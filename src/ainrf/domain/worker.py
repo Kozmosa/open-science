@@ -17,7 +17,7 @@ from uuid import uuid4
 from ainrf.db import connect
 from ainrf.domain.attempts import (
     AttemptControlRequest,
-    AttemptService,
+    AttemptWorkerModule,
     DispatchClaim,
     DispatchClaimError,
 )
@@ -175,7 +175,7 @@ class TaskDispatcher:
         # attributes precise for the dispatch paths, which are reachable only
         # after ``start`` has confirmed that writable services were assembled.
         self._cutover = cast(DomainCutoverController, None)
-        self._attempts = cast(AttemptService, None)
+        self._attempts = cast(AttemptWorkerModule, None)
         self._overview_planner = cast(OverviewSnapshotPlanner, None)
         self._literature_tracking = cast(LiteratureTrackingService, None)
         self._writable_services_initialized = False
@@ -202,7 +202,7 @@ class TaskDispatcher:
             self._maintenance.check_lease(lease)
             self._cutover = DomainCutoverController(self._state_root)
             self._maintenance.check_lease(lease)
-            self._attempts = AttemptService(self._state_root, artifact_sha=self._artifact_sha)
+            self._attempts = AttemptWorkerModule(self._state_root, artifact_sha=self._artifact_sha)
             self._maintenance.check_lease(lease)
             self._overview_planner = OverviewSnapshotPlanner(
                 self._state_root,

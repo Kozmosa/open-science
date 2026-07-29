@@ -54,11 +54,11 @@ async def register(payload: RegisterRequest, request: Request) -> dict[str, str]
     # If the domain database is temporarily unavailable, the durable intent is
     # retried during the next v2 lifespan rather than claiming a distributed
     # transaction succeeded.
-    domain = getattr(request.app.state, "domain_service", None)
-    provision = getattr(domain, "provision_default_project", None)
+    project_module = getattr(request.app.state, "project_module", None)
+    provision = getattr(project_module, "provision_default_project", None)
     if not callable(provision):  # pragma: no cover - create_app invariant
-        error = RuntimeError("DomainService is unavailable for user provisioning")
-        _LOG.error("registration_domain_service_missing", exc_info=error)
+        error = RuntimeError("Project Module is unavailable for user provisioning")
+        _LOG.error("registration_project_module_missing", exc_info=error)
         service.record_domain_default_project_provisioning_failure(user.id, error)
         return {"message": "Registration submitted. Default Project provisioning is queued."}
     try:

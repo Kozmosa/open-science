@@ -22,9 +22,10 @@ from ainrf.api.schemas import (
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     DomainPermissionError,
-    DomainService,
+    ProjectModule,
     ProjectContextService,
     TaskApplicationService,
+    WorkspaceModule,
 )
 from ainrf.domain.overview_jobs import OverviewSnapshotService
 from ainrf.domain_control import DomainMaintenanceService
@@ -35,8 +36,14 @@ router = APIRouter(prefix="/domain", tags=["domain-v2"])
 
 @router.get("/capabilities")
 async def capabilities(request: Request) -> dict[str, object]:
-    service = getattr(request.app.state, "domain_service", None)
-    ready = isinstance(service, DomainService) and service.v2_ready()
+    project_module = getattr(request.app.state, "project_module", None)
+    workspace_module = getattr(request.app.state, "workspace_module", None)
+    ready = (
+        isinstance(project_module, ProjectModule)
+        and project_module.v2_ready()
+        and isinstance(workspace_module, WorkspaceModule)
+        and workspace_module.v2_ready()
+    )
     context_ready = ready and isinstance(
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
@@ -59,7 +66,7 @@ async def capabilities(request: Request) -> dict[str, object]:
         dispatcher_readiness = maintenance.participant_readiness("task-dispatcher")
     task_ready = task_service_ready and bool(dispatcher_readiness.get("ready"))
     workspace_links_ready = ready and all(
-        callable(getattr(service, name, None))
+        callable(getattr(workspace_module, name, None))
         for name in ("attach_workspace", "detach_workspace", "set_primary_workspace")
     )
     overview_service = getattr(request.app.state, "overview_snapshot_service", None)
@@ -146,9 +153,18 @@ async def get_today_overview_refresh(job_id: str, request: Request) -> dict[str,
     return job
 
 
-def _service(request: Request) -> DomainService:
-    service = getattr(request.app.state, "domain_service", None)
-    if service is None:
+def _project_module(request: Request) -> ProjectModule:
+    service = getattr(request.app.state, "project_module", None)
+    if not isinstance(service, ProjectModule):
+        raise HTTPException(status_code=404, detail="Domain is unavailable")
+    if not service.v2_ready():
+        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    return service
+
+
+def _workspace_module(request: Request) -> WorkspaceModule:
+    service = getattr(request.app.state, "workspace_module", None)
+    if not isinstance(service, WorkspaceModule):
         raise HTTPException(status_code=404, detail="Domain is unavailable")
     if not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
@@ -156,7 +172,7 @@ def _service(request: Request) -> DomainService:
 
 
 def _overview_service(request: Request) -> OverviewSnapshotService:
-    _service(request)
+    _project_module(request)
     service = getattr(request.app.state, "overview_snapshot_service", None)
     if not isinstance(service, OverviewSnapshotService):
         raise HTTPException(status_code=503, detail="Overview snapshot service is not initialized")
@@ -166,17 +182,15 @@ def _overview_service(request: Request) -> OverviewSnapshotService:
 
 
 def _context_service(request: Request) -> ProjectContextService:
-    _service(request)
     service = getattr(request.app.state, "project_context_service", None)
-    if service is None:
+    if service is None or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Project Context service is not initialized")
     return service
 
 
 def _task_application_service(request: Request) -> TaskApplicationService:
-    _service(request)
     service = getattr(request.app.state, "task_application_service", None)
-    if not isinstance(service, TaskApplicationService):
+    if not isinstance(service, TaskApplicationService) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Task application service is not initialized")
     return service
 
@@ -196,7 +210,7 @@ async def create_project(request: Request, payload: dict[str, object]) -> dict[s
     try:
         description_value = payload.get("description")
         description = description_value if isinstance(description_value, str) else None
-        return _service(request).create_project(
+        return _project_module(request).create_project(
             get_current_user(request),
             name=str(payload["name"]),
             description=description,
@@ -214,7 +228,7 @@ async def list_domain_projects(
     try:
         return DomainProjectListResponse.model_validate(
             {
-                "items": _service(request).project_console_summaries(
+                "items": _project_module(request).project_console_summaries(
                     get_current_user(request), include_archived=include_archived
                 )
             }
@@ -227,7 +241,7 @@ async def list_domain_projects(
 async def get_domain_project(project_id: str, request: Request) -> DomainProjectSummaryResponse:
     try:
         return DomainProjectSummaryResponse.model_validate(
-            _service(request).project_console_summary(project_id, get_current_user(request))
+            _project_module(request).project_console_summary(project_id, get_current_user(request))
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -236,7 +250,7 @@ async def get_domain_project(project_id: str, request: Request) -> DomainProject
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
-        service = _service(request)
+        service = _project_module(request)
         user = get_current_user(request)
         user_id = user.get("id")
         if not isinstance(user_id, str):
@@ -279,7 +293,7 @@ async def list_domain_workspaces(
     try:
         return DomainWorkspaceListResponse.model_validate(
             {
-                "items": _service(request).workspace_console_entries(
+                "items": _workspace_module(request).workspace_console_entries(
                     get_current_user(request), include_unregistered=include_unregistered
                 )
             }
@@ -292,7 +306,9 @@ async def list_domain_workspaces(
 async def get_domain_workspace(workspace_id: str, request: Request) -> DomainWorkspaceResponse:
     try:
         return DomainWorkspaceResponse.model_validate(
-            _service(request).workspace_console_entry(workspace_id, get_current_user(request))
+            _workspace_module(request).workspace_console_entry(
+                workspace_id, get_current_user(request)
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -303,7 +319,7 @@ async def attach_workspace(
     project_id: str, workspace_id: str, request: Request
 ) -> dict[str, object]:
     try:
-        return _service(request).attach_workspace(
+        return _workspace_module(request).attach_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
@@ -318,7 +334,7 @@ async def set_primary_workspace(
     project_id: str, workspace_id: str, request: Request
 ) -> dict[str, object]:
     try:
-        return _service(request).set_primary_workspace(
+        return _project_module(request).set_primary_workspace(
             project_id,
             workspace_id,
             get_current_user(request),

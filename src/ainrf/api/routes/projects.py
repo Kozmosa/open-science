@@ -27,7 +27,7 @@ from ainrf.api.schemas import (
     TaskListResponse,
 )
 from ainrf.auth.permissions import get_current_user
-from ainrf.domain import DomainPermissionError, DomainService, TaskApplicationService
+from ainrf.domain import DomainPermissionError, ProjectModule, TaskApplicationService
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -36,9 +36,9 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 task_edges_router = APIRouter(prefix="/task-edges", tags=["projects"])
 
 
-def _domain_service(request: Request) -> DomainService:
-    service = getattr(request.app.state, "domain_service", None)
-    if not isinstance(service, DomainService) or not service.v2_ready():
+def _project_module(request: Request) -> ProjectModule:
+    service = getattr(request.app.state, "project_module", None)
+    if not isinstance(service, ProjectModule) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain cutover is not ready")
     return service
 
@@ -55,7 +55,7 @@ def _mark_v2_compatibility_route(response: Response, *, route_name: str, replace
 
 
 def _primary_link(
-    domain: DomainService, project_id: str, user: dict[str, object]
+    domain: ProjectModule, project_id: str, user: dict[str, object]
 ) -> dict[str, object] | None:
     for link in domain.workspace_links(project_id, user):
         if link.get("status") == "active" and link.get("is_primary") is True:
@@ -64,7 +64,7 @@ def _primary_link(
 
 
 def _serialize_domain_project(
-    domain: DomainService, project: dict[str, object], user: dict[str, object]
+    domain: ProjectModule, project: dict[str, object], user: dict[str, object]
 ) -> ProjectResponse:
     project_id = str(project["project_id"])
     primary = _primary_link(domain, project_id, user)
@@ -83,7 +83,7 @@ def _serialize_domain_project(
 
 
 def _active_domain_project(
-    domain: DomainService, project_id: str, user: dict[str, object]
+    domain: ProjectModule, project_id: str, user: dict[str, object]
 ) -> dict[str, object]:
     project = domain.project(project_id, user)
     if project.get("status") != "active":
@@ -193,7 +193,7 @@ def _translate_reference_error(exc: Exception) -> HTTPException:
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(request: Request, response: Response) -> ProjectListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(response, route_name="projects.list", replacement="GET /projects")
     try:
         return ProjectListResponse(
@@ -211,7 +211,7 @@ async def create_project(
     payload: ProjectCreateRequest, request: Request, response: Response
 ) -> ProjectResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.create", replacement="POST /projects"
     )
@@ -230,7 +230,7 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def read_project(project_id: str, request: Request, response: Response) -> ProjectResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.read", replacement=f"/projects/{project_id}/workspaces"
     )
@@ -247,7 +247,7 @@ async def update_project(
     project_id: str, payload: ProjectUpdateRequest, request: Request, response: Response
 ) -> ProjectResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response,
         route_name="projects.update",
@@ -289,7 +289,7 @@ async def update_project(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: str, request: Request, response: Response) -> None:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.delete", replacement=f"POST /projects/{project_id}/archive"
     )
@@ -308,7 +308,7 @@ async def delete_project(project_id: str, request: Request, response: Response) 
 
 @router.post("/{project_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
 async def archive_project(project_id: str, request: Request) -> None:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_owner(project_id, get_current_user(request))
         _task_application_service(request).archive_project(
@@ -324,7 +324,7 @@ async def archive_project(project_id: str, request: Request) -> None:
 
 @router.post("/{project_id}/unarchive", status_code=status.HTTP_204_NO_CONTENT)
 async def unarchive_project(project_id: str, request: Request) -> None:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_owner(project_id, get_current_user(request))
         _task_application_service(request).unarchive_project(
@@ -337,7 +337,7 @@ async def unarchive_project(project_id: str, request: Request) -> None:
 
 @router.get("/{project_id}/workspaces")
 async def list_project_workspace_links(project_id: str, request: Request) -> dict[str, object]:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         return {"items": domain.workspace_links(project_id, get_current_user(request))}
     except Exception as exc:
@@ -348,7 +348,7 @@ async def list_project_workspace_links(project_id: str, request: Request) -> dic
 async def attach_project_workspace(
     project_id: str, workspace_id: str, request: Request
 ) -> dict[str, object]:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_editor(project_id, get_current_user(request))
         return domain.attach_workspace(
@@ -365,7 +365,7 @@ async def attach_project_workspace(
 async def detach_project_workspace(
     project_id: str, workspace_id: str, request: Request, allow_no_primary: bool = Query(False)
 ) -> None:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_editor(project_id, get_current_user(request))
         domain.detach_workspace(
@@ -387,7 +387,7 @@ async def set_primary_project_workspace(
     request: Request,
     previous_workspace_id: str | None = Query(None),
 ) -> dict[str, object]:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_editor(project_id, get_current_user(request))
         if previous_workspace_id is not None:
@@ -415,7 +415,7 @@ async def list_project_environment_refs(
     project_id: str, request: Request, response: Response
 ) -> ProjectEnvironmentReferenceListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response,
         route_name="projects.environment_refs.list",
@@ -447,7 +447,7 @@ async def create_project_environment_ref(
     project_id: str, payload: ProjectEnvironmentReferenceCreateRequest, request: Request
 ) -> ProjectEnvironmentReferenceResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         _active_domain_project(domain, project_id, user)
         domain.require_project_editor(project_id, user)
@@ -474,7 +474,7 @@ async def update_project_environment_ref(
     request: Request,
 ) -> ProjectEnvironmentReferenceResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         _active_domain_project(domain, project_id, user)
         domain.require_project_editor(project_id, user)
@@ -497,7 +497,7 @@ async def delete_project_environment_ref(
     project_id: str, environment_id: str, request: Request
 ) -> None:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         _active_domain_project(domain, project_id, user)
         domain.require_project_editor(project_id, user)
@@ -518,7 +518,7 @@ async def get_project_cost_summary(
     project_id: str, request: Request, response: Response
 ) -> ProjectCostSummaryResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         _active_domain_project(domain, project_id, user)
     except Exception as exc:
@@ -541,7 +541,7 @@ async def list_project_task_edges(
     project_id: str, request: Request, response: Response
 ) -> TaskEdgeListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response,
         route_name="projects.task_edges.list",
@@ -565,7 +565,7 @@ async def create_project_task_edge(
     project_id: str, payload: TaskEdgeCreateRequest, request: Request, response: Response
 ) -> TaskEdgeResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.task_edges.create", replacement="Task relationship API"
     )
@@ -587,7 +587,7 @@ async def create_project_task_edge(
 @task_edges_router.delete("/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task_edge(edge_id: str, request: Request, response: Response) -> None:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="task_edges.delete", replacement="Task relationship API"
     )
@@ -614,7 +614,7 @@ async def list_project_tasks(
     their own), matching the "project as a collaboration unit" model.
     """
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         _active_domain_project(domain, project_id, user)
     except Exception as exc:
@@ -635,7 +635,7 @@ async def list_project_tasks(
 
 @router.get("/{project_id}/members", response_model=ProjectMemberListResponse)
 async def list_project_members(project_id: str, request: Request) -> ProjectMemberListResponse:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         auth_service = _get_auth_service(request)
         return ProjectMemberListResponse(
@@ -652,7 +652,7 @@ async def list_project_members(project_id: str, request: Request) -> ProjectMemb
 async def upsert_project_member(
     project_id: str, member_user_id: str, payload: ProjectMemberRequest, request: Request
 ) -> ProjectMemberResponse:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     user = get_current_user(request)
     try:
         domain.require_project_owner(project_id, user)
@@ -675,7 +675,7 @@ async def upsert_project_member(
 
 @router.delete("/{project_id}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project_member(project_id: str, member_user_id: str, request: Request) -> None:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_owner(project_id, get_current_user(request))
         domain.remove_member(
@@ -693,7 +693,7 @@ async def delete_project_member(project_id: str, member_user_id: str, request: R
 async def transfer_project_owner(
     project_id: str, payload: ProjectOwnerTransferRequest, request: Request
 ) -> ProjectResponse:
-    domain = _domain_service(request)
+    domain = _project_module(request)
     user = get_current_user(request)
     try:
         domain.require_project_owner(project_id, user)
@@ -713,7 +713,7 @@ async def list_collaborators(
     project_id: str, request: Request, response: Response
 ) -> CollaboratorListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.collaborators.list", replacement="Project member API"
     )
@@ -738,7 +738,7 @@ async def add_collaborator(
     project_id: str, payload: CollaboratorRequest, request: Request, response: Response
 ) -> CollaboratorResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     _mark_v2_compatibility_route(
         response, route_name="projects.collaborators.add", replacement="Project member API"
     )
@@ -764,7 +764,7 @@ async def add_collaborator(
 @router.delete("/{project_id}/collaborators/{user_id}", status_code=204)
 async def remove_collaborator(project_id: str, user_id: str, request: Request) -> Response:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _project_module(request)
     try:
         domain.require_project_owner(project_id, user)
         domain.remove_member(

@@ -5,10 +5,15 @@ from typing import Any
 from ainrf._lazy_exports import resolve_export
 
 _EXPORTS = {
-    "DomainAuthorizationService": ("ainrf.domain.service", "DomainAuthorizationService"),
     "DomainNotFoundError": ("ainrf.domain.service", "DomainNotFoundError"),
     "DomainPermissionError": ("ainrf.domain.service", "DomainPermissionError"),
-    "DomainService": ("ainrf.domain.service", "DomainService"),
+    "DomainModules": ("ainrf.domain.service", "DomainModules"),
+    "build_domain_modules": ("ainrf.domain.service", "build_domain_modules"),
+    "ProjectModule": ("ainrf.domain.interfaces", "ProjectModule"),
+    "WorkspaceModule": ("ainrf.domain.interfaces", "WorkspaceModule"),
+    "EnvironmentModule": ("ainrf.domain.interfaces", "EnvironmentModule"),
+    "ContextModule": ("ainrf.domain.interfaces", "ContextModule"),
+    "TaskLifecycleModule": ("ainrf.domain.interfaces", "TaskLifecycleModule"),
     "PersistentEnvironmentFacade": (
         "ainrf.domain.environment_facade",
         "PersistentEnvironmentFacade",
@@ -19,7 +24,6 @@ _EXPORTS = {
     "ContextFragment": ("ainrf.domain.context", "ContextFragment"),
     "ContextSource": ("ainrf.domain.context", "ContextSource"),
     "ProjectContextService": ("ainrf.domain.context", "ProjectContextService"),
-    "AttemptService": ("ainrf.domain.attempts", "AttemptService"),
     "AttemptProjectionService": ("ainrf.domain.attempt_projection", "AttemptProjectionService"),
     "DispatchClaim": ("ainrf.domain.attempts", "DispatchClaim"),
     "DispatchRunResult": ("ainrf.domain.worker", "DispatchRunResult"),

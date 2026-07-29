@@ -6,8 +6,10 @@ import hashlib
 import json
 import sqlite3
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
@@ -16,7 +18,8 @@ from ainrf.domain.environment_identity import (
     canonical_connection_object,
     environment_connection_fingerprint,
 )
-from ainrf.domain.repositories import SqliteDomainRepository
+from ainrf.domain.interfaces import EnvironmentModule, ProjectModule, WorkspaceModule
+from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.project_initialization import initialize_project_context
 from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain_control import MaintenanceModeError
@@ -49,7 +52,7 @@ def _now() -> str:
 class DomainAuthorizationService:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
-        self._repository = SqliteDomainRepository(conn)
+        self._repository = _SqliteDomainRepository(conn)
 
     def project_role(self, project_id: str, user: dict[str, object]) -> str | None:
         owner_user_id = self._repository.project_owner(project_id)
@@ -268,7 +271,7 @@ class DomainAuthorizationService:
         raise DomainPermissionError("Task owner permission is required")
 
 
-class DomainService:
+class _DomainWriteKernel:
     """All v2 writes are transactionally routed through this application service."""
 
     def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
@@ -291,7 +294,7 @@ class DomainService:
         Keeping the barrier beside the SQLite transaction makes direct
         application-service callers fail closed during maintenance too.  The
         cutover controller may add a stronger runtime fence here without
-        changing the public ``DomainService`` constructor.
+        changing the aggregate Interfaces.
         """
 
         conn.execute("BEGIN IMMEDIATE")
@@ -433,13 +436,13 @@ class DomainService:
     def _environment_is_referenced(conn: sqlite3.Connection, environment_id: str) -> bool:
         """Return whether a durable execution reference has fixed this Environment ID."""
 
-        return SqliteDomainRepository(conn).environment_is_referenced(environment_id)
+        return _SqliteDomainRepository(conn).environment_is_referenced(environment_id)
 
     @staticmethod
-    def _repository(conn: sqlite3.Connection) -> SqliteDomainRepository:
+    def _repository(conn: sqlite3.Connection) -> _SqliteDomainRepository:
         """Create the persistence boundary for one caller-owned transaction."""
 
-        return SqliteDomainRepository(conn)
+        return _SqliteDomainRepository(conn)
 
     @staticmethod
     def _connection_from_stored_json(value: object) -> dict[str, object]:
@@ -2415,7 +2418,7 @@ class DomainService:
     ) -> dict[str, object] | None:
         if not key:
             raise DomainConflictError("idempotency_key is required")
-        row = SqliteDomainRepository(conn).idempotency_record(
+        row = _SqliteDomainRepository(conn).idempotency_record(
             actor_user_id=actor_user_id,
             scope=scope,
             key=key,
@@ -2455,7 +2458,7 @@ class DomainService:
         request: dict[str, object],
         result: dict[str, object],
     ) -> None:
-        SqliteDomainRepository(conn).insert_idempotency_record(
+        _SqliteDomainRepository(conn).insert_idempotency_record(
             actor_user_id=actor_user_id,
             scope=scope,
             key=key,
@@ -2463,3 +2466,23 @@ class DomainService:
             response_json=json.dumps(result, ensure_ascii=True, sort_keys=True),
             created_at=_now(),
         )
+
+
+@dataclass(frozen=True)
+class DomainModules:
+    """Narrow aggregate Interfaces backed by one transactional write kernel."""
+
+    projects: ProjectModule
+    workspaces: WorkspaceModule
+    environments: EnvironmentModule
+
+
+def build_domain_modules(state_root: Path, *, artifact_sha: str | None = None) -> DomainModules:
+    """Build the authoritative aggregate Modules around one internal SQLite seam."""
+
+    kernel = _DomainWriteKernel(state_root, artifact_sha=artifact_sha)
+    return DomainModules(
+        projects=cast(ProjectModule, kernel),
+        workspaces=cast(WorkspaceModule, kernel),
+        environments=cast(EnvironmentModule, kernel),
+    )

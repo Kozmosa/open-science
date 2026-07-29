@@ -56,7 +56,7 @@ def _headers(app: FastAPI, username: str, user_id: str, role: str) -> dict[str, 
 
 
 def _prepare_task_scope(app: FastAPI, state_root: Path) -> tuple[str, str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(
         _ADMIN,
         alias="session-v2-host",
@@ -355,7 +355,7 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
     viewer_headers = _headers(app, "output-viewer", "output-viewer", "member")
     administrator_headers = _headers(app, "output-admin", "output-admin", "admin")
     project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
-    app.state.domain_service.add_member(project_id, "output-viewer", "viewer", False, _USER)
+    app.state.project_module.add_member(project_id, "output-viewer", "viewer", False, _USER)
     durable_output = json.dumps(
         {
             "role": "assistant",

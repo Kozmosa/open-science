@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.domain import DomainService, ProjectContextService
+from ainrf.domain import ProjectContextService, ProjectModule
 from ainrf.literature.tracking import DiscoveredPaper
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import get_jwt_headers, prepare_v2_test_state
@@ -211,7 +211,7 @@ def _v2_literature_app(state_root: Path, tmp_path: Path) -> tuple[FastAPI, str]:
     )
     owner: dict[str, object] = {"id": "api-key-user", "role": "user"}
     admin: dict[str, object] = {"id": "literature-v2-admin", "role": "admin"}
-    domain: DomainService = app.state.domain_service
+    domain: ProjectModule = app.state.project_module
     environment = domain.create_environment(
         admin,
         alias="literature-v2-host",

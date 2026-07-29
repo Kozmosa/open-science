@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ainrf.domain import DomainService, PersistentEnvironmentFacade
+from ainrf.domain import PersistentEnvironmentFacade, build_domain_modules
 
 pytestmark = [pytest.mark.unit]
 
@@ -15,7 +15,7 @@ def test_persistent_environment_facade_survives_restart_without_detection_side_e
     state_root: Path,
     committed_v2_state: str,
 ) -> None:
-    service = DomainService(state_root, artifact_sha=committed_v2_state)
+    service = build_domain_modules(state_root, artifact_sha=committed_v2_state).environments
     environment = service.create_environment(
         {"id": "admin", "role": "admin"},
         alias="durable-host",

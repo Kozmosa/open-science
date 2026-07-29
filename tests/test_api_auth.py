@@ -284,7 +284,7 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
     users = [user for user in app.state.auth_service.list_users() if user.username == "v2alice"]
     assert len(users) == 1
     user = users[0]
-    projects = app.state.domain_service.list_projects({"id": user.id, "role": "member"})
+    projects = app.state.project_module.list_projects({"id": user.id, "role": "member"})
     defaults = [project for project in projects if bool(project["is_default"])]
     assert len(defaults) == 1
     assert defaults[0]["name"] == "v2alice's Project"

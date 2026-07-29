@@ -10,8 +10,7 @@ from contextlib import closing
 
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain import DomainService, ProjectContextService, TaskApplicationService
-from ainrf.domain.service import DomainConflictError
+from ainrf.domain import ProjectContextService, TaskApplicationService, build_domain_modules
 
 pytestmark = [pytest.mark.unit]
 
@@ -29,11 +28,11 @@ def test_publish_is_immutable_and_task_pins_active_version(
     tmp_path: Path,
     committed_v2_state: str,
 ) -> None:
-    domain = DomainService(state_root, artifact_sha=committed_v2_state)
+    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
     context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
     owner = _user("owner")
     admin = _admin()
-    environment = domain.create_environment(
+    environment = domain.environments.create_environment(
         admin,
         alias="project-context-host",
         display_name="Project context host",
@@ -49,7 +48,7 @@ def test_publish_is_immutable_and_task_pins_active_version(
         granted_by="admin",
         reason="project context pin test",
     )
-    project = domain.create_project(owner, name="Project")
+    project = domain.projects.create_project(owner, name="Project")
     project_id = str(project["project_id"])
     context.save_draft(project_id, "first", owner)
     first = context.publish(project_id, owner)
@@ -59,14 +58,16 @@ def test_publish_is_immutable_and_task_pins_active_version(
 
     workspace_path = tmp_path / "project-context-workspace"
     workspace_path.mkdir()
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(workspace_path),
         label="Project context workspace",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="project-context-link")
+    domain.projects.attach_workspace(
+        project_id, workspace_id, owner, idempotency_key="project-context-link"
+    )
     task = TaskApplicationService(state_root, artifact_sha=committed_v2_state).create_task(
         owner,
         project_id=project_id,
@@ -90,5 +91,4 @@ def test_publish_is_immutable_and_task_pins_active_version(
     assert pinned is not None
     assert pinned["project_context_version_id"] == second["context_version_id"]
     assert "## Project Brief\nsecond" in snapshot["content"]
-    with pytest.raises(DomainConflictError, match="Task Context mutations"):
-        context.pin_active_context(str(task["task_id"]), project_id)
+    assert not hasattr(context, "pin_active_context")

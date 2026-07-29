@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain import DomainService
+from ainrf.domain import build_domain_modules
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
@@ -62,7 +62,7 @@ def seed_frontend_dev_profile(
     profile: FrontendDevProfile,
     users: FrontendDevUsers,
 ) -> FrontendDevSeedResult:
-    DomainService(state_root, artifact_sha=artifact_sha)
+    build_domain_modules(state_root, artifact_sha=artifact_sha)
     LiteratureTrackingService(state_root).initialize()
     if profile is FrontendDevProfile.EMPTY:
         _remove_cutover_default_project(state_root)

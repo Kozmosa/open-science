@@ -16,7 +16,7 @@ from starlette.websockets import WebSocketState
 from ainrf.api.domain_access import (
     require_v2_active_environment,
     require_v2_workspace_execution_owner,
-    v2_domain_service,
+    v2_environment_module,
 )
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
@@ -357,7 +357,7 @@ async def read_terminal_session_pairs(
     app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
-    domain = v2_domain_service(request)
+    domain = v2_environment_module(request)
     if environment_id is not None:
         try:
             require_v2_active_environment(request, user, environment_id)

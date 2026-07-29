@@ -47,12 +47,6 @@ def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
     """Return the formal saga only after the committed v2 fuse is live."""
 
     service = getattr(request.app.state, "literature_task_saga_service", None)
-    domain = getattr(request.app.state, "domain_service", None)
-    if domain is None or not domain.v2_ready():
-        raise HTTPException(
-            status_code=409,
-            detail="Literature research Tasks require a committed domain v2 cutover",
-        )
     if not isinstance(service, LiteratureTaskSagaService) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Literature Task saga service is not ready")
     return service

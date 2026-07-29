@@ -8,37 +8,33 @@ or file-system capability.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-
 from fastapi import HTTPException, status
 from starlette.requests import HTTPConnection
 
 from ainrf.domain.service import DomainNotFoundError
+from ainrf.domain.interfaces import EnvironmentReader, WorkspaceReader
 from ainrf.domain_telemetry import record_permission_denied
 
 
-@runtime_checkable
-class RuntimeDomainReader(Protocol):
-    """Small domain read Interface required by runtime transport Modules."""
-
-    def v2_ready(self) -> bool: ...
-
-    def environment(
-        self,
-        environment_id: str,
-        user: dict[str, object],
-        *,
-        include_disabled: bool = False,
-    ) -> dict[str, object]: ...
-
-    def workspace(self, workspace_id: str, user: dict[str, object]) -> dict[str, object]: ...
+def _environment_module(request: HTTPConnection) -> EnvironmentReader:
+    service = getattr(request.app.state, "environment_module", None)
+    if not isinstance(service, EnvironmentReader) or not service.v2_ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Domain v2 cutover is not ready",
+        )
+    return service
 
 
-def v2_domain_service(request: HTTPConnection) -> RuntimeDomainReader:
-    """Return the ready authoritative Domain Module or fail closed."""
+def v2_environment_module(request: HTTPConnection) -> EnvironmentReader:
+    """Return the ready Environment application Interface."""
 
-    service = getattr(request.app.state, "domain_service", None)
-    if not isinstance(service, RuntimeDomainReader) or not service.v2_ready():
+    return _environment_module(request)
+
+
+def _workspace_module(request: HTTPConnection) -> WorkspaceReader:
+    service = getattr(request.app.state, "workspace_module", None)
+    if not isinstance(service, WorkspaceReader) or not service.v2_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Domain v2 cutover is not ready",
@@ -53,7 +49,7 @@ def require_v2_active_environment(
 ) -> None:
     """Require a visible, active durable Environment before runtime access."""
 
-    service = v2_domain_service(request)
+    service = _environment_module(request)
     try:
         service.environment(environment_id, user, include_disabled=False)
     except DomainNotFoundError as exc:
@@ -72,13 +68,13 @@ def require_v2_workspace_execution_owner(
 ) -> dict[str, object]:
     """Require owner-level access to a Workspace used for runtime I/O.
 
-    ``DomainService.workspace`` preserves private-resource visibility: a
+    The Workspace Module preserves private-resource visibility: a
     non-owner cannot discover a Workspace ID.  An administrator may view that
     row, but must not gain Linux tenant filesystem or execution rights, so the
     second check deliberately rejects that case with 403.
     """
 
-    service = v2_domain_service(request)
+    service = _workspace_module(request)
     try:
         workspace = service.workspace(workspace_id, user)
     except DomainNotFoundError as exc:

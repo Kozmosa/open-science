@@ -46,8 +46,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 def _get_task_application_service(request: Request) -> TaskApplicationService:
     service = getattr(request.app.state, "task_application_service", None)
-    domain = getattr(request.app.state, "domain_service", None)
-    if service is None or domain is None or (not domain.v2_ready()):
+    if service is None or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Task domain v2 is not ready")
     if not isinstance(service, TaskApplicationService):
         raise HTTPException(status_code=500, detail="Task application service is invalid")

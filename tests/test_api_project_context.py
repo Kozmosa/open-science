@@ -54,7 +54,7 @@ def _nested(payload: dict[str, object], name: str) -> dict[str, object]:
 
 
 def _prepare_attached_workspace(app: FastAPI, state_root: Path, project_id: str) -> tuple[str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(
         _ADMIN,
         alias="context-api-host",
@@ -305,7 +305,7 @@ async def test_api_key_context_permissions_for_viewer_editor_and_publisher(
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    domain = app.state.domain_service
+    domain = app.state.project_module
     context = app.state.project_context_service
     project = domain.create_project(_OWNER, name="Permission Project")
     project_id = str(project["project_id"])

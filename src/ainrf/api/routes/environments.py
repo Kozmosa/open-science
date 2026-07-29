@@ -17,7 +17,7 @@ from ainrf.api.schemas import (
     EnvironmentUpdateRequest,
 )
 from ainrf.environments.models import DetectionSnapshot
-from ainrf.domain import DomainPermissionError, DomainService
+from ainrf.domain import DomainPermissionError, EnvironmentModule
 from ainrf.domain_control import MaintenanceModeError
 
 router = APIRouter(prefix="/environments", tags=["environments"])
@@ -33,9 +33,9 @@ class _EnvironmentUpdateKwargs(TypedDict):
     connection: NotRequired[dict[str, object]]
 
 
-def _domain_service(request: Request) -> DomainService:
-    service = getattr(request.app.state, "domain_service", None)
-    if not isinstance(service, DomainService) or not service.v2_ready():
+def _environment_module(request: Request) -> EnvironmentModule:
+    service = getattr(request.app.state, "environment_module", None)
+    if not isinstance(service, EnvironmentModule) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain cutover is not ready")
     return service
 
@@ -163,7 +163,7 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
 @router.get("", response_model=EnvironmentListResponse)
 async def list_environments(request: Request, response: Response) -> EnvironmentListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.list", "/domain/capabilities")
     try:
         return EnvironmentListResponse(
@@ -188,7 +188,7 @@ async def create_environment(
     response: Response,
 ) -> EnvironmentResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.create", "/domain/capabilities")
     try:
         environment = domain.create_environment(
@@ -211,7 +211,7 @@ async def read_environment(
     response: Response,
 ) -> EnvironmentResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.read", "/domain/capabilities")
     try:
         return _serialize_domain_environment(
@@ -230,7 +230,7 @@ async def update_environment(
     response: Response,
 ) -> EnvironmentResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.update", "/domain/capabilities")
     try:
         current = domain.environment(environment_id, user)
@@ -286,7 +286,7 @@ async def delete_environment(
     response: Response,
 ) -> None:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.delete", "/domain/capabilities")
     try:
         domain.disable_environment(
@@ -306,7 +306,7 @@ async def detect_environment(
     response: Response,
 ) -> EnvironmentResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _environment_module(request)
     _mark_v2_compatibility_route(request, response, "environments.detect", "/domain/capabilities")
     try:
         environment = domain.environment(environment_id, user, include_disabled=False)

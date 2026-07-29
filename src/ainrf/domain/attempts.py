@@ -99,7 +99,9 @@ class DispatchClaimError(DomainConflictError):
     """The worker no longer owns a claimed dispatch row."""
 
 
-class AttemptService:
+class AttemptWorkerModule:
+    """Internal dispatcher Interface for Attempt claim, control, and reconciliation."""
+
     """The SQLite repository used by every durable task dispatcher.
 
     Claim ownership is always scoped by a fresh opaque token.  An expired
@@ -122,7 +124,7 @@ class AttemptService:
     def _require_v2_mutation(self) -> None:
         """Reject repository writes outside the committed v2 runtime.
 
-        AttemptService is intentionally a dispatcher repository, not an
+        AttemptWorkerModule is intentionally a dispatcher Module, not a
         alternate lifecycle admission path.  Its public mutations must not be
         usable by an unauthorized process simply because it bypassed HTTP
         startup wiring.
@@ -149,7 +151,7 @@ class AttemptService:
     ) -> None:
         """Re-check and durably record the first v2 write in this transaction.
 
-        ``AttemptService`` is intentionally usable by a separate worker
+        ``AttemptWorkerModule`` is intentionally usable by a separate worker
         process, so it cannot rely on a preceding Task application-service
         audit event to bind the cutover fuse.  Calling the fence while this
         connection owns the mutation transaction makes every direct repository
@@ -1114,7 +1116,7 @@ class AttemptService:
                WHERE attempt_id = ? AND status = 'unknown'""",
             (now, reason, now, attempt_id),
         )
-        AttemptService._project_task_status(conn, attempt_id, "stopped_runtime_unknown", now)
+        AttemptWorkerModule._project_task_status(conn, attempt_id, "stopped_runtime_unknown", now)
         return {
             "task_id": task_id,
             "attempt_id": attempt_id,

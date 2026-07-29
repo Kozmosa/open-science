@@ -46,7 +46,7 @@ def _create_environment(
     default_workdir: str | None = None,
 ) -> EnvironmentRegistryEntry:
     state = app.state
-    created = state.domain_service.create_environment(
+    created = state.environment_module.create_environment(
         {"id": APP_USER_ID, "role": "admin"},
         alias=alias,
         display_name=display_name,
@@ -88,7 +88,7 @@ def _maintenance_terminal_request(
                         state_root=state_root,
                     ),
                     domain_api_participant_id=None,
-                    domain_service=domain_reader,
+                    environment_module=domain_reader,
                     domain_maintenance_service=maintenance,
                     environment_service=environment_service,
                     terminal_attachment_broker=broker,

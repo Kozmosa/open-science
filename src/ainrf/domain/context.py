@@ -33,7 +33,6 @@ DEFAULT_PLATFORM_CONSTRAINTS = (
     "Respect tenant isolation, do not expose credentials or private paths, "
     "and report uncertainty instead of assuming unavailable state."
 )
-_TASK_CONTEXT_LIFECYCLE_CAPABILITY = object()
 
 
 def _now() -> str:
@@ -135,12 +134,6 @@ def record_context_version_fragment_provenance_in_transaction(
         """,
         (context_version_id, status, evidence_json, recorded_at),
     )
-
-
-def task_context_lifecycle_capability() -> object:
-    """Return the private capability held by ``TaskApplicationService`` only."""
-
-    return _TASK_CONTEXT_LIFECYCLE_CAPABILITY
 
 
 def _load_json_object(value: object) -> dict[str, object]:
@@ -405,6 +398,11 @@ class ProjectContextService:
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
+    def v2_ready(self) -> bool:
+        """Return readiness for this Module's committed authoritative writer."""
+
+        return self._write_fence.v2_ready()
+
     @staticmethod
     def _begin_domain_write(conn: sqlite3.Connection) -> None:
         """Serialize a Context mutation with the persistent maintenance barrier.
@@ -434,14 +432,7 @@ class ProjectContextService:
         return value
 
     @staticmethod
-    def _require_task_lifecycle_capability(capability: object | None) -> None:
-        if capability is not _TASK_CONTEXT_LIFECYCLE_CAPABILITY:
-            raise DomainConflictError(
-                "Task Context mutations must be submitted through TaskApplicationService"
-            )
-
-    @staticmethod
-    def initialize_project_context_in_transaction(
+    def _initialize_project_context_in_transaction(
         conn: sqlite3.Connection,
         *,
         project_id: str,
@@ -1099,16 +1090,12 @@ class ProjectContextService:
             ).fetchall()
             return [self._fragment_payload(row) for row in rows]
 
-    def pin_active_context(
+    def _pin_active_context(
         self,
         task_id: str,
         project_id: str,
-        *,
-        _lifecycle_capability: object | None = None,
     ) -> str:
         """Retired direct Task-pin facade; only lifecycle code may use it."""
-
-        self._require_task_lifecycle_capability(_lifecycle_capability)
 
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
@@ -1134,7 +1121,7 @@ class ProjectContextService:
             conn.commit()
             return snapshot_id
 
-    def create_active_snapshot_for_task_in_transaction(
+    def _create_active_snapshot_for_task_in_transaction(
         self,
         conn: sqlite3.Connection,
         *,
@@ -1153,7 +1140,7 @@ class ProjectContextService:
             task_prompt=task_prompt,
         )
 
-    def create_snapshot_for_task_context_version_in_transaction(
+    def _create_snapshot_for_task_context_version_in_transaction(
         self,
         conn: sqlite3.Connection,
         *,
@@ -1181,36 +1168,27 @@ class ProjectContextService:
         )
         return self._insert_snapshot(conn, context_version_id, assembly)
 
-    def ensure_task_snapshot(
+    def _ensure_task_snapshot(
         self,
         task_id: str,
-        *,
-        _lifecycle_capability: object | None = None,
     ) -> str:
         """Retired direct Task-pin facade; only lifecycle code may use it."""
 
-        self._require_task_lifecycle_capability(_lifecycle_capability)
-
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
-            snapshot_id = self.ensure_task_snapshot_in_transaction(
+            snapshot_id = self._ensure_task_snapshot_in_transaction(
                 conn,
                 task_id,
-                _lifecycle_capability=_lifecycle_capability,
             )
             conn.commit()
             return snapshot_id
 
-    def ensure_task_snapshot_in_transaction(
+    def _ensure_task_snapshot_in_transaction(
         self,
         conn: sqlite3.Connection,
         task_id: str,
-        *,
-        _lifecycle_capability: object | None = None,
     ) -> str:
         """Backfill a Task pin using an already-open task/Attempt transaction."""
-
-        self._require_task_lifecycle_capability(_lifecycle_capability)
 
         task = conn.execute(
             """SELECT task_id, project_id, workspace_id, prompt, project_context_version_id,
@@ -1255,15 +1233,12 @@ class ProjectContextService:
         self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
         return snapshot_id
 
-    def preview_task_context_update(
+    def _preview_task_context_update(
         self,
         task_id: str,
         project_id: str,
         user: Mapping[str, object],
-        *,
-        _lifecycle_capability: object | None = None,
     ) -> dict[str, object]:
-        self._require_task_lifecycle_capability(_lifecycle_capability)
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             task = self._authorize_task_context_update(conn, task_id, project_id, user)
@@ -1321,7 +1296,7 @@ class ProjectContextService:
                 ),
             }
 
-    def confirm_task_context_update(
+    def _confirm_task_context_update(
         self,
         task_id: str,
         project_id: str,
@@ -1329,9 +1304,7 @@ class ProjectContextService:
         user: Mapping[str, object],
         *,
         idempotency_key: str,
-        _lifecycle_capability: object | None = None,
     ) -> dict[str, object]:
-        self._require_task_lifecycle_capability(_lifecycle_capability)
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             actor_user_id = self._user_id(user)
@@ -1408,7 +1381,7 @@ class ProjectContextService:
             conn.commit()
             return result
 
-    def update_task_context(
+    def _update_task_context(
         self,
         task_id: str,
         project_id: str,
