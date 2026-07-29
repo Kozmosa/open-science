@@ -10,7 +10,7 @@ from ainrf.agentic_researcher.models import (
     TaskOutputEvent,
 )
 from ainrf.api.idempotency import require_idempotency_key
-from ainrf.api.deprecation import deprecation_headers, mark_deprecated
+from ainrf.api.deprecation import deprecation_headers, mark_deprecated, record_deprecated_use
 from ainrf.api.schemas import (
     MessageItemResponse,
     TaskAttemptListResponse,
@@ -93,6 +93,7 @@ def _v2_task_mutation_response(
     projection: TaskProjectionService,
     user: dict[str, object],
     result: dict[str, object] | dict[str, str],
+    request: Request,
 ) -> TaskMutationResponse:
     task_id = result.get("task_id")
     attempt_id = result.get("attempt_id")
@@ -103,6 +104,11 @@ def _v2_task_mutation_response(
     dispatch = attempt.dispatch
     if dispatch is None:
         raise HTTPException(status_code=500, detail="Task Attempt has no dispatch summary")
+    record_deprecated_use(
+        request=request,
+        route="tasks.mutation.flat_response",
+        replacement="nested task, attempt, and dispatch response fields",
+    )
     return TaskMutationResponse(**task.model_dump(), task=task, attempt=attempt, dispatch=dispatch)
 
 
@@ -233,7 +239,7 @@ async def create_task(
             idempotency_key=_idempotency_key(request, payload.idempotency_key),
         )
         projection = _get_task_projection_service(request)
-        result = _v2_task_mutation_response(projection, user, created)
+        result = _v2_task_mutation_response(projection, user, created, request)
         return result
     except HTTPException:
         raise
@@ -615,7 +621,7 @@ async def fork_task(
             idempotency_key=_idempotency_key(request, payload.idempotency_key),
         )
         projection = _get_task_projection_service(request)
-        return _v2_task_mutation_response(projection, user, created)
+        return _v2_task_mutation_response(projection, user, created, request)
     except HTTPException:
         raise
     except Exception as exc:
@@ -643,6 +649,11 @@ async def retry_task(
         projection = _get_task_projection_service(request)
         original = _v2_task_summary(projection, task_id, user)
         if body.task_input is not None:
+            mark_deprecated(
+                response,
+                route="tasks.retry.task_input",
+                replacement=f"POST /tasks/{task_id}/continue",
+            )
             raise HTTPException(
                 status_code=409,
                 detail="Retry does not accept task_input; use Task continue instead",
@@ -655,7 +666,7 @@ async def retry_task(
         retried = task_application.retry_task(
             task_id, user, idempotency_key=_idempotency_key(request, body.idempotency_key)
         )
-        mutation = _v2_task_mutation_response(projection, user, retried)
+        mutation = _v2_task_mutation_response(projection, user, retried, request)
         return TaskRetryResponse(
             new_task=mutation.task,
             archived_task_id=None,

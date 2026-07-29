@@ -51,6 +51,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
         "Deprecated compatibility route or field uses",
     ),
     (
+        "ainrf_deprecated_contract_calls_total",
+        ["route", "kind"],
+        "Deprecated compatibility calls split by route, request field, and response field",
+    ),
+    (
         "ainrf_domain_legacy_write_attempts_total",
         ["source"],
         "Blocked attempts to mutate sealed legacy domain state",

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "phase": "P0",
+  "final_state": "delete",
+  "items": [
+    {
+      "id": "deprecated-db-instrumentation",
+      "path": "src/ainrf/db/instrumentation.py",
+      "symbols": ["QueryTimer", "instrument_connection"],
+      "owner": "P2",
+      "removal_phase": "P2",
+      "reason": "The module is deprecated in favor of OpenTelemetry, has no product caller, and is itself a forbidden non-api -> api.metrics dependency.",
+      "replacement": "opentelemetry.instrumentation.sqlite3.SQLite3Instrumentor plus neutral metrics ownership",
+      "delete_when": "P2 moves metrics out of api.routes and confirms no external compatibility support remains"
+    }
+  ]
+}

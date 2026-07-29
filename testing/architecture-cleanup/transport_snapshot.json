@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "owner": "P4",
+  "removal_phase": "P6",
+  "final_state": "delete",
+  "openapi": {
+    "version": "3.1.0",
+    "path_count": 394,
+    "operation_count": 511,
+    "sha256": "c0e5fe80cdfdffda710c929563ced1ec747eb7dad31bdb6dbfc50c866e824ca7"
+  },
+  "routes": {
+    "all_count": 511,
+    "all_sha256": "6b86675ba02b488065a84d4735090e2b6dc70b29edb38b27b8317aacd0ac4c7b",
+    "canonical_api_count": 170,
+    "canonical_api_sha256": "8ac20a53a052329b4a6ee09b01ff13cb68814e6f6c18312fa950600a79128b06",
+    "root_alias_count": 171,
+    "v1_alias_count": 170,
+    "deprecated_operations": []
+  },
+  "client_prefix_inventory": {
+    "canonical": "/api",
+    "aliases": ["/", "/v1"],
+    "owner": "P4",
+    "removal_phase": "P4",
+    "evidence": ["frontend/src/shared/api/client.ts", "frontend/src/shared/api/endpoints.ts", "src/ainrf/api/app.py"]
+  }
+}

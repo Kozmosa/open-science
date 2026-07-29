@@ -200,6 +200,9 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
             },
         )
         assert forked.status_code == 201
+        assert "deprecation" not in forked.headers
+        assert "sunset" not in forked.headers
+        assert "link" not in forked.headers
         forked_task_id = str(_mapping(_body(forked)["task"])["task_id"])
         assert forked_task_id != task_id
 

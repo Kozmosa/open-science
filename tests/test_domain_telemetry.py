@@ -748,6 +748,22 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     assert "ainrf_domain_metrics_risk_state_known 1.0" in text
     assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
     assert 'ainrf_deprecated_route_calls_total{route="tasks"} 1.0' in text
+    assert 'ainrf_deprecated_contract_calls_total{kind="response_field",route="tasks"} 1.0' in text
+
+
+@pytest.mark.parametrize(
+    ("surface", "expected_kind"),
+    [
+        ("tasks.prompt", "route"),
+        ("tasks.create.environment_id", "request_field"),
+        ("tasks.retry.task_input", "request_field"),
+        ("tasks.retry.new_task", "response_field"),
+        ("tasks.mutation.flat_response", "response_field"),
+        ("unknown", "other"),
+    ],
+)
+def test_deprecated_contract_kind_is_bounded(surface: str, expected_kind: str) -> None:
+    assert domain_telemetry._deprecated_contract_kind(surface) == expected_kind
 
 
 def test_uncached_scrape_failure_exports_unknown_risk_not_zero(

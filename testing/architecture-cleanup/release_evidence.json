@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "a5a12df1292a9de343d19535e72e3ab0a5c17e49",
+  "runtime_target": "production loopback nginx",
+  "recorded_at": "2026-07-29T15:03:00+08:00",
+  "observations": [
+    {
+      "dimension": "domain_mode",
+      "status": "observed_gap",
+      "evidence_type": "runtime",
+      "observed_at": "2026-07-29T15:02:00+08:00",
+      "owner": "P1 release deployment",
+      "result": "The production health endpoint is live, but the scraped runtime exports neither ainrf_domain_mode_info nor ainrf_domain_runtime_mode_info; the authenticated capability endpoint returned 401. The deployed runtime mode is therefore unknown and must not be represented as verified v2.",
+      "evidence": [
+        "GET http://127.0.0.1:8192/api/health returned 200",
+        "GET http://127.0.0.1:8192/metrics returned 200 with no domain mode series",
+        "GET http://127.0.0.1:8192/api/domain/capabilities returned 401"
+      ]
+    },
+    {
+      "dimension": "deprecated_traffic",
+      "status": "observed_gap",
+      "evidence_type": "runtime",
+      "observed_at": "2026-07-29T15:02:00+08:00",
+      "owner": "P1 release deployment / P4 compatibility cleanup",
+      "result": "The production scrape exports HTTP counters but no ainrf_deprecated_route_calls_total series, so zero deprecated traffic cannot be claimed. The P0 dashboard and detailed bounded metric are ready for the next release observation window.",
+      "evidence": [
+        "GET http://127.0.0.1:8192/metrics returned 200",
+        "ainrf_http_requests_total is present",
+        "ainrf_deprecated_route_calls_total is absent"
+      ]
+    },
+    {
+      "dimension": "client_prefix",
+      "status": "verified",
+      "evidence_type": "runtime",
+      "observed_at": "2026-07-29T15:03:00+08:00",
+      "owner": "P4",
+      "result": "Production cumulative HTTP counters contain 45,254 /api requests. The only /v1 traffic is three unauthorized /v1/models probes; no root product-alias traffic was observed after excluding health, metrics, and documentation endpoints. The WebUI release configuration also fixes API_BASE to /api.",
+      "evidence": [
+        "production /metrics prefix aggregation: /api=45254, /v1=3",
+        "the /v1 series is GET /v1/models status=401",
+        "frontend/src/shared/api/client.ts and endpoints.ts define API_BASE=/api"
+      ]
+    }
+  ]
+}

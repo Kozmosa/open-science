@@ -437,6 +437,52 @@
         }
       ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "title": "Deprecated Contract Calls by Route / Field",
+      "description": "P0 compatibility budget: actual route, request-field, and response-field calls over the selected dashboard range. Any non-zero series requires an identified caller before removal.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 35 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (route, kind) (increase(ainrf_deprecated_contract_calls_total[$__range]))",
+          "legendFormat": "{{kind}} · {{route}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      }
+    },
+    {
+      "title": "Deprecated Compatibility Traffic",
+      "description": "Durable aggregate retained across process restarts. This panel remains useful while old deployments emit only the route-group metric.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (route) (increase(ainrf_deprecated_route_calls_total[$__range]))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      }
     }
   ],
   "refresh": "30s",
