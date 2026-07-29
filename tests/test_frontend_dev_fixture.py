@@ -17,7 +17,7 @@ from ainrf.api.config import hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.cli import app
 from ainrf.db import connect
-from ainrf.domain import DomainService
+from ainrf.domain import build_domain_modules
 from ainrf.domain_control import DomainCutoverController
 
 
@@ -89,10 +89,10 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
         assert login["user"]["id"] == identity["user_id"]
         assert login["user"]["role"] == expected_role
 
-    domain = DomainService(state_root, artifact_sha=artifact_sha)
+    domain = build_domain_modules(state_root, artifact_sha=artifact_sha)
     user: dict[str, object] = {"id": "frontend-owner-user", "role": "member"}
-    projects = domain.project_console_summaries(user)
-    workspaces = domain.workspace_console_entries(user)
+    projects = domain.projects.project_console_summaries(user)
+    workspaces = domain.workspaces.workspace_console_entries(user)
     assert any(
         cast(dict[str, object], project["permissions"])["can_create_task"] is True
         for project in projects

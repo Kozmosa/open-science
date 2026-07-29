@@ -12,7 +12,12 @@ import pytest
 from ainrf.auth.service import AuthService
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
-from ainrf.domain import DomainService, ProjectContextService, TaskApplicationService
+from ainrf.domain import (
+    DomainModules,
+    ProjectContextService,
+    TaskApplicationService,
+    build_domain_modules,
+)
 from ainrf.domain.context import ContextAssembler, ContextFragment, ContextSource
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
 
@@ -23,8 +28,8 @@ def _user(identifier: str) -> dict[str, object]:
     return {"id": identifier, "role": "member"}
 
 
-def _domain(state_root: Path, artifact_sha: str) -> DomainService:
-    return DomainService(state_root, artifact_sha=artifact_sha)
+def _domain(state_root: Path, artifact_sha: str) -> DomainModules:
+    return build_domain_modules(state_root, artifact_sha=artifact_sha)
 
 
 def _context(state_root: Path, artifact_sha: str) -> ProjectContextService:
@@ -42,14 +47,14 @@ def _project_workspace(
     owner: dict[str, object],
     *,
     label: str,
-) -> tuple[DomainService, ProjectContextService, TaskApplicationService, str, str]:
+) -> tuple[DomainModules, ProjectContextService, TaskApplicationService, str, str]:
     """Create a fully authorized v2 Project/Workspace scope for Context tests."""
 
     domain = _domain(state_root, artifact_sha)
     context = _context(state_root, artifact_sha)
     tasks = _tasks(state_root, artifact_sha)
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    environment = domain.create_environment(
+    environment = domain.environments.create_environment(
         admin,
         alias=f"context-{label}",
         display_name=f"Context {label}",
@@ -67,7 +72,7 @@ def _project_workspace(
         granted_by="admin",
         reason="project context closure test",
     )
-    project = domain.create_project(
+    project = domain.projects.create_project(
         owner,
         name=f"Context {label}",
         idempotency_key=f"context-project-{label}",
@@ -75,7 +80,7 @@ def _project_workspace(
     project_id = str(project["project_id"])
     workspace_path = tmp_path / f"workspace-{label}"
     workspace_path.mkdir()
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(workspace_path),
@@ -83,7 +88,7 @@ def _project_workspace(
         idempotency_key=f"context-workspace-{label}",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         project_id,
         workspace_id,
         owner,
@@ -159,10 +164,8 @@ def test_direct_task_context_pin_facades_are_retired(state_root: Path) -> None:
     """TaskApplicationService is the sole public writer of Task Context pins."""
 
     context = _context(state_root, "b" * 64)
-    with pytest.raises(DomainConflictError, match="Task Context mutations"):
-        context.pin_active_context("task-direct", "project-direct")
-    with pytest.raises(DomainConflictError, match="Task Context mutations"):
-        context.ensure_task_snapshot("task-direct")
+    assert not hasattr(context, "pin_active_context")
+    assert not hasattr(context, "ensure_task_snapshot")
 
 
 def test_assembler_keeps_fragment_provenance_and_rejects_tampered_fingerprint() -> None:
@@ -258,7 +261,7 @@ def test_persisted_fragment_is_included_in_a_task_snapshot_with_provenance(
     state_root: Path, tmp_path: Path, committed_v2_state: str
 ) -> None:
     owner = _user("owner")
-    _domain_service, context, tasks, project_id, workspace_id = _project_workspace(
+    _domain_modules, context, tasks, project_id, workspace_id = _project_workspace(
         state_root,
         tmp_path,
         committed_v2_state,
@@ -305,7 +308,7 @@ def test_fragment_create_replays_the_original_result_for_an_idempotency_key(
     state_root: Path, tmp_path: Path, committed_v2_state: str
 ) -> None:
     owner = _user("owner")
-    _domain_service, context, _tasks, project_id, _workspace_id = _project_workspace(
+    _domain_modules, context, _tasks, project_id, _workspace_id = _project_workspace(
         state_root,
         tmp_path,
         committed_v2_state,
@@ -348,7 +351,7 @@ def test_published_context_version_freezes_fragment_manifest_and_fingerprint(
     """Later Fragment rows must not alter an already-published Version."""
 
     owner = _user("owner")
-    _domain_service, context, tasks, project_id, workspace_id = _project_workspace(
+    _domain_modules, context, tasks, project_id, workspace_id = _project_workspace(
         state_root,
         tmp_path,
         committed_v2_state,
@@ -450,7 +453,7 @@ def test_candidate_acceptance_changes_only_draft_and_publish_requires_capability
         username="editor", display_name="Editor", password="context-test-password"
     )
     editor = _user(durable_editor.id)
-    domain.add_member(project_id, durable_editor.id, "editor", False, owner)
+    domain.projects.add_member(project_id, durable_editor.id, "editor", False, owner)
 
     context.save_draft(project_id, "active brief", owner)
     first = context.publish(project_id, owner, idempotency_key="publish-first")
@@ -519,7 +522,7 @@ def test_candidate_acceptance_changes_only_draft_and_publish_requires_capability
             source_type="manual_reference",
         )
 
-    domain.add_member(project_id, durable_editor.id, "editor", True, owner)
+    domain.projects.add_member(project_id, durable_editor.id, "editor", True, owner)
     second = context.publish(project_id, editor, idempotency_key="editor-publishes")
     assert second["context_version_id"] != first["context_version_id"]
     assert "candidate evidence" in str(second["content"])
@@ -548,7 +551,7 @@ def test_context_publish_requires_owner_or_explicit_publisher_membership(
         password="context-publisher-password",
     )
     editor = _user(durable_editor.id)
-    domain.add_member(project_id, durable_editor.id, "editor", True, owner)
+    domain.projects.add_member(project_id, durable_editor.id, "editor", True, owner)
 
     context.save_draft(project_id, "Owner can publish", owner)
     owner_version = context.publish(project_id, owner, idempotency_key="owner-publish")
@@ -600,7 +603,7 @@ def test_task_context_preview_confirm_is_idempotent_and_started_attempt_never_dr
     state_root: Path, tmp_path: Path, committed_v2_state: str
 ) -> None:
     owner = _user("owner")
-    _domain_service, context, tasks, project_id, workspace_id = _project_workspace(
+    _domain_modules, context, tasks, project_id, workspace_id = _project_workspace(
         state_root,
         tmp_path,
         committed_v2_state,

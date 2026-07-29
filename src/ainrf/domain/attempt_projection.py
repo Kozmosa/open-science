@@ -253,7 +253,7 @@ class AttemptProjectionService:
     ) -> dict[str, object]:
         """Return a Project cost projection after the route checked visibility.
 
-        Project visibility is intentionally enforced by ``DomainService`` at the
+        Project visibility is intentionally enforced by the Project Module at the
         route boundary: project members may see aggregate cost for every Task in
         their visible Project, not just Tasks they personally own.
         """

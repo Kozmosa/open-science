@@ -35,7 +35,7 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
 
 
 def _seed_frontend_contract(app: FastAPI, state_root: Path) -> dict[str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     auth = AuthService(state_root=state_root)
     auth.initialize()
 

@@ -43,7 +43,7 @@ def _environment_with_owner_grant(
     workdir = state_root / "runtime-environment"
     workdir.mkdir()
     (workdir / "visible.txt").write_text("visible")
-    environment = app.state.domain_service.create_environment(
+    environment = app.state.environment_module.create_environment(
         {"id": "runtime-admin", "role": "admin"},
         alias="runtime-access-host",
         display_name="Runtime access host",
@@ -107,7 +107,7 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
     environment_id = _environment_with_owner_grant(app, state_root, "runtime-owner")
     workspace_path = state_root / "runtime-workspace"
     workspace_path.mkdir()
-    workspace = app.state.domain_service.create_workspace(
+    workspace = app.state.workspace_module.create_workspace(
         {"id": "runtime-owner", "role": "member"},
         environment_id=environment_id,
         canonical_path=str(workspace_path),

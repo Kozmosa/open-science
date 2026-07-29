@@ -14,7 +14,7 @@ from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
-from ainrf.domain import DomainPermissionError, DomainService
+from ainrf.domain import DomainPermissionError, WorkspaceModule
 from ainrf.domain_control import MaintenanceModeError
 
 logger = logging.getLogger(__name__)
@@ -49,9 +49,9 @@ class _WorkspaceUpdateKwargs(TypedDict):
     workspace_prompt: NotRequired[str | None]
 
 
-def _domain_service(request: Request) -> DomainService:
-    service = getattr(request.app.state, "domain_service", None)
-    if not isinstance(service, DomainService) or not service.v2_ready():
+def _workspace_module(request: Request) -> WorkspaceModule:
+    service = getattr(request.app.state, "workspace_module", None)
+    if not isinstance(service, WorkspaceModule) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain cutover is not ready")
     return service
 
@@ -103,7 +103,9 @@ def _serialize_domain_workspace(workspace: dict[str, object]) -> WorkspaceRespon
     )
 
 
-def _primary_environment_id(domain: DomainService, project_id: str, user: dict[str, object]) -> str:
+def _primary_environment_id(
+    domain: WorkspaceModule, project_id: str, user: dict[str, object]
+) -> str:
     for link in domain.workspace_links(project_id, user):
         if link.get("status") == "active" and link.get("is_primary") is True:
             environment_id = link.get("environment_id")
@@ -113,7 +115,7 @@ def _primary_environment_id(domain: DomainService, project_id: str, user: dict[s
 
 
 def _compatibility_workspace_path(
-    domain: DomainService,
+    domain: WorkspaceModule,
     environment_id: str,
     user: dict[str, object],
 ) -> str:
@@ -149,7 +151,7 @@ async def list_workspaces(
     project_id: str | None = None,
 ) -> WorkspaceListResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     _mark_v2_compatibility_route(request, response, "workspaces.list", "/domain/capabilities")
     try:
         workspaces = domain.list_workspaces(user, project_id=project_id)
@@ -168,7 +170,7 @@ async def update_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     _mark_v2_compatibility_route(request, response, "workspaces.update", "/domain/capabilities")
     try:
         current = domain.workspace(workspace_id, user)
@@ -216,7 +218,7 @@ async def read_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     _mark_v2_compatibility_route(request, response, "workspaces.read", "/domain/capabilities")
     try:
         workspace = domain.workspace(workspace_id, user)
@@ -234,7 +236,7 @@ async def create_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     _mark_v2_compatibility_route(request, response, "workspaces.create", "/domain/capabilities")
     try:
         environment_id = _primary_environment_id(domain, payload.project_id, user)
@@ -282,7 +284,7 @@ async def create_workspace(
 @router.post("/{workspace_id}/unregister", status_code=204)
 async def unregister_workspace(workspace_id: str, request: Request) -> Response:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     try:
         domain.unregister_workspace(
             workspace_id,
@@ -299,7 +301,7 @@ async def unregister_workspace(workspace_id: str, request: Request) -> Response:
 @router.delete("/{workspace_id}", status_code=204)
 async def delete_workspace(workspace_id: str, request: Request) -> Response:
     user = get_current_user(request)
-    domain = _domain_service(request)
+    domain = _workspace_module(request)
     try:
         domain.unregister_workspace(
             workspace_id,

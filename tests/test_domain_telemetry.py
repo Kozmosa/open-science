@@ -17,7 +17,8 @@ import yaml
 import ainrf.domain_telemetry as domain_telemetry
 from ainrf.telemetry.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
-from ainrf.domain.service import DomainConflictError, DomainService
+from ainrf.domain import build_domain_modules
+from ainrf.domain.service import DomainConflictError
 from ainrf.domain_telemetry import record_idempotency_event, refresh_domain_metrics
 
 
@@ -978,60 +979,23 @@ def test_read_only_connection_is_closed_after_active_user_lookup(
     assert connection.closed is True
 
 
-def test_domain_service_durable_idempotency_reuse_and_conflict_are_observed(tmp_path: Path) -> None:
-    db_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
-    db_path.parent.mkdir()
-    request: dict[str, object] = {
-        "project_id": "project-telemetry",
-        "workspace_id": "workspace-telemetry",
-        "task_id": "task-telemetry",
-        "attempt_id": "attempt-telemetry",
-        "runtime_session_id": "runtime-telemetry",
-        "run_id": "run-telemetry",
-    }
-    with closing(connect(db_path)) as conn:
-        run_pending(conn, "agentic_researcher")
-        conn.execute(
-            """
-            INSERT INTO domain_idempotency_requests (
-                actor_user_id, scope, idempotency_key, request_hash, response_json, created_at
-            ) VALUES ('telemetry-user', 'task.create', 'durable-key', ?, ?, ?)
-            """,
-            (
-                DomainService._request_hash(request),
-                '{"task_id":"task-telemetry","attempt_id":"attempt-telemetry"}',
-                _timestamp(),
-            ),
-        )
-        conn.commit()
+def test_project_module_durable_idempotency_reuse_and_conflict_are_observed(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    projects = build_domain_modules(state_root, artifact_sha=committed_v2_state).projects
+    actor: dict[str, object] = {"id": "telemetry-user", "role": "member"}
 
-        with structlog.testing.capture_logs() as logs:
-            result = DomainService._idempotent_result(
-                conn,
-                "telemetry-user",
-                "task.create",
-                "durable-key",
-                request,
-            )
-        assert result is not None
-        assert logs[0]["user_id"] == "telemetry-user"
-        assert logs[0]["project_id"] == "project-telemetry"
-        assert logs[0]["workspace_id"] == "workspace-telemetry"
-        assert logs[0]["task_id"] == "task-telemetry"
-        assert logs[0]["attempt_id"] == "attempt-telemetry"
-        assert logs[0]["runtime_session_id"] == "runtime-telemetry"
-        assert logs[0]["run_id"] == "run-telemetry"
-        assert "idempotency_key_fingerprint" in logs[0]
-        assert "durable-key" not in logs[0].values()
+    with structlog.testing.capture_logs() as logs:
+        first = projects.create_project(actor, name="Telemetry", idempotency_key="durable-key")
+        replay = projects.create_project(actor, name="Telemetry", idempotency_key="durable-key")
+    assert replay == first
+    reused = next(item for item in logs if item.get("outcome") == "reused")
+    assert reused["user_id"] == "telemetry-user"
+    assert "idempotency_key_fingerprint" in reused
+    assert "durable-key" not in reused.values()
 
-        with pytest.raises(DomainConflictError, match="different request"):
-            DomainService._idempotent_result(
-                conn,
-                "telemetry-user",
-                "task.create",
-                "durable-key",
-                {**request, "task_id": "other-task"},
-            )
+    with pytest.raises(DomainConflictError, match="different request"):
+        projects.create_project(actor, name="Other", idempotency_key="durable-key")
 
     text = get_metrics_text()
     assert 'ainrf_domain_idempotency_requests_total{outcome="reused"} 1.0' in text

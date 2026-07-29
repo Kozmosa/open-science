@@ -14,7 +14,7 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain import AttemptService
+from ainrf.domain.attempts import AttemptWorkerModule as AttemptService
 from ainrf.domain.worker import TaskDispatcher
 from ainrf.domain_control import DomainMaintenanceService
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
@@ -39,7 +39,7 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
 
 
 def _prepare_task_scope(app: FastAPI, state_root: Path) -> tuple[str, str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(
         _ADMIN,
         alias="task-v2-host",
@@ -90,12 +90,12 @@ def _string_list(value: object) -> list[str]:
 
 
 @pytest.mark.anyio
-async def test_v2_fuse_failure_never_falls_back_to_an_uninitialized_legacy_service(
+async def test_task_module_fuse_failure_never_falls_back_to_a_legacy_writer(
     state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    domain = app.state.domain_service
-    monkeypatch.setattr(domain, "v2_ready", lambda: False)
+    task_module = app.state.task_application_service
+    monkeypatch.setattr(task_module, "v2_ready", lambda: False)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -104,9 +104,8 @@ async def test_v2_fuse_failure_never_falls_back_to_an_uninitialized_legacy_servi
         sessions = await client.get(f"/sessions?api_key={_API_KEY}")
 
     assert tasks.status_code == 503
-    assert sessions.status_code == 503
+    assert sessions.status_code == 200
     assert _body(tasks)["detail"] == "Task domain v2 is not ready"
-    assert _body(sessions)["detail"] == "Session domain v2 is not ready"
 
 
 @pytest.mark.anyio

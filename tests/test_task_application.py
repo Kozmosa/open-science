@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from ainrf.db import connect
-from ainrf.domain import DomainService, ProjectContextService, TaskApplicationService
+from ainrf.domain import ProjectContextService, TaskApplicationService, build_domain_modules
 from ainrf.auth.service import AuthService
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
@@ -21,8 +21,10 @@ def test_create_and_retry_task_share_task_id_and_outbox(
 ) -> None:
     owner: dict[str, object] = {"id": "owner", "role": "member"}
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    domain = DomainService(state_root, artifact_sha=committed_v2_state)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
     auth = AuthService(state_root=state_root)
     auth.initialize()
     auth.grant_environment(
@@ -32,14 +34,14 @@ def test_create_and_retry_task_share_task_id_and_outbox(
         granted_by="admin",
         reason="task application test",
     )
-    project = domain.create_project(owner, name="Project")
-    workspace = domain.create_workspace(
+    project = domain.projects.create_project(owner, name="Project")
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=str(environment["environment_id"]),
         canonical_path="/tmp/task-app",
         label="Task",
     )
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         str(project["project_id"]), str(workspace["workspace_id"]), owner, idempotency_key="link"
     )
     context = ProjectContextService(state_root, artifact_sha=committed_v2_state)

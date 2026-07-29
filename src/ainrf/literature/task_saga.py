@@ -19,7 +19,8 @@ from typing import Mapping
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain import DomainAuthorizationService, TaskApplicationService
+from ainrf.domain import TaskApplicationService
+from ainrf.domain.service import DomainAuthorizationService
 from ainrf.domain.service import (
     DomainConflictError,
     DomainNotFoundError,
@@ -641,7 +642,7 @@ class LiteratureTaskSagaService:
             # persisted admin capability to replay here: this fixed role can
             # only act through the Project membership/ownership and
             # Environment grant already checked by TaskApplicationService.
-            # Keep it aligned with DomainService's explicit API-key principal
+            # Keep it aligned with the Project Module's explicit API-key principal
             # exception instead of treating an absent auth row as a bypass.
             return {"id": user_id, "role": "user"}
         if not self._auth_db_path.is_file():

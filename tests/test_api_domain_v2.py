@@ -55,7 +55,7 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
     app = create_app(config)
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     user: dict[str, object] = {"id": "api-key-user", "role": "user"}
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
     auth = AuthService(state_root=state_root)
     auth.initialize()

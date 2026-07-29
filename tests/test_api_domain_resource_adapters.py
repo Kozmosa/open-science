@@ -56,7 +56,7 @@ def _project_with_primary(
     state_root: Path,
     owner: dict[str, object],
 ) -> tuple[str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(
         {"id": "admin", "role": "admin"},
         alias="resource-adapter-host",
@@ -107,7 +107,7 @@ async def test_v2_project_adapter_preserves_visibility_and_deprecation_headers(
     viewer_headers = _headers(app, "adapter-viewer", "viewer-id", "member")
     outsider_headers = _headers(app, "adapter-outsider", "outsider-id", "member")
     project_id, _ = _project_with_primary(app, state_root, owner)
-    app.state.domain_service.add_member(project_id, "viewer-id", "viewer", False, owner)
+    app.state.project_module.add_member(project_id, "viewer-id", "viewer", False, owner)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -168,7 +168,7 @@ async def test_v2_workspace_delete_unregisters_without_deleting_directory(
     assert deleted.headers["Deprecation"] == "true"
     assert workspace_path.is_dir()
     assert hidden.status_code == 404
-    assert app.state.domain_service.workspace(workspace_id, owner)["status"] == "unregistered"
+    assert app.state.workspace_module.workspace(workspace_id, owner)["status"] == "unregistered"
 
 
 @pytest.mark.anyio
@@ -180,7 +180,7 @@ async def test_v2_workspace_registration_rejects_an_unusable_path_without_persis
     owner: dict[str, object] = {"id": "workspace-preflight-owner", "role": "member"}
     headers = _headers(app, "workspace-preflight-owner", "workspace-preflight-owner", "member")
     _, environment_id = _project_with_primary(app, state_root, owner)
-    before = app.state.domain_service.list_workspaces(owner)
+    before = app.state.workspace_module.list_workspaces(owner)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -197,7 +197,7 @@ async def test_v2_workspace_registration_rejects_an_unusable_path_without_persis
 
     assert rejected.status_code == 409
     assert "existing directory" in rejected.json()["detail"]
-    assert app.state.domain_service.list_workspaces(owner) == before
+    assert app.state.workspace_module.list_workspaces(owner) == before
 
 
 @pytest.mark.anyio
@@ -259,7 +259,7 @@ async def test_v2_environment_delete_disables_the_durable_environment(
     assert deleted.headers["Deprecation"] == "true"
     assert hidden.status_code == 404
     assert (
-        app.state.domain_service.environment(environment_id, {"id": "admin", "role": "admin"})[
+        app.state.environment_module.environment(environment_id, {"id": "admin", "role": "admin"})[
             "status"
         ]
         == "disabled"
@@ -277,7 +277,7 @@ async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visi
     admin_headers = _headers(app, "visibility-admin", "admin", "admin")
     grantee_headers = _headers(app, "visibility-grantee", "grantee-id", "member")
     outsider_headers = _headers(app, "visibility-outsider", "outsider-id", "member")
-    environment = app.state.domain_service.create_environment(
+    environment = app.state.environment_module.create_environment(
         {"id": "admin", "role": "admin"},
         alias="visibility-boundary",
         display_name="Visibility boundary",
@@ -376,7 +376,7 @@ async def test_v2_compatibility_routes_fail_closed_when_cutover_readiness_is_los
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     headers = _headers(app, "readiness-owner", "readiness-owner", "member")
-    monkeypatch.setattr(app.state.domain_service, "v2_ready", lambda: False)
+    monkeypatch.setattr(app.state.project_module, "v2_ready", lambda: False)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
@@ -396,7 +396,7 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
     owner_headers = _headers(app, "member-owner", "member-owner", "member")
     editor_headers = _headers(app, "member-editor", "member-editor", "member")
     new_owner_headers = _headers(app, "member-new-owner", "member-new-owner", "member")
-    project = app.state.domain_service.create_project(owner, name="Transferable project")
+    project = app.state.project_module.create_project(owner, name="Transferable project")
     project_id = str(project["project_id"])
 
     async with httpx.AsyncClient(
@@ -413,7 +413,7 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
             headers=_write_headers(owner_headers, "owner-transfer"),
             json={"new_owner_user_id": "member-new-owner"},
         )
-        default_project = app.state.domain_service.create_project(
+        default_project = app.state.project_module.create_project(
             owner, name="Protected default", is_default=True
         )
         default_transfer = await client.post(
@@ -445,7 +445,7 @@ async def test_v2_detection_persists_observation_without_mutating_environment(
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     admin_headers = _headers(app, "observation-admin", "admin", "admin")
-    environment = app.state.domain_service.create_environment(
+    environment = app.state.environment_module.create_environment(
         {"id": "admin", "role": "admin"},
         alias="observation-host",
         display_name="Observation host",
@@ -482,5 +482,7 @@ async def test_v2_detection_persists_observation_without_mutating_environment(
     assert read_back.status_code == 200
     assert read_back.json()["latest_detection"]["summary"] == "persistent observation"
     assert (state_root / "detections" / f"{environment_id}.json").is_file()
-    current = app.state.domain_service.environment(environment_id, {"id": "admin", "role": "admin"})
+    current = app.state.environment_module.environment(
+        environment_id, {"id": "admin", "role": "admin"}
+    )
     assert current["connection_json"] == original_connection

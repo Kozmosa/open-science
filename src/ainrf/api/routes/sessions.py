@@ -20,9 +20,8 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 def _projection(request: Request) -> SessionProjectionService:
-    domain = getattr(request.app.state, "domain_service", None)
     service = getattr(request.app.state, "session_projection_service", None)
-    if domain is None or service is None or not domain.v2_ready():
+    if service is None:
         raise HTTPException(status_code=503, detail="Session domain v2 is not ready")
     if not isinstance(service, SessionProjectionService):
         raise HTTPException(status_code=500, detail="Session projection service is invalid")

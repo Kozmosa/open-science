@@ -14,13 +14,16 @@ from ainrf.auth.service import AuthService
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import (
-    AttemptService,
-    DomainService,
     OverviewSnapshotService,
     ProjectContextService,
     TaskApplicationService,
+    build_domain_modules,
 )
-from ainrf.domain.attempts import DispatchClaim, DispatchClaimError
+from ainrf.domain.attempts import (
+    AttemptWorkerModule as AttemptService,
+    DispatchClaim,
+    DispatchClaimError,
+)
 from ainrf.domain.worker import (
     DispatchRunResult,
     TaskDispatcher,
@@ -56,8 +59,10 @@ def _queued_task(
     auth.initialize()
     seed_user(auth, username="worker-owner", role="member", user_id="owner")
     seed_user(auth, username="worker-admin", role="admin", user_id="admin")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
     environment_id = str(environment["environment_id"])
     auth.grant_environment(
         env_id=environment_id,
@@ -66,10 +71,10 @@ def _queued_task(
         granted_by="admin",
         reason="domain worker test",
     )
-    project = domain.create_project(owner, name="Project")
+    project = domain.projects.create_project(owner, name="Project")
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(workspace_path),
@@ -77,7 +82,7 @@ def _queued_task(
     )
     project_id = str(project["project_id"])
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
+    domain.projects.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "Project context", owner)
     context.publish(project_id, owner)
@@ -362,7 +367,7 @@ async def test_active_maintenance_worker_never_constructs_writable_services(
         pytest.fail("active-maintenance worker must not construct a writable service")
 
     monkeypatch.setattr("ainrf.domain.worker.DomainCutoverController", unexpected_constructor)
-    monkeypatch.setattr("ainrf.domain.worker.AttemptService", unexpected_constructor)
+    monkeypatch.setattr("ainrf.domain.worker.AttemptWorkerModule", unexpected_constructor)
     monkeypatch.setattr("ainrf.domain.worker.OverviewSnapshotPlanner", unexpected_constructor)
 
     dispatcher = TaskDispatcher(

@@ -61,7 +61,7 @@ from ainrf.domain_control import (
 )
 from ainrf.domain import (
     AttemptProjectionService,
-    DomainService,
+    build_domain_modules,
     OverviewSnapshotService,
     PersistentEnvironmentFacade,
     PersistentWorkspaceFacade,
@@ -306,14 +306,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # every known user at startup: a retry after either database commits is
         # harmless because the domain default-Project write is idempotent.
         def reconcile_v2_default_projects() -> None:
-            domain_service: DomainService = app.state.domain_service
+            project_module = app.state.project_module
             for account in auth_service.list_users():
                 auth_service.ensure_domain_default_project_provisioning(
                     account.id, account.username
                 )
             for user_id, username in auth_service.pending_domain_default_project_provisioning():
                 try:
-                    domain_service.provision_default_project(user_id=user_id, username=username)
+                    project_module.provision_default_project(user_id=user_id, username=username)
                 except Exception as exc:
                     _LOG.exception(
                         "v2_default_project_provisioning_failed",
@@ -420,7 +420,9 @@ def create_app(
         # initialize an external runtime is attached.  Exiting maintenance
         # therefore requires a clean restart to regain the writable graph.
         app.state.domain_cutover_controller = None
-        app.state.domain_service = None
+        app.state.project_module = None
+        app.state.workspace_module = None
+        app.state.environment_module = None
         app.state.project_context_service = None
         app.state.persistent_environment_facade = None
         app.state.task_application_service = None
@@ -451,7 +453,10 @@ def create_app(
 
         environment_service = PersistentEnvironmentFacade(api_config.state_root)
         workspace_service = PersistentWorkspaceFacade(api_config.state_root)
-        app.state.domain_service = DomainService(api_config.state_root, artifact_sha=artifact_sha)
+        domain_modules = build_domain_modules(api_config.state_root, artifact_sha=artifact_sha)
+        app.state.project_module = domain_modules.projects
+        app.state.workspace_module = domain_modules.workspaces
+        app.state.environment_module = domain_modules.environments
         app.state.project_context_service = ProjectContextService(
             api_config.state_root, artifact_sha=artifact_sha
         )

@@ -14,8 +14,8 @@ from typing import Mapping
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain.attempts import AttemptService
-from ainrf.domain.context import ProjectContextService, task_context_lifecycle_capability
+from ainrf.domain.attempts import AttemptWorkerModule
+from ainrf.domain.context import ProjectContextService
 from ainrf.domain.dispatch_wakeup import DispatchWakeup
 from ainrf.domain.service import (
     DomainAuthorizationService,
@@ -71,6 +71,11 @@ class TaskApplicationService:
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
+
+    def v2_ready(self) -> bool:
+        """Return readiness for this Module's committed authoritative writer."""
+
+        return self._write_fence.v2_ready()
 
     def _record_permission_denial(
         self,
@@ -175,7 +180,7 @@ class TaskApplicationService:
             )
             task_id = f"task-{uuid4().hex}"
             snapshot_id, context_version_id = (
-                self._context_service.create_active_snapshot_for_task_in_transaction(
+                self._context_service._create_active_snapshot_for_task_in_transaction(
                     conn,
                     project_id=project_id,
                     workspace_id=workspace_id,
@@ -413,7 +418,7 @@ class TaskApplicationService:
             if cached is not None:
                 return self._string_result(cached)
             self._owned_task(conn, task_id, dict(user))
-            result = AttemptService._resolve_launch_unknown_in_transaction(
+            result = AttemptWorkerModule._resolve_launch_unknown_in_transaction(
                 conn,
                 task_id=task_id,
                 attempt_id=attempt_id,
@@ -760,11 +765,10 @@ class TaskApplicationService:
     ) -> dict[str, object]:
         """Expose the B4 diff phase through the one Task lifecycle facade."""
 
-        return self._context_service.preview_task_context_update(
+        return self._context_service._preview_task_context_update(
             task_id,
             project_id,
             user,
-            _lifecycle_capability=task_context_lifecycle_capability(),
         )
 
     def confirm_task_context_update(
@@ -778,13 +782,12 @@ class TaskApplicationService:
     ) -> dict[str, object]:
         """Confirm a previously reviewed Context diff through this facade."""
 
-        return self._context_service.confirm_task_context_update(
+        return self._context_service._confirm_task_context_update(
             task_id,
             project_id,
             preview_id,
             user,
             idempotency_key=idempotency_key,
-            _lifecycle_capability=task_context_lifecycle_capability(),
         )
 
     def move_task(
@@ -826,7 +829,7 @@ class TaskApplicationService:
                 expected_environment_id=str(task["environment_id"]),
             )
             snapshot_id = (
-                self._context_service.create_snapshot_for_task_context_version_in_transaction(
+                self._context_service._create_snapshot_for_task_context_version_in_transaction(
                     conn,
                     project_id=project_id,
                     workspace_id=str(task["workspace_id"]),
@@ -913,7 +916,7 @@ class TaskApplicationService:
             new_prompt = prompt if prompt is not None else str(source["prompt"])
             new_title = title if title is not None else str(source["title"])
             snapshot_id, context_version_id = (
-                self._context_service.create_active_snapshot_for_task_in_transaction(
+                self._context_service._create_active_snapshot_for_task_in_transaction(
                     conn,
                     project_id=target_project_id,
                     workspace_id=workspace_id,
@@ -1057,10 +1060,9 @@ class TaskApplicationService:
         )
         snapshot_id = context_snapshot_id or task["project_context_snapshot_id"]
         if not isinstance(snapshot_id, str) or not snapshot_id:
-            snapshot_id = self._context_service.ensure_task_snapshot_in_transaction(
+            snapshot_id = self._context_service._ensure_task_snapshot_in_transaction(
                 conn,
                 str(task["task_id"]),
-                _lifecycle_capability=task_context_lifecycle_capability(),
             )
         return self._create_attempt_in_transaction(
             conn,
@@ -1088,10 +1090,9 @@ class TaskApplicationService:
 
         context_version_id = task["project_context_version_id"]
         if not isinstance(context_version_id, str) or not context_version_id:
-            self._context_service.ensure_task_snapshot_in_transaction(
+            self._context_service._ensure_task_snapshot_in_transaction(
                 conn,
                 str(task["task_id"]),
-                _lifecycle_capability=task_context_lifecycle_capability(),
             )
             refreshed = conn.execute(
                 "SELECT project_context_version_id FROM tasks WHERE task_id = ?",
@@ -1106,7 +1107,7 @@ class TaskApplicationService:
         combined_prompt = (
             f"{original_prompt.rstrip()}\n\nContinuation request:\n{continuation_prompt.lstrip()}"
         )
-        return self._context_service.create_snapshot_for_task_context_version_in_transaction(
+        return self._context_service._create_snapshot_for_task_context_version_in_transaction(
             conn,
             project_id=str(task["project_id"]),
             workspace_id=str(task["workspace_id"]),

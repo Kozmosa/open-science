@@ -12,7 +12,7 @@ import pytest
 from ainrf.auth.service import AuthService
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
-from ainrf.domain import DomainService, ProjectContextService, TaskDispatcher
+from ainrf.domain import ProjectContextService, TaskDispatcher, build_domain_modules
 from ainrf.domain.service import DomainPermissionError
 from ainrf.domain_control import (
     DomainCutoverController,
@@ -61,8 +61,10 @@ def _scope(state_root: Path) -> tuple[dict[str, object], str, str]:
     auth.initialize()
     seed_user(auth, username="literature-owner", role="member", user_id="owner")
     seed_user(auth, username="literature-admin", role="admin", user_id="admin")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
     auth.grant_environment(
         env_id=str(environment["environment_id"]),
         user_id="owner",
@@ -70,17 +72,17 @@ def _scope(state_root: Path) -> tuple[dict[str, object], str, str]:
         granted_by="admin",
         reason="literature task saga test",
     )
-    project = domain.create_project(owner, name="Project")
+    project = domain.projects.create_project(owner, name="Project")
     project_id = str(project["project_id"])
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=str(environment["environment_id"]),
         canonical_path="/tmp/lit",
         label="Lit",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="attach")
-    domain.set_primary_workspace(project_id, workspace_id, owner, idempotency_key="link")
+    domain.projects.attach_workspace(project_id, workspace_id, owner, idempotency_key="attach")
+    domain.projects.set_primary_workspace(project_id, workspace_id, owner, idempotency_key="link")
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "context", owner)
     context.publish(project_id, owner)
@@ -97,8 +99,8 @@ def _v2_scope(state_root: Path, tmp_path: Path) -> tuple[dict[str, object], str,
     auth.initialize()
     seed_user(auth, username="v2-literature-owner", role="member", user_id="owner")
     seed_user(auth, username="v2-literature-admin", role="admin", user_id="admin")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    environment = domain.create_environment(
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
         admin, alias="v2-host", display_name="V2 Host", connection={}
     )
     environment_id = str(environment["environment_id"])
@@ -109,17 +111,19 @@ def _v2_scope(state_root: Path, tmp_path: Path) -> tuple[dict[str, object], str,
         granted_by="admin",
         reason="v2 literature worker test",
     )
-    project = domain.create_project(owner, name="V2 Literature Project")
+    project = domain.projects.create_project(owner, name="V2 Literature Project")
     project_id = str(project["project_id"])
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(tmp_path / "v2-literature-workspace"),
         label="V2 Literature Workspace",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="v2-attach")
-    domain.set_primary_workspace(project_id, workspace_id, owner, idempotency_key="v2-link")
+    domain.projects.attach_workspace(project_id, workspace_id, owner, idempotency_key="v2-attach")
+    domain.projects.set_primary_workspace(
+        project_id, workspace_id, owner, idempotency_key="v2-link"
+    )
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "V2 context", owner)
     context.publish(project_id, owner, idempotency_key="v2-context")
@@ -225,8 +229,8 @@ def _former_admin_scope(state_root: Path) -> tuple[dict[str, object], str, str, 
     auth.initialize()
     seed_user(auth, username="former-admin", role="admin", user_id="former-admin")
     seed_user(auth, username="project-owner", role="member", user_id="project-owner")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    environment = domain.create_environment(
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
         former_admin, alias="former-admin-host", display_name="Former Admin Host", connection={}
     )
     environment_id = str(environment["environment_id"])
@@ -237,19 +241,19 @@ def _former_admin_scope(state_root: Path) -> tuple[dict[str, object], str, str, 
         granted_by="former-admin",
         reason="fixture requires an explicit tenant execution grant",
     )
-    project = domain.create_project(project_owner, name="Project owned by another user")
+    project = domain.projects.create_project(project_owner, name="Project owned by another user")
     project_id = str(project["project_id"])
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         former_admin,
         environment_id=environment_id,
         canonical_path=str(state_root / "former-admin-workspace"),
         label="Former Admin Workspace",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         project_id, workspace_id, former_admin, idempotency_key="former-admin-attach"
     )
-    domain.set_primary_workspace(
+    domain.projects.set_primary_workspace(
         project_id, workspace_id, former_admin, idempotency_key="former-admin-primary"
     )
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
@@ -595,7 +599,7 @@ def test_literature_research_task_reuses_same_key_after_workspace_state_changes(
         workspace_id=None,
         idempotency_key="retry-after-detach",
     )
-    DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA).detach_workspace(
+    build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA).projects.detach_workspace(
         project_id,
         workspace_id,
         owner,
@@ -701,7 +705,7 @@ def test_literature_research_task_recovers_after_crash_before_task_checkpoint(
             (work_item_id,),
         )
         conn.commit()
-    DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA).detach_workspace(
+    build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA).projects.detach_workspace(
         project_id,
         workspace_id,
         owner,
@@ -890,8 +894,8 @@ def test_literature_research_task_does_not_persist_an_intent_during_maintenance(
 def test_literature_research_task_requires_owned_executable_primary(state_root: Path) -> None:
     owner, project_id, workspace_id = _scope(state_root)
     _seed_legacy_paper(state_root)
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    domain.detach_workspace(
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    domain.projects.detach_workspace(
         project_id,
         workspace_id,
         owner,
