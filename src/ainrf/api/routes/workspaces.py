@@ -7,37 +7,23 @@ from typing import NotRequired, TypedDict
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
 
 from ainrf.api.deprecation import mark_deprecated
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.auth.permissions import get_current_user
-from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
+from ainrf.api.schemas import (
+    WorkspaceCreateRequest,
+    WorkspaceListResponse,
+    WorkspaceResponse,
+    WorkspaceUpdateRequest,
+)
 from ainrf.domain import DomainPermissionError, WorkspaceModule
 from ainrf.domain_control import MaintenanceModeError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
-
-
-class WorkspaceCreateRequest(BaseModel):
-    project_id: str = Field(default="default", min_length=1)
-    label: str = Field(min_length=1)
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
-class WorkspaceUpdateRequest(BaseModel):
-    project_id: str | None = Field(default=None, min_length=1)
-    label: str | None = Field(default=None, min_length=1)
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str | None = Field(default=None, min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class _WorkspaceUpdateKwargs(TypedDict):

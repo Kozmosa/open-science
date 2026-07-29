@@ -28,8 +28,8 @@ import type {
   EnvironmentListResponse,
   EnvironmentRecord,
   ProjectEnvironmentReferenceListResponse,
-  ProjectEnvironmentReferenceUpdateRequest,
 } from '@/shared/types';
+import type { ProjectEnvironmentReferenceUpdateRequest } from '@/shared/api/transportTypes';
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useEnvironmentSelection } from '../components/environment';

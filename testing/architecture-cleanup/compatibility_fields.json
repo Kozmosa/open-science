@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "owner": "P4",
-  "removal_phase": "P4",
+  "removal_phase": "P5",
   "final_state": "delete",
   "common_replacement": "Idempotency-Key header or canonical generated transport contract",
   "items": [

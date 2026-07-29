@@ -10,8 +10,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TypedDict
 
-from fastapi import FastAPI
-
 
 class ImportEdge(TypedDict):
     source: str
@@ -227,19 +225,9 @@ def frontend_layer_violations(repo_root: Path) -> list[FrontendViolation]:
 
 
 def openapi_inventory() -> tuple[dict[str, object], list[RouteItem]]:
-    from ainrf.api.app import ROUTERS
-    from ainrf.api.routes.metrics import create_metrics_router
-    from ainrf.api.config import ApiConfig
+    from ainrf.api.transport_schema import build_transport_openapi
 
-    app = FastAPI()
-    for router in ROUTERS:
-        app.include_router(router)
-        app.include_router(router, prefix="/v1")
-        app.include_router(router, prefix="/api")
-    app.include_router(
-        create_metrics_router(ApiConfig(api_key_hashes=frozenset(), state_root=Path("/tmp")))
-    )
-    schema = app.openapi()
+    schema = build_transport_openapi()
     routes: list[RouteItem] = []
     paths = schema.get("paths", {})
     assert isinstance(paths, dict)

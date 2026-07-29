@@ -24,6 +24,7 @@ from ainrf.api.middleware import (
 )
 from ainrf.api.middleware.request_context import build_request_context_middleware
 from ainrf.api.middleware.request_logging import build_request_logging_middleware
+from ainrf.api.openapi import stable_operation_id
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.environments import router as environments_router
@@ -373,6 +374,7 @@ def create_app(
         docs_url=docs_url,
         redoc_url=redoc_url,
         openapi_url=openapi_url,
+        generate_unique_id_function=stable_operation_id,
     )
     app.state.api_config = api_config
     maintenance_service = DomainMaintenanceService(api_config.state_root)
@@ -570,8 +572,8 @@ def create_app(
 
     app.middleware("http")(build_exception_handler_middleware())
     for router in ROUTERS:
-        app.include_router(router)
-        app.include_router(router, prefix="/v1")
+        app.include_router(router, deprecated=True)
+        app.include_router(router, prefix="/v1", deprecated=True)
         app.include_router(router, prefix="/api")
     # Metrics endpoint (gated by config)
     if api_config.metrics_enabled:

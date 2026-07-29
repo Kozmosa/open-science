@@ -46,7 +46,7 @@ def test_deprecated_contract_surface_does_not_expand() -> None:
     payload = json.loads(_DEPRECATED_SURFACE_PATH.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
     assert payload["owner"] == "P4"
-    assert payload["removal_phase"] == "P4"
+    assert payload["removal_phase"] == "P5"
     assert payload["final_state"] == "delete"
     for item in payload["items"]:
         assert item["owner"] == "P4"
@@ -63,7 +63,7 @@ def test_compatibility_fields_are_individually_inventoried() -> None:
     components = _mapping(schema["components"])
     schemas = _mapping(components["schemas"])
     assert payload["owner"] == "P4"
-    assert payload["removal_phase"] == "P4"
+    assert payload["removal_phase"] == "P5"
     assert payload["final_state"] == "delete"
     assert payload["common_replacement"]
     observed: set[tuple[str, str]] = set()

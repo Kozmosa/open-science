@@ -41,6 +41,8 @@ run_backend_gate() {
 }
 
 run_frontend_lint() {
+  _info "Generated transport contract drift"
+  _run npm --prefix frontend run check:transport
   _info "Frontend lint"
   _run npm --prefix frontend run lint
 }

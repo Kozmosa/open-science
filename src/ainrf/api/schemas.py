@@ -1356,3 +1356,79 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=4)
+
+
+class WorkspaceCreateRequest(BaseModel):
+    project_id: str = Field(default="default", min_length=1)
+    label: str = Field(min_length=1)
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    project_id: str | None = Field(default=None, min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str | None = Field(default=None, min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
+
+
+class CodexDefaultsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    codex_config_toml: str | None = None
+    codex_auth_json: str | None = None
+
+
+class DeploymentVersionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    short_commit: str | None = None
+    committed_at: str | None = None
+
+
+class SearchBackendItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    display_name: str
+    description: str
+    requires_mcp: bool
+
+
+class SearchSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active_backend: str
+    available_backends: list[SearchBackendItem]
+    auto_start_mcp_servers: list[str]
+
+
+class SearchSettingsUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active_backend: str | None = None
+    auto_start_mcp_servers: list[str] | None = None
+
+
+class McpServerSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    description: str
+
+
+class McpServersResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    servers: list[McpServerSummary]
+
+
+class MonitoringServiceItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    display_name: str
+    description: str
+    url: str | None = None
+    icon: str
+
+
+class MonitoringSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    services: list[MonitoringServiceItem]

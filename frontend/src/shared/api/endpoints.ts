@@ -1,25 +1,17 @@
 import { api } from './client';
-import type { ChangePasswordRequest,
+import type {
   AccessTokenResponse,
-  AdminPasswordResetRequest,
   AdminUserItem,
   AdminUserListResponse,
-  AdminUserUpdateRequest,
   AttemptListResponse,
   AuthTokenResponse,
-  LoginRequest,
-  RegisterRequest,
   CodexDefaults,
   CollaboratorItem,
   CollaboratorListResponse,
-  CollaboratorRequest,
   EnvAccessItem,
   EnvAccessListResponse,
-  EnvAccessRequest,
-  EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
-  EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
   FileUploadResponse,
@@ -34,53 +26,64 @@ import type { ChangePasswordRequest,
   LiteratureTopicPreview,
   LiteratureTaskIntent,
   ProjectCostSummary,
-  ProjectCreateRequest,
   ProjectEnvironmentReference,
-  ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
-  ProjectEnvironmentReferenceUpdateRequest,
   ProjectListResponse,
   ProjectRecord,
-  ProjectUpdateRequest,
   SessionDetailRecord,
   SessionListResponse,
   SessionsBatchDetailResponse,
   SkillDetail,
-  SkillImportRequest,
   SkillImportResponse,
   SkillListResponse,
   SkillPreview,
   SkillRegistryInstallResponse,
   SkillRegistryListResponse,
   SkillRegistryStatus,
-  SkillRegistryUpdateRequest,
   SkillRegistryUpdateResponse,
   SystemHealth,
-  TaskCreatePayload,
   TaskListResponse,
   TaskOutputListResponse,
   TaskRecord,
   TaskRetryResponse,
   TaskSummary,
   TaskTokenUsageSummary,
-  TaskUpdateProjectRequest,
   TerminalSession,
   UserInfo,
   UserSessionPairListResponse,
-  WorkspaceCreateRequest,
   WorkspaceListResponse,
   WorkspaceRecord,
-  WorkspaceUpdateRequest,
   ResourcesResponse,
   TaskEdge,
-  TaskEdgeCreateRequest,
   TaskEdgeListResponse,
   TaskMessagesResponse,
   SearchSettingsResponse,
-  SearchSettingsUpdateRequest,
   DeploymentVersionResponse,
   MonitoringSettingsResponse,
 } from '@/shared/types';
+import type {
+  AdminPasswordResetRequest as TransportAdminPasswordResetRequest,
+  AdminUserUpdateRequest as TransportAdminUserUpdateRequest,
+  ChangePasswordRequest as TransportChangePasswordRequest,
+  CollaboratorRequest as TransportCollaboratorRequest,
+  EnvAccessRequest as TransportEnvAccessRequest,
+  EnvironmentCreateRequest as TransportEnvironmentCreateRequest,
+  EnvironmentUpdateRequest as TransportEnvironmentUpdateRequest,
+  LoginRequest as TransportLoginRequest,
+  ProjectCreateRequest as TransportProjectCreateRequest,
+  ProjectEnvironmentReferenceCreateRequest as TransportProjectEnvironmentReferenceCreateRequest,
+  ProjectEnvironmentReferenceUpdateRequest as TransportProjectEnvironmentReferenceUpdateRequest,
+  ProjectUpdateRequest as TransportProjectUpdateRequest,
+  RegisterRequest as TransportRegisterRequest,
+  SearchSettingsUpdateRequest as TransportSearchSettingsUpdateRequest,
+  SkillImportRequest as TransportSkillImportRequest,
+  SkillRegistryUpdateRequest as TransportSkillRegistryUpdateRequest,
+  TaskCreatePayload as TransportTaskCreatePayload,
+  TaskEdgeCreateRequest as TransportTaskEdgeCreateRequest,
+  TaskUpdateProjectRequest as TransportTaskUpdateProjectRequest,
+  WorkspaceCreateRequest as TransportWorkspaceCreateRequest,
+  WorkspaceUpdateRequest as TransportWorkspaceUpdateRequest,
+} from './transportTypes';
 
 const DEFAULT_PROJECT_ID = 'default';
 const API_BASE = '/api';
@@ -121,7 +124,7 @@ export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
 export const previewSkillSettings = (skillId: string): Promise<SkillPreview> =>
   api.get<SkillPreview>(`/skills/${skillId}/preview`);
 
-export const importSkill = (payload: SkillImportRequest): Promise<SkillImportResponse> =>
+export const importSkill = (payload: TransportSkillImportRequest): Promise<SkillImportResponse> =>
   api.post<SkillImportResponse>('/skills/import', payload);
 
 export const getHealth = (): Promise<SystemHealth> => api.get<SystemHealth>('/health');
@@ -171,12 +174,12 @@ export const getWorkspaces = (): Promise<WorkspaceListResponse> =>
 export const getWorkspace = (workspaceId: string): Promise<WorkspaceRecord> =>
   api.get<WorkspaceRecord>(`/workspaces/${workspaceId}`);
 
-export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<WorkspaceRecord> =>
+export const createWorkspace = (payload: TransportWorkspaceCreateRequest): Promise<WorkspaceRecord> =>
   api.post<WorkspaceRecord>('/workspaces', payload);
 
 export const updateWorkspace = (
   workspaceId: string,
-  payload: WorkspaceUpdateRequest,
+  payload: TransportWorkspaceUpdateRequest,
   idempotencyKey: string,
 ): Promise<WorkspaceRecord> =>
   api.patch<WorkspaceRecord>(`/workspaces/${workspaceId}`, payload, {
@@ -217,7 +220,7 @@ export const getTaskTokenUsageSummary = (params: { includeArchived?: boolean } =
 };
 
 export const createTask = (
-  payload: TaskCreatePayload,
+  payload: TransportTaskCreatePayload,
   idempotencyKey: string,
 ): Promise<TaskSummary> =>
   api.post<TaskSummary>('/tasks', payload, {
@@ -264,7 +267,7 @@ export const forkTask = (
 });
 
 export const updateTaskProject = (taskId: string, projectId: string): Promise<TaskSummary> =>
-  api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TaskUpdateProjectRequest);
+  api.patch<TaskSummary>(`/tasks/${taskId}/project`, { project_id: projectId } satisfies TransportTaskUpdateProjectRequest);
 
 export const updateTask = (
   taskId: string,
@@ -292,7 +295,7 @@ export const getTaskEdges = (projectId: string): Promise<TaskEdgeListResponse> =
 
 export const createTaskEdge = (
   projectId: string,
-  payload: TaskEdgeCreateRequest,
+  payload: TransportTaskEdgeCreateRequest,
   idempotencyKey: string,
 ): Promise<TaskEdge> =>
   api.post<TaskEdge>(`/projects/${projectId}/task-edges`, payload, {
@@ -344,13 +347,13 @@ export const getEnvironment = (environmentId: string): Promise<EnvironmentRecord
   api.get<EnvironmentRecord>(`/environments/${environmentId}`);
 
 export const createEnvironment = (
-  payload: EnvironmentCreateRequest
+  payload: TransportEnvironmentCreateRequest
 ): Promise<EnvironmentRecord> =>
   api.post<EnvironmentRecord>('/environments', payload);
 
 export const updateEnvironment = (
   environmentId: string,
-  payload: EnvironmentUpdateRequest
+  payload: TransportEnvironmentUpdateRequest
 ): Promise<EnvironmentRecord> =>
   api.patch<EnvironmentRecord>(`/environments/${environmentId}`, payload);
 
@@ -367,12 +370,12 @@ export const getProjects = (): Promise<ProjectListResponse> =>
 export const getProject = (projectId: string): Promise<ProjectRecord> =>
   api.get<ProjectRecord>(`/projects/${projectId}`);
 
-export const createProject = (payload: ProjectCreateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
+export const createProject = (payload: TransportProjectCreateRequest, idempotencyKey?: string): Promise<ProjectRecord> =>
   api.post<ProjectRecord>('/projects', payload, {
     headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
   });
 
-export const updateProject = (projectId: string, payload: ProjectUpdateRequest, idempotencyKey: string): Promise<ProjectRecord> =>
+export const updateProject = (projectId: string, payload: TransportProjectUpdateRequest, idempotencyKey: string): Promise<ProjectRecord> =>
   api.patch<ProjectRecord>(`/projects/${projectId}`, payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
@@ -386,14 +389,14 @@ export const getProjectEnvironmentReferences = (
   api.get<ProjectEnvironmentReferenceListResponse>(`/projects/${projectId}/environment-refs`);
 
 export const createProjectEnvironmentReference = (
-  payload: ProjectEnvironmentReferenceCreateRequest,
+  payload: TransportProjectEnvironmentReferenceCreateRequest,
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<ProjectEnvironmentReference> =>
   api.post<ProjectEnvironmentReference>(`/projects/${projectId}/environment-refs`, payload);
 
 export const updateProjectEnvironmentReference = (
   environmentId: string,
-  payload: ProjectEnvironmentReferenceUpdateRequest,
+  payload: TransportProjectEnvironmentReferenceUpdateRequest,
   projectId: string = DEFAULT_PROJECT_ID
 ): Promise<ProjectEnvironmentReference> =>
   api.patch<ProjectEnvironmentReference>(
@@ -469,7 +472,7 @@ export const installSkillRegistry = (registryId: string): Promise<SkillRegistryI
 
 export const updateSkillRegistry = (
   registryId: string,
-  payload: SkillRegistryUpdateRequest
+  payload: TransportSkillRegistryUpdateRequest
 ): Promise<SkillRegistryUpdateResponse> =>
   api.post<SkillRegistryUpdateResponse>(`/skill-registries/${registryId}/update`, payload);
 
@@ -509,21 +512,21 @@ export const getProjectCostSummary = (projectId: string): Promise<ProjectCostSum
   api.get<ProjectCostSummary>(`/projects/${projectId}/cost-summary`);
 
 export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get('/admin/users');
-export const updateAdminUser = (userId: string, payload: AdminUserUpdateRequest): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
-export const resetUserPassword = (userId: string, payload: AdminPasswordResetRequest): Promise<void> => api.put(`/admin/users/${userId}/password`, payload);
+export const updateAdminUser = (userId: string, payload: TransportAdminUserUpdateRequest): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
+export const resetUserPassword = (userId: string, payload: TransportAdminPasswordResetRequest): Promise<void> => api.put(`/admin/users/${userId}/password`, payload);
 export const getCollaborators = (projectId: string): Promise<CollaboratorListResponse> => api.get(`/projects/${projectId}/collaborators`);
-export const addCollaborator = (projectId: string, payload: CollaboratorRequest): Promise<CollaboratorItem> => api.put(`/projects/${projectId}/collaborators`, payload);
+export const addCollaborator = (projectId: string, payload: TransportCollaboratorRequest): Promise<CollaboratorItem> => api.put(`/projects/${projectId}/collaborators`, payload);
 export const removeCollaborator = (projectId: string, userId: string): Promise<void> => api.delete(`/projects/${projectId}/collaborators/${userId}`);
 export const getEnvAccess = (envId: string): Promise<EnvAccessListResponse> => api.get(`/admin/environments/${envId}/access`);
-export const grantEnvAccess = (envId: string, payload: EnvAccessRequest): Promise<EnvAccessItem> => api.put(`/admin/environments/${envId}/access`, payload);
+export const grantEnvAccess = (envId: string, payload: TransportEnvAccessRequest): Promise<EnvAccessItem> => api.put(`/admin/environments/${envId}/access`, payload);
 export const revokeEnvAccess = (envId: string, userId: string): Promise<void> => api.delete(`/admin/environments/${envId}/access/${userId}`);
 
-export const login = (payload: LoginRequest): Promise<AuthTokenResponse> => api.post<AuthTokenResponse>('/auth/login', payload);
-export const register = (payload: RegisterRequest): Promise<{ message: string }> => api.post<{ message: string }>('/auth/register', payload);
+export const login = (payload: TransportLoginRequest): Promise<AuthTokenResponse> => api.post<AuthTokenResponse>('/auth/login', payload);
+export const register = (payload: TransportRegisterRequest): Promise<{ message: string }> => api.post<{ message: string }>('/auth/register', payload);
 export const refreshToken = (refreshTokenValue: string): Promise<AccessTokenResponse> => api.post<AccessTokenResponse>('/auth/refresh', { refresh_token: refreshTokenValue });
 export const logoutApi = (refreshTokenValue: string): Promise<void> => api.post<void>('/auth/logout', { refresh_token: refreshTokenValue });
 export const getMe = (): Promise<UserInfo> => api.get<UserInfo>('/auth/me');
-export const changePassword = (payload: ChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);
+export const changePassword = (payload: TransportChangePasswordRequest): Promise<void> => api.post<void>('/auth/change-password', payload);
 
 // ── Literature tracking endpoints ──────────────────────────
 
@@ -626,7 +629,7 @@ export const getLiteratureResearchTasks = (paperId: string): Promise<{ items: Li
 export const getSearchSettings = (): Promise<SearchSettingsResponse> =>
   api.get<SearchSettingsResponse>('/settings/search');
 
-export const updateSearchSettings = (payload: SearchSettingsUpdateRequest): Promise<SearchSettingsResponse> =>
+export const updateSearchSettings = (payload: TransportSearchSettingsUpdateRequest): Promise<SearchSettingsResponse> =>
   api.patch<SearchSettingsResponse>('/settings/search', payload);
 
 export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>

@@ -1,8 +1,10 @@
-import { http, HttpResponse } from 'msw';
+import { http as mswHttp, HttpResponse } from 'msw';
+import type {
+  LiteratureTopicInput,
+} from '@/shared/types';
 import type {
   EnvironmentCreateRequest,
   EnvironmentUpdateRequest,
-  LiteratureTopicInput,
   ProjectCreateRequest,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
@@ -12,8 +14,9 @@ import type {
   TaskEdgeCreateRequest,
   WorkspaceCreateRequest,
   WorkspaceUpdateRequest,
-} from '@/shared/types';
+} from './transportTypes';
 import { ApiError } from './client';
+import { createTransportMockAdapter } from './transport';
 import { frontendV2MockHandlers, resetFrontendV2MockState } from './mockScenarioV2';
 import {
   mockArchiveTask,
@@ -68,6 +71,8 @@ import {
   resetMockTaskState,
   resetMockTerminalSession,
 } from './mock';
+
+const http = createTransportMockAdapter(mswHttp);
 
 type Params = Record<string, string | readonly string[] | undefined>;
 
@@ -142,7 +147,7 @@ function resolveJson<Resolver>(resolver: Resolver): Resolver {
 }
 
 export const legacyMockHandlers = [
-  http.get('/build-info.json', () => HttpResponse.json({ short_commit: null, committed_at: null })),
+  mswHttp.get('/build-info.json', () => HttpResponse.json({ short_commit: null, committed_at: null })),
   http.get('/api/health', () => HttpResponse.json(mockGetHealth())),
   http.get('/api/settings/codex-defaults', () => HttpResponse.json({ codex_config_toml: null, codex_auth_json: null })),
   http.get('/api/settings/deployment-version', () => HttpResponse.json({ short_commit: null, committed_at: null })),
