@@ -1,39 +1,33 @@
-"""Resumable source snapshots and importer support for domain migration."""
+"""Lazy domain migration exports."""
 
-from ainrf.domain_migration.audit import LegacyDomainRecordAuditService
-from ainrf.domain_migration.importer import (
-    DomainImporter,
-    MigrationInspection,
-    MigrationInterruptedError,
-    MigrationRecordResult,
-    MigrationReport,
-    ReconciliationReport,
-)
-from ainrf.domain_migration.reconciliation import (
-    DomainReconciliationService,
-    MigrationFinalization,
-    MigrationIssue,
-)
-from ainrf.domain_migration.sources import (
-    SourceManifest,
-    SourceSnapshotSet,
-    SourceStaleError,
-    capture_source_manifest,
-)
+from typing import Any
 
-__all__ = [
-    "DomainImporter",
-    "DomainReconciliationService",
-    "LegacyDomainRecordAuditService",
-    "MigrationFinalization",
-    "MigrationInspection",
-    "MigrationInterruptedError",
-    "MigrationIssue",
-    "MigrationRecordResult",
-    "MigrationReport",
-    "ReconciliationReport",
-    "SourceManifest",
-    "SourceSnapshotSet",
-    "SourceStaleError",
-    "capture_source_manifest",
-]
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {
+    "LegacyDomainRecordAuditService": (
+        "ainrf.domain_migration.audit",
+        "LegacyDomainRecordAuditService",
+    ),
+    "DomainImporter": ("ainrf.domain_migration.importer", "DomainImporter"),
+    "MigrationInspection": ("ainrf.domain_migration.importer", "MigrationInspection"),
+    "MigrationInterruptedError": ("ainrf.domain_migration.importer", "MigrationInterruptedError"),
+    "MigrationRecordResult": ("ainrf.domain_migration.importer", "MigrationRecordResult"),
+    "MigrationReport": ("ainrf.domain_migration.importer", "MigrationReport"),
+    "ReconciliationReport": ("ainrf.domain_migration.importer", "ReconciliationReport"),
+    "DomainReconciliationService": (
+        "ainrf.domain_migration.reconciliation",
+        "DomainReconciliationService",
+    ),
+    "MigrationFinalization": ("ainrf.domain_migration.reconciliation", "MigrationFinalization"),
+    "MigrationIssue": ("ainrf.domain_migration.reconciliation", "MigrationIssue"),
+    "SourceManifest": ("ainrf.domain_migration.sources", "SourceManifest"),
+    "SourceSnapshotSet": ("ainrf.domain_migration.sources", "SourceSnapshotSet"),
+    "SourceStaleError": ("ainrf.domain_migration.sources", "SourceStaleError"),
+    "capture_source_manifest": ("ainrf.domain_migration.sources", "capture_source_manifest"),
+}
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

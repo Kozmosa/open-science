@@ -15,7 +15,7 @@ import structlog
 import yaml
 
 import ainrf.domain_telemetry as domain_telemetry
-from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
+from ainrf.telemetry.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
 from ainrf.domain.service import DomainConflictError, DomainService
 from ainrf.domain_telemetry import record_idempotency_event, refresh_domain_metrics

@@ -1,26 +1,17 @@
-"""LLM observability abstraction layer.
+"""Lazy LLM observability exports."""
 
-Provides a decoupled interface for tracing LLM calls, recording token usage,
-and reporting to external observability backends (e.g. Litefuse).
+from typing import Any
+from ainrf._lazy_exports import resolve_export
 
-When no backend is configured, all operations are no-ops via NullReporter.
-"""
-
-from __future__ import annotations
-
-from ainrf.observability.protocol import (
-    NullReporter,
-    ObservabilityConfig,
-    ObservabilityReporter,
-    SafeReporter,
+_EXPORTS = {
+    name: ("ainrf.observability.protocol", name)
+    for name in ("NullReporter", "ObservabilityConfig", "ObservabilityReporter", "SafeReporter")
+}
+_EXPORTS.update(
+    {name: ("ainrf.observability.factory", name) for name in ("get_reporter", "reset_reporter")}
 )
-from ainrf.observability.factory import get_reporter, reset_reporter
+__all__ = list(_EXPORTS)
 
-__all__ = [
-    "get_reporter",
-    "reset_reporter",
-    "NullReporter",
-    "ObservabilityConfig",
-    "ObservabilityReporter",
-    "SafeReporter",
-]
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

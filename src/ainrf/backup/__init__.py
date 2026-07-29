@@ -1,17 +1,20 @@
-"""OpenScience data backup and restore."""
+"""Lazy backup and restore exports."""
 
-from __future__ import annotations
+from typing import Any
 
-from ainrf.backup.service import (
-    BackupManifest,
-    BackupService,
-    StagedRestoreValidator,
-    validate_staged_domain_restore,
-)
+from ainrf._lazy_exports import resolve_export
 
-__all__ = [
-    "BackupManifest",
-    "BackupService",
-    "StagedRestoreValidator",
-    "validate_staged_domain_restore",
-]
+_EXPORTS = {
+    name: ("ainrf.backup.service", name)
+    for name in (
+        "BackupManifest",
+        "BackupService",
+        "StagedRestoreValidator",
+        "validate_staged_domain_restore",
+    )
+}
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

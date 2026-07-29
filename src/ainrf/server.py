@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import signal
 import subprocess
@@ -12,8 +13,19 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
-from ainrf.api import ApiConfig, create_app
 from ainrf.logging import configure_logging
+from ainrf.runtime.product_config import ApiConfig
+
+
+def create_app(config: ApiConfig) -> FastAPI:
+    """Load the HTTP Adapter at the process composition root."""
+
+    module = importlib.import_module("ainrf.api.app")
+    factory = getattr(module, "create_app")
+    app = factory(config)
+    if not isinstance(app, FastAPI):
+        raise TypeError("HTTP composition root did not return a FastAPI application")
+    return app
 
 
 def create_development_app() -> FastAPI:

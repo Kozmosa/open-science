@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 import json as json_mod
 import os
-import shlex
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +23,11 @@ from ainrf.onboarding import (
 )
 from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
+from ainrf.runtime.container_profile import (
+    ParsedSSHCommand,
+    build_container_profile,
+    parse_ssh_command,
+)
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
 from ainrf.domain_control import (
@@ -50,6 +54,7 @@ from ainrf.development import (
     prepare_frontend_dev_fixture,
 )
 from ainrf.logging import configure_cli_logging
+from ainrf.harness_engine.factory import create_engine
 
 
 app = typer.Typer(
@@ -171,7 +176,11 @@ def domain_worker(
             err=True,
         )
         raise typer.Exit(code=2)
-    dispatcher = TaskDispatcher(state_root, artifact_sha=artifact_sha)
+    dispatcher = TaskDispatcher(
+        state_root,
+        artifact_sha=artifact_sha,
+        engine_factory=lambda engine_type: create_engine(engine_type, state_root=state_root),
+    )
     try:
         if once:
             result = asyncio.run(dispatcher.run_once())
@@ -351,24 +360,6 @@ def container_add(
         f"Saved container profile `{profile_name}` -> {profile['user']}@{profile['host']}:{profile['port']} "
         f"(project_dir={project_dir})"
     )
-
-
-def build_container_profile(
-    name: str,
-    ssh_command: str,
-    project_dir: str,
-    password: str,
-) -> tuple[str, dict[str, str | int | None]]:
-    parsed = _parse_ssh_command(ssh_command)
-    profile = {
-        "host": parsed.host,
-        "port": parsed.port,
-        "user": parsed.user,
-        "ssh_key_path": parsed.ssh_key_path,
-        "project_dir": project_dir,
-        "ssh_password": password or None,
-    }
-    return name, profile
 
 
 @app.command()
@@ -1327,60 +1318,11 @@ def main() -> None:
     app()
 
 
-@dataclass(slots=True)
-class ParsedSSHCommand:
-    host: str
-    user: str
-    port: int = 22
-    ssh_key_path: str | None = None
-
-
 def _parse_ssh_command(command: str) -> ParsedSSHCommand:
-    tokens = shlex.split(command)
-    if not tokens:
-        raise typer.BadParameter("SSH command cannot be empty")
-    if tokens[0] == "ssh":
-        tokens = tokens[1:]
-    port = 22
-    user: str | None = None
-    ssh_key_path: str | None = None
-    host: str | None = None
-    index = 0
-    while index < len(tokens):
-        token = tokens[index]
-        if token == "-p":
-            index += 1
-            if index >= len(tokens):
-                raise typer.BadParameter("Invalid SSH command: missing value for -p")
-            port = int(tokens[index])
-        elif token.startswith("-p") and token != "-p":
-            port = int(token[2:])
-        elif token == "-l":
-            index += 1
-            if index >= len(tokens):
-                raise typer.BadParameter("Invalid SSH command: missing value for -l")
-            user = tokens[index]
-        elif token == "-i":
-            index += 1
-            if index >= len(tokens):
-                raise typer.BadParameter("Invalid SSH command: missing value for -i")
-            ssh_key_path = tokens[index]
-        elif token.startswith("-"):
-            if token in {"-o", "-J"}:
-                index += 1
-        else:
-            host = token
-        index += 1
-    if host is None:
-        raise typer.BadParameter("Invalid SSH command: missing target host")
-    if "@" in host:
-        parsed_user, parsed_host = host.split("@", 1)
-        if parsed_user:
-            user = parsed_user
-        host = parsed_host
-    if user is None:
-        raise typer.BadParameter("Invalid SSH command: missing user (use user@host or -l user)")
-    return ParsedSSHCommand(host=host, user=user, port=port, ssh_key_path=ssh_key_path)
+    try:
+        return parse_ssh_command(command)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def _ensure_api_key_hashes_configured(state_root: Path) -> None:

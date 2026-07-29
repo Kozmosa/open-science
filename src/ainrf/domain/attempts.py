@@ -14,7 +14,7 @@ from ainrf.db import connect, run_pending
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import DomainCutoverError, MaintenanceLease, MaintenanceModeError
-from ainrf.harness_engine import EngineEvent
+from ainrf.harness_engine.base import EngineEvent
 
 
 def _now() -> str:

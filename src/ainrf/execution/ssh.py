@@ -94,7 +94,7 @@ class SSHExecutor:
 
         import time as _time
 
-        from ainrf.api.routes.metrics import inc_counter, observe_histogram
+        from ainrf.telemetry.metrics import inc_counter, observe_histogram
 
         start = _time.monotonic()
         try:
@@ -299,7 +299,7 @@ class SSHExecutor:
                 attempt += 1
                 try:
                     self._logger.info("connect_attempt", attempt=attempt)
-                    from ainrf.api.routes.metrics import inc_counter as _inc
+                    from ainrf.telemetry.metrics import inc_counter as _inc
 
                     _inc("ainrf_ssh_connection_attempt_total", {"host": self._container.host})
                     self._connection = await self._open_connection()

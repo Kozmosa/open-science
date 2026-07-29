@@ -11,7 +11,7 @@ from pathlib import Path
 
 import bcrypt
 
-from ainrf.api.config import hash_api_key
+from ainrf.runtime.product_config import hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.backup import BackupService
 from ainrf.db import connect

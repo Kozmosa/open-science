@@ -16,7 +16,7 @@ from typing import Mapping
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from ainrf.api.config import hash_api_key
+from ainrf.runtime.product_config import hash_api_key
 from ainrf.development.instance import (
     FrontendDevInstance,
     ensure_frontend_dev_instance,

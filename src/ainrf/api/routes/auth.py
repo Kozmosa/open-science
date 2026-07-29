@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from ainrf.api.routes.metrics import inc_counter
-from ainrf.api.config import ApiConfig
+from ainrf.runtime.product_config import ApiConfig
 from ainrf.api.schemas import (
     ChangePasswordRequest,
     AccessTokenResponse,
@@ -17,6 +16,7 @@ from ainrf.api.schemas import (
     UserInfoResponse,
 )
 from ainrf.auth import AuthService
+from ainrf.telemetry.metrics import inc_counter
 
 _LOG = logging.getLogger(__name__)
 

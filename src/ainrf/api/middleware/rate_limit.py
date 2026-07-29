@@ -144,8 +144,8 @@ def build_rate_limit_middleware() -> Callable[
         if bucket.consume():
             return await call_next(request)
 
-        from ainrf.api.routes.sla_metrics import rate_limited
-        from ainrf.api.routes.metrics import route_template_for_request
+        from ainrf.api.http_telemetry import route_template_for_request
+        from ainrf.telemetry.sla import rate_limited
 
         route = route_template_for_request(request)
         rate_limited("user_quota", route)

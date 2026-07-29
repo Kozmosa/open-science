@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
-from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 from ainrf.db import connect
 from ainrf.domain.attempts import (
     AttemptControlRequest,
@@ -33,20 +32,18 @@ from ainrf.domain_control import (
     MaintenanceLease,
     MaintenanceModeError,
 )
-from ainrf.harness_engine import (
+from ainrf.harness_engine.base import (
     EngineEvent,
     ExecutionContext,
     HarnessEngine,
     HarnessEngineNotSupportedError,
     HarnessEngineType,
     RuntimeProbeStatus,
-    get_engine,
 )
-from ainrf.harness_engine.db_session_store import DbSessionStore
-from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
 from ainrf.literature.planner import run_planner_cycle
 from ainrf.literature.tracking import LiteratureTrackingService
+from ainrf.runtime import tenant_identity
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +162,7 @@ class TaskDispatcher:
             participant_id=self.dispatcher_id,
             details={"component": "domain-worker"},
         )
-        self._engine_factory = engine_factory or self._default_engine_factory
+        self._engine_factory = engine_factory or self._missing_engine_factory
         # Construction only stores a Path.  ``notify()`` is called after an
         # outbox commit, so retaining this lightweight helper before the
         # maintenance probe cannot create the wakeup file or its directory.
@@ -1279,7 +1276,7 @@ class TaskDispatcher:
         task_id: str,
         environment_id: str,
     ) -> str | None:
-        if not _is_container_environment():
+        if not tenant_identity.is_container_environment():
             return None
         if not self._auth_db_path.is_file():
             raise DispatchAuthorizationError(
@@ -1320,8 +1317,8 @@ class TaskDispatcher:
                 task_id=task_id,
                 environment_id=environment_id,
             )
-        tenant_user = tenant_linux_username(row[0])
-        if not _linux_user_exists(tenant_user):
+        tenant_user = tenant_identity.tenant_linux_username(row[0])
+        if not tenant_identity.linux_user_exists(tenant_user):
             raise DispatchAuthorizationError(
                 "Task owner Linux tenant is not provisioned",
                 resource="workspace",
@@ -1382,14 +1379,12 @@ class TaskDispatcher:
         engine = self._engines.get(engine_type)
         if engine is None:
             engine = self._engine_factory(engine_type)
-            if engine_type is HarnessEngineType.AGENT_SDK and isinstance(engine, AgentSdkEngine):
-                engine._session_store = DbSessionStore(str(self._db_path))
             self._engines[engine_type] = engine
         return engine
 
     @staticmethod
-    def _default_engine_factory(engine_type: HarnessEngineType) -> HarnessEngine:
-        return get_engine(engine_type.value)
+    def _missing_engine_factory(engine_type: HarnessEngineType) -> HarnessEngine:
+        raise RuntimeError(f"no engine factory configured for {engine_type.value}")
 
     @staticmethod
     def _json_string_list(value: object) -> list[str]:

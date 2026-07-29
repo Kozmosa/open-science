@@ -111,16 +111,16 @@ class SessionManager:
             user = self._auth_service.get_user(app_user_id)
         except Exception:
             return None
-        from ainrf.auth.service import (
-            _is_container_environment,
-            _linux_user_exists,
+        from ainrf.runtime.tenant_identity import (
+            is_container_environment,
+            linux_user_exists,
             tenant_linux_username,
         )
 
-        if not _is_container_environment():
+        if not is_container_environment():
             return None
         linux_user = tenant_linux_username(user.username)
-        if not _linux_user_exists(linux_user):
+        if not linux_user_exists(linux_user):
             return None
         return linux_user
 

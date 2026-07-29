@@ -15,7 +15,8 @@ import math
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
-from ainrf.api.routes.sla_metrics import rate_limited
+from ainrf.telemetry.metrics import observe_histogram
+from ainrf.telemetry.sla import rate_limited
 
 router = APIRouter(prefix="/client-metrics", tags=["client-metrics"])
 
@@ -123,7 +124,5 @@ def _normalize_web_vital(
 
 def _record_web_vital(metric_name: str, value: float, rating: str) -> None:
     """Record one already-normalized Core Web Vital histogram observation."""
-
-    from ainrf.api.routes.metrics import observe_histogram
 
     observe_histogram(metric_name, value, {"rating": rating})

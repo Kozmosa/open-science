@@ -131,7 +131,7 @@ profile，供后续容器连接配置复用。
 生成哈希示例：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from ainrf.api.config import hash_api_key; print(hash_api_key('your-api-key'))"
+UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from ainrf.runtime.product_config import hash_api_key; print(hash_api_key('your-api-key'))"
 ```
 
 设置环境变量：
