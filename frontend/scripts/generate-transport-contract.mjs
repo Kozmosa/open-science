@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,14 @@ function compareGenerated(actualRoot, expectedRoot) {
 }
 
 try {
-  run('uv', ['run', 'python', 'scripts/export_transport_openapi.py', '--output', schemaPath], repoRoot);
+  const uvAvailable = spawnSync('uv', ['--version'], { stdio: 'ignore' }).status === 0;
+  if (uvAvailable) {
+    run('uv', ['run', 'python', 'scripts/export_transport_openapi.py', '--output', schemaPath], repoRoot);
+  } else if (checkOnly) {
+    copyFileSync(join(generatedRoot, 'openapi.json'), schemaPath);
+  } else {
+    throw new Error('uv is required to export the authoritative FastAPI OpenAPI schema');
+  }
   const generatorOutput = join(outputRoot, '.generator');
   mkdirSync(generatorOutput, { recursive: true });
   run(
