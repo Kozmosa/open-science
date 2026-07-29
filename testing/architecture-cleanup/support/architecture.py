@@ -185,6 +185,7 @@ def deprecated_contract_surfaces(repo_root: Path) -> list[DeprecatedSurface]:
             if function_name not in {
                 "deprecation_headers",
                 "mark_deprecated",
+                "record_deprecated_use",
                 "_mark_v2_compatibility_route",
             }:
                 continue

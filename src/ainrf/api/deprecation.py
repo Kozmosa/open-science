@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from starlette.requests import Request
 from starlette.responses import Response
 
 from ainrf.domain_telemetry import record_deprecated_route
@@ -10,6 +11,16 @@ from ainrf.domain_telemetry import record_deprecated_route
 # RFC 7231 date makes the compatibility contract machine-readable without
 # claiming that a production cleanup has already been approved.
 DEFAULT_SUNSET = "Thu, 31 Dec 2026 23:59:59 GMT"
+
+
+def record_deprecated_use(*, request: Request, route: str, replacement: str) -> None:
+    """Record field-level compatibility use without deprecating the operation."""
+
+    record_deprecated_route(
+        route=route,
+        replacement=replacement,
+        state_root=request.app.state.api_config.state_root,
+    )
 
 
 def deprecation_headers(*, route: str, replacement: str) -> dict[str, str]:
