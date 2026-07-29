@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "owner": "architecture-cleanup P0-P3",
+  "removal_phase": "P6",
+  "final_state": "delete",
+  "python_import_graph": {
+    "edge_count": 504,
+    "sha256": "e69713ea4f3d06b4bb5c277217f47c3b4b2a0a466c9d5fbb6c3c690e176d28c7",
+    "cycles": [
+      ["ainrf.api", "ainrf.api.app", "ainrf.api.middleware", "ainrf.api.middleware.rate_limit", "ainrf.api.routes", "ainrf.api.routes.client_logs", "ainrf.api.routes.client_metrics", "ainrf.api.routes.domain", "ainrf.api.routes.terminal"],
+      ["ainrf.api.config", "ainrf.api.routes.metrics", "ainrf.domain_telemetry", "ainrf.execution", "ainrf.execution.ssh", "ainrf.runtime", "ainrf.runtime.config"],
+      ["ainrf.auth", "ainrf.auth.service"],
+      ["ainrf.backup", "ainrf.backup.service", "ainrf.domain", "ainrf.domain.attempts", "ainrf.domain.context", "ainrf.domain.overview", "ainrf.domain.overview_jobs", "ainrf.domain.service", "ainrf.domain.session_projection", "ainrf.domain.task_projection", "ainrf.domain.tasks", "ainrf.domain.worker", "ainrf.domain.write_fence", "ainrf.domain_control", "ainrf.domain_control.cutover", "ainrf.domain_migration", "ainrf.domain_migration.importer", "ainrf.domain_migration.reconciliation", "ainrf.literature.planner", "ainrf.literature.task_saga", "ainrf.literature.tasks", "ainrf.literature.work"],
+      ["ainrf.cli", "ainrf.onboarding"],
+      ["ainrf.development", "ainrf.development.browser", "ainrf.development.stack"],
+      ["ainrf.environments", "ainrf.environments.local", "ainrf.environments.probing", "ainrf.environments.protocols", "ainrf.environments.service", "ainrf.terminal.sessions", "ainrf.terminal.tmux"],
+      ["ainrf.files", "ainrf.files.cache", "ainrf.files.service"],
+      ["ainrf.harness_engine", "ainrf.harness_engine.engines"],
+      ["ainrf.observability", "ainrf.observability.factory", "ainrf.observability.litefuse_reporter"],
+      ["ainrf.skills", "ainrf.skills.discovery", "ainrf.skills.loader"]
+    ]
+  },
+  "python_public_interface": {
+    "item_count": 1519,
+    "sha256": "1b5437907a7e9f25536fbab797dc10cb1d2f9997b3d8ad0fe921c21ed5ee6497"
+  }
+}

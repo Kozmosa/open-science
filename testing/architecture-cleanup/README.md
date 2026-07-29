@@ -4,6 +4,12 @@ This directory contains disposable development guards for the architecture clean
 It is intentionally outside `tests/`, the repository pytest `testpaths`, `scripts/test.sh`,
 `scripts/ci.sh`, and GitHub Actions. It must be deleted in P6.
 
+- **Owner:** architecture cleanup P0-P6
+- **Current phase:** P0 baseline and freeze (Release E/P1 debt is already closed)
+- **Maximum lifetime:** through P6 only; delete the entire directory before P6 exits
+- **Final deletion condition:** P6 architecture/documentation audit is complete and no normal test,
+  CI entrypoint, workflow, or required check refers to these assets
+
 ## Run locally
 
 ```bash
@@ -18,11 +24,29 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest \
 
 | Asset | Owner | Introduced | Removal | Final state |
 | --- | --- | --- | --- | --- |
+| `architecture_baseline.json` | P0/P3 | P0 | P6 | delete |
+| `backend_api_import_allowlist.json` | P2 | P0 | P2/P6 | delete |
+| `frontend_layer_allowlist.json` | P5 | P0 | P5/P6 | delete |
+| `transport_snapshot.json` | P4 | P0 | P6 | delete |
+| `compatibility_inventory.json` | P0-P6 | P0 | P6 | delete |
+| `release_evidence.json` | P0/P1 | P0 | P6 | delete |
 | `release_e_debt.json` | P1 | P1-A | P1-D/P6 | delete |
 | `release_e_compatibility_budget.json` | P1 | P1-D | P4/P6 | delete |
+| `support/` | P0-P6 | P0 | P6 | delete |
+| `test_architecture_baseline.py` | P0-P3 | P0 | P6 | delete |
+| `test_frontend_layers.py` | P0/P5 | P0 | P6 | delete |
+| `test_transport_inventory.py` | P0/P4 | P0 | P6 | delete |
+| `test_compatibility_inventory.py` | P0-P6 | P0 | P6 | delete |
+| `test_local_only_contract.py` | P0-P6 | P0 | P6 | delete |
 | `test_release_e_inventory.py` | P1 | P1-A | P6 | delete |
 | `pytest.ini` | P1 | P1-A | P6 | delete |
 
 Rules in `release_e_debt.json` are monotonic ceilings: implementation may reduce matches, but may
 not add new files or occurrences. When a debt item is removed, update its status and evidence in the
 same change. Do not regenerate the baseline to accept growth.
+
+The backend and frontend allowlists are also monotonic: remove entries as dependencies are fixed,
+and never add or rebase entries to make a regression pass. Import graph, public Interface, OpenAPI,
+and route snapshots may change during an intentional cleanup slice, but the same review must explain
+the delta and update the snapshot explicitly. Snapshot changes are not a substitute for expanding an
+allowlist.

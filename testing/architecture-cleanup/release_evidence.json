@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "release_commit": "a5a12df1292a9de343d19535e72e3ab0a5c17e49",
+  "recorded_at": "2026-07-29T14:59:00+08:00",
+  "observations": [
+    {"dimension":"domain_mode","status":"verified","evidence_type":"release-config","observed_at":"2026-07-29T14:30:00+08:00","owner":"P1","evidence":["src/ainrf/api/app.py:_assert_domain_runtime_fuse requires committed v2 artifact","deploy/docker-compose.cpu.yml:OPENSCIENCE_DOMAIN_ARTIFACT_SHA","docs/LLM-Working/worklog/2026-07-29.md:managed full-profile status recorded committed v2 epoch and first v2 write"]},
+    {"dimension":"deprecated_traffic","status":"budgeted","evidence_type":"telemetry-budget","observed_at":"2026-07-29T14:30:00+08:00","owner":"P4/P5","evidence":["ainrf_deprecated_route_calls_total meters retained adapters","deploy/config/prometheus/rules/ainrf-alerts.yml alerts on non-zero traffic","release_e_compatibility_budget.json records replacement, deadline, and owner for every retained adapter"]},
+    {"dimension":"client_prefix","status":"verified","evidence_type":"release-config","observed_at":"2026-07-29T14:59:00+08:00","owner":"P4","evidence":["frontend/src/shared/api/client.ts fixes API_BASE to /api","frontend/src/shared/api/endpoints.ts fixes API_BASE to /api","src/ainrf/api/app.py retains root and /v1 as explicitly inventoried aliases"]}
+  ]
+}
