@@ -7,8 +7,6 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
   ProjectUpdateRequest,
-  SessionCreateRequest,
-  SessionUpdateRequest,
   SkillImportRequest,
   TaskCreatePayload,
   TaskEdgeCreateRequest,
@@ -23,7 +21,6 @@ import {
   mockCreateEnvironment,
   mockCreateProject,
   mockCreateProjectEnvironmentReference,
-  mockCreateSession,
   mockCreateTask,
   mockCreateTaskEdge,
   mockCreateTerminalSession,
@@ -31,7 +28,6 @@ import {
   mockDeleteEnvironment,
   mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
-  mockDeleteSession,
   mockDeleteTask,
   mockDeleteTaskEdge,
   mockDeleteTerminalSession,
@@ -66,7 +62,6 @@ import {
   mockUpdateEnvironment,
   mockUpdateProject,
   mockUpdateProjectEnvironmentReference,
-  mockUpdateSession,
   mockUpdateTaskProject,
   mockUpdateWorkspace,
   resetMockEnvironmentState,
@@ -288,15 +283,6 @@ export const legacyMockHandlers = [
     return HttpResponse.json(mockGetSessions({ projectId: search.get('project_id') ?? undefined, status: search.get('status') ?? undefined }));
   }),
   http.get('/api/sessions/:sessionId', ({ params }) => mockJson(() => mockGetSession(textParam(params, 'sessionId')))),
-  http.post('/api/sessions', resolveJson(async ({ request }) => {
-    const body = await request.json() as SessionCreateRequest;
-    return mockJson(() => mockCreateSession(body));
-  })),
-  http.patch('/api/sessions/:sessionId', resolveJson(async ({ params, request }) => {
-    const body = await request.json() as SessionUpdateRequest;
-    return mockJson(() => mockUpdateSession(textParam(params, 'sessionId'), body));
-  })),
-  http.delete('/api/sessions/:sessionId', ({ params }) => mockEmpty(() => mockDeleteSession(textParam(params, 'sessionId')))),
   http.get('/api/sessions/:sessionId/attempts', ({ params }) => HttpResponse.json(mockGetAttempts(textParam(params, 'sessionId')))),
 
   http.get('/api/literature/overview', () => HttpResponse.json({ last_successful_check_at: null, next_scheduled_check_at: null, active_check: null, counts: { today: 0, unread: 0, saved: 0, updated: 0 } })),

@@ -124,7 +124,7 @@ class AttemptService:
 
         AttemptService is intentionally a dispatcher repository, not an
         alternate lifecycle admission path.  Its public mutations must not be
-        usable by a legacy/validate process simply because they bypassed HTTP
+        usable by an unauthorized process simply because it bypassed HTTP
         startup wiring.
         """
 

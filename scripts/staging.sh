@@ -71,7 +71,7 @@ _assert_no_background_worker_profiles() {
   running_services="$("${COMPOSE_CMD[@]}" ps --services --status running 2>/dev/null || true)"
   while IFS= read -r running_service; do
     case "${running_service}" in
-      domain-worker-staging|literature-worker-staging|literature-planner-staging|literature-redis-staging)
+      domain-worker-staging|literature-worker-staging|literature-redis-staging)
         _error "Refusing staging lifecycle action while ${running_service} is running."
         _error "Stop the project first; a clone smoke must not run background runtime/Literature workers."
         return 1

@@ -11,7 +11,6 @@ import time
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,7 +25,6 @@ CUTOVER_REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
     "api",
     "task-dispatcher",
     "literature-worker",
-    "literature-planner",
     "overview-planner",
     "terminal-session-reconciler",
     "admin-cli",
@@ -48,12 +46,6 @@ _MAINTENANCE_VOLATILE_SOURCE_NAMES = frozenset(
         "domain_telemetry_delivery_failure.json",
     }
 )
-
-
-class DomainModelMode(StrEnum):
-    LEGACY = "legacy"
-    VALIDATE = "validate"
-    V2 = "v2"
 
 
 class MaintenanceModeError(RuntimeError):

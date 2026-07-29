@@ -12,7 +12,6 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.domain.environment_facade import PersistentEnvironmentFacade
-from ainrf.domain_control import DomainModelMode
 from ainrf.environments.models import (
     DetectionSnapshot,
     DetectionStatus,
@@ -35,7 +34,6 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("resource-adapter-key")}),
             state_root=state_root,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )

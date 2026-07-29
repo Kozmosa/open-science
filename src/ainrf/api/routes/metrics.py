@@ -161,7 +161,7 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
     (
         "ainrf_domain_runtime_mode_info",
         ["mode"],
-        "One for the API process DomainModelMode currently in effect",
+        "One for the authoritative domain runtime mode currently in effect",
     ),
     (
         "ainrf_domain_contract_version",
@@ -535,7 +535,7 @@ def create_metrics_router(config: ApiConfig) -> APIRouter:
 
         refresh_domain_metrics(
             app_config.state_root,
-            runtime_mode=app_config.domain_model_mode.value,
+            runtime_mode="v2",
             read_only=bool(getattr(request.app.state, "maintenance_startup_read_only", False)),
         )
         return PlainTextResponse(get_metrics_text())

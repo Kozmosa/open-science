@@ -8,7 +8,6 @@
 from ainrf.domain_control.service import (
     CUTOVER_REQUIRED_PARTICIPANT_TYPES,
     DomainMaintenanceService,
-    DomainModelMode,
     DomainWriteParticipant,
     MaintenancePreflight,
     MaintenanceLease,
@@ -43,7 +42,6 @@ __all__ = [
     "DomainCutoverController",
     "DomainCutoverError",
     "DomainMaintenanceService",
-    "DomainModelMode",
     "DomainWriteParticipant",
     "LegacySourceDriftError",
     "LegacySourceFile",

@@ -1,35 +1,44 @@
-"""Authorization guards for v2 runtime adapters.
+"""Authorization guards for authoritative domain runtime adapters.
 
 The persistent runtime facades deliberately only translate durable control
-plane rows into legacy runtime shapes.  They do not carry a request actor, so
+plane rows into runtime shapes.  They do not carry a request actor, so
 routes that use them must establish v2 visibility before touching a terminal
 or file-system capability.
 """
 
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
+
 from fastapi import HTTPException, status
 from starlette.requests import HTTPConnection
 
-from ainrf.domain import DomainService
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_telemetry import record_permission_denied
-from ainrf.domain_control import DomainModelMode
 
 
-def v2_domain_service(request: HTTPConnection) -> DomainService | None:
-    """Return the ready v2 service, or ``None`` while legacy remains active.
+@runtime_checkable
+class RuntimeDomainReader(Protocol):
+    """Small domain read Interface required by runtime transport Modules."""
 
-    A process configured for v2 must not silently fall back to a facade-only
-    read when the cutover fuse is unavailable: that would bypass authorization
-    at precisely the point where the durable control plane is authoritative.
-    """
+    def v2_ready(self) -> bool: ...
 
-    config = getattr(request.app.state, "api_config", None)
-    if config is None or config.domain_model_mode is not DomainModelMode.V2:
-        return None
+    def environment(
+        self,
+        environment_id: str,
+        user: dict[str, object],
+        *,
+        include_disabled: bool = False,
+    ) -> dict[str, object]: ...
+
+    def workspace(self, workspace_id: str, user: dict[str, object]) -> dict[str, object]: ...
+
+
+def v2_domain_service(request: HTTPConnection) -> RuntimeDomainReader:
+    """Return the ready authoritative Domain Module or fail closed."""
+
     service = getattr(request.app.state, "domain_service", None)
-    if not isinstance(service, DomainService) or not service.v2_ready():
+    if not isinstance(service, RuntimeDomainReader) or not service.v2_ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Domain v2 cutover is not ready",
@@ -45,8 +54,6 @@ def require_v2_active_environment(
     """Require a visible, active durable Environment before runtime access."""
 
     service = v2_domain_service(request)
-    if service is None:
-        return
     try:
         service.environment(environment_id, user, include_disabled=False)
     except DomainNotFoundError as exc:
@@ -62,7 +69,7 @@ def require_v2_workspace_execution_owner(
     request: HTTPConnection,
     user: dict[str, object],
     workspace_id: str,
-) -> dict[str, object] | None:
+) -> dict[str, object]:
     """Require owner-level access to a Workspace used for runtime I/O.
 
     ``DomainService.workspace`` preserves private-resource visibility: a
@@ -72,8 +79,6 @@ def require_v2_workspace_execution_owner(
     """
 
     service = v2_domain_service(request)
-    if service is None:
-        return None
     try:
         workspace = service.workspace(workspace_id, user)
     except DomainNotFoundError as exc:

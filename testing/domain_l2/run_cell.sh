@@ -226,7 +226,6 @@ CREDENTIAL_DIGEST="$(printf '%s\n%s\n' "${API_KEY}" "${JWT_SECRET}" | sha256_tex
 # value so the immutable L2 API can start without onboarding or a writable
 # home directory.
 printf '%s\n' \
-  'OPENSCIENCE_DOMAIN_MODEL_MODE=v2' \
   "OPENSCIENCE_DOMAIN_ARTIFACT_SHA=${BACKEND_DIGEST#*@sha256:}" \
   "OPENSCIENCE_L2_RUN_ID=${RUN_ID}" \
   "OPENSCIENCE_L2_ARTIFACT_TAG=${ARTIFACT_TAG}" \

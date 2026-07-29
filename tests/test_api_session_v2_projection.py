@@ -16,7 +16,6 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import seed_user
 
@@ -44,7 +43,6 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )
@@ -96,7 +94,6 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    assert app.state.session_service is None
     project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(

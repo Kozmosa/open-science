@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from ainrf.execution import ContainerConfig
-from ainrf.domain_control import DomainModelMode
 from ainrf.runtime import parse_container_config_from_runtime_config
 from ainrf.runtime.paths import RuntimePathConfig, build_runtime_path_config
 from ainrf.state import default_state_root
@@ -73,15 +72,13 @@ class ApiConfig:
     observability_secret_key: str = ""
     observability_public_key: str = ""
     auth_cookie_namespace: str = ""
-    domain_model_mode: DomainModelMode = DomainModelMode.LEGACY
     # Disable automatic runtime observation/reconciliation for an isolated
     # clone without disabling authenticated API reads.  This is intentionally
-    # separate from the domain model mode: legacy data may still be inspected
+    # separate from the domain authority: state clones may still be inspected
     # while the process is forbidden to initiate SSH/tmux work on startup.
     runtime_reconciliation_enabled: bool = True
     # Exact immutable artifact digest bound by the B7 cutover controller.  It
-    # is intentionally absent in legacy/validate mode; a v2 process must
-    # supply it and fail closed if it does not match the committed fuse.
+    # must be supplied by a writable process and match the committed fuse.
     domain_artifact_sha: str | None = None
 
     @property
@@ -185,14 +182,6 @@ class ApiConfig:
         auth_cookie_namespace = _env_value(
             "OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "AINRF_AUTH_COOKIE_NAMESPACE"
         ).strip()
-        raw_domain_model_mode = _env_value(
-            "OPENSCIENCE_DOMAIN_MODEL_MODE", "AINRF_DOMAIN_MODEL_MODE", "legacy"
-        ).lower()
-        try:
-            domain_model_mode = DomainModelMode(raw_domain_model_mode)
-        except ValueError as exc:
-            allowed = ", ".join(mode.value for mode in DomainModelMode)
-            raise ValueError(f"OPENSCIENCE_DOMAIN_MODEL_MODE must be one of: {allowed}") from exc
         raw_domain_artifact_sha = _env_value(
             "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", "AINRF_DOMAIN_ARTIFACT_SHA"
         ).strip()
@@ -230,7 +219,6 @@ class ApiConfig:
             observability_secret_key=observability_secret_key,
             observability_public_key=observability_public_key,
             auth_cookie_namespace=auth_cookie_namespace,
-            domain_model_mode=domain_model_mode,
             domain_artifact_sha=raw_domain_artifact_sha or None,
             runtime_reconciliation_enabled=runtime_reconciliation_enabled,
         )

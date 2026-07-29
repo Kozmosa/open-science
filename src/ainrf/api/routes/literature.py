@@ -10,7 +10,7 @@ from ainrf.api.deprecation import deprecation_headers
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
-from ainrf.domain_control import DomainCutoverError, DomainModelMode, MaintenanceModeError
+from ainrf.domain_control import DomainCutoverError, MaintenanceModeError
 from ainrf.literature.models import LiteratureSubscription
 from ainrf.literature.service import LiteratureService
 from ainrf.literature.task_saga import (
@@ -48,11 +48,7 @@ def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
 
     service = getattr(request.app.state, "literature_task_saga_service", None)
     domain = getattr(request.app.state, "domain_service", None)
-    if (
-        request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
-        or domain is None
-        or not domain.v2_ready()
-    ):
+    if domain is None or not domain.v2_ready():
         raise HTTPException(
             status_code=409,
             detail="Literature research Tasks require a committed domain v2 cutover",

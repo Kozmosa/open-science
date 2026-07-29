@@ -276,8 +276,6 @@ def _require_v2_attachment_environment_access(
 ) -> None:
     """Revalidate the attachment owner's durable grant before starting a PTY."""
 
-    if v2_domain_service(websocket) is None:
-        return
     auth_service = getattr(websocket.app.state, "auth_service", None)
     if auth_service is None:
         raise HTTPException(status_code=503, detail="authentication service not initialized")
@@ -367,15 +365,12 @@ async def read_terminal_session_pairs(
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
-    environment_visible: Callable[[str], bool] | None = None
-    if domain is not None:
-
-        def environment_visible(candidate_environment_id: str) -> bool:
-            try:
-                domain.environment(candidate_environment_id, user, include_disabled=False)
-            except DomainNotFoundError:
-                return False
-            return True
+    def environment_visible(candidate_environment_id: str) -> bool:
+        try:
+            domain.environment(candidate_environment_id, user, include_disabled=False)
+        except DomainNotFoundError:
+            return False
+        return True
 
     items = await to_thread.run_sync(
         manager.list_session_pairs,
@@ -607,22 +602,10 @@ async def terminal_session_exec(
     assert environment is not None
 
     if payload.workspace_id is not None:
-        v2_workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
-        if v2_workspace is not None:
-            canonical_path = v2_workspace.get("canonical_path")
-            if isinstance(canonical_path, str) and canonical_path:
-                working_directory = canonical_path
-        else:
-            workspace_service = getattr(request.app.state, "workspace_service", None)
-            if workspace_service is None:
-                workspace = None
-            else:
-                try:
-                    workspace = workspace_service.get_workspace(payload.workspace_id)
-                except Exception as exc:
-                    raise _translate_environment_error(exc) from exc
-            if workspace is not None:
-                working_directory = workspace.default_workdir or working_directory or "/"
+        workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
+        canonical_path = workspace.get("canonical_path")
+        if isinstance(canonical_path, str) and canonical_path:
+            working_directory = canonical_path
 
     try:
         # Validate command against allowlist for security

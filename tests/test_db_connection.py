@@ -16,7 +16,6 @@ from pathlib import Path
 import pytest
 
 from ainrf.db.connection import atomic_write_json, connect
-from ainrf.sessions.service import SessionService
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
@@ -184,22 +183,3 @@ class TestAtomicWriteJson:
         tmp = path.parent / (path.name + ".crash.tmp")
         if tmp.exists():
             assert tmp.read_text(encoding="utf-8") == '{"version": 2}'
-
-
-# ---------------------------------------------------------------------------
-# Service-level DB edge cases
-# ---------------------------------------------------------------------------
-class TestServiceDbEdgeCases:
-    def test_corrupted_sqlite_file_raises_on_initialize(self, tmp_path: Path):
-        db_path = tmp_path / "runtime" / "sessions.sqlite3"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        db_path.write_bytes(b"this is not a sqlite database")
-
-        svc = SessionService(state_root=tmp_path)
-        with pytest.raises((sqlite3.DatabaseError, sqlite3.OperationalError)):
-            svc.initialize()
-
-    def test_missing_runtime_directory_is_created(self, tmp_path: Path):
-        svc = SessionService(state_root=tmp_path)
-        svc.initialize()
-        assert (tmp_path / "runtime" / "sessions.sqlite3").exists()

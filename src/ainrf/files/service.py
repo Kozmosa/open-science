@@ -5,7 +5,7 @@ import json
 import shlex
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from ainrf.environments.local import is_localhost_environment
 from ainrf.execution.models import CommandResult, ContainerConfig
@@ -17,11 +17,15 @@ from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUpl
 if TYPE_CHECKING:
     from ainrf.environments.models import EnvironmentRegistryEntry
     from ainrf.environments.protocols import EnvironmentRuntimeReader
-    from ainrf.workspaces.service import WorkspaceRegistryService
+    from ainrf.workspaces.models import WorkspaceRecord
 
 _MAX_FILE_SIZE_BYTES = 50_000_000
 _MAX_DIRECTORY_ENTRIES = 1_000
 _BINARY_PROBE_BYTES = 8_192
+
+
+class WorkspaceReader(Protocol):
+    def get_workspace(self, workspace_id: str) -> WorkspaceRecord: ...
 
 
 class FileBrowserError(Exception):
@@ -40,7 +44,7 @@ class _EnvironmentResolver:
     def __init__(
         self,
         environment_service: EnvironmentRuntimeReader,
-        workspace_service: WorkspaceRegistryService | None = None,
+        workspace_service: WorkspaceReader | None = None,
     ) -> None:
         self._environment_service = environment_service
         self._workspace_service = workspace_service
@@ -89,7 +93,7 @@ class FileBrowserService:
     def __init__(
         self,
         environment_service: EnvironmentRuntimeReader,
-        workspace_service: WorkspaceRegistryService | None = None,
+        workspace_service: WorkspaceReader | None = None,
         cache_ttl_seconds: float = 60.0,
         max_file_size_bytes: int = _MAX_FILE_SIZE_BYTES,
     ) -> None:

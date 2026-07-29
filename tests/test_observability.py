@@ -191,38 +191,6 @@ class TestApiConfigObservability:
 
 
 # ---------------------------------------------------------------------------
-# AgenticResearcherService integration (mocked)
-# ---------------------------------------------------------------------------
-class TestResearcherObservability:
-    """Verify the observability reporter receives calls during task lifecycle."""
-
-    def test_service_accepts_reporter(self):
-        """Service constructor accepts observability_reporter without error."""
-        from ainrf.agentic_researcher.service import AgenticResearcherService
-        from ainrf.observability.protocol import NullReporter
-        import tempfile
-        from pathlib import Path
-
-        with tempfile.TemporaryDirectory() as tmp:
-            reporter = NullReporter()
-            svc = AgenticResearcherService(
-                Path(tmp),
-                observability_reporter=reporter,
-            )
-            assert svc._observability is reporter
-
-    def test_service_defaults_to_null(self):
-        """Service uses NullReporter when none is provided."""
-        from ainrf.agentic_researcher.service import AgenticResearcherService
-        import tempfile
-        from pathlib import Path
-
-        with tempfile.TemporaryDirectory() as tmp:
-            svc = AgenticResearcherService(Path(tmp))
-            assert isinstance(svc._observability, NullReporter)
-
-
-# ---------------------------------------------------------------------------
 # Literature fetcher integration
 # ---------------------------------------------------------------------------
 class TestLiteratureObservability:

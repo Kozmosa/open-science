@@ -28,7 +28,7 @@ class SkillRegistryConfigService:
     restarts.
 
     This service follows the same JSON-registry pattern used by
-    ``WorkspaceRegistryService`` and ``ProjectRegistryService``.
+    the former JSON-backed Workspace and Project registries.
     """
 
     def __init__(self, state_root: Path, *, read_only: bool = False) -> None:

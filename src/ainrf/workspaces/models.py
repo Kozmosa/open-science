@@ -4,6 +4,18 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+class WorkspaceNotFoundError(LookupError):
+    pass
+
+
+class WorkspaceDeletionError(ValueError):
+    pass
+
+
+class WorkspaceDirectoryError(ValueError):
+    pass
+
+
 @dataclass(slots=True)
 class WorkspaceRecord:
     workspace_id: str
