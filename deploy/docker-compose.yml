@@ -39,9 +39,7 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
-      # Release A stays legacy/validate by default.  A release controller must
-      # explicitly provide both v2 mode and the exact committed artifact SHA.
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
+      # The committed cutover fuse requires the exact immutable artifact SHA.
       OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
@@ -97,8 +95,8 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # No-port durable Task/Overview/Literature-saga worker.  The profile keeps
-  # legacy and validate deployments free of v2 consumers by default.
+  # No-port durable Task/Overview/Literature-saga worker.  Its profile keeps
+  # API-only deployments free of background consumers by default.
   domain-worker:
     profiles: ["domain-v2"]
     build:
@@ -113,7 +111,6 @@ services:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
       OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
       OPENSCIENCE_NO_SSHD: "1"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

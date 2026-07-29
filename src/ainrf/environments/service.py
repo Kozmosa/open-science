@@ -31,7 +31,6 @@ from ainrf.execution.errors import SSHConnectionError
 from ainrf.terminal.tmux import TmuxCommandError
 
 if TYPE_CHECKING:
-    from ainrf.projects import ProjectRegistryService
     from ainrf.terminal.sessions import SessionManager
 
 
@@ -121,11 +120,9 @@ class InMemoryEnvironmentService:
     def __init__(
         self,
         default_local_workdir: str | None = None,
-        project_service: ProjectRegistryService | None = None,
         state_root: str | None = None,
     ) -> None:
         self._default_local_workdir = default_local_workdir
-        self._project_service = project_service
         self._state_root = state_root
         self._environments: dict[str, EnvironmentRegistryEntry] = {}
         self._detections: dict[str, list[DetectionSnapshot]] = defaultdict(list)
@@ -445,8 +442,7 @@ class InMemoryEnvironmentService:
                 continue
 
     def _validate_project_id(self, project_id: str) -> None:
-        if self._project_service is not None:
-            self._project_service.get_project(project_id)
+        del project_id
 
     def create_project_reference(
         self,

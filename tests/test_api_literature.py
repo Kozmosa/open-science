@@ -12,10 +12,9 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.domain import DomainService, ProjectContextService
-from ainrf.domain_control import DomainModelMode
 from ainrf.literature.tracking import DiscoveredPaper
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-from tests.testutil import get_jwt_headers
+from tests.testutil import get_jwt_headers, prepare_v2_test_state
 
 pytestmark = [pytest.mark.api]
 
@@ -27,10 +26,12 @@ def _body(response: httpx.Response) -> dict[str, object]:
 
 
 def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
+    artifact_sha = prepare_v2_test_state(tmp_path)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
+            domain_artifact_sha=artifact_sha,
         )
     )
     app.state.literature_service.initialize()
@@ -205,7 +206,6 @@ def _v2_literature_app(state_root: Path, tmp_path: Path) -> tuple[FastAPI, str]:
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(api_key)}),
             state_root=state_root,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )

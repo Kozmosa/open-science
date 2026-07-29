@@ -4,6 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+class ProjectNotFoundError(LookupError):
+    pass
+
+
+class TaskEdgeNotFoundError(LookupError):
+    pass
+
+
 @dataclass(slots=True)
 class ProjectRecord:
     project_id: str

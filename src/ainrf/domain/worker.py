@@ -45,6 +45,8 @@ from ainrf.harness_engine import (
 from ainrf.harness_engine.db_session_store import DbSessionStore
 from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
+from ainrf.literature.planner import run_planner_cycle
+from ainrf.literature.tracking import LiteratureTrackingService
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +180,7 @@ class TaskDispatcher:
         self._cutover = cast(DomainCutoverController, None)
         self._attempts = cast(AttemptService, None)
         self._overview_planner = cast(OverviewSnapshotPlanner, None)
+        self._literature_tracking = cast(LiteratureTrackingService, None)
         self._writable_services_initialized = False
         self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
         if not self._maintenance_startup_read_only:
@@ -209,6 +212,8 @@ class TaskDispatcher:
                 planner_id=f"{self.dispatcher_id}:overview",
                 artifact_sha=self._artifact_sha,
             )
+            self._maintenance.check_lease(lease)
+            self._literature_tracking = LiteratureTrackingService(self._state_root)
             self._maintenance.check_lease(lease)
             self._writable_services_initialized = True
         except MaintenanceModeError:
@@ -250,7 +255,7 @@ class TaskDispatcher:
             return self._start_as_drained_maintenance_participant()
         # Registering a participant is itself a durable control-plane write.
         # Do not let a direct Python caller create a shadow dispatcher in
-        # legacy/validate mode merely by bypassing the CLI entry point.
+        # an unauthorized runtime merely by bypassing the CLI entry point.
         self._assert_domain_runtime_fuse()
         participant_status = self._participant.start()
         self._started = True
@@ -296,6 +301,10 @@ class TaskDispatcher:
             return DispatchRunResult(outcome="maintenance_drained")
         try:
             try:
+                run_planner_cycle(
+                    self._literature_tracking,
+                    check_lease=lambda: self._participant.check_lease(lease),
+                )
                 self._recover_v2_literature_intents(lease)
             except MaintenanceModeError:
                 self._participant.drain()

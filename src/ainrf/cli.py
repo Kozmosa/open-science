@@ -31,7 +31,6 @@ from ainrf.domain_control import (
     DomainCutoverController,
     DomainCutoverError,
     DomainMaintenanceService,
-    DomainModelMode,
     DomainWriteParticipant,
     MaintenanceLease,
     MaintenanceModeError,
@@ -50,8 +49,6 @@ from ainrf.development import (
     FrontendDevProfile,
     prepare_frontend_dev_fixture,
 )
-from ainrf.literature.planner import run_once as run_literature_planner_once
-from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.logging import configure_cli_logging
 
 
@@ -149,28 +146,6 @@ def serve(
         typer.echo(f"OpenScience API daemon started (pid={daemon_pid}, port={port})")
         return
     run_server(host, port, state_root, workers=workers)
-
-
-@app.command("literature-planner")
-def literature_planner(
-    state_root: Annotated[
-        Path,
-        typer.Option(help="State root shared by the API, literature planner, and worker."),
-    ] = default_state_root(),
-    once: Annotated[
-        bool,
-        typer.Option(help="Publish pending durable literature work once and exit."),
-    ] = False,
-) -> None:
-    """Run the durable literature planner/outbox dispatcher."""
-    _require_legacy_literature_planner(state_root)
-    service = LiteratureTrackingService(state_root)
-    if once:
-        typer.echo(f"Published {run_literature_planner_once(service)} literature work item(s).")
-        return
-    from ainrf.literature.planner import run_forever
-
-    run_forever(service)
 
 
 @app.command("domain-worker")
@@ -285,52 +260,22 @@ def frontend_dev_worker(
         raise typer.Exit(code=2) from exc
 
 
-def _configured_domain_mode() -> DomainModelMode:
-    raw = (
-        os.environ.get(
-            "OPENSCIENCE_DOMAIN_MODEL_MODE",
-            os.environ.get("AINRF_DOMAIN_MODEL_MODE", DomainModelMode.LEGACY.value),
-        )
-        .strip()
-        .lower()
-    )
-    try:
-        return DomainModelMode(raw)
-    except ValueError as exc:
-        raise DomainCutoverError("invalid OPENSCIENCE_DOMAIN_MODEL_MODE for domain worker") from exc
-
-
-def _domain_worker_artifact_sha(state_root: Path) -> str | None:
-    """Return the exact v2 artifact only when both config and DB fuse agree."""
+def _domain_worker_artifact_sha(state_root: Path) -> str:
+    """Return the exact artifact only when the committed v2 fuse agrees."""
 
     controller = _cutover_controller(state_root)
     status = controller.status()
-    mode = _configured_domain_mode()
     if status.state == "legacy":
-        if mode is DomainModelMode.V2:
-            raise DomainCutoverError("v2 domain worker cannot start before cutover commit")
-        return None
+        raise DomainCutoverError("domain worker cannot start before cutover commit")
     if status.state != "v2":
         raise DomainCutoverError("domain worker cannot start while cutover is prepared")
-    if mode is not DomainModelMode.V2:
-        raise DomainCutoverError("legacy/validate domain worker cannot open committed v2 state")
     artifact_sha = os.environ.get(
         "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", os.environ.get("AINRF_DOMAIN_ARTIFACT_SHA", "")
     ).strip()
     if not artifact_sha:
-        raise DomainCutoverError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for v2 domain worker")
+        raise DomainCutoverError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for domain worker")
     controller.assert_v2_writable(artifact_sha=artifact_sha)
     return artifact_sha
-
-
-def _require_legacy_literature_planner(state_root: Path) -> None:
-    """Prevent the pre-B9 legacy planner from writing after the v2 cutover."""
-
-    status = _cutover_controller(state_root).status()
-    if status.state != "legacy":
-        raise DomainCutoverError(
-            "legacy literature planner is unavailable after prepare; use the B9 domain worker planner"
-        )
 
 
 @app.command()

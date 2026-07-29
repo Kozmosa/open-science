@@ -801,16 +801,6 @@ export interface AttemptListResponse {
   items: AttemptRecord[];
 }
 
-export interface SessionCreateRequest {
-  project_id: string;
-  title: string;
-}
-
-export interface SessionUpdateRequest {
-  title?: string | null;
-  status?: string | null;
-}
-
 // ── Token types ──────────────────────────────────────────
 
 export interface TokenUsage {

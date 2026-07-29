@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "recorded_phase": "P1-D",
+  "scope": "local disposable development cutover",
+  "decision": "retained protocol adapters do not own or read legacy domain authority",
+  "items": [
+    {
+      "surface": "project-workspace-environment compatibility routes",
+      "owner": "P4",
+      "replacement": "generated canonical domain transport contract",
+      "earliest_removal_phase": "P4",
+      "deadline": "before P5 frontend canonical-route completion",
+      "reason": "current WebUI still consumes these v2-backed response projections"
+    },
+    {
+      "surface": "task prompt/archive/move/retry aliases and flat mutation response",
+      "owner": "P4",
+      "replacement": "canonical Task application transport contract",
+      "earliest_removal_phase": "P4",
+      "deadline": "before P5 frontend canonical-route completion",
+      "reason": "aliases delegate only to the authoritative Task Module and remain metered"
+    },
+    {
+      "surface": "body/query idempotency compatibility fields",
+      "owner": "P4",
+      "replacement": "Idempotency-Key request header",
+      "earliest_removal_phase": "P4",
+      "deadline": "with generated transport contract adoption",
+      "reason": "field removal is coupled to the P4 generated client contract, not legacy persistence"
+    }
+  ]
+}

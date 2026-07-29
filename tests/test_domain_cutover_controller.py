@@ -21,7 +21,6 @@ from ainrf.domain_control import (
 )
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_migration import DomainImporter, DomainReconciliationService
-from ainrf.projects import ProjectRegistryService
 from tests.domain_cutover_fixtures import enter_maintenance_with_required_participants
 
 pytestmark = [pytest.mark.unit]
@@ -489,11 +488,8 @@ def test_legacy_project_registry_cannot_atomically_replace_a_sealed_json_source(
     guard = LegacySourceGuard(state_root)
     inventory = guard.capture()
     guard.seal(inventory)
-    registry = ProjectRegistryService(state_root)
-    registry.initialize()
-
-    with pytest.raises(PermissionError, match="legacy source is sealed"):
-        registry.create_project(name="Blocked", description=None, owner_user_id="owner")
+    with pytest.raises(PermissionError):
+        projects_json.write_text('{"items": []}\n', encoding="utf-8")
 
     guard.unseal(inventory)
 

@@ -58,7 +58,6 @@ def test_stack_environment_keeps_proxy_key_out_of_browser_bundle(
     assert environment["OPENSCIENCE_STATE_ROOT"] == str(instance.state_root)
     assert environment["OPENSCIENCE_WEBUI_API_KEY"] == "private-dev-key"
     assert environment["OPENSCIENCE_API_KEY_HASHES"] == hash_api_key("private-dev-key")
-    assert environment["OPENSCIENCE_DOMAIN_MODEL_MODE"] == "v2"
     assert environment["OPENSCIENCE_DOMAIN_ARTIFACT_SHA"] == "b" * 64
     assert environment["HOME"] == str(instance.runtime_root / "home")
     assert "VITE_OPENSCIENCE_API_KEY" not in environment

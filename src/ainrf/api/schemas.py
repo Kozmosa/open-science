@@ -484,7 +484,6 @@ class TaskCreateRequest(BaseModel):
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
-    research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
@@ -1134,18 +1133,6 @@ class SkillRegistryUpdateResponse(BaseModel):
 
 
 # ── Session schemas ──────────────────────────────────────────────
-
-
-class SessionCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: str = Field(min_length=1)
-    title: str = Field(min_length=1, max_length=500)
-
-
-class SessionUpdateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    title: str | None = Field(default=None, min_length=1, max_length=500)
-    status: str | None = None  # "active" | "completed" | "archived"
 
 
 class AttemptResponse(BaseModel):

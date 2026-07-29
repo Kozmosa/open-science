@@ -10,11 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from ainrf.agentic_researcher.service import AgenticResearcherService
     from ainrf.auth.service import AuthService
-    from ainrf.projects.service import ProjectRegistryService
-    from ainrf.sessions.service import SessionService
-    from ainrf.workspaces.service import WorkspaceRegistryService
 
 
 # Pytest loads this conftest before importing test modules. Point HOME at a
@@ -94,46 +90,6 @@ def auth_service(state_root: Path) -> AuthService:
     from ainrf.auth.service import AuthService
 
     svc = AuthService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def session_service(state_root: Path) -> SessionService:
-    """Return an initialized SessionService using the isolated state root."""
-    from ainrf.sessions.service import SessionService
-
-    svc = SessionService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def agentic_service(state_root: Path) -> AgenticResearcherService:
-    """Return an initialized AgenticResearcherService using the isolated state root."""
-    from ainrf.agentic_researcher.service import AgenticResearcherService
-
-    svc = AgenticResearcherService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def project_service(state_root: Path) -> ProjectRegistryService:
-    """Return an initialized ProjectRegistryService using the isolated state root."""
-    from ainrf.projects.service import ProjectRegistryService
-
-    svc = ProjectRegistryService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def workspace_service(state_root: Path) -> WorkspaceRegistryService:
-    """Return an initialized WorkspaceRegistryService using the isolated state root."""
-    from ainrf.workspaces.service import WorkspaceRegistryService
-
-    svc = WorkspaceRegistryService(state_root=state_root)
     svc.initialize()
     return svc
 

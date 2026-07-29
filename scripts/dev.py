@@ -127,7 +127,6 @@ def _print_environment(stack: DevelopmentStack) -> None:
     environment = stack.environment()
     names = (
         "OPENSCIENCE_STATE_ROOT",
-        "OPENSCIENCE_DOMAIN_MODEL_MODE",
         "OPENSCIENCE_DOMAIN_ARTIFACT_SHA",
         "OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED",
         "OPENSCIENCE_JWT_SECRET",

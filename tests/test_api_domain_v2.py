@@ -9,7 +9,7 @@ from pathlib import Path
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.domain_control import DomainCutoverError, DomainModelMode
+from ainrf.domain_control import DomainCutoverError
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.api]
@@ -22,7 +22,6 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
-        domain_model_mode=DomainModelMode.V2,
         domain_artifact_sha=V2_ARTIFACT_SHA,
     )
     with pytest.raises(DomainCutoverError, match="fuse is not committed and ready"):
@@ -51,7 +50,6 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
-        domain_model_mode=DomainModelMode.V2,
         domain_artifact_sha=V2_ARTIFACT_SHA,
     )
     app = create_app(config)

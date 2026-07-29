@@ -14,10 +14,8 @@ SupplementaryGroups=ainrf_tenants
 # OPENSCIENCE_DOMAIN_ARTIFACT_SHA.  The CLI rejects an absent/mismatched SHA
 # and refuses to run before a committed v2 cutover.
 EnvironmentFile=-/etc/openscience/domain-worker.env
-# Keep the worker itself v2-only even if an operator environment file carries
-# an accidental legacy value.  The CLI separately verifies the DB fuse and
-# immutable artifact SHA before it can claim any work.
-Environment=OPENSCIENCE_DOMAIN_MODEL_MODE=v2
+# The CLI verifies the DB fuse and immutable artifact SHA before the worker
+# can claim any work.
 ExecStart=/usr/local/bin/openscience domain-worker --state-root /opt/ainrf/state
 Restart=on-failure
 RestartSec=5

@@ -42,12 +42,9 @@ import type { ChangePasswordRequest,
   ProjectListResponse,
   ProjectRecord,
   ProjectUpdateRequest,
-  SessionCreateRequest,
   SessionDetailRecord,
   SessionListResponse,
   SessionsBatchDetailResponse,
-  SessionRecord,
-  SessionUpdateRequest,
   SkillDetail,
   SkillImportRequest,
   SkillImportResponse,
@@ -504,20 +501,6 @@ export const getSessionsBatchDetail = (
 
 export const getSession = (id: string): Promise<SessionDetailRecord> =>
   api.get<SessionDetailRecord>(`/sessions/${id}`);
-
-export const createSession = (
-  payload: SessionCreateRequest,
-): Promise<SessionRecord> =>
-  api.post<SessionRecord>('/sessions', payload);
-
-export const updateSession = (
-  id: string,
-  payload: SessionUpdateRequest,
-): Promise<SessionRecord> =>
-  api.patch<SessionRecord>(`/sessions/${id}`, payload);
-
-export const deleteSession = (id: string): Promise<void> =>
-  api.delete<void>(`/sessions/${id}`);
 
 export const getAttempts = (sessionId: string): Promise<AttemptListResponse> =>
   api.get<AttemptListResponse>(`/sessions/${sessionId}/attempts`);

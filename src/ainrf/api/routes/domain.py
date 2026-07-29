@@ -1,4 +1,4 @@
-"""Mode-gated v2 adapters; legacy routes remain authoritative until B7."""
+"""Authoritative v2 domain routes."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from ainrf.domain import (
     TaskApplicationService,
 )
 from ainrf.domain.overview_jobs import OverviewSnapshotService
-from ainrf.domain_control import DomainMaintenanceService, DomainModelMode
+from ainrf.domain_control import DomainMaintenanceService
 from ainrf.literature.task_saga import LiteratureTaskSagaService
 
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
@@ -36,8 +36,7 @@ router = APIRouter(prefix="/domain", tags=["domain-v2"])
 @router.get("/capabilities")
 async def capabilities(request: Request) -> dict[str, object]:
     service = getattr(request.app.state, "domain_service", None)
-    mode = request.app.state.api_config.domain_model_mode
-    ready = mode is DomainModelMode.V2 and isinstance(service, DomainService) and service.v2_ready()
+    ready = isinstance(service, DomainService) and service.v2_ready()
     context_ready = ready and isinstance(
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
@@ -85,7 +84,7 @@ async def capabilities(request: Request) -> dict[str, object]:
     )
     return {
         "domain_contract_version": 2 if ready else 1,
-        "mode": mode.value,
+        "mode": "v2",
         "standard_task_create": task_ready,
         "project_context": context_ready,
         "workspace_links": workspace_links_ready,
@@ -149,8 +148,8 @@ async def get_today_overview_refresh(job_id: str, request: Request) -> dict[str,
 
 def _service(request: Request) -> DomainService:
     service = getattr(request.app.state, "domain_service", None)
-    if service is None or request.app.state.api_config.domain_model_mode is not DomainModelMode.V2:
-        raise HTTPException(status_code=404, detail="Domain v2 is unavailable")
+    if service is None:
+        raise HTTPException(status_code=404, detail="Domain is unavailable")
     if not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
     return service

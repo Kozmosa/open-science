@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict
 from pathlib import Path
 from typing import NotRequired, TypedDict
 from uuid import uuid4
@@ -13,17 +12,10 @@ from pydantic import BaseModel, Field
 from ainrf.api.deprecation import mark_deprecated
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.workspace_preflight import validate_workspace_registration_path
-from ainrf.auth.permissions import check_resource_ownership, get_current_user, is_admin
+from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import WorkspaceListResponse, WorkspaceResponse
 from ainrf.domain import DomainPermissionError, DomainService
-from ainrf.domain_control import DomainModelMode, MaintenanceModeError
-from ainrf.workspaces import (
-    WorkspaceDeletionError,
-    WorkspaceDirectoryError,
-    WorkspaceNotFoundError,
-    WorkspaceRegistryService,
-)
-from ainrf.workspaces.models import WorkspaceRecord
+from ainrf.domain_control import MaintenanceModeError
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +49,10 @@ class _WorkspaceUpdateKwargs(TypedDict):
     workspace_prompt: NotRequired[str | None]
 
 
-def _get_workspace_service(request: Request) -> WorkspaceRegistryService:
-    service = getattr(request.app.state, "workspace_service", None)
-    if service is None:
-        raise HTTPException(status_code=500, detail="workspace service not initialized")
-    return service
-
-
-def _v2_domain_service(request: Request) -> DomainService | None:
+def _domain_service(request: Request) -> DomainService:
     service = getattr(request.app.state, "domain_service", None)
-    config = getattr(request.app.state, "api_config", None)
-    if config is None or config.domain_model_mode is not DomainModelMode.V2:
-        return None
     if not isinstance(service, DomainService) or not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+        raise HTTPException(status_code=503, detail="Domain cutover is not ready")
     return service
 
 
@@ -153,24 +135,11 @@ def _translate_workspace_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
     if isinstance(exc, DomainPermissionError):
         return HTTPException(status_code=403, detail=str(exc))
-    if isinstance(exc, WorkspaceNotFoundError):
-        return HTTPException(status_code=404, detail="Workspace not found")
-    if isinstance(exc, WorkspaceDirectoryError):
-        return HTTPException(status_code=400, detail=str(exc))
-    if isinstance(exc, WorkspaceDeletionError):
-        return HTTPException(status_code=409, detail=str(exc))
     if isinstance(exc, LookupError):
         return HTTPException(status_code=404, detail="Workspace not found")
     if isinstance(exc, ValueError):
         return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected workspace error")
-
-
-def _serialize_workspace(workspace: WorkspaceRecord) -> WorkspaceResponse:
-    payload = asdict(workspace)
-    payload["created_at"] = workspace.created_at
-    payload["updated_at"] = workspace.updated_at
-    return WorkspaceResponse.model_validate(payload)
 
 
 @router.get("", response_model=WorkspaceListResponse)
@@ -180,26 +149,15 @@ async def list_workspaces(
     project_id: str | None = None,
 ) -> WorkspaceListResponse:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is not None:
-        _mark_v2_compatibility_route(request, response, "workspaces.list", "/domain/capabilities")
-        try:
-            workspaces = domain.list_workspaces(user, project_id=project_id)
-            return WorkspaceListResponse(
-                items=[_serialize_domain_workspace(workspace) for workspace in workspaces]
-            )
-        except Exception as exc:
-            raise _translate_workspace_error(exc) from exc
-    service = _get_workspace_service(request)
+    domain = _domain_service(request)
+    _mark_v2_compatibility_route(request, response, "workspaces.list", "/domain/capabilities")
     try:
-        if is_admin(user):
-            workspaces = service.list_workspaces(project_id=project_id)
-        else:
-            workspaces = service.list_workspaces(project_id=project_id, owner_user_id=user["id"])
-        items = [_serialize_workspace(workspace) for workspace in workspaces]
+        workspaces = domain.list_workspaces(user, project_id=project_id)
+        return WorkspaceListResponse(
+            items=[_serialize_domain_workspace(workspace) for workspace in workspaces]
+        )
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
-    return WorkspaceListResponse(items=items)
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
@@ -210,61 +168,43 @@ async def update_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is not None:
-        _mark_v2_compatibility_route(request, response, "workspaces.update", "/domain/capabilities")
-        try:
-            current = domain.workspace(workspace_id, user)
-            if current.get("status") != "active":
-                raise LookupError(workspace_id)
-            fields_set = payload.model_fields_set
-            idempotency_key = require_idempotency_key(request, payload.idempotency_key)
-            metadata_fields = fields_set.difference({"project_id", "idempotency_key"})
-            if "project_id" in fields_set and metadata_fields:
-                raise ValueError(
-                    "Workspace attachment and metadata must be updated by separate requests"
-                )
-            if "project_id" not in fields_set and not metadata_fields:
-                raise ValueError("Workspace update requires at least one mutable field")
-            if "project_id" in fields_set and isinstance(payload.project_id, str):
-                domain.attach_workspace(
-                    payload.project_id,
-                    workspace_id,
-                    user,
-                    idempotency_key=idempotency_key,
-                )
-                return _serialize_domain_workspace(current)
-            kwargs: _WorkspaceUpdateKwargs = {}
-            if "label" in fields_set:
-                kwargs["label"] = payload.label
-            if "description" in fields_set:
-                kwargs["description"] = payload.description
-            if "default_workdir" in fields_set and payload.default_workdir is not None:
-                kwargs["canonical_path"] = payload.default_workdir
-            if "workspace_prompt" in fields_set:
-                kwargs["workspace_prompt"] = payload.workspace_prompt
-            workspace = domain.update_workspace(
+    domain = _domain_service(request)
+    _mark_v2_compatibility_route(request, response, "workspaces.update", "/domain/capabilities")
+    try:
+        current = domain.workspace(workspace_id, user)
+        if current.get("status") != "active":
+            raise LookupError(workspace_id)
+        fields_set = payload.model_fields_set
+        idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+        metadata_fields = fields_set.difference({"project_id", "idempotency_key"})
+        if "project_id" in fields_set and metadata_fields:
+            raise ValueError("Workspace attachment and metadata must be updated separately")
+        if "project_id" not in fields_set and not metadata_fields:
+            raise ValueError("Workspace update requires at least one mutable field")
+        if "project_id" in fields_set and isinstance(payload.project_id, str):
+            domain.attach_workspace(
+                payload.project_id,
                 workspace_id,
                 user,
                 idempotency_key=idempotency_key,
-                **kwargs,
             )
-            return _serialize_domain_workspace(workspace)
-        except Exception as exc:
-            raise _translate_workspace_error(exc) from exc
-    service = _get_workspace_service(request)
-    try:
-        workspace = service.get_workspace(workspace_id)
-        check_resource_ownership(user, workspace.owner_user_id)
-        workspace = service.update_workspace(
+            return _serialize_domain_workspace(current)
+        kwargs: _WorkspaceUpdateKwargs = {}
+        if "label" in fields_set:
+            kwargs["label"] = payload.label
+        if "description" in fields_set:
+            kwargs["description"] = payload.description
+        if "default_workdir" in fields_set and payload.default_workdir is not None:
+            kwargs["canonical_path"] = payload.default_workdir
+        if "workspace_prompt" in fields_set:
+            kwargs["workspace_prompt"] = payload.workspace_prompt
+        workspace = domain.update_workspace(
             workspace_id,
-            project_id=payload.project_id,
-            label=payload.label,
-            description=payload.description,
-            default_workdir=payload.default_workdir,
-            workspace_prompt=payload.workspace_prompt,
+            user,
+            idempotency_key=idempotency_key,
+            **kwargs,
         )
-        return _serialize_workspace(workspace)
+        return _serialize_domain_workspace(workspace)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
 
@@ -276,21 +216,13 @@ async def read_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is not None:
-        _mark_v2_compatibility_route(request, response, "workspaces.read", "/domain/capabilities")
-        try:
-            workspace = domain.workspace(workspace_id, user)
-            if workspace.get("status") != "active":
-                raise LookupError(workspace_id)
-            return _serialize_domain_workspace(workspace)
-        except Exception as exc:
-            raise _translate_workspace_error(exc) from exc
-    service = _get_workspace_service(request)
+    domain = _domain_service(request)
+    _mark_v2_compatibility_route(request, response, "workspaces.read", "/domain/capabilities")
     try:
-        workspace = service.get_workspace(workspace_id)
-        check_resource_ownership(user, workspace.owner_user_id)
-        return _serialize_workspace(workspace)
+        workspace = domain.workspace(workspace_id, user)
+        if workspace.get("status") != "active":
+            raise LookupError(workspace_id)
+        return _serialize_domain_workspace(workspace)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
 
@@ -302,61 +234,47 @@ async def create_workspace(
     response: Response,
 ) -> WorkspaceResponse:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is not None:
-        _mark_v2_compatibility_route(request, response, "workspaces.create", "/domain/capabilities")
-        try:
-            environment_id = _primary_environment_id(domain, payload.project_id, user)
-            canonical_path = payload.default_workdir or _compatibility_workspace_path(
-                domain, environment_id, user
-            )
-            canonical_path = domain.canonical_workspace_path(canonical_path)
-            user_id = user.get("id")
-            if not isinstance(user_id, str):
-                raise ValueError("Authenticated user ID is required")
-            idempotency_key = require_idempotency_key(request, payload.idempotency_key)
-            replay = domain.workspace_create_and_attach_replay(
-                project_id=payload.project_id,
-                user=user,
-                environment_id=environment_id,
-                canonical_path=canonical_path,
-                label=payload.label,
-                description=payload.description,
-                workspace_prompt=payload.workspace_prompt,
-                idempotency_key=idempotency_key,
-            )
-            if replay is not None:
-                return _serialize_domain_workspace(replay)
-            await validate_workspace_registration_path(
-                request,
-                environment_id=environment_id,
-                canonical_path=canonical_path,
-                user_id=user_id,
-            )
-            workspace = domain.create_workspace_and_attach(
-                project_id=payload.project_id,
-                user=user,
-                environment_id=environment_id,
-                canonical_path=canonical_path,
-                label=payload.label,
-                description=payload.description,
-                workspace_prompt=payload.workspace_prompt,
-                idempotency_key=idempotency_key,
-            )
-            return _serialize_domain_workspace(workspace)
-        except Exception as exc:
-            raise _translate_workspace_error(exc) from exc
-    service = _get_workspace_service(request)
+    domain = _domain_service(request)
+    _mark_v2_compatibility_route(request, response, "workspaces.create", "/domain/capabilities")
     try:
-        workspace = service.create_workspace(
+        environment_id = _primary_environment_id(domain, payload.project_id, user)
+        canonical_path = payload.default_workdir or _compatibility_workspace_path(
+            domain, environment_id, user
+        )
+        canonical_path = domain.canonical_workspace_path(canonical_path)
+        user_id = user.get("id")
+        if not isinstance(user_id, str):
+            raise ValueError("Authenticated user ID is required")
+        idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+        replay = domain.workspace_create_and_attach_replay(
             project_id=payload.project_id,
+            user=user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
             label=payload.label,
             description=payload.description,
-            default_workdir=payload.default_workdir,
             workspace_prompt=payload.workspace_prompt,
-            owner_user_id=user["id"],
+            idempotency_key=idempotency_key,
         )
-        return _serialize_workspace(workspace)
+        if replay is not None:
+            return _serialize_domain_workspace(replay)
+        await validate_workspace_registration_path(
+            request,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            user_id=user_id,
+        )
+        workspace = domain.create_workspace_and_attach(
+            project_id=payload.project_id,
+            user=user,
+            environment_id=environment_id,
+            canonical_path=canonical_path,
+            label=payload.label,
+            description=payload.description,
+            workspace_prompt=payload.workspace_prompt,
+            idempotency_key=idempotency_key,
+        )
+        return _serialize_domain_workspace(workspace)
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
 
@@ -364,9 +282,7 @@ async def create_workspace(
 @router.post("/{workspace_id}/unregister", status_code=204)
 async def unregister_workspace(workspace_id: str, request: Request) -> Response:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is None:
-        raise HTTPException(status_code=404, detail="Workspace unregister is unavailable")
+    domain = _domain_service(request)
     try:
         domain.unregister_workspace(
             workspace_id,
@@ -383,28 +299,17 @@ async def unregister_workspace(workspace_id: str, request: Request) -> Response:
 @router.delete("/{workspace_id}", status_code=204)
 async def delete_workspace(workspace_id: str, request: Request) -> Response:
     user = get_current_user(request)
-    domain = _v2_domain_service(request)
-    if domain is not None:
-        try:
-            # v2 DELETE is a compatibility alias: it unregisters only the
-            # registry record and deliberately never removes tenant files.
-            domain.unregister_workspace(
-                workspace_id,
-                user,
-                idempotency_key=require_idempotency_key(request),
-            )
-        except Exception as exc:
-            raise _translate_workspace_error(exc) from exc
-        response = Response(status_code=204)
-        _mark_v2_compatibility_route(
-            request, response, "workspaces.delete", "/workspaces/{workspace_id}/unregister"
-        )
-        return response
-    service = _get_workspace_service(request)
+    domain = _domain_service(request)
     try:
-        workspace = service.get_workspace(workspace_id)
-        check_resource_ownership(user, workspace.owner_user_id)
-        service.delete_workspace(workspace_id)
+        domain.unregister_workspace(
+            workspace_id,
+            user,
+            idempotency_key=require_idempotency_key(request),
+        )
     except Exception as exc:
         raise _translate_workspace_error(exc) from exc
-    return Response(status_code=204)
+    response = Response(status_code=204)
+    _mark_v2_compatibility_route(
+        request, response, "workspaces.delete", "/workspaces/{workspace_id}/unregister"
+    )
+    return response

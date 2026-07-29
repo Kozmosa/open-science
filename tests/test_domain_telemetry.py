@@ -10,19 +10,15 @@ from pathlib import Path
 import sqlite3
 from typing import Iterator
 
-import httpx
 import pytest
 import structlog
 import yaml
 
 import ainrf.domain_telemetry as domain_telemetry
-from ainrf.api.app import create_app
-from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
 from ainrf.domain.service import DomainConflictError, DomainService
 from ainrf.domain_telemetry import record_idempotency_event, refresh_domain_metrics
-from tests.testutil import get_jwt_headers
 
 
 pytestmark = [pytest.mark.unit]
@@ -183,14 +179,6 @@ def _seed_control_plane(state_root: Path) -> None:
             (_timestamp(minutes_ago=18), _timestamp(minutes_ago=18)),
         )
         conn.commit()
-
-
-def _metrics_config(state_root: Path) -> ApiConfig:
-    return ApiConfig(
-        api_key_hashes=frozenset({hash_api_key("test")}),
-        state_root=state_root,
-        metrics_enabled=True,
-    )
 
 
 def test_refresh_reads_migrated_durable_control_plane_state(tmp_path: Path) -> None:
@@ -1043,92 +1031,6 @@ def test_shared_connection_records_sqlite_execution_errors(tmp_path: Path) -> No
     assert "ainrf_domain_sqlite_errors_total" in text
     assert 'operation="connection_execute"' in text
     assert 'error_type="OperationalError"' in text
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_refreshes_durable_domain_gauges(tmp_path: Path) -> None:
-    _seed_control_plane(tmp_path)
-    app = create_app(_metrics_config(tmp_path))
-    app.state.maintenance_startup_read_only = False
-    headers = get_jwt_headers(app)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in response.text
-    assert "ainrf_domain_idempotency_records 1.0" in response.text
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_uses_read_only_telemetry_for_maintenance_app(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _seed_control_plane(tmp_path)
-    app = create_app(_metrics_config(tmp_path))
-    app.state.maintenance_startup_read_only = True
-    headers = get_jwt_headers(app)
-    original_refresh = domain_telemetry.refresh_domain_metrics
-    observed_read_only: list[bool] = []
-
-    def _unexpected_persist(
-        _state_root: Path,
-        _collected: domain_telemetry._CollectedDomainMetrics,
-        *,
-        collected_at: float,
-    ) -> None:
-        _ = collected_at
-        raise AssertionError("maintenance metrics must not persist a snapshot")
-
-    def _refresh(
-        state_root: Path,
-        *,
-        runtime_mode: str | None = None,
-        read_only: bool = False,
-    ) -> domain_telemetry.DomainTelemetrySnapshot:
-        observed_read_only.append(read_only)
-        return original_refresh(state_root, runtime_mode=runtime_mode, read_only=read_only)
-
-    monkeypatch.setattr(domain_telemetry, "refresh_domain_metrics", _refresh)
-    monkeypatch.setattr(domain_telemetry, "_persist_collected_snapshot", _unexpected_persist)
-
-    def _unexpected_status() -> None:
-        raise AssertionError("metrics must not initialize or query maintenance service status")
-
-    monkeypatch.setattr(app.state.domain_maintenance_service, "status", _unexpected_status)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert observed_read_only == [True]
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_hydrates_no_port_worker_counter(tmp_path: Path) -> None:
-    _seed_control_plane(tmp_path)
-    # This call represents a domain-worker/CLI process: no FastAPI app has
-    # been constructed yet, so only the shared telemetry sidecar can carry
-    # the event into the later API /metrics scrape.
-    domain_telemetry.record_literature_saga_event(
-        "completed",
-        intent_id="telemetry-intent",
-        state_root=tmp_path,
-    )
-    app = create_app(_metrics_config(tmp_path))
-    headers = get_jwt_headers(app)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert 'ainrf_domain_literature_saga_events_total{outcome="completed"} 1.0' in response.text
 
 
 def test_domain_alert_baseline_has_required_release_gates() -> None:
