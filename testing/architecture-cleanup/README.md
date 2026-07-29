@@ -29,6 +29,9 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest \
 | `frontend_layer_allowlist.json` | P5 | P0 | P5/P6 | delete |
 | `transport_snapshot.json` | P4 | P0 | P6 | delete |
 | `compatibility_inventory.json` | P0-P6 | P0 | P6 | delete |
+| `compatibility_fields.json` | P4 | P0 | P4/P6 | delete |
+| `deletion_candidates.json` | P2 | P0 | P2/P6 | delete |
+| `deprecated_contract_allowlist.json` | P4 | P0 | P4/P6 | delete |
 | `release_evidence.json` | P0/P1 | P0 | P6 | delete |
 | `release_e_debt.json` | P1 | P1-A | P1-D/P6 | delete |
 | `release_e_compatibility_budget.json` | P1 | P1-D | P4/P6 | delete |

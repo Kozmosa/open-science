@@ -38,6 +38,11 @@ class RouteItem(TypedDict):
     deprecated: bool
 
 
+class DeprecatedSurface(TypedDict):
+    source: str
+    surface: str
+
+
 _TS_IMPORT_RE = re.compile(
     r"(?:from\s+|import\s*\(\s*)[\"']([^\"']+)[\"']",
     re.MULTILINE,
@@ -168,6 +173,39 @@ def forbidden_backend_imports(edges: list[ImportEdge]) -> list[ImportEdge]:
     ]
 
 
+def deprecated_contract_surfaces(repo_root: Path) -> list[DeprecatedSurface]:
+    route_root = repo_root / "src" / "ainrf" / "api" / "routes"
+    surfaces: set[tuple[str, str]] = set()
+    for path in sorted(route_root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            function_name = _called_name(node.func)
+            if function_name not in {
+                "deprecation_headers",
+                "mark_deprecated",
+                "_mark_v2_compatibility_route",
+            }:
+                continue
+            if function_name == "_mark_v2_compatibility_route" and len(node.args) >= 3:
+                route_argument = node.args[2]
+                if isinstance(route_argument, ast.Constant) and isinstance(
+                    route_argument.value, str
+                ):
+                    source = path.relative_to(repo_root).as_posix()
+                    surfaces.add((source, route_argument.value))
+            for keyword in node.keywords:
+                if keyword.arg not in {"route", "route_name"}:
+                    continue
+                if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                    source = path.relative_to(repo_root).as_posix()
+                    surfaces.add((source, keyword.value.value))
+    return [
+        DeprecatedSurface(source=source, surface=surface) for source, surface in sorted(surfaces)
+    ]
+
+
 def frontend_layer_violations(repo_root: Path) -> list[FrontendViolation]:
     source_root = repo_root / "frontend" / "src"
     violations: list[FrontendViolation] = []
@@ -254,6 +292,14 @@ def _function_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     if node.args.kwarg:
         arguments.append(f"**{node.args.kwarg.arg}")
     return f"({','.join(arguments)})"
+
+
+def _called_name(node: ast.expr) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
 
 
 def _resolve_frontend_import(source_root: Path, source: Path, specifier: str) -> str | None:
