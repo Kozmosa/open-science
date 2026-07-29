@@ -16,19 +16,20 @@ source_path: /home/xuyang/code/scholar-agent
 
 ## 当前产品入口
 
-- **[OpenScience Docs](https://kozmosa.github.io/scholar-agent/)**（产品文档站点，Astro + Starlight，源码在 `docs-site/`）
+- **[OpenScience Docs](https://kozmosa.github.io/open-science/)**（产品文档站点，VitePress，源码在 `docs-site/`）
+- 当前架构、release / rollback 与 compatibility contract：`docs-site/docs/architecture.md`
 - 设计规范：`docs/superpowers/specs/`（最新的架构与功能设计）
 - 历史文档：`docs/archive/`（V1 框架 RFC、外部项目调研、跨项目综述）
 
 ## 适合什么场景
 
-- 如果你的目标是"直接启动或联调 OpenScience"，访问 [OpenScience Docs](https://kozmosa.github.io/scholar-agent/)。
+- 如果你的目标是"直接启动或联调 OpenScience"，访问 [OpenScience Docs](https://kozmosa.github.io/open-science/)。
 - 如果你的目标是"理解当前产品设计与架构取舍"，读 `docs/superpowers/specs/` 下的最新规范。
 - 如果你的目标是"回看历史框架、外部项目比较或早期想法"，进入 `docs/archive/`。
 
 ## 默认阅读顺序
 
-1. [OpenScience Docs](https://kozmosa.github.io/scholar-agent/)
+1. [OpenScience Docs](https://kozmosa.github.io/open-science/)
 2. `docs/superpowers/specs/`（最新设计规范）
 3. `docs/archive/`（历史参考）
 

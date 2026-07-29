@@ -1,11 +1,14 @@
 # OpenScience 架构清理与深模块重构设计
 
-**Status:** Proposed high-level cleanup specification
+**Status:** Executed and archived (P0–P6 complete 2026-07-30)
 **Date:** 2026-07-29
 **Scope:** Release E 执行、monorepo 边界、legacy/v2 收口、Python 后端模块划分与依赖方向、前后端契约、前端分层、测试与仓库卫生
 **Detailed cutover contract:** [`2026-07-12-openscience-domain-refactor-execution-spec.md`](2026-07-12-openscience-domain-refactor-execution-spec.md)
 **Related:** [`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-11-five-layer-hybrid-ci-design.md`](2026-07-11-five-layer-hybrid-ci-design.md)
 **Does not supersede:** 已接受的 Project / Task / Workspace、Conversation、Engine Runtime 和五层 CI 领域契约
+
+> [!done]
+> P0–P6 已于 2026-07-30 执行完成。P6 删除了 cleanup-only 基础设施和无长期 owner 的 tracked research/export 资产，将仍有效的 compatibility inventory 迁移到 VitePress 长期文档，并保持所有缺少生产完整观察窗口零流量证据的 surface fail-closed。本文保留原始设计、阶段约束与审计历史，不将历史计划改写为当前 contract。
 
 ## 1. 目的
 
@@ -702,6 +705,8 @@ root、product `/v1` 等通用 route alias 只有在确认属于 legacy contract
 - mock scenario 不再形成第二套手写 backend schema。
 
 ### 12.7 P6：仓库卫生和长期文档
+
+执行状态：**已完成（2026-07-30）**。当前架构、release/rollback contract 与 fail-closed compatibility inventory 由 `docs-site/docs/architecture.md` 长期维护；临时 `testing/architecture-cleanup/` 已删除。
 
 内容：
 
