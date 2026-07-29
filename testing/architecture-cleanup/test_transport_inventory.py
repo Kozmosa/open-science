@@ -43,7 +43,10 @@ def test_openapi_and_route_inventory_match_reviewed_snapshot() -> None:
         "canonical_api_sha256": stable_digest(canonical_routes),
         "root_alias_count": len(root_routes),
         "v1_alias_count": len(v1_routes),
-        "deprecated_operations": [route for route in routes if route["deprecated"]],
+        "deprecated_operations": {
+            "count": len([route for route in routes if route["deprecated"]]),
+            "sha256": stable_digest([route for route in routes if route["deprecated"]]),
+        },
     }
 
 
@@ -53,5 +56,5 @@ def test_canonical_prefix_inventory_is_explicit() -> None:
     assert prefixes["canonical"] == "/api"
     assert prefixes["aliases"] == ["/", "/v1"]
     assert prefixes["owner"] == "P4"
-    assert prefixes["removal_phase"] == "P4"
+    assert prefixes["removal_phase"] == "P5"
     assert prefixes["evidence"]

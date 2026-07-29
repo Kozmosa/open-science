@@ -5,7 +5,7 @@ It is intentionally outside `tests/`, the repository pytest `testpaths`, `script
 `scripts/ci.sh`, and GitHub Actions. It must be deleted in P6.
 
 - **Owner:** architecture cleanup P0-P6
-- **Current phase:** P0 baseline and freeze (Release E/P1 debt is already closed)
+- **Current phase:** P4 generated transport contract (Release E/P1, P2, and P3 are closed)
 - **Maximum lifetime:** through P6 only; delete the entire directory before P6 exits
 - **Final deletion condition:** P6 architecture/documentation audit is complete and no normal test,
   CI entrypoint, workflow, or required check refers to these assets
@@ -29,12 +29,12 @@ UV_CACHE_DIR=/tmp/uv-cache uv run pytest \
 | `frontend_layer_allowlist.json` | P5 | P0 | P5/P6 | delete |
 | `transport_snapshot.json` | P4 | P0 | P6 | delete |
 | `compatibility_inventory.json` | P0-P6 | P0 | P6 | delete |
-| `compatibility_fields.json` | P4 | P0 | P4/P6 | delete |
+| `compatibility_fields.json` | P4/P5 | P0 | P5/P6 | delete |
 | `deletion_candidates.json` | P2 | P0 | P2/P6 | delete |
-| `deprecated_contract_allowlist.json` | P4 | P0 | P4/P6 | delete |
+| `deprecated_contract_allowlist.json` | P4/P5 | P0 | P5/P6 | delete |
 | `release_evidence.json` | P0/P1 | P0 | P6 | delete |
 | `release_e_debt.json` | P1 | P1-A | P1-D/P6 | delete |
-| `release_e_compatibility_budget.json` | P1 | P1-D | P4/P6 | delete |
+| `release_e_compatibility_budget.json` | P1/P4/P5 | P1-D | P5/P6 | delete |
 | `support/` | P0-P6 | P0 | P6 | delete |
 | `test_architecture_baseline.py` | P0-P3 | P0 | P6 | delete |
 | `test_frontend_layers.py` | P0/P5 | P0 | P6 | delete |
@@ -53,3 +53,9 @@ and never add or rebase entries to make a regression pass. Import graph, public 
 and route snapshots may change during an intentional cleanup slice, but the same review must explain
 the delta and update the snapshot explicitly. Snapshot changes are not a substitute for expanding an
 allowlist.
+
+P4 intentionally retains compatibility fields and route aliases for the first generated-contract
+cut. Their existing owner, telemetry, deadline, and removal evidence remain recorded in the
+compatibility inventories; generated adoption does not authorize deleting them in the same slice.
+The generated contract and normal CI drift gate live outside this local-only directory under
+`frontend/src/generated/transport/` and `scripts/ci.sh`.

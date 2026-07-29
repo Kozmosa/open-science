@@ -1,31 +1,23 @@
 import type {
   AnthropicEnvStatus,
   AttemptListResponse,
-  EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
-  EnvironmentUpdateRequest,
   FileListResponse,
   FileReadResponse,
-  ProjectCreateRequest,
   ProjectEnvironmentReference,
-  ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
-  ProjectEnvironmentReferenceUpdateRequest,
   ProjectListResponse,
   ProjectRecord,
-  ProjectUpdateRequest,
   SessionDetailRecord,
   SessionListResponse,
   SessionRecord,
   SkillDetail,
-  SkillImportRequest,
   SkillImportResponse,
   SkillItem,
   SkillListResponse,
   SkillPreview,
   SystemHealth,
-  TaskCreatePayload,
   TaskListResponse,
   TaskRecord,
   TaskOutputEvent,
@@ -34,15 +26,25 @@ import type {
   TerminalSession,
   UserSessionPair,
   UserSessionPairListResponse,
-  WorkspaceCreateRequest,
   WorkspaceListResponse,
   WorkspaceRecord,
-  WorkspaceUpdateRequest,
   ResourcesResponse,
   TaskEdge,
-  TaskEdgeCreateRequest,
   TaskEdgeListResponse,
 } from '@/shared/types';
+import type {
+  EnvironmentCreateRequest,
+  EnvironmentUpdateRequest,
+  ProjectCreateRequest,
+  ProjectEnvironmentReferenceCreateRequest,
+  ProjectEnvironmentReferenceUpdateRequest,
+  ProjectUpdateRequest,
+  SkillImportRequest,
+  TaskCreatePayload,
+  TaskEdgeCreateRequest,
+  WorkspaceCreateRequest,
+  WorkspaceUpdateRequest,
+} from './transportTypes';
 import { ApiError } from './client';
 
 const DEFAULT_PROJECT_ID = 'default';
@@ -703,8 +705,14 @@ function createMockProject(
     project_id: existing?.project_id ?? `project-${++mockProjectCounter}`,
     name: payload.name ?? existing?.name ?? 'Mock Project',
     description: payload.description ?? existing?.description ?? null,
-    default_workspace_id: payload.default_workspace_id ?? existing?.default_workspace_id ?? null,
-    default_environment_id: payload.default_environment_id ?? existing?.default_environment_id ?? null,
+    default_workspace_id:
+      ('default_workspace_id' in payload ? payload.default_workspace_id : undefined) ??
+      existing?.default_workspace_id ??
+      null,
+    default_environment_id:
+      ('default_environment_id' in payload ? payload.default_environment_id : undefined) ??
+      existing?.default_environment_id ??
+      null,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
     owner_user_id: existing?.owner_user_id ?? null,

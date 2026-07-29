@@ -1,14 +1,16 @@
 import type {
   EnvironmentAuthKind,
-  EnvironmentCreateRequest,
   EnvironmentListResponse,
   EnvironmentRecord,
-  EnvironmentUpdateRequest,
   ProjectEnvironmentReference,
-  ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceListResponse,
-  ProjectEnvironmentReferenceUpdateRequest,
 } from '@/shared/types';
+import type {
+  EnvironmentCreateRequest,
+  EnvironmentUpdateRequest,
+  ProjectEnvironmentReferenceCreateRequest,
+  ProjectEnvironmentReferenceUpdateRequest,
+} from '@/shared/api/transportTypes';
 
 export const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
 export const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];

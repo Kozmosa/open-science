@@ -4,12 +4,12 @@
   "removal_phase": "P6",
   "final_state": "delete",
   "python_import_graph": {
-    "edge_count": 486,
-    "sha256": "349c15b1a26abf5bf4b9d971bbb12bca06093d17bdc9e08019e99522b99d6a54",
+    "edge_count": 492,
+    "sha256": "b58f45d96e5665af1a1b3199e45e0782790f4bdad0152aa7d1f70bef5c626151",
     "cycles": []
   },
   "python_public_interface": {
-    "item_count": 1513,
-    "sha256": "dee0aefca7c81b58f85540efc9b35c906a98a3f5e47328d2ce586c76bc3b4b09"
+    "item_count": 1515,
+    "sha256": "9ef2a53ef76801452c690c479edee500973c65450448c736b29c90cadf34c1fe"
   }
 }

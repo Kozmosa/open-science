@@ -1,4 +1,4 @@
-import { http, HttpResponse } from 'msw';
+import { http as mswHttp, HttpResponse } from 'msw';
 import type {
   AdminUserItem,
   CollaboratorItem,
@@ -31,6 +31,9 @@ import type {
   OverviewRefreshJob,
   OverviewSnapshot,
 } from '@/features/domain/types';
+import { createTransportMockAdapter } from './transport';
+
+const http = createTransportMockAdapter(mswHttp);
 
 const OWNER_ID = 'mock-browser-user';
 const BASE_TIME = '2026-07-16T08:00:00Z';

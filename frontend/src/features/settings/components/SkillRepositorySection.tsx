@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Button, Dialog, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SkillDetail, SkillImportRequest, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
+import type { SkillDetail, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
+import type { SkillImportRequest } from '@/shared/api/transportTypes';
 import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '@/shared/api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
