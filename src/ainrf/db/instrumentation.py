@@ -30,7 +30,7 @@ import warnings
 
 import structlog
 
-from ainrf.api.routes.metrics import inc_counter, observe_histogram
+from ainrf.telemetry.metrics import inc_counter, observe_histogram
 
 _LOG = structlog.get_logger(__name__).bind(component="db")
 

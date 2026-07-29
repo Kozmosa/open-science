@@ -20,6 +20,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain.project_initialization import initialize_project_context
 from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
@@ -455,38 +456,12 @@ class ProjectContextService:
         only because its Context lifecycle was never initialized.
         """
 
-        context_version_id = f"context-{uuid4().hex}"
-        content = ""
-        fragment_manifest_json = empty_fragment_manifest_json()
-        conn.execute(
-            """INSERT INTO project_context_drafts
-               (project_id, content, updated_by_user_id, updated_at)
-               VALUES (?, ?, ?, ?)""",
-            (project_id, content, owner_user_id, created_at),
-        )
-        conn.execute(
-            """INSERT INTO project_context_versions
-               (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
-                is_active, created_by_user_id, created_at)
-               VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
-            (
-                context_version_id,
-                project_id,
-                content,
-                context_version_fingerprint(content),
-                fragment_manifest_json,
-                owner_user_id,
-                created_at,
-            ),
-        )
-        record_context_version_fragment_provenance_in_transaction(
+        return initialize_project_context(
             conn,
-            context_version_id=context_version_id,
-            status="verified",
-            evidence_json=verified_fragment_provenance_evidence(()),
-            recorded_at=created_at,
+            project_id=project_id,
+            owner_user_id=owner_user_id,
+            created_at=created_at,
         )
-        return context_version_id
 
     def save_draft(
         self,

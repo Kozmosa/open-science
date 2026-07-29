@@ -1107,8 +1107,8 @@ async def test_tenant_agent_sdk_is_rejected_before_any_backend_user_launch(
     state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path, harness_engine="agent-sdk")
-    monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
-    monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.linux_user_exists", lambda _user: True)
     engine = FakeEngine()
     dispatcher = TaskDispatcher(
         state_root,
@@ -1132,8 +1132,8 @@ async def test_domain_worker_records_tenant_access_denial_before_runtime_start(
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
     reset_metrics()
-    monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
-    monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: False)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.linux_user_exists", lambda _user: False)
     engine = FakeEngine()
     dispatcher = TaskDispatcher(
         state_root,

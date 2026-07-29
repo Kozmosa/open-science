@@ -4,15 +4,5 @@
   "owner": "P2",
   "removal_phase": "P2",
   "final_state": "delete",
-  "items": [
-    {"source": "ainrf.db.instrumentation", "target": "ainrf.api.routes.metrics", "owner": "P2", "reason": "database instrumentation records through the HTTP metrics module", "replacement": "neutral observability metrics recorder", "expires_when": "metrics ownership leaves api.routes"},
-    {"source": "ainrf.development.frontend_fixture", "target": "ainrf.api.config", "owner": "P2", "reason": "development composition reuses the HTTP configuration object", "replacement": "neutral runtime configuration input", "expires_when": "development composition root no longer imports API internals"},
-    {"source": "ainrf.development.stack", "target": "ainrf.api.config", "owner": "P2", "reason": "development stack constructs the API adapter directly", "replacement": "public server composition interface", "expires_when": "development stack depends only on composition root"},
-    {"source": "ainrf.domain_telemetry", "target": "ainrf.api.routes.metrics", "owner": "P2", "reason": "domain telemetry uses route-owned metric registration", "replacement": "neutral observability metrics recorder", "expires_when": "domain telemetry has no HTTP adapter knowledge"},
-    {"source": "ainrf.execution.ssh", "target": "ainrf.api.routes.metrics", "owner": "P2", "reason": "SSH adapter records through route-owned metrics", "replacement": "neutral observability metrics recorder", "expires_when": "execution adapters have no HTTP adapter imports"},
-    {"source": "ainrf.literature.scheduler", "target": "ainrf.api.routes.metrics", "owner": "P2", "reason": "scheduler metrics are registered by an HTTP route module", "replacement": "neutral observability metrics recorder", "expires_when": "scheduler has no HTTP adapter imports"},
-    {"source": "ainrf.literature.summarizer", "target": "ainrf.api.routes.metrics", "owner": "P2", "reason": "summarizer metrics are registered by an HTTP route module", "replacement": "neutral observability metrics recorder", "expires_when": "summarizer has no HTTP adapter imports"},
-    {"source": "ainrf.onboarding", "target": "ainrf.api.config", "owner": "P2", "reason": "onboarding writes API-owned configuration shape", "replacement": "neutral product configuration module", "expires_when": "onboarding has no HTTP adapter imports"},
-    {"source": "ainrf.server", "target": "ainrf.api", "owner": "P2", "reason": "server entry point uses API package re-export", "replacement": "explicit composition root module", "expires_when": "server imports the stable composition interface"}
-  ]
+  "items": []
 }

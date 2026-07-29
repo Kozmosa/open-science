@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from ainrf.api.routes.metrics import (
+from ainrf.telemetry.metrics import (
     get_metrics_text,
     reset_metrics,
 )

@@ -10,7 +10,7 @@ from fastapi import Request
 from starlette.responses import JSONResponse, Response
 
 
-from ainrf.api.config import ApiConfig
+from ainrf.runtime.product_config import ApiConfig
 from ainrf.auth.presence import record_activity
 from ainrf.auth.service import AuthService
 from ainrf.api.middleware.domain_maintenance import (
@@ -18,6 +18,7 @@ from ainrf.api.middleware.domain_maintenance import (
     build_maintenance_startup_read_only_middleware as build_maintenance_startup_read_only_middleware,
     is_maintenance_startup_evidence_path,
 )
+from ainrf.api.request_identity import client_ip, parse_cidrs
 
 _EXEMPT_PATH_PREFIXES = (
     "/health",
@@ -90,49 +91,11 @@ def _is_exempt(path: str, production: bool) -> bool:
     return any(path.startswith(p) for p in _DEV_EXEMPT_PATH_PREFIXES)
 
 
-def _parse_cidrs(raw: tuple[str, ...]) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
-    """Parse CIDR strings into network objects. Invalid entries are silently skipped."""
-    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
-    for cidr in raw:
-        try:
-            networks.append(ipaddress.ip_network(cidr, strict=False))
-        except ValueError:
-            continue
-    return networks
-
-
-def _client_ip(
-    request: Request,
-    trusted_cidrs: tuple[str, ...] | None = None,
-) -> str:
-    """Extract client IP, respecting X-Forwarded-For from a trusted reverse proxy."""
-    direct_ip = request.client.host if request.client else "0.0.0.0"
-    if trusted_cidrs:
-        networks = _parse_cidrs(trusted_cidrs)
-        try:
-            addr = ipaddress.ip_address(direct_ip)
-            if any(
-                net.supernet_of(
-                    ipaddress.ip_network(f"{addr}/128" if addr.version == 6 else f"{addr}/32")
-                )
-                for net in networks
-            ):
-                forwarded = request.headers.get("x-forwarded-for")
-                if forwarded:
-                    return forwarded.split(",")[0].strip()
-        except ValueError:
-            pass
-    elif request.headers.get("x-forwarded-for"):
-        # No trusted CIDRs configured — legacy behavior for dev
-        return request.headers["x-forwarded-for"].split(",")[0].strip()
-    return direct_ip
-
-
 def build_ip_allowlist_middleware(
     allowed_cidrs: tuple[str, ...],
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Return middleware that rejects requests from IPs outside the allowed CIDRs."""
-    networks = _parse_cidrs(allowed_cidrs)
+    networks = parse_cidrs(allowed_cidrs)
 
     async def ip_allowlist_middleware(
         request: Request,
@@ -142,9 +105,9 @@ def build_ip_allowlist_middleware(
             # No CIDRs configured — allow all (rely on network-level firewall).
             return await call_next(request)
 
-        client_ip = _client_ip(request)
+        resolved_client_ip = client_ip(request)
         try:
-            addr = ipaddress.ip_address(client_ip)
+            addr = ipaddress.ip_address(resolved_client_ip)
         except ValueError:
             return JSONResponse({"detail": "Forbidden"}, status_code=403)
 
@@ -280,8 +243,8 @@ def build_concurrency_limit_middleware(
         try:
             await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
         except TimeoutError:
-            from ainrf.api.routes.sla_metrics import rate_limited
-            from ainrf.api.routes.metrics import route_template_for_request
+            from ainrf.api.http_telemetry import route_template_for_request
+            from ainrf.telemetry.sla import rate_limited
 
             rate_limited("concurrency", route_template_for_request(request))
             return JSONResponse(

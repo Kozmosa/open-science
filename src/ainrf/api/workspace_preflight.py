@@ -9,9 +9,9 @@ from pathlib import Path
 
 from fastapi import Request
 
-from ainrf.auth.service import (
-    _is_container_environment,
-    _linux_user_exists,
+from ainrf.runtime.tenant_identity import (
+    is_container_environment,
+    linux_user_exists,
     tenant_linux_username,
 )
 from ainrf.environments.local import is_localhost_environment
@@ -65,7 +65,7 @@ async def validate_workspace_path(
         if tenant_user is not None:
             await _validate_local_tenant_path(canonical_path, tenant_user)
             return
-        if _is_container_environment() and _is_under_tenant_root(path):
+        if is_container_environment() and _is_under_tenant_root(path):
             raise WorkspacePathPreflightError(
                 "Workspace tenant user is not provisioned for this canonical path"
             )
@@ -137,7 +137,7 @@ async def _validate_local_tenant_path(canonical_path: str, tenant_user: str) -> 
 
 
 def _resolve_tenant_user(request: Request, user_id: str) -> str | None:
-    if not _is_container_environment():
+    if not is_container_environment():
         return None
     auth_service = getattr(request.app.state, "auth_service", None)
     if auth_service is None:
@@ -147,7 +147,7 @@ def _resolve_tenant_user(request: Request, user_id: str) -> str | None:
     except Exception:
         return None
     tenant_user = tenant_linux_username(user.username)
-    return tenant_user if _linux_user_exists(tenant_user) else None
+    return tenant_user if linux_user_exists(tenant_user) else None
 
 
 def _is_under_tenant_root(path: Path) -> bool:

@@ -13,7 +13,7 @@ from anyio import to_thread
 from fastapi import APIRouter, FastAPI
 from starlette.responses import Response
 
-from ainrf.api.config import ApiConfig
+from ainrf.runtime.product_config import ApiConfig
 from ainrf.api.middleware import (
     build_concurrency_limit_middleware,
     build_domain_maintenance_middleware,
@@ -570,7 +570,8 @@ def create_app(
         app.include_router(router, prefix="/api")
     # Metrics endpoint (gated by config)
     if api_config.metrics_enabled:
-        from ainrf.api.routes.metrics import build_http_metrics_middleware, create_metrics_router
+        from ainrf.api.http_telemetry import build_http_metrics_middleware
+        from ainrf.api.routes.metrics import create_metrics_router
 
         app.middleware("http")(build_http_metrics_middleware())
         app.include_router(create_metrics_router(api_config))

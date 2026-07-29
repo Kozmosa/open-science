@@ -287,17 +287,17 @@ class AnthropicSummarizer:
             self._observe_duration(time.monotonic() - t_start)
 
     def _record_success(self, paper: LiteraturePaper) -> None:
-        from ainrf.api.routes.metrics import inc_counter
+        from ainrf.telemetry.metrics import inc_counter
 
         inc_counter("ainrf_literature_summarize_total", {"status": "success"})
 
     def _record_failed(self) -> None:
-        from ainrf.api.routes.metrics import inc_counter
+        from ainrf.telemetry.metrics import inc_counter
 
         inc_counter("ainrf_literature_summarize_total", {"status": "failed"})
 
     def _observe_duration(self, elapsed: float) -> None:
-        from ainrf.api.routes.metrics import observe_histogram
+        from ainrf.telemetry.metrics import observe_histogram
 
         observe_histogram("ainrf_literature_summarize_duration_seconds", elapsed)
 

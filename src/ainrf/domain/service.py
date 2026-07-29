@@ -17,6 +17,7 @@ from ainrf.domain.environment_identity import (
     environment_connection_fingerprint,
 )
 from ainrf.domain.repositories import SqliteDomainRepository
+from ainrf.domain.project_initialization import initialize_project_context
 from ainrf.domain_telemetry import record_durable_idempotency_event, record_permission_denied
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.domain.write_fence import DomainWriteFence
@@ -494,9 +495,7 @@ class DomainService:
             # Context is part of the Project's authoritative lifecycle: a
             # fresh Project always has the empty Draft and immutable initial
             # Active Version that Task creation is allowed to pin.
-            from ainrf.domain.context import ProjectContextService
-
-            ProjectContextService.initialize_project_context_in_transaction(
+            initialize_project_context(
                 conn,
                 project_id=project_id,
                 owner_user_id=owner_id,
@@ -579,9 +578,7 @@ class DomainService:
                     raise DomainConflictError("Default Project provisioning conflicted") from exc
                 conn.commit()
                 return dict(active)
-            from ainrf.domain.context import ProjectContextService
-
-            ProjectContextService.initialize_project_context_in_transaction(
+            initialize_project_context(
                 conn,
                 project_id=project_id,
                 owner_user_id=user_id,
@@ -1719,48 +1716,6 @@ class DomainService:
             self._audit(conn, actor_user_id, "project.owner.transferred", "project", project_id)
             conn.commit()
             return result
-
-    def archive_project(
-        self,
-        project_id: str,
-        user: dict[str, object],
-        *,
-        reason: str,
-        idempotency_key: str | None = None,
-    ) -> None:
-        """Compatibility facade for the transactional Task lifecycle writer.
-
-        Project archival affects queued dispatches and paused Attempts, so it
-        must not retain an independent lightweight write path here.  The
-        import stays local to avoid the intentional service/tasks dependency
-        cycle at module import time.
-        """
-
-        from ainrf.domain.tasks import TaskApplicationService
-
-        TaskApplicationService(self._state_root, artifact_sha=self._artifact_sha).archive_project(
-            project_id,
-            user,
-            reason=reason,
-            idempotency_key=idempotency_key or f"legacy-project-archive-{uuid4().hex}",
-        )
-
-    def unarchive_project(
-        self,
-        project_id: str,
-        user: dict[str, object],
-        *,
-        idempotency_key: str | None = None,
-    ) -> None:
-        """Compatibility facade; it never recreates stopped Attempts."""
-
-        from ainrf.domain.tasks import TaskApplicationService
-
-        TaskApplicationService(self._state_root, artifact_sha=self._artifact_sha).unarchive_project(
-            project_id,
-            user,
-            idempotency_key=idempotency_key or f"legacy-project-unarchive-{uuid4().hex}",
-        )
 
     def unregister_workspace(
         self,

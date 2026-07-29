@@ -62,3 +62,21 @@ def test_non_api_to_api_imports_do_not_expand() -> None:
     assert actual == [{"source": item["source"], "target": item["target"]} for item in allowed], (
         "non-api -> api allowlist is monotonic; remove resolved entries instead of rebasing it"
     )
+
+
+def test_p2_backend_dependency_direction_is_closed() -> None:
+    edges = python_import_edges(_REPO_ROOT)
+
+    assert forbidden_backend_imports(edges) == []
+    assert import_cycles(edges) == []
+    worker_targets = {edge["target"] for edge in edges if edge["source"] == "ainrf.domain.worker"}
+    assert "ainrf.harness_engine.base" in worker_targets
+    assert not any(target.startswith("ainrf.harness_engine.engines") for target in worker_targets)
+    assert "ainrf.auth.service" not in worker_targets
+
+
+def test_p2_neutral_modules_own_shared_runtime_capabilities() -> None:
+    assert (_REPO_ROOT / "src/ainrf/telemetry/metrics.py").is_file()
+    assert (_REPO_ROOT / "src/ainrf/telemetry/sla.py").is_file()
+    assert (_REPO_ROOT / "src/ainrf/runtime/tenant_identity.py").is_file()
+    assert (_REPO_ROOT / "src/ainrf/runtime/product_config.py").is_file()

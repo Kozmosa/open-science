@@ -1,6 +1,15 @@
-from __future__ import annotations
+"""HTTP Adapter compatibility exports."""
 
-from ainrf.api.app import create_app
-from ainrf.api.config import ApiConfig
+from typing import Any
 
-__all__ = ["ApiConfig", "create_app"]
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {
+    "ApiConfig": ("ainrf.runtime.product_config", "ApiConfig"),
+    "create_app": ("ainrf.api.app", "create_app"),
+}
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

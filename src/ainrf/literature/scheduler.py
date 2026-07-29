@@ -146,7 +146,7 @@ class LiteratureScheduler:
         if lock.locked():
             raise RuntimeError(f"fetch already running for subscription {subscription_id}")
 
-        from ainrf.api.routes.metrics import (  # lazy — avoids circular import
+        from ainrf.telemetry.metrics import (
             inc_counter,
             observe_histogram,
             set_gauge,

@@ -608,17 +608,18 @@ def test_project_unarchive_is_idempotent_and_never_requeues_stopped_work(
     assert dispatch["status"] == "cancelled"
 
 
-def test_domain_service_project_archive_uses_lifecycle_transaction(
+def test_task_application_project_archive_uses_lifecycle_transaction(
     state_root: Path, tmp_path: Path
 ) -> None:
     scope = _task_scope(state_root, tmp_path)
     tasks = _tasks(state_root)
     created = _create_task(tasks, scope, idempotency_key="create-before-domain-project-archive")
 
-    _domain(state_root).archive_project(
+    tasks.archive_project(
         scope.project_id,
         scope.owner,
         reason="compatibility facade archive",
+        idempotency_key="task-application-project-archive",
     )
 
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
@@ -1265,7 +1266,7 @@ def test_context_preview_and_confirm_are_owned_by_task_application_service(
     assert queued_attempt["context_snapshot_id"] == confirmed["context_snapshot_id"]
 
 
-def test_v2_project_archive_facade_keeps_the_committed_artifact_sha(
+def test_v2_project_lifecycle_keeps_the_committed_artifact_sha(
     state_root: Path, tmp_path: Path
 ) -> None:
     prepare_committed_v2_cutover(state_root, tmp_path)
@@ -1274,13 +1275,14 @@ def test_v2_project_archive_facade_keeps_the_committed_artifact_sha(
     project = domain.create_project(owner, name="V2 archive Project")
     project_id = str(project["project_id"])
 
-    domain.archive_project(
+    tasks = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    tasks.archive_project(
         project_id,
         owner,
         reason="verify committed-v2 lifecycle fence",
         idempotency_key="v2-archive-project",
     )
-    domain.unarchive_project(
+    tasks.unarchive_project(
         project_id,
         owner,
         idempotency_key="v2-unarchive-project",

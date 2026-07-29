@@ -466,7 +466,7 @@ def _counter(
     """Increment a metric without allowing telemetry failures to break work."""
 
     try:
-        from ainrf.api.routes.metrics import inc_counter
+        from ainrf.telemetry.metrics import inc_counter
 
         inc_counter(name, dict(labels) if labels else None)
     except Exception:  # pragma: no cover - metrics must stay non-fatal
@@ -487,7 +487,7 @@ def _gauge(name: str, value: float, labels: Mapping[str, str] | None = None) -> 
     """Publish one gauge without allowing telemetry failures to break work."""
 
     try:
-        from ainrf.api.routes.metrics import set_gauge
+        from ainrf.telemetry.metrics import set_gauge
 
         set_gauge(name, value, dict(labels) if labels else None)
     except Exception:  # pragma: no cover - metrics must stay non-fatal
@@ -498,7 +498,7 @@ def _set_counter(name: str, value: float, labels: Mapping[str, str]) -> None:
     """Hydrate one API-process counter from a durable monotonic total."""
 
     try:
-        from ainrf.api.routes.metrics import set_counter
+        from ainrf.telemetry.metrics import set_counter
 
         set_counter(name, value, dict(labels))
     except Exception:  # pragma: no cover - metrics must stay non-fatal

@@ -8,9 +8,10 @@ from typing import Any
 import click
 import typer
 
-from ainrf.api.config import hash_api_key
+from ainrf.runtime.product_config import hash_api_key
 from ainrf.runtime import build_default_runtime_config, normalize_runtime_config
 from ainrf.runtime.readiness import RuntimeReadinessPayload, check_runtime_readiness
+from ainrf.runtime.container_profile import build_container_profile
 
 
 def config_path_for(state_root: Path) -> Path:
@@ -57,8 +58,6 @@ def prompt_api_key() -> str:
 def prompt_optional_container_profile() -> tuple[str, dict[str, str | int | None]] | None:
     if not typer.confirm("Add an optional container profile?", default=False):
         return None
-    from ainrf.cli import build_container_profile
-
     name = typer.prompt("Container profile name", default="default").strip()
     ssh_command = typer.prompt("SSH command").strip()
     project_dir = typer.prompt("Remote project directory", default="/workspace/projects").strip()

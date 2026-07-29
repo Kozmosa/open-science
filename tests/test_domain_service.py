@@ -17,6 +17,7 @@ from ainrf.domain.service import (
     DomainPermissionError,
     DomainService,
 )
+from ainrf.domain.tasks import TaskApplicationService
 from tests.testutil import seed_user
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
@@ -318,7 +319,12 @@ def test_default_project_cannot_be_archived_and_workspace_can_be_unregistered(
     admin, alice = _admin(), _user("alice")
     default = service.create_project(alice, name="Default", is_default=True)
     with pytest.raises(ValueError):
-        service.archive_project(str(default["project_id"]), alice, reason="test")
+        TaskApplicationService(state_root, artifact_sha=committed_v2_state).archive_project(
+            str(default["project_id"]),
+            alice,
+            reason="test",
+            idempotency_key="reject-default-project-archive",
+        )
     environment = service.create_environment(
         admin, alias="host-a", display_name="Host A", connection={}
     )
@@ -398,7 +404,12 @@ def test_project_viewer_visibility_and_primary_replacement_guards(
     service.add_member(project_id, "viewer", "viewer", False, alice)
     assert service.project(project_id, viewer)["project_id"] == project_id
     with pytest.raises(DomainPermissionError):
-        service.archive_project(project_id, viewer, reason="not allowed")
+        TaskApplicationService(state_root, artifact_sha=committed_v2_state).archive_project(
+            project_id,
+            viewer,
+            reason="not allowed",
+            idempotency_key="reject-viewer-project-archive",
+        )
     with pytest.raises(DomainNotFoundError):
         service.project(project_id, outsider)
 

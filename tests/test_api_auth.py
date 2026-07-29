@@ -246,7 +246,7 @@ def test_api_config_uses_login_shell_by_default(
     class PwRecord:
         pw_shell = "/bin/zsh"
 
-    monkeypatch.setattr("ainrf.api.config.pwd.getpwuid", lambda uid: PwRecord())
+    monkeypatch.setattr("ainrf.runtime.product_config.pwd.getpwuid", lambda uid: PwRecord())
     monkeypatch.setenv("SHELL", "/bin/fish")
 
     config = ApiConfig(

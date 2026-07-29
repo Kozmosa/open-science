@@ -27,7 +27,7 @@ from ainrf.api.schemas import (
     TaskListResponse,
 )
 from ainrf.auth.permissions import get_current_user
-from ainrf.domain import DomainPermissionError, DomainService
+from ainrf.domain import DomainPermissionError, DomainService, TaskApplicationService
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -40,6 +40,13 @@ def _domain_service(request: Request) -> DomainService:
     service = getattr(request.app.state, "domain_service", None)
     if not isinstance(service, DomainService) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Domain cutover is not ready")
+    return service
+
+
+def _task_application_service(request: Request) -> TaskApplicationService:
+    service = getattr(request.app.state, "task_application_service", None)
+    if not isinstance(service, TaskApplicationService):
+        raise HTTPException(status_code=503, detail="Task application module is unavailable")
     return service
 
 
@@ -288,7 +295,7 @@ async def delete_project(project_id: str, request: Request, response: Response) 
     )
     try:
         domain.require_project_owner(project_id, user)
-        domain.archive_project(
+        _task_application_service(request).archive_project(
             project_id,
             user,
             reason="deprecated project DELETE",
@@ -304,7 +311,7 @@ async def archive_project(project_id: str, request: Request) -> None:
     domain = _domain_service(request)
     try:
         domain.require_project_owner(project_id, get_current_user(request))
-        domain.archive_project(
+        _task_application_service(request).archive_project(
             project_id,
             get_current_user(request),
             reason="user archived project",
@@ -320,7 +327,7 @@ async def unarchive_project(project_id: str, request: Request) -> None:
     domain = _domain_service(request)
     try:
         domain.require_project_owner(project_id, get_current_user(request))
-        domain.unarchive_project(
+        _task_application_service(request).unarchive_project(
             project_id, get_current_user(request), idempotency_key=require_idempotency_key(request)
         )
     except Exception as exc:

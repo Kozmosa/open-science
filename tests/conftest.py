@@ -50,8 +50,8 @@ def isolated_runtime_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     tenant_root.mkdir()
     monkeypatch.setenv("HOME", str(home_dir))
     monkeypatch.setattr("ainrf.auth.jwt_utils._SECRET_PATH", home_dir / ".ainrf" / "jwt_secret")
-    monkeypatch.setattr("ainrf.auth.service._TENANT_HOME_ROOT", tenant_root)
-    monkeypatch.setattr("ainrf.auth.service._is_container_environment", lambda: False)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.TENANT_HOME_ROOT", tenant_root)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: False)
     monkeypatch.setattr("ainrf.runtime.paths._TENANT_HOME_ROOT", tenant_root)
 
 

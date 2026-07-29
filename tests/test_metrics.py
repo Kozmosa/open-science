@@ -1,4 +1,4 @@
-"""Tests for ainrf.api.routes.metrics."""
+"""Tests for neutral metrics plus their HTTP Adapter."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from fastapi import FastAPI
 
 from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.api.routes.metrics import (
+from ainrf.api.http_telemetry import build_http_metrics_middleware
+from ainrf.telemetry.metrics import (
     dec_gauge,
-    build_http_metrics_middleware,
     get_metrics_text,
     inc_counter,
     inc_gauge,
@@ -22,7 +22,7 @@ from ainrf.api.routes.metrics import (
     set_counter,
     set_gauge,
 )
-from ainrf.api.routes.sla_metrics import rate_limited
+from ainrf.telemetry.sla import rate_limited
 from ainrf.api.routes import client_metrics
 from tests.testutil import get_jwt_headers
 
