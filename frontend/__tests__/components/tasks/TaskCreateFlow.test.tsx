@@ -2,14 +2,13 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import TaskCreateFlow from '@features/tasks/components/TaskCreateFlow';
 import { buildLiteratureTaskCreateFixture } from '@features/tasks/taskCreateContract';
-import { renderWithProviders } from '@/shared/test/render';
-import { createTask, getSkills } from '@/shared/api';
+import { renderWithProviders } from '@/test-support/render';
+import { createTask } from '@features/tasks/api';
+import { getSkills } from '@features/settings/api';
 import { getDomainCapabilities, getDomainProjects, getDomainWorkspaces } from '@features/domain';
 
-vi.mock('@/shared/api', () => ({
-  createTask: vi.fn(),
-  getSkills: vi.fn(),
-}));
+vi.mock('@features/tasks/api', () => ({ createTask: vi.fn() }));
+vi.mock('@features/settings/api', () => ({ getSkills: vi.fn() }));
 
 vi.mock('@features/domain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@features/domain')>();

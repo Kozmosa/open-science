@@ -1,13 +1,12 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getEnvironments, getProjectEnvironmentReferences } from '@/shared/api';
-import { renderWithProviders } from '@/shared/test/render';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
+import { renderWithProviders } from '@/test-support/render';
 import type { EnvironmentRecord } from '@/shared/types';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
-import EnvironmentSelectorPanel from '../../../src/components/environment/EnvironmentSelectorPanel';
-import { useEnvironmentSelection } from '../../../src/components/environment/useEnvironmentSelection';
+import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@features/environments';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@features/environments/api', () => ({
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
 }));

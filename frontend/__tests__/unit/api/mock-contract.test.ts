@@ -5,19 +5,17 @@ import { setupServer } from 'msw/node';
 import {
   createLiteratureCheck,
   createLiteratureResearchTask,
-  createTask,
-  getAdminUsers,
   getLiteratureCheck,
   getLiteraturePaper,
   getLiteraturePapers,
   getLiteratureResearchTask,
   getLiteratureResearchTasks,
   getLiteratureSummary,
-  getSearchSettings,
-  getSessionsBatchDetail,
   requestLiteratureSummary,
-  retryTask,
-} from '@/shared/api/endpoints';
+} from '@/features/literature';
+import { createTask, retryTask } from '@/features/tasks';
+import { getAdminUsers, getSearchSettings } from '@/features/settings';
+import { getSessionsBatchDetail } from '@/features/sessions';
 import {
   acceptDomainContextCandidate,
   getDomainCapabilities,
@@ -34,7 +32,7 @@ import {
   requestTodayOverviewRefresh,
   saveDomainProjectContextDraft,
 } from '@/features/domain/api';
-import { frontendMockHandlers, resetLegacyMockState } from '@/shared/api/mockHandlers';
+import { frontendMockHandlers, resetLegacyMockState } from '@/app/mock/handlers';
 
 const server = setupServer(...frontendMockHandlers);
 
@@ -219,10 +217,17 @@ describe('frontend mock architecture guard', () => {
 
   it('keeps business endpoint modules independent from direct mock implementations', () => {
     const endpointModules = [
-      join(srcRoot, 'shared/api/endpoints.ts'),
-      join(srcRoot, 'features/domain/api.ts'),
       join(srcRoot, 'features/tasks/api/endpoints.ts'),
+      join(srcRoot, 'features/environments/api/endpoints.ts'),
+      join(srcRoot, 'features/terminal/api/endpoints.ts'),
+      join(srcRoot, 'features/workspaces/api.ts'),
+      join(srcRoot, 'features/projects/api.ts'),
+      join(srcRoot, 'features/resources/api.ts'),
+      join(srcRoot, 'features/sessions/api.ts'),
+      join(srcRoot, 'features/literature/api.ts'),
+      join(srcRoot, 'features/domain/api.ts'),
       join(srcRoot, 'features/settings/api/endpoints.ts'),
+      join(srcRoot, 'features/system/api.ts'),
     ];
 
     for (const path of endpointModules) {
@@ -230,12 +235,12 @@ describe('frontend mock architecture guard', () => {
       expect(source).not.toMatch(/from ['"].*mock(?:\.ts)?['"]/);
       expect(source).not.toContain('VITE_USE_MOCK');
     }
-    expect(readFileSync(join(srcRoot, 'shared/api/endpoints.ts'), 'utf8')).toContain("import { api } from './client'");
+    expect(readFileSync(join(srcRoot, 'features/tasks/api/endpoints.ts'), 'utf8')).toContain("import { api } from '@/shared/api/client'");
     expect(readFileSync(join(srcRoot, 'features/domain/api.ts'), 'utf8')).toContain("import { api } from '@/shared/api/client'");
   });
 
   it('fails unhandled browser API requests while bypassing non-API assets', () => {
-    const source = readFileSync(join(srcRoot, 'shared/api/mockBrowser.ts'), 'utf8');
+    const source = readFileSync(join(srcRoot, 'app/mock/browser.ts'), 'utf8');
     const forbiddenBypass = 'onUnhandledRequest: ' + "'bypass'";
     expect(source).toContain("pathname.startsWith('/api/')");
     expect(source).toContain('print.error()');

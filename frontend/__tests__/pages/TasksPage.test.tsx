@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
-import { createTestQueryClient, renderWithProviders } from '@/shared/test/render';
+import { createTestQueryClient, renderWithProviders } from '@/test-support/render';
 import type {
   EnvironmentRecord,
   TaskOutputEvent,
@@ -15,18 +15,16 @@ import type {
 import {
   buildTaskStreamUrl,
   createTask,
-  getCodexDefaults,
-  getEnvironments,
-  getProjectEnvironmentReferences,
-  getProjects,
-  getSkills,
   getTask,
   getTaskMessages,
   getTaskOutput,
   getTasks,
-  getWorkspaces,
   retryTask,
-} from '@/shared/api';
+} from '@features/tasks/api';
+import { getCodexDefaults, getSkills } from '@features/settings/api';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
+import { getProjects } from '@features/projects/api';
+import { getWorkspaces } from '@features/workspaces/api';
 import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -251,21 +249,25 @@ function createOutputPage(
   };
 }
 
-vi.mock('@/shared/api', () => ({
+vi.mock('@features/tasks/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
-  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getEnvironments: vi.fn(),
-  getProjectEnvironmentReferences: vi.fn(),
-  getProjects: vi.fn(),
-  getSkills: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
-  getWorkspaces: vi.fn(),
   retryTask: vi.fn(),
 }));
+vi.mock('@features/settings/api', () => ({
+  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+  getSkills: vi.fn(),
+}));
+vi.mock('@features/environments/api', () => ({
+  getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(),
+}));
+vi.mock('@features/projects/api', () => ({ getProjects: vi.fn() }));
+vi.mock('@features/workspaces/api', () => ({ getWorkspaces: vi.fn() }));
 
 vi.mock('@features/domain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@features/domain')>();

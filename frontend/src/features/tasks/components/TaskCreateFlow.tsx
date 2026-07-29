@@ -12,7 +12,8 @@ import {
   RadioGroupItem,
   Textarea,
 } from '@design-system';
-import { createTask, getSkills } from '@/shared/api';
+import { getSkills } from '@features/settings';
+import { createTask } from '../api';
 import { useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { HarnessEngine, ResearcherType, SkillItem, TaskCreatePayload, TaskSummary } from '@/shared/types';

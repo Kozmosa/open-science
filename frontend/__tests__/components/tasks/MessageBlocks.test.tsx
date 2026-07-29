@@ -1,8 +1,8 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ChatAssistantMessage, ChatThinkingBlock, ChatToolCallBlock } from '../../../src/components/chat';
-import { renderWithProviders } from '@/shared/test/render';
-import type { ChatAssistantMessage as ChatAssistantMessageType } from '../../../src/components/chat';
+import { ChatAssistantMessage, ChatThinkingBlock, ChatToolCallBlock } from '@features/tasks/components/chat';
+import { renderWithProviders } from '@/test-support/render';
+import type { ChatAssistantMessage as ChatAssistantMessageType } from '@features/tasks/components/chat';
 
 function assistantMessage(content: string, overrides?: Partial<ChatAssistantMessageType>): ChatAssistantMessageType {
   return {

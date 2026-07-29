@@ -3,29 +3,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCodexDefaults,
   getDeploymentVersion,
-  getEnvironments,
   getFrontendBuildVersion,
-  getProjectEnvironmentReferences,
   getSearchSettings,
   getSkillRegistries,
   getSkills,
-  getWorkspaces,
-} from '@/shared/api';
+} from '@features/settings/api';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
+import { getWorkspaces } from '@features/workspaces/api';
 import {
   createDefaultWebUiSettings,
   defaultResearchAgentProfileId,
   rawPromptTaskConfigurationId,
   settingsStorageKey,
 } from '@/features/settings';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import type { EnvironmentRecord } from '@/shared/types';
 import SettingsPage from '../../src/pages/SettingsPage';
 
-vi.mock('../../src/components/environment/EnvironmentSelectorPanel', () => ({
+vi.mock('@features/environments/components/EnvironmentSelectorPanel', () => ({
   default: () => <div data-testid="environment-selector" />,
 }));
 
-vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
+vi.mock('@features/terminal/components/TerminalSessionConsole', () => ({
   default: ({
     attachmentId,
     terminalWsUrl,
@@ -39,12 +38,10 @@ vi.mock('../../src/components/terminal/TerminalSessionConsole', () => ({
   ),
 }));
 
-vi.mock('@/shared/api', () => ({
+vi.mock('@features/settings/api', () => ({
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
-  getEnvironments: vi.fn(),
-  getProjectEnvironmentReferences: vi.fn(() => Promise.resolve({ items: [] })),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getSearchSettings: vi.fn(() => Promise.resolve({
@@ -61,10 +58,14 @@ vi.mock('@/shared/api', () => ({
     available_backends: [],
     auto_start_mcp_servers: [],
   })),
-  getWorkspaces: vi.fn(),
   importSkill: vi.fn(),
   installSkillRegistry: vi.fn(),
 }));
+vi.mock('@features/environments/api', () => ({
+  getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(() => Promise.resolve({ items: [] })),
+}));
+vi.mock('@features/workspaces/api', () => ({ getWorkspaces: vi.fn() }));
 
 vi.mock('@features/domain', () => ({
   getDomainProjects: vi.fn(() => Promise.resolve({

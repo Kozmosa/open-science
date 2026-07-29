@@ -1,5 +1,7 @@
 export const OSCI_THEME_CONTRACT = 'osci-theme/v1' as const;
 
+export type ThemePreference = 'light' | 'dark' | 'system';
+
 export const OSCI_THEME_TOKEN_NAMES = [
   '--osci-color-canvas',
   '--osci-color-surface',

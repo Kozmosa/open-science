@@ -138,4 +138,5 @@ export function useLocaleSwitcher(): Pick<I18nContextValue, 'locale' | 'setLocal
 }
 
 export { messages };
+export { default as LocaleSwitcher } from './LocaleSwitcher';
 export type { Locale, MessageKey } from './messages';

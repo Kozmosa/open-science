@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { groupMessages } from '../../../src/components/chat/groupMessages';
-import type { MessageItem } from '../../../src/components/chat';
+import { groupMessages } from '@features/tasks/components/chat/groupMessages';
+import type { MessageItem } from '@features/tasks/components/chat';
 
 function user(seq: number, content: string): MessageItem {
   return {

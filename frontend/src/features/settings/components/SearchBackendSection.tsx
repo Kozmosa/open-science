@@ -2,7 +2,7 @@ import { Checkbox, FormField, SectionCard, SectionHeader, NativeSelect } from '@
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SearchBackendItem } from '@/shared/types';
-import { getSearchSettings, updateSearchSettings } from '@/shared/api';
+import { getSearchSettings, updateSearchSettings } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 export function SearchBackendSection() {

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Button, Dialog, Input } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
-import { changePassword } from '@/shared/api';
+import { changePassword } from '@features/auth';
 
 export function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();

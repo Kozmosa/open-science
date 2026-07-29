@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../src/App';
-import { getTasks } from '@/shared/api';
+import { getTasks } from '@features/tasks/api';
 import { LocaleProvider } from '@/shared/i18n';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
 
@@ -53,9 +53,7 @@ vi.mock('@features/domain', () => ({
   }),
 }));
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getTasks: vi.fn(),
-}));
+vi.mock('@features/tasks/api', () => ({ getTasks: vi.fn() }));
 
 vi.mock('../src/pages/TerminalPage', () => ({
   default: () => <div data-testid="terminal-page">terminal-page</div>,

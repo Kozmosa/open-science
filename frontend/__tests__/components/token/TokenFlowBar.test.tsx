@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { TokenFlowBar } from '../../../src/components/token/TokenFlowBar';
+import { TokenFlowBar } from '@features/tasks';
 
 const agentSdkJson = JSON.stringify({
   total: {

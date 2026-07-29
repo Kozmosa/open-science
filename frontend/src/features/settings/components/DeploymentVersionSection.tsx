@@ -1,7 +1,7 @@
 import { SectionCard, SectionHeader } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useQuery } from '@tanstack/react-query';
-import { getDeploymentVersion, getFrontendBuildVersion } from '@/shared/api';
+import { getDeploymentVersion, getFrontendBuildVersion } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 export function VersionSideCard({
@@ -115,4 +115,3 @@ export function DeploymentVersionSection() {
     </SectionCard>
   );
 }
-

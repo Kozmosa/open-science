@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import ChatInputBar from '../../../src/components/chat/ChatInputBar';
-import { renderWithProviders } from '@/shared/test/render';
+import ChatInputBar from '@features/tasks/components/chat/ChatInputBar';
+import { renderWithProviders } from '@/test-support/render';
 
 describe('ChatInputBar', () => {
   it('renders a textarea with placeholder', () => {
@@ -127,4 +127,3 @@ describe('ChatInputBar', () => {
   });
 
 });
-

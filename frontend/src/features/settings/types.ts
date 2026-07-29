@@ -1,8 +1,10 @@
+import type { SkillMode, ThemePreference } from '@design-system';
+
+export type { SkillMode, ThemePreference } from '@design-system';
+
 export type DefaultRoute = 'today' | 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
-export type ThemePreference = 'light' | 'dark' | 'system';
 
 export type ExecutionEngineId = 'claude-code' | 'agent-sdk' | 'codex-app-server';
-export type SkillMode = 'disabled' | 'enabled' | 'auto';
 export type CodexConfigSource = 'host_default' | 'custom';
 export type TaskConfigurationMode = 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
 

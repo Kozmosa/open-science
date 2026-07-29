@@ -2,8 +2,9 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkspacesPage from '../../src/pages/WorkspacesPage';
-import { renderWithProviders } from '@/shared/test/render';
-import { getEnvironments, unregisterWorkspace, updateWorkspace } from '@/shared/api';
+import { renderWithProviders } from '@/test-support/render';
+import { getEnvironments } from '@features/environments/api';
+import { unregisterWorkspace, updateWorkspace } from '@features/workspaces/api';
 import {
   attachDomainWorkspace,
   createDomainWorkspace,
@@ -13,15 +14,11 @@ import {
   type DomainWorkspaceProjection,
 } from '@features/domain';
 
-vi.mock('@/shared/api', async () => {
-  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api');
-  return {
-    ...actual,
-    getEnvironments: vi.fn(),
-    unregisterWorkspace: vi.fn(),
-    updateWorkspace: vi.fn(),
-  };
-});
+vi.mock('@features/environments/api', () => ({ getEnvironments: vi.fn() }));
+vi.mock('@features/workspaces/api', () => ({
+  unregisterWorkspace: vi.fn(),
+  updateWorkspace: vi.fn(),
+}));
 
 vi.mock('@features/domain', async () => {
   const actual = await vi.importActual<typeof import('@features/domain')>('@features/domain');

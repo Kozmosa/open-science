@@ -7,7 +7,7 @@ import { LocaleProvider } from '@/shared/i18n'
 
 async function bootstrap(): Promise<void> {
   if (import.meta.env.VITE_USE_MOCK === 'true') {
-    const { startMockBrowser } = await import('@/shared/api/mockBrowser')
+    const { startMockBrowser } = await import('@/app/mock/browser')
     await startMockBrowser()
   }
 

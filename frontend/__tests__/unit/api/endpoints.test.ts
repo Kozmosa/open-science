@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupServer } from 'msw/node';
-import { frontendMockHandlers, resetLegacyMockState } from '@/shared/api/mockHandlers';
+import { frontendMockHandlers, resetLegacyMockState } from '@/app/mock/handlers';
 
 const server = setupServer(...frontendMockHandlers);
 
@@ -22,9 +22,9 @@ describe('api endpoints', () => {
       getTask,
       getTaskOutput,
       getTasks,
-      getTerminalSession,
-      getWorkspaces,
-    } = await import('../../../src/shared/api/endpoints');
+    } = await import('../../../src/features/tasks/api/endpoints');
+    const { getTerminalSession } = await import('../../../src/features/terminal/api/endpoints');
+    const { getWorkspaces } = await import('../../../src/features/workspaces/api');
 
     const session = await getTerminalSession('env-localhost');
     const workspaces = await getWorkspaces();
@@ -53,7 +53,7 @@ describe('api endpoints', () => {
   it('uses a query parameter for task stream API keys because EventSource cannot send custom headers', async () => {
     vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
 
-    const { buildTaskStreamUrl } = await import('../../../src/shared/api/endpoints');
+    const { buildTaskStreamUrl } = await import('../../../src/features/tasks/api/endpoints');
 
     expect(buildTaskStreamUrl('task-1', 7)).toBe(
       '/api/tasks/task-1/stream?after_seq=7&api_key=stream-secret'
@@ -69,7 +69,7 @@ describe('api endpoints', () => {
     ));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { pauseTask, resumeTask, sendTaskPrompt } = await import('../../../src/shared/api/endpoints');
+    const { pauseTask, resumeTask, sendTaskPrompt } = await import('../../../src/features/tasks/api/endpoints');
     await pauseTask('task-1', 'task.pause:test');
     await resumeTask('task-1', 'task.resume:test');
     await sendTaskPrompt('task-1', 'Continue the analysis', 'task.continue:test');
@@ -95,7 +95,7 @@ describe('api endpoints', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { getHealth } = await import('../../../src/shared/api/endpoints');
+    const { getHealth } = await import('../../../src/features/system/api');
     await expect(getHealth()).resolves.toEqual({ status: 'ok' });
     expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.any(Object));
   });
@@ -134,7 +134,7 @@ describe('api endpoints', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('../../../src/shared/api/endpoints');
+    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('../../../src/features/workspaces/api');
 
     await createWorkspace({
       label: 'New workspace',

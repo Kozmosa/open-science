@@ -4,7 +4,7 @@ import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
 import type { SkillImportRequest } from '@/shared/api/transportTypes';
-import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '@/shared/api';
+import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 export interface SkillRepositorySectionProps {

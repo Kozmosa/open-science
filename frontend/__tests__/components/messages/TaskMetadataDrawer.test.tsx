@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import TaskMetadataDrawer from '../../../src/components/messages/TaskMetadataDrawer';
-import { renderWithProviders } from '@/shared/test/render';
+import TaskMetadataDrawer from '@features/tasks/components/messages/TaskMetadataDrawer';
+import { renderWithProviders } from '@/test-support/render';
 import type { TaskRecord } from '@/shared/types';
 import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';
 
