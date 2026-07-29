@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "owner": "P4",
+  "owner": "P5",
   "removal_phase": "P5",
   "final_state": "delete",
   "common_replacement": "Idempotency-Key header or canonical generated transport contract",

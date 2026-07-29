@@ -37,21 +37,26 @@ def test_compatibility_inventory_covers_every_required_surface() -> None:
         assert item["surface"]
         assert item["owner"] in {"P1", "P4", "P5", "P6"}
         assert item["replacement"]
-        assert item["removal_phase"] in {"P1", "P4", "P5", "P6"}
+        assert item["removal_phase"] in {"P1", "P5", "P6"}
         assert item["deadline"]
         assert item["evidence"]
+        if item["removal_phase"] == "P5":
+            assert item["owner"] == "P5"
+            assert item["status"] == "retained-pending-client-migration-and-zero-traffic-evidence"
+            assert item["telemetry_key"]
+            assert item["removal_evidence"]
 
 
 def test_deprecated_contract_surface_does_not_expand() -> None:
     payload = json.loads(_DEPRECATED_SURFACE_PATH.read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
-    assert payload["owner"] == "P4"
+    assert payload["owner"] == "P5"
     assert payload["removal_phase"] == "P5"
     assert payload["final_state"] == "delete"
     for item in payload["items"]:
-        assert item["owner"] == "P4"
+        assert item["owner"] == "P5"
         assert item["replacement"]
-        assert item["expires_when"]
+        assert "reviewed telemetry proves zero usage" in item["expires_when"]
     assert deprecated_contract_surfaces(_REPO_ROOT) == [
         {"source": item["source"], "surface": item["surface"]} for item in payload["items"]
     ], "deprecated contract allowlist is monotonic; remove entries instead of adding surfaces"
@@ -62,7 +67,7 @@ def test_compatibility_fields_are_individually_inventoried() -> None:
     schema, _routes = openapi_inventory()
     components = _mapping(schema["components"])
     schemas = _mapping(components["schemas"])
-    assert payload["owner"] == "P4"
+    assert payload["owner"] == "P5"
     assert payload["removal_phase"] == "P5"
     assert payload["final_state"] == "delete"
     assert payload["common_replacement"]

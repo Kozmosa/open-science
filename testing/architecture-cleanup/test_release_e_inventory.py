@@ -113,7 +113,7 @@ def test_retained_compatibility_has_bounded_followup_ownership() -> None:
     payload = json.loads(_COMPATIBILITY_BUDGET_PATH.read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == 1
-    assert payload["recorded_phase"] == "P1-D"
+    assert payload["recorded_phase"] == "P5-entry"
     assert payload["decision"] == (
         "retained protocol adapters do not own or read legacy domain authority"
     )
@@ -121,11 +121,23 @@ def test_retained_compatibility_has_bounded_followup_ownership() -> None:
     assert items
     for item in items:
         assert item["surface"]
-        assert item["owner"] in {"P4", "P5"}
+        assert item["owner"] == "P5"
         assert item["replacement"]
-        assert item["earliest_removal_phase"] in {"P4", "P5"}
+        assert item["earliest_removal_phase"] == "P5"
+        assert item["telemetry_key"]
         assert item["deadline"]
+        assert item["removal_evidence"]
         assert item["reason"]
+
+
+def test_observed_production_gaps_block_compatibility_deletion() -> None:
+    evidence_path = _REPO_ROOT / "testing/architecture-cleanup/release_evidence.json"
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    observations = {item["dimension"]: item for item in evidence["observations"]}
+    budget = json.loads(_COMPATIBILITY_BUDGET_PATH.read_text(encoding="utf-8"))
+
+    assert observations["deprecated_traffic"]["status"] == "observed_gap"
+    assert all(item["earliest_removal_phase"] == "P5" for item in budget["items"])
 
 
 def test_legacy_surface_does_not_expand() -> None:
