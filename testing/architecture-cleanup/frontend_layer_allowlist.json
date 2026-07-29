@@ -3,20 +3,5 @@
   "owner": "P5",
   "removal_phase": "P5",
   "final_state": "delete",
-  "items": [
-    {"source":"components/common/Layout.tsx","target":"features/auth","rule":"components-features-cycle-risk","owner":"P5","reason":"legacy shell component consumes auth feature","replacement":"app-owned shell composition","expires_when":"Layout moves to app composition"},
-    {"source":"components/environment/useEnvironmentSelection.ts","target":"features/domain","rule":"components-features-cycle-risk","owner":"P5","reason":"legacy environment hook coordinates domain feature","replacement":"environment feature hook","expires_when":"environment components are feature-owned"},
-    {"source":"components/environment/useEnvironmentSelection.ts","target":"features/settings","rule":"components-features-cycle-risk","owner":"P5","reason":"legacy environment hook reads settings feature","replacement":"feature-level adapter input","expires_when":"environment components are feature-owned"},
-    {"source":"components/file-browser/MonacoTextViewer.tsx","target":"features/settings","rule":"components-features-cycle-risk","owner":"P5","reason":"legacy viewer reads product settings","replacement":"prop-driven shared viewer","expires_when":"viewer receives neutral preferences"},
-    {"source":"components/messages/TaskHeaderBar.tsx","target":"features/tasks/utils/status","rule":"components-features-cycle-risk","owner":"P5","reason":"task UI remains under legacy components","replacement":"tasks feature component","expires_when":"task message UI moves under features/tasks"},
-    {"source":"components/messages/TaskMetadataDrawer.tsx","target":"features/tasks/components/TechnicalIdentifier","rule":"components-features-cycle-risk","owner":"P5","reason":"task UI remains under legacy components","replacement":"tasks feature component","expires_when":"task message UI moves under features/tasks"},
-    {"source":"components/messages/TaskMetadataDrawer.tsx","target":"features/tasks/utils/metadataPresentation","rule":"components-features-cycle-risk","owner":"P5","reason":"task UI remains under legacy components","replacement":"tasks feature component","expires_when":"task message UI moves under features/tasks"},
-    {"source":"components/terminal/TerminalSessionConsole.tsx","target":"features/settings","rule":"components-features-cycle-risk","owner":"P5","reason":"terminal component reads settings feature directly","replacement":"terminal feature adapter input","expires_when":"terminal console is feature-owned"},
-    {"source":"design-system/primitives/SkillToggleGroup.tsx","target":"features/settings/types","rule":"design-system-must-not-depend-on-product","owner":"P5","reason":"design primitive uses settings-owned option type","replacement":"shared primitive option type","expires_when":"type moves below design-system"},
-    {"source":"design-system/theme/runtime.ts","target":"features/settings/types","rule":"design-system-must-not-depend-on-product","owner":"P5","reason":"theme runtime uses settings-owned theme type","replacement":"design-system theme type","expires_when":"theme contract is owned by design-system"},
-    {"source":"shared/api/mockScenarioV2.ts","target":"features/domain/types","rule":"shared-must-not-depend-upward","owner":"P5","reason":"shared mock imports domain feature transport types","replacement":"generated/shared transport contract","expires_when":"P4 generated contract drives mocks"},
-    {"source":"shared/test/render.tsx","target":"design-system","rule":"shared-must-not-depend-upward","owner":"P5","reason":"test composition helper is misplaced under shared","replacement":"frontend test-support composition","expires_when":"test helper leaves shared"},
-    {"source":"shared/test/render.tsx","target":"features/auth","rule":"shared-must-not-depend-upward","owner":"P5","reason":"test composition helper is misplaced under shared","replacement":"frontend test-support composition","expires_when":"test helper leaves shared"},
-    {"source":"shared/test/render.tsx","target":"features/settings","rule":"shared-must-not-depend-upward","owner":"P5","reason":"test composition helper is misplaced under shared","replacement":"frontend test-support composition","expires_when":"test helper leaves shared"}
-  ]
+  "items": []
 }

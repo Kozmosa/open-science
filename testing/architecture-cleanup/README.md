@@ -5,8 +5,9 @@ It is intentionally outside `tests/`, the repository pytest `testpaths`, `script
 `scripts/ci.sh`, and GitHub Actions. It must be deleted in P6.
 
 - **Owner:** architecture cleanup P0-P6
-- **Current phase:** P5 entry; P4 generated transport is closed and retained compatibility is
-  explicitly handed to P5 pending canonical-client migration and reviewed zero-traffic evidence
+- **Current phase:** P5 frontend layering implemented and under exit validation; canonical frontend
+  callers and MSW adapters use the generated `/api` contract, while retained compatibility remains
+  blocked on reviewed production zero-traffic evidence
 - **Maximum lifetime:** through P6 only; delete the entire directory before P6 exits
 - **Final deletion condition:** P6 architecture/documentation audit is complete and no normal test,
   CI entrypoint, workflow, or required check refers to these assets
@@ -61,7 +62,8 @@ compatibility inventories; generated adoption does not authorize deleting them i
 The generated contract and normal CI drift gate live outside this local-only directory under
 `frontend/src/generated/transport/` and `scripts/ci.sh`.
 
-P5 owns the retained protocol surfaces after that first cut. A generated type existing is not
-removal evidence: callers and mock adapters must use the canonical operation, and release telemetry
-must prove zero deprecated route/field usage for a reviewed observation window. The production gaps
-in `release_evidence.json` therefore remain fail-closed deletion blockers, not implied zero traffic.
+P5 migrated canonical frontend callers and mock adapters without deleting compatibility surfaces.
+Production telemetry was intentionally not queried in this work slice, so the observation gaps in
+`release_evidence.json` remain fail-closed deletion blockers rather than implied zero traffic. Route
+aliases, compatibility projections, deprecated Task response fields, and body/query idempotency
+aliases therefore remain owned by the compatibility inventory.

@@ -42,7 +42,7 @@ def test_compatibility_inventory_covers_every_required_surface() -> None:
         assert item["evidence"]
         if item["removal_phase"] == "P5":
             assert item["owner"] == "P5"
-            assert item["status"] == "retained-pending-client-migration-and-zero-traffic-evidence"
+            assert item["status"] == "retained-pending-reviewed-zero-traffic-evidence"
             assert item["telemetry_key"]
             assert item["removal_evidence"]
 
