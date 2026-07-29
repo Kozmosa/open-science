@@ -554,16 +554,16 @@ flowchart TD
 
 P0 为本次清理建立的基线、allowlist、inventory、snapshot 和迁移断言是仅供本地开发使用的临时脚手架，不能散落在常规测试目录、产品 Module、仓库 CI 脚本或 GitHub Actions workflow 中。
 
-- 所有 cleanup-only Python guard、跨语言静态扫描、allowlist、route inventory 和 snapshot 集中在 `testing/architecture-cleanup/`；该目录位于 pytest 默认 `testpaths` 和 `scripts/test.sh all` 的 `tests/` 范围之外；
+- 所有 cleanup-only Python guard、跨语言静态扫描、allowlist、route inventory 和 snapshot 集中在仓库外显命名的临时 cleanup-only tree；该目录位于 pytest 默认 `testpaths` 和 `scripts/test.sh all` 的 `tests/` 范围之外；
 - 该目录必须包含显眼的 `README.md`，标注 `TEMPORARY: local-only architecture cleanup P0-P6`、owner、当前 phase、最终删除条件和允许存在的最长生命周期；
-- 如果使用 pytest，marker 只在 `testing/architecture-cleanup/pytest.ini` 中注册，目录内每个文件统一声明 `pytestmark = [pytest.mark.architecture_cleanup]`；不得修改仓库级 pytest 配置，也不得附加 `unit`、`api` 等会被常规 lane 选中的 marker；
-- 唯一执行 Interface 是 README 记录的本地显式命令，例如 `UV_CACHE_DIR=/tmp/uv-cache uv run pytest -c testing/architecture-cleanup/pytest.ini testing/architecture-cleanup -m architecture_cleanup -n 0`；不得新增 `scripts/test.sh architecture-cleanup`、`scripts/ci.sh` 接线或 workflow job；
+- 如果使用 pytest，专用 marker 只在临时 tree 的局部 `pytest.ini` 中注册，目录内每个文件统一声明该 cleanup-only marker；不得修改仓库级 pytest 配置，也不得附加 `unit`、`api` 等会被常规 lane 选中的 marker；
+- 唯一执行 Interface 是临时 README 记录的本地显式 pytest 命令；不得新增常规 test runner、`scripts/ci.sh` 接线或 workflow job；
 - `.github/workflows/`、`scripts/ci.sh`、当前 L0/L1 和 GitHub required checks 不因这些临时 guard 发生任何行为变化；
-- cleanup-only helper 留在 `testing/architecture-cleanup/support/`，不得进入 `src/ainrf/`、`scripts/` 根部、`tests/` 或 frontend product source；
+- cleanup-only helper 留在临时 tree 的 `support/` 子目录，不得进入 `src/ainrf/`、`scripts/` 根部、`tests/` 或 frontend product source；
 - frontend 临时分层扫描也由该目录统一拥有，不自动迁入 ESLint 或 frontend test runner；
 - allowlist 只能单调收缩。新增例外必须同时记录 owner、原因、replacement、removal phase 和到期条件，不能用重新生成基线掩盖回归。
 
-P6 必须直接删除整个 `testing/architecture-cleanup/`；其本地 pytest 配置和 marker 随目录一并消失。不得将临时 guard 原样改名、迁入常规测试或转接到远端 CI；若未来需要永久架构约束，应在本 spec 之外单独设计、评审和落地。
+P6 必须直接删除整个临时 cleanup-only tree；其本地 pytest 配置和 marker 随目录一并消失。不得将临时 guard 原样改名、迁入常规测试或转接到远端 CI；若未来需要永久架构约束，应在本 spec 之外单独设计、评审和落地。
 
 ### 12.2 P1：完成 v2 Cutover 与 Release E
 
@@ -706,14 +706,14 @@ root、product `/v1` 等通用 route alias 只有在确认属于 legacy contract
 
 ### 12.7 P6：仓库卫生和长期文档
 
-执行状态：**已完成（2026-07-30）**。当前架构、release/rollback contract 与 fail-closed compatibility inventory 由 `docs-site/docs/architecture.md` 长期维护；临时 `testing/architecture-cleanup/` 已删除。
+执行状态：**已完成（2026-07-30）**。当前架构、release/rollback contract 与 fail-closed compatibility inventory 由 `docs-site/docs/architecture.md` 长期维护；临时 cleanup-only tree 已删除。
 
 内容：
 
 - 清理 tracked `test/` 历史 binary 和一次性研究产物；
 - 校正 README、PROJECT_BASIS、docs-site 与真实目录/构建工具的漂移；
 - 删除无调用 deprecated 模块、兼容常量和死测试；
-- 删除 `testing/architecture-cleanup/`、专用 marker、allowlist、inventory 和 snapshot；
+- 删除临时 cleanup-only tree、专用 marker、allowlist、inventory 和 snapshot；
 - 更新架构图、开发入口和 release contract；
 - 归档迁移 spec 的执行结果，但保留审计历史。
 
@@ -722,7 +722,7 @@ root、product `/v1` 等通用 route alias 只有在确认属于 legacy contract
 - root 目录只包含长期拥有者明确的产品、测试、文档和部署目录；
 - README 与实际 VitePress、CLI、route prefix、domain mode 一致；
 - 无 tracked runtime workspace、构建输出或无政策例外的大型 binary；
-- `testing/architecture-cleanup/` 和所有 cleanup-only surface 已删除；
+- 临时 cleanup-only tree 和所有 cleanup-only surface 已删除；
 - `.github/workflows/`、`scripts/ci.sh` 和 GitHub required checks 没有残留本次清理的规则、marker、路径或 allowlist。
 
 ## 13. 测试策略
@@ -750,7 +750,7 @@ root、product `/v1` 等通用 route alias 只有在确认属于 legacy contract
 
 ### 13.3 Architecture checks
 
-P0-P6 期间，以下临时检查统一由 `testing/architecture-cleanup/` 拥有，只能由开发者在本地显式运行，不属于 L0/L1、GitHub Actions 或 required checks：
+P0-P6 期间，以下临时检查统一由 cleanup-only tree 拥有，只能由开发者在本地显式运行，不属于 L0/L1、GitHub Actions 或 required checks：
 
 - Python forbidden import rules；
 - Python module cycle detection；
