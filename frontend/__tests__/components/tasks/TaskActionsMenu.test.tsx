@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import TaskActionsMenu from '@features/tasks/components/TaskActionsMenu';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import type { TaskRecord } from '@/shared/types';
 
 const task: TaskRecord = {

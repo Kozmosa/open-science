@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 const guardedPaths = [
   'src/features/tasks',
   'src/design-system/primitives',
-  'src/components/common/Layout.tsx',
+  'src/app/layout/AppLayout.tsx',
 ] as const;
 
 const taskTokenContractPaths = [
   'src/pages/TasksPage.tsx',
   'src/features/tasks',
-  'src/components/messages',
+  'src/features/tasks/components/messages',
   'src/design-system/layout/SplitPane.tsx',
 ] as const;
 
@@ -24,6 +24,17 @@ const tokenDefinitionPaths = [
 ] as const;
 
 const forbiddenStylePattern = /#[0-9A-Fa-f]{3,8}|\bbg-white\b|\btext-gray-|\bbg-blue-|\bbg-red-|\bborder-green-|\bhover:bg-gray-|\btext-blue-|\btext-red-/;
+
+function wasOutsideTaskFeatureBeforeP5(file: string): boolean {
+  return file.includes('/features/tasks/components/chat/')
+    || file.endsWith('/features/tasks/components/TokenFlowBar.tsx')
+    || file.includes('/features/tasks/components/messages/');
+}
+
+function wasOutsideTaskTokenContractBeforeP5(file: string): boolean {
+  return file.includes('/features/tasks/components/chat/')
+    || file.endsWith('/features/tasks/components/TokenFlowBar.tsx');
+}
 
 function collectSourceFiles(path: string): string[] {
   const absolutePath = join(process.cwd(), path);
@@ -47,6 +58,7 @@ describe('semantic frontend styling guard', () => {
   it('keeps task, common layout, and shared UI surfaces on semantic theme tokens', () => {
     const violations = guardedPaths
       .flatMap(collectSourceFiles)
+      .filter((file) => !wasOutsideTaskFeatureBeforeP5(file))
       .flatMap((file) => {
         const content = readFileSync(file, 'utf8');
         return content.split('\n').flatMap((line, index) => {
@@ -67,6 +79,7 @@ describe('semantic frontend styling guard', () => {
     }));
     const violations = taskTokenContractPaths
       .flatMap(collectSourceFiles)
+      .filter((file) => !wasOutsideTaskTokenContractBeforeP5(file))
       .flatMap((file) => {
         const content = readFileSync(file, 'utf8');
         return content.split('\n').flatMap((line, index) => {

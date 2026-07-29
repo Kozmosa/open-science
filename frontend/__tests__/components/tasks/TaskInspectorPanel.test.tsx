@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import TaskInspectorPanel from '@features/tasks/components/TaskInspectorPanel';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import { getDomainTaskAttempts, getDomainTaskContext } from '@features/domain';
 import type { TaskRecord } from '@/shared/types';
 import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';

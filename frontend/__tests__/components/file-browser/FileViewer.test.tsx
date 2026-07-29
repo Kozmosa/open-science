@@ -2,11 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/shared/i18n';
 import type { FileReadResponse } from '@/shared/types';
-import FileViewer from '../../../src/components/file-browser/FileViewer';
+import FileViewer from '@features/workspaces/components/file-browser/FileViewer';
 
 const lazyModuleState = vi.hoisted(() => ({ loads: 0 }));
 
-vi.mock('../../../src/components/file-browser/MonacoTextViewer', () => {
+vi.mock('@features/workspaces/components/file-browser/MonacoTextViewer', () => {
   lazyModuleState.loads += 1;
   return {
     default: ({ content, language }: { content: string; language: string }) => (
@@ -26,10 +26,16 @@ const fileBase: FileReadResponse = {
   mime_type: 'text/plain',
 };
 
+const editorPreferences = {
+  colorScheme: 'light' as const,
+  fontFamily: 'monospace',
+  fontSize: 14,
+};
+
 describe('FileViewer', () => {
   it('loads Monaco only after a text file is selected', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
-    const { rerender } = render(<FileViewer file={null} isLoading={false} />, {
+    const { rerender } = render(<FileViewer file={null} isLoading={false} editorPreferences={editorPreferences} />, {
       wrapper: ({ children }) => <LocaleProvider initialLocale="en">{children}</LocaleProvider>,
     });
 
@@ -46,6 +52,7 @@ describe('FileViewer', () => {
           mime_type: 'image/png',
         }}
         isLoading={false}
+        editorPreferences={editorPreferences}
       />
     );
     expect(screen.getByRole('img', { name: 'figure.png' })).toBeInTheDocument();
@@ -61,6 +68,7 @@ describe('FileViewer', () => {
           mime_type: 'application/octet-stream',
         }}
         isLoading={false}
+        editorPreferences={editorPreferences}
       />
     );
     expect(screen.getByText('Binary file')).toBeInTheDocument();
@@ -76,6 +84,7 @@ describe('FileViewer', () => {
           mime_type: 'application/pdf',
         }}
         isLoading={false}
+        editorPreferences={editorPreferences}
         pdfStreamUrl="/api/files/stream/paper.pdf"
       />
     );
@@ -93,6 +102,7 @@ describe('FileViewer', () => {
           mime_type: 'text/markdown',
         }}
         isLoading={false}
+        editorPreferences={editorPreferences}
       />
     );
 

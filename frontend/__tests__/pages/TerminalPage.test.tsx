@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalPage from '../../src/pages/TerminalPage';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import type { EnvironmentRecord } from '@/shared/types';
 
 const selectedEnvironment: EnvironmentRecord = {
@@ -30,11 +30,11 @@ const selectedEnvironment: EnvironmentRecord = {
   latest_detection: null,
 };
 
-vi.mock('../../src/components/terminal', () => ({
-  TerminalBenchCard: () => <div data-testid="terminal-bench-card" />,
+vi.mock('@features/terminal/components/TerminalBenchCard', () => ({
+  default: () => <div data-testid="terminal-bench-card" />,
 }));
 
-vi.mock('../../src/components/environment', () => ({
+vi.mock('@features/environments/hooks/useEnvironmentSelection', () => ({
   useEnvironmentSelection: () => ({
     selectedEnvironment,
     selectedEnvironmentId: selectedEnvironment.id,

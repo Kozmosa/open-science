@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import TimelinePage from '../../src/pages/TimelinePage';
-import * as api from '@/shared/api';
+import * as taskApi from '@features/tasks/api';
+import * as projectApi from '@features/projects/api';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getTasks: vi.fn(),
-  getProjects: vi.fn(),
-}));
+vi.mock('@features/tasks/api', () => ({ getTasks: vi.fn() }));
+vi.mock('@features/projects/api', () => ({ getProjects: vi.fn() }));
 
-const mockGetTasks = vi.mocked(api.getTasks);
-const mockGetProjects = vi.mocked(api.getProjects);
+const mockGetTasks = vi.mocked(taskApi.getTasks);
+const mockGetProjects = vi.mocked(projectApi.getProjects);
 
 const mockTask = {
   task_id: 'task-1',

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, CardBody, Checkbox, ConfirmDialog, FormField, Input, NativeSelect, Textarea } from '@design-system';
-import { updateProject } from '@/shared/api';
+import { updateProject } from './api';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { extractErrorMessage } from '@/shared/utils/error';

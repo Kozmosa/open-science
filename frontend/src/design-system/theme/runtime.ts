@@ -1,4 +1,4 @@
-import type { ThemePreference } from '@features/settings/types';
+import type { ThemePreference } from './contract';
 
 export type ResolvedOsciTheme = 'light' | 'dark';
 

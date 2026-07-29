@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CardGrid, PageShell } from '@design-system';
 import { getRouteDefinition, getVisibleRoutes, ROUTE_REGISTRY } from '@/app/routeRegistry';
 import { LocaleProvider } from '@/shared/i18n';
-import { TopBar } from '@/components/shell';
+import { TopBar } from '@/app/shell';
 
 describe('osci shell contracts', () => {
   it('uses one route registry for titles, navigation, commands, and admin filtering', () => {

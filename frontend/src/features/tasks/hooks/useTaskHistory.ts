@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getTaskMessages } from '@/shared/api';
+import { getTaskMessages } from '../api';
 import type { MessageItem } from '@/shared/types';
 import { queryKeys } from '@/shared/api/queryKeys';
 

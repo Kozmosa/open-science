@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { LlmProviderEditDialog } from '../../../src/pages/settings/LlmProviderEditDialog';
-import { renderWithProviders } from '@/shared/test/render';
+import { LlmProviderEditDialog } from '@features/settings/pages/settings/LlmProviderEditDialog';
+import { renderWithProviders } from '@/test-support/render';
 
 describe('LlmProviderEditDialog i18n', () => {
   it('uses localized placeholders and labels in Chinese', () => {

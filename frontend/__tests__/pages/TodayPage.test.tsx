@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { type OverviewRefreshJob, type OverviewSnapshot } from '@features/domain';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import TodayPage from '../../src/pages/TodayPage';
 
 const domainApiMocks = vi.hoisted(() => ({

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import SessionsPage from '../../src/pages/SessionsPage';
-import * as api from '@/shared/api';
+import * as api from '@features/tasks/api';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@features/tasks/api', () => ({
   getTasks: vi.fn(),
   getTask: vi.fn(),
 }));

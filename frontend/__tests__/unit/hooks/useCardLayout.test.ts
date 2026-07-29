@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useCardLayout } from '../../../src/hooks/useCardLayout';
+import { useCardLayout } from '../../../src/shared/hooks/useCardLayout';
 
 describe('useCardLayout', () => {
   beforeEach(() => {

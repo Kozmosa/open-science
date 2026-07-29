@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { login as apiLogin, register as apiRegister, refreshToken, logoutApi, getMe } from '@/shared/api/endpoints';
+import { login as apiLogin, register as apiRegister, refreshToken, logoutApi, getMe } from '../api';
 import { setAccessToken, getStoredRefreshToken, setStoredRefreshToken } from '@/shared/api/client';
 import type { UserInfo } from '@/shared/types';
 

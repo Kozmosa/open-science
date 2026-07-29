@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { pauseTask, resumeTask, sendTaskPrompt } from '@/shared/api';
+import { pauseTask, resumeTask, sendTaskPrompt } from '../api';
 import { useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';

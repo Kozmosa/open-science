@@ -1,7 +1,8 @@
 import { createElement, lazy, Profiler, Suspense, useEffect, type ComponentType, type LazyExoticComponent, type ProfilerOnRenderCallback } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ErrorBoundary, Layout } from './components/common';
+import { AppLayout } from '@/app/layout';
+import ErrorBoundary from '@/app/ErrorBoundary';
 import { ToastProvider } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { createAppQueryClient } from './queryClient';
@@ -88,7 +89,7 @@ function AuthenticatedRoutes() {
   const isAdmin = user?.role === 'admin';
 
   return (
-    <Layout>
+    <AppLayout>
       <Suspense
         fallback={
           <div className="flex items-center justify-center py-16 text-sm tracking-[-0.224px] text-[var(--text-tertiary)]">
@@ -110,7 +111,7 @@ function AuthenticatedRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
-    </Layout>
+    </AppLayout>
   );
 }
 

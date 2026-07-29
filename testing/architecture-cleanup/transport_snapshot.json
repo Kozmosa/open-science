@@ -26,6 +26,6 @@
     "aliases": ["/", "/v1"],
     "owner": "P4",
     "removal_phase": "P5",
-    "evidence": ["frontend/src/generated/transport/operations.ts", "frontend/src/shared/api/transport.ts", "frontend/src/shared/api/endpoints.ts", "src/ainrf/api/app.py"]
+    "evidence": ["frontend/src/generated/transport/operations.ts", "frontend/src/shared/api/transport.ts", "frontend/src/features/*/api.ts", "frontend/src/features/*/api/endpoints.ts", "src/ainrf/api/app.py"]
   }
 }

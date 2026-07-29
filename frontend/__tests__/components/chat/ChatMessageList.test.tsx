@@ -1,8 +1,8 @@
 import { screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import ChatMessageList from '../../../src/components/chat/ChatMessageList';
-import { renderWithProviders } from '@/shared/test/render';
-import type { ChatMessage } from '../../../src/components/chat';
+import ChatMessageList from '@features/tasks/components/chat/ChatMessageList';
+import { renderWithProviders } from '@/test-support/render';
+import type { ChatMessage } from '@features/tasks/components/chat';
 
 beforeAll(() => {
   if (typeof IntersectionObserver === 'undefined') {
