@@ -43,6 +43,10 @@ if [[ "${TARGET}" == "staging" ]]; then
   exit 2
 fi
 
+if [[ "${TARGET}" == "production" ]]; then
+  exec "${REPO_ROOT}/deploy/release-production.sh" "${EXTRA_ARGS[@]+${EXTRA_ARGS[@]}}"
+fi
+
 case "$TARGET" in
   production)
     COMPOSE_FILE="docker-compose.cpu.yml"
