@@ -21,6 +21,9 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     assert all("build" not in service for service in services.values())
     assert all("container_name" not in service for service in services.values())
     assert services["api"]["environment"]["AINRF_PORT"] == "17000"
+    assert services["api"]["environment"]["AINRF_RUNTIME_RECONCILIATION_ENABLED"] == (
+        "false"
+    )
     assert services["api"]["environment"]["AINRF_DOMAIN_ARTIFACT_SHA"].startswith(
         "${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA"
     )
