@@ -70,7 +70,7 @@ Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activatio
 - `L1` deterministic gate: `bash scripts/ci.sh l1`; GitHub-hosted jobs run backend, frontend, and docs lanes separately.
 - `L2` isolated container integration: reserved for per-SHA local CI cells; never reuse shared staging.
 - `L3` deep system verification: trusted, serialized local tests for tenant permissions, SSH/tmux, backup/restore, full runtime, and performance.
-- `L4` release acceptance: immutable artifacts promoted through release staging, manual production approval, read-only post-smoke, and rollback.
+- `L4` release acceptance: a planned maintenance-window release with verified backup/restore, version-consistent immutable artifacts, read-only post-smoke, and an executable manual rollback. Independent release staging is optional.
 - Public pull-request code must never execute on a self-hosted runner attached to the production machine or its Docker daemon.
 - Backend pytest defaults to at most 8 workers and frontend Vitest defaults to at most 4; lower them with `OPENSCIENCE_PYTEST_WORKERS` and `OPENSCIENCE_VITEST_WORKERS` when the shared host is under load.
 - The long-lived design is documented in [`docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md`](docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md).
@@ -264,7 +264,7 @@ Do NOT operate production deployment containers (Docker, Kubernetes, etc.) — i
 
 ### Production Deployment
 
-CPU-only Docker Compose with host networking. Backend on `:18000`, nginx on `:8192`, Prometheus + Grafana for monitoring. Deploy: `docker compose -f deploy/docker-compose.cpu.yml up -d --build`. Rebuild via `deploy/redeploy-backend.sh` / `deploy/redeploy-frontend.sh`.
+CPU-only Docker Compose with host networking. Backend on `:18000`, nginx on `:8192`, Prometheus + Grafana for monitoring. The default production model permits a planned 2–3 hour maintenance window: verify a complete backup, stop writers, deploy one version-consistent release, run read-only smoke checks, and use the documented manual rollback if needed. Build and deploy through `bash deploy/release-production.sh`; do not release frontend and backend independently.
 
 > **Full details (architecture, volumes, monitoring, observability, rebuild, admin credentials)**: [.rules/deployment.md](.rules/deployment.md)
 

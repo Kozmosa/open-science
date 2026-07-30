@@ -128,9 +128,15 @@ Production Compose 不执行源码构建，也不挂载 Git checkout、worktree�
 nginx 配置位于配套 web 镜像中。构建脚本会先完成全部镜像，再写出包含 release ID
 及四个镜像引用的 manifest，随后 Compose 只使用这些预构建镜像启动。
 
-保留上一份 manifest 即可形成明确的回滚单位。CI/CD 接入 registry 后，应在 CI 中构建
-并推送这些镜像，在 release staging 验收相同引用，再向 production 提升同一 manifest；
-production 主机不应重新生成另一套字节。
+保留上一份 manifest 作为代码回滚单位。OpenScience 默认采用实验室计划维护窗口发布，
+允许约 2–3 小时停机：发布前完成 state、workspace 与 tenant 数据的完整备份和隔离恢复验证，
+停止 writer 后部署同一 manifest，执行必要迁移和只读 smoke；失败时按 runbook 人工恢复数据
+并启动上一份 manifest。独立 release staging 是可选强化，不是默认门禁；如未来接入 registry，
+production 仍应使用已经构建的同一组镜像引用，而不是在主机上重新生成另一套字节。
+
+当前 `deploy/release-production.sh` 尚未自动执行数据备份、隔离恢复验证或数据 rollback；它只负责
+构建同版本制品、部署和健康检查。在维护窗口自动化补齐前，操作员必须先按受控 runbook 手工
+完成备份与恢复验证，不能把该脚本的成功输出视为完整 L4 验收。
 
 ---
 
