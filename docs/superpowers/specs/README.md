@@ -14,5 +14,6 @@
 | `2026-07-17-codex-aligned-conversation-domain-design.md` | accepted / awaiting implementation | Task/Turn/Item 目标领域模型 |
 | `2026-07-17-conversation-domain-standalone-migration-design.md` | proposed | 等待 schema 冻结的数据迁移设计 |
 | `2026-07-17-engine-runtime-and-credential-injection-design.md` | accepted / awaiting implementation | Engine runtime 与 credential 目标设计 |
+| `2026-07-30-compatibility-telemetry-correctness-design.md` | accepted / awaiting implementation | 区分长期与 cleanup-only 遥测，修复 compatibility 流量漏算、误算和混算 |
 
 已实现、被替代、退役或与当前 contract 冲突的设计位于 [`archived/`](archived/README.md)。
