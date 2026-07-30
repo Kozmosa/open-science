@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request
 
-from ainrf.domain_telemetry import record_deprecated_route, record_idempotency_event
+from ainrf.domain_telemetry import record_idempotency_event
+from ainrf.telemetry.compatibility import (
+    CleanupCompatibilityObservation,
+    observe_cleanup_compatibility,
+)
 
 _MAX_IDEMPOTENCY_KEY_LENGTH = 256
 
@@ -19,14 +23,14 @@ def require_idempotency_key(request: Request, body_key: object | None = None) ->
 
     state_root = request.app.state.api_config.state_root
     if body_key is not None:
-        path_parts = [part for part in request.url.path.split("/") if part]
-        if path_parts and path_parts[0] in {"api", "v1"}:
-            path_parts.pop(0)
-        route_group = path_parts[0] if path_parts else "other"
-        record_deprecated_route(
-            route=f"{route_group}.idempotency_key",
-            replacement="Idempotency-Key header",
-            state_root=state_root,
+        observe_cleanup_compatibility(
+            CleanupCompatibilityObservation(
+                item="task.request.idempotency_key",
+                observation="request_field_observed",
+                state_root=state_root,
+                production=request.app.state.api_config.production,
+                request_id=getattr(request.state, "request_id", None),
+            )
         )
     if body_key is not None and not isinstance(body_key, str):
         record_idempotency_event("invalid", scope=request.url.path, state_root=state_root)

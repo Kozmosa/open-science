@@ -44,6 +44,11 @@ _MAINTENANCE_VOLATILE_SOURCE_NAMES = frozenset(
         "domain_telemetry.sqlite3-journal",
         "domain_telemetry_anchor.json",
         "domain_telemetry_delivery_failure.json",
+        "compatibility_telemetry.sqlite3",
+        "compatibility_telemetry.sqlite3-wal",
+        "compatibility_telemetry.sqlite3-shm",
+        "compatibility_telemetry.sqlite3-journal",
+        "compatibility_telemetry_delivery_failure.json",
     }
 )
 

@@ -181,6 +181,7 @@ groups:
           or ainrf_domain_metrics_scrape_success != 1
           or ainrf_domain_metrics_risk_state_known != 1
           or ainrf_domain_telemetry_delivery_failure_latched != 0
+          or ainrf_http_contract_telemetry_delivery_failure_latched != 0
         for: 1m
         labels:
           severity: critical

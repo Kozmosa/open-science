@@ -26,6 +26,11 @@ _LOG = logging.getLogger(__name__)
 # (name, label_names, documentation)
 _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_http_requests_total", ["method", "path", "status"], "Total HTTP requests"),
+    (
+        "ainrf_http_contract_requests_total",
+        ["surface", "operation", "method", "status_class"],
+        "HTTP requests by stable product contract surface and operation",
+    ),
     ("ainrf_auth_login_success_total", [], "Successful login attempts"),
     ("ainrf_auth_login_failed_total", ["reason"], "Failed login attempts"),
     ("ainrf_terminal_exec_total", [], "Terminal command executions"),
@@ -45,6 +50,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
         "ainrf_deprecated_contract_calls_total",
         ["route", "kind"],
         "Deprecated compatibility calls split by route, request field, and response field",
+    ),
+    (
+        "ainrf_cleanup_compatibility_observations_total",
+        ["item", "observation"],
+        "Temporary architecture cleanup compatibility evidence",
     ),
     (
         "ainrf_domain_legacy_write_attempts_total",
@@ -109,6 +119,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
 _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_http_request_duration_seconds", ["method", "path"], "HTTP request latency"),
     (
+        "ainrf_http_contract_request_duration_seconds",
+        ["surface", "operation", "method"],
+        "HTTP request latency by stable product contract surface and operation",
+    ),
+    (
         "ainrf_ssh_command_duration_seconds",
         ["target"],
         "SSH command execution latency by privacy-safe aggregate target",
@@ -144,6 +159,11 @@ _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
 
 _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_terminal_ws_active", [], "Active WebSocket terminal sessions"),
+    (
+        "ainrf_http_contract_telemetry_delivery_failure_latched",
+        [],
+        "Whether HTTP contract durable evidence delivery has failed",
+    ),
     (
         "ainrf_literature_last_fetch_timestamp_seconds",
         ["scope"],

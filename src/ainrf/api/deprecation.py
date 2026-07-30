@@ -14,7 +14,7 @@ DEFAULT_SUNSET = "Thu, 31 Dec 2026 23:59:59 GMT"
 
 
 def record_deprecated_use(*, request: Request, route: str, replacement: str) -> None:
-    """Record field-level compatibility use without deprecating the operation."""
+    """Maintain the superseded legacy metric during its transition release."""
 
     record_deprecated_route(
         route=route,
@@ -24,7 +24,7 @@ def record_deprecated_use(*, request: Request, route: str, replacement: str) -> 
 
 
 def deprecation_headers(*, route: str, replacement: str) -> dict[str, str]:
-    """Record one compatibility use and return its stable HTTP headers."""
+    """Return stable HTTP deprecation headers without inferring telemetry."""
 
     record_deprecated_route(route=route, replacement=replacement)
     return {
