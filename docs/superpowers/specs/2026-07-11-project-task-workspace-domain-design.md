@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Project、Task 与 Workspace 领域设计
 
 **Status:** Accepted domain design — 核心定义、关系、Context 首期、人工沉淀、任务关系、权限、移动和归档语义已确认

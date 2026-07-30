@@ -13,14 +13,16 @@ doc_state: current
 
 ## Authority 顺序
 
-发生冲突时，按以下顺序判断：
+不同文档和工程证据各自负责不同层面的事实：
 
-1. 当前代码、持久化 schema、generated transport 和正常测试定义已实现行为。
-2. `PROJECT_BASIS.md` 定义跨会话长期工程约束。
+1. `PROJECT_BASIS.md` 是最高优先级、经过人工审阅的长期项目事实与规则来源。
+2. 当前代码、持久化 schema、generated transport 和正常测试定义当前已实现行为。
 3. `docs-site/docs/` 定义当前产品、用户、部署和公开架构 contract。
 4. `docs/superpowers/specs/` 定义尚在决策或实施中的活跃设计。
 5. `docs/reference/` 与 `docs/projects/` 提供当前工程参考和研究输入。
 6. `docs/superpowers/specs/archived/`、`docs/archive/` 与 worklog 只用于追溯，不得覆盖当前 contract。
+
+`PROJECT_BASIS.md` 与当前工程事实并不是可以由 Agent 自动择一采信的普通优先级关系。如果代码、schema、测试、部署配置或其他可靠工程证据与 `PROJECT_BASIS.md` 冲突，Agent 必须停止受影响的判断，向用户报告 drift，并请用户决定修正工程实现还是人工修订 `PROJECT_BASIS.md`。Agent 永远不得修改 `PROJECT_BASIS.md`。
 
 设计文档不能仅凭日期较新就覆盖代码或长期治理约束。若 accepted spec 尚未实现，必须明确写出“等待实现”；若代码已经偏离它，应重新确认、修订或归档。
 
@@ -46,6 +48,8 @@ doc_state: current
 - `accepted`：方向已确认但可能尚未实现。
 - `in-progress`：正在实施，必须能对应当前工作切片。
 
+每份活跃 spec 必须在 YAML frontmatter 中声明 `status`、`last_reviewed` 和 `review_by`。复审周期最长为 30 天；超过 `review_by` 且尚未实施的 spec，在重新审阅前不得作为可信实施依据。若它已经过时且不具备长期迁移或决策追溯价值，可以直接删除。
+
 满足任一条件时必须移入 `docs/superpowers/specs/archived/`：
 
 - `implemented`：实现已完成，稳定结论已经提升到代码、测试、`PROJECT_BASIS.md`、`docs-site/docs/` 或 `docs/reference/`。
@@ -61,7 +65,7 @@ OpenScience 是当前产品品牌，`ainrf` 是稳定内部工程与运行时身
 
 处理这类转向时：
 
-1. 在 `PROJECT_BASIS.md` 与当前架构文档写入新的长期规则。
+1. 请用户人工复核并在 `PROJECT_BASIS.md` 写入新的长期规则，同时更新当前架构文档。
 2. 把冲突 spec 移入 archive，而不是悄悄重写其历史论证。
 3. 在仍活跃的后继 spec 中明确新的范围与 supersedes 关系。
 4. 对可自动验证的范围增加 lint、测试或文档 drift gate。

@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # OpenScience 五层混合 CI 设计
 
 **Goal:** 在开发与生产共用同一台服务器的约束下，建立低延迟、可复现、不会误伤生产的五层混合 CI；本轮先完整落地 L0 开发内循环与 L1 确定性门禁，并为后续本机容器集成、深度验证和发布验收定义稳定边界。

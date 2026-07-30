@@ -1,6 +1,8 @@
 # Active design specifications
 
-本目录只保存仍在决策或实施中的 OpenScience 设计。当前产品事实以代码、测试、`PROJECT_BASIS.md` 和 `docs-site/docs/` 为准；生命周期规则见 [`../../documentation-governance.md`](../../documentation-governance.md)。
+本目录只保存仍在决策或实施中的 OpenScience 设计。`PROJECT_BASIS.md` 是最高优先级、经过人工审阅的长期项目事实与规则来源；代码和测试记录当前已实现行为，`docs-site/docs/` 记录当前产品 contract。三者发生漂移时必须请用户裁定，不得由 Agent 自动择一覆盖。生命周期规则见 [`../../documentation-governance.md`](../../documentation-governance.md)。
+
+所有 active spec 必须在 YAML frontmatter 中声明 `status`、`last_reviewed` 和 `review_by`，且复审周期不得超过 30 天。
 
 ## Active inventory
 

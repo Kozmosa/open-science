@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Codex 对齐的 Conversation Domain 设计
 
 **Status:** Accepted direction — 核心领域语义与兼容性策略已确认，等待实现

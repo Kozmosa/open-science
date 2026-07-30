@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # osci 设计系统与设计语言
 
 **Status:** Accepted architecture — token 分层、主题扩展、shadcn 采用方式、字体优先级和渐进迁移边界已确认

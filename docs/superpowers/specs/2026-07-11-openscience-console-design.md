@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # OpenScience Console 设计说明
 
 **Status:** Accepted foundation — 已确认品牌、视觉语言、导航、默认入口、命令面板、首批范围与主题策略；Project / Task / Workspace 领域模型已由独立契约确定

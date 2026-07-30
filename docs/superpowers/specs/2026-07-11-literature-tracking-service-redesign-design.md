@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # OpenScience 文献追踪服务重设计
 
 **Status:** Accepted product and service design; Dramatiq + dedicated Redis execution selected
