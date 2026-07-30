@@ -14,7 +14,7 @@ services:
       - --state-root
       - /opt/ainrf/state
       - --api-key
-      - ${OPENSCIENCE_RELEASE_STAGING_API_KEY:?Set a disposable release-staging API key}
+      - ${OPENSCIENCE_RELEASE_STAGING_API_KEY:-}
       - --artifact-sha
       - ${OPENSCIENCE_RELEASE_GIT_SHA:?Load the verified release manifest}
       - --profile

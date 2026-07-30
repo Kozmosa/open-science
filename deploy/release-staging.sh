@@ -29,6 +29,10 @@ require_env_file() {
 
 load_release() {
   require_env_file
+  [[ -n "${OPENSCIENCE_RELEASE_STAGING_API_KEY:-}" ]] || {
+    echo "Set OPENSCIENCE_RELEASE_STAGING_API_KEY to a disposable release-staging API key." >&2
+    exit 2
+  }
   [[ -n "${MANIFEST_PATH}" ]] || {
     echo "Set OPENSCIENCE_RELEASE_MANIFEST to the manifest produced by build-production.sh." >&2
     exit 2

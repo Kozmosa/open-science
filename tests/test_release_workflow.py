@@ -69,6 +69,7 @@ def test_release_staging_is_human_gated_and_never_drives_production() -> None:
     assert "release-production.sh" not in script
     assert "promote-production" not in script
     assert "ledger" not in script
+    assert "OPENSCIENCE_RELEASE_STAGING_API_KEY" in script
 
 
 def test_web_image_uses_one_port_parameterized_nginx_template() -> None:
