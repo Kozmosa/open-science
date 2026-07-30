@@ -2,11 +2,15 @@
 
 ## Instruction Priority
 
-Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.md) as a required long-lived constraints document.
+Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.md) as the highest-authority, human-reviewed source of long-lived project facts and rules.
 
-- Follow `PROJECT_BASIS.md` for project goals, directory boundaries, documentation placement, coding standards, command entrypoints, and maintenance rules.
-- If this file and `PROJECT_BASIS.md` overlap, apply the stricter rule.
-- If a task-specific user instruction conflicts with `PROJECT_BASIS.md`, follow the user instruction for that task and keep other `PROJECT_BASIS.md` rules intact.
+- **Agents must never edit `PROJECT_BASIS.md`.** It may only be changed manually by the user after human review. If a correction is needed, stop the affected work and ask the user to review it, or create an issue when the user has authorized issue creation.
+- Follow `PROJECT_BASIS.md` for project identity, goals, durable boundaries, documentation placement, architecture invariants, and maintenance rules.
+- `AGENTS.md`, `CLAUDE.md`, nested agent instructions, current docs, specs, and implementation plans must not contradict `PROJECT_BASIS.md`.
+- If any of those files contradict `PROJECT_BASIS.md`, do not choose the stricter, newer, or more implementation-aligned rule. Stop the affected decision and explicitly ask the user how the documentation drift should be resolved.
+- If `PROJECT_BASIS.md` appears inconsistent with current code, schemas, tests, deployment configuration, or other engineering facts, do not silently treat either side as authoritative. Ask the user to re-review the engineering facts and manually correct `PROJECT_BASIS.md` or direct an implementation correction.
+- If no trustworthy higher-authority document resolves a material conflict, stop and ask the user rather than making an autonomous governance decision.
+- A task-specific user instruction may override ordinary repository workflow for that task, but an apparent change to a durable `PROJECT_BASIS.md` rule must be called out explicitly and remains a user-owned manual documentation change.
 
 - Review [`dev-bitter-lesson.md`](dev-bitter-lesson.md) before debugging frontend deployment, browser/devtools tooling, multi-tenant permissions, or session-scoped config issues. It captures recurring high-cost mistakes and the corresponding fixed workflow.
 
@@ -25,7 +29,7 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ## Project Overview
 
-`scholar-agent` currently centers on the OpenScience frontend/backend product surface. OpenScience is the user-facing product brand; `ainrf` is the stable internal Python package and runtime identity and must not be treated as a blanket rename target. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities. User-facing docs prefer the `openscience` CLI and `OPENSCIENCE_*` configuration while the `ainrf` CLI and `AINRF_*` remain supported engineering surfaces. `docs/`, `ref-repos/`, and historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
+`scholar-agent` currently centers on the OpenScience frontend/backend product surface. OpenScience is the user-facing product brand and `openscience` is the project CLI. AINRF is the backend: `ainrf` is the canonical Python package, runtime identity, service/config namespace, state-path identity, and telemetry namespace. Backend environment variables use `AINRF_*`; corresponding `OPENSCIENCE_*` backend variables are compatibility aliases. Repository-wide development and orchestration variables such as `OPENSCIENCE_DEV_*`, `OPENSCIENCE_L2_*`, and bounded CI worker controls may retain the OpenScience project prefix. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities. `docs/`, `ref-repos/`, and historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
 
 ## LLM Working Log
 
@@ -166,6 +170,7 @@ Use shared layout primitives (`PageShell`, `SplitPane`, `SectionStack`, `CardGri
 - Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
 - Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
 - Documentation authority and lifecycle rules: `docs/documentation-governance.md`
+- Every active spec must declare `last_reviewed` and `review_by`; the review period is at most 30 days. An overdue, unimplemented spec is not trustworthy implementation input. Re-review it before use, and delete it when it has become obsolete without lasting migration or decision value.
 
 **Commit rules for spec/plan documents:**
 - Active design specs (`docs/superpowers/specs/`) are part of the long-lived knowledge base and should be committed. Once implemented, superseded, retired, or contradicted by the current contract, move them to `docs/superpowers/specs/archived/` and update the active inventory.
