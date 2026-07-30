@@ -267,6 +267,40 @@ async def test_v2_environment_delete_disables_the_durable_environment(
 
 
 @pytest.mark.anyio
+async def test_compatibility_removals_preserve_idempotency_and_not_found_errors(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    headers = _headers(app, "missing-resource-admin", "missing-resource-admin", "admin")
+    paths = (
+        "/environments/missing-environment",
+        "/workspaces/missing-workspace",
+        "/workspaces/missing-workspace/unregister",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        for prefix in ("/api", "", "/v1"):
+            for path in paths:
+                method = "POST" if path.endswith("/unregister") else "DELETE"
+                missing_key = await client.request(method, f"{prefix}{path}", headers=headers)
+                missing_resource = await client.request(
+                    method,
+                    f"{prefix}{path}",
+                    headers=_write_headers(headers, f"missing:{prefix}:{path}"),
+                )
+                assert missing_key.status_code == 409, (prefix, path, missing_key.text)
+                assert missing_key.json()["detail"] == "Idempotency-Key is required"
+                assert missing_resource.status_code == 404, (
+                    prefix,
+                    path,
+                    missing_resource.text,
+                )
+
+
+@pytest.mark.anyio
 async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visible_grantees(
     state_root: Path,
     tmp_path: Path,

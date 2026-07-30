@@ -142,6 +142,8 @@ def _connection_from_create_payload(payload: EnvironmentCreateRequest) -> dict[s
 
 
 def _translate_environment_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(exc, MaintenanceModeError):
         return HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

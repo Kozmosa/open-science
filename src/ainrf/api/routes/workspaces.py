@@ -119,6 +119,8 @@ def _compatibility_workspace_path(
 
 
 def _translate_workspace_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(exc, MaintenanceModeError):
         return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
     if isinstance(exc, DomainPermissionError):
