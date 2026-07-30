@@ -21,6 +21,25 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     assert all("build" not in service for service in services.values())
     assert all("container_name" not in service for service in services.values())
     assert services["api"]["environment"]["AINRF_PORT"] == "17000"
+    assert services["api"]["environment"]["AINRF_DOMAIN_ARTIFACT_SHA"].startswith(
+        "${OPENSCIENCE_RELEASE_GIT_SHA"
+    )
+    assert services["api"]["depends_on"]["init"]["condition"] == (
+        "service_completed_successfully"
+    )
+    assert services["init"]["command"][:3] == [
+        "openscience",
+        "frontend-dev",
+        "prepare",
+    ]
+    assert any(
+        value.startswith("${OPENSCIENCE_RELEASE_STAGING_API_KEY")
+        for value in services["init"]["command"]
+    )
+    assert any(
+        value.startswith("${OPENSCIENCE_RELEASE_GIT_SHA")
+        for value in services["init"]["command"]
+    )
     assert services["web"]["environment"]["AINRF_WEB_PORT"] == "7192"
     mounted_sources = str(compose)
     assert "src/" not in mounted_sources

@@ -1,6 +1,29 @@
 name: openscience-release-staging
 
 services:
+  init:
+    image: ${OPENSCIENCE_API_IMAGE:-openscience-release-staging-api-unavailable}
+    network_mode: host
+    restart: "no"
+    environment:
+      AINRF_NO_SSHD: "1"
+    command:
+      - openscience
+      - frontend-dev
+      - prepare
+      - --state-root
+      - /opt/ainrf/state
+      - --api-key
+      - ${OPENSCIENCE_RELEASE_STAGING_API_KEY:?Set a disposable release-staging API key}
+      - --artifact-sha
+      - ${OPENSCIENCE_RELEASE_GIT_SHA:?Load the verified release manifest}
+      - --profile
+      - full
+    volumes:
+      - release-staging-state:/opt/ainrf/state
+      - release-staging-workspaces:/opt/ainrf/.ainrf_workspaces
+      - release-staging-tenants:/home/ainrf_tenants
+
   api:
     image: ${OPENSCIENCE_API_IMAGE:-openscience-release-staging-api-unavailable}
     network_mode: host
@@ -13,6 +36,7 @@ services:
       AINRF_HOST: 127.0.0.1
       AINRF_PORT: "17000"
       AINRF_STATE_ROOT: /opt/ainrf/state
+      AINRF_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_RELEASE_GIT_SHA:?Load the verified release manifest}
       AINRF_JWT_SECRET: ${STAGING_OPENSCIENCE_JWT_SECRET:?Set a staging-only JWT secret}
       AINRF_API_KEY_HASHES: ${STAGING_OPENSCIENCE_API_KEY_HASHES:?Set a staging-only API key hash}
       AINRF_PUBLIC_REGISTRATION_ENABLED: "false"
@@ -27,6 +51,9 @@ services:
       - release-staging-state:/opt/ainrf/state
       - release-staging-workspaces:/opt/ainrf/.ainrf_workspaces
       - release-staging-tenants:/home/ainrf_tenants
+    depends_on:
+      init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:17000/health')"]
       interval: 10s
