@@ -112,7 +112,7 @@ subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path], ...)
 ### 硬规则
 前端问题优先级：
 1. 先运行 `bash scripts/dev.sh doctor --profile full --browser`，确认 Chrome、MCP 配置和 CDP 链路
-2. 再确认当前 session 实际暴露 **chrome-devtools MCP / browser tool**；若未暴露，重启 session
+2. 再从当前 task 调用 `chrome-devtools list_pages`，确认实际暴露 **chrome-devtools MCP / browser tool**；主机检查通过但工具不可用时才重启 session
 3. 再看实际 DOM、class、computed style、network loaded assets
 4. 最后才改代码
 
@@ -121,7 +121,7 @@ subprocess.run(["sudo", "-u", tenant_user, "mkdir", "-p", path], ...)
 - 当前稳定可用的是 Puppeteer 缓存的 Chrome for Testing
 - OMP / Claude 的配置改完后，很多时候**需要重启 session 才会生效**
 - headless 不等于“没有真实浏览器”：Chrome 可以通过 CDP 提供 DOM、computed style、Network、focus 和截图证据
-- preflight 成功只证明主机工具链可用，不证明当前 agent session 已加载 browser tool
+- preflight 成功只证明主机工具链可用，不证明当前 agent session 已加载 browser tool；doctor 对不可观察的 session 状态必须报告 unknown，不能直接声称需要重启
 
 ## 5. 配置改了不等于当前 session 生效了
 
