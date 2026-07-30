@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { type OverviewRefreshJob, type OverviewSnapshot } from '@features/domain';
 import { renderWithProviders } from '@/test-support/render';
 import TodayPage from '../../src/pages/TodayPage';
@@ -141,6 +141,12 @@ function renderToday() {
   );
 }
 
+async function waitForWithFakeTimers(assertion: () => void): Promise<void> {
+  await act(async () => {
+    await vi.waitFor(assertion);
+  });
+}
+
 describe('TodayPage', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -209,15 +215,15 @@ describe('TodayPage', () => {
       return job(jobReads === 1 ? 'running' : 'succeeded');
     });
     renderToday();
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Refresh overview' })).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(screen.getByRole('button', { name: 'Refresh overview' })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
-    await vi.waitFor(() => expect(screen.getByText('Refresh job: queued')).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(screen.getByText('Refresh job: queued')).toBeInTheDocument());
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-    await vi.waitFor(() => expect(jobReads).toBe(1));
+    await waitForWithFakeTimers(() => expect(jobReads).toBe(1));
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-    await vi.waitFor(() => expect(jobReads).toBe(2));
-    await vi.waitFor(() => expect(screen.getByText('Refresh job: succeeded')).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(jobReads).toBe(2));
+    await waitForWithFakeTimers(() => expect(screen.getByText('Refresh job: succeeded')).toBeInTheDocument());
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(jobReads).toBe(2);
@@ -236,8 +242,8 @@ describe('TodayPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
 
-    await vi.waitFor(() => expect(screen.getByText('Refresh job: partial')).toBeInTheDocument());
-    await vi.waitFor(() => expect(overviewReads).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText('Refresh job: partial')).toBeInTheDocument());
+    await waitFor(() => expect(overviewReads).toBeGreaterThanOrEqual(2));
     expect(domainApiMocks.getOverviewRefreshJob).not.toHaveBeenCalled();
   });
 
@@ -250,12 +256,12 @@ describe('TodayPage', () => {
       return job('running');
     });
     renderToday();
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Refresh overview' })).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(screen.getByRole('button', { name: 'Refresh overview' })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh overview' }));
-    await vi.waitFor(() => expect(screen.getByText('Refresh job: queued')).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(screen.getByText('Refresh job: queued')).toBeInTheDocument());
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    await vi.waitFor(() => expect(screen.getByText(/stopped after 60 seconds/)).toBeInTheDocument());
+    await waitForWithFakeTimers(() => expect(screen.getByText(/stopped after 60 seconds/)).toBeInTheDocument());
     const readsAtTimeout = jobReads;
 
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });

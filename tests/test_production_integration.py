@@ -365,9 +365,9 @@ async def test_health_degraded_returns_200(tmp_path: Path) -> None:
     _orig_ping = health_module.SSHExecutor.ping
     _orig_connect = health_module.SSHExecutor.connect
     _orig_close = health_module.SSHExecutor.close
-    health_module.SSHExecutor.ping = fake_ping  # type: ignore[assignment]
-    health_module.SSHExecutor.connect = _noop_async  # type: ignore[assignment]
-    health_module.SSHExecutor.close = _noop_async  # type: ignore[assignment]
+    health_module.SSHExecutor.ping = fake_ping
+    health_module.SSHExecutor.connect = _noop_async
+    health_module.SSHExecutor.close = _noop_async
     try:
         async with client:
             resp = await client.get("/health")
