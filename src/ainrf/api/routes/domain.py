@@ -54,6 +54,8 @@ from ainrf.domain import (
 from ainrf.domain.overview_jobs import OverviewSnapshotService
 from ainrf.domain_control import DomainMaintenanceService
 from ainrf.literature.task_saga import LiteratureTaskSagaService
+
+
 class _WorkspaceUpdateKwargs(TypedDict):
     label: NotRequired[str | None]
     description: NotRequired[str | None]
