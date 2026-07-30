@@ -5,10 +5,8 @@ import type {
 import type {
   EnvironmentCreateRequest,
   EnvironmentUpdateRequest,
-  ProjectCreateRequest,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
-  ProjectUpdateRequest,
   SkillImportRequest,
   TaskCreatePayload,
   TaskEdgeCreateRequest,
@@ -22,14 +20,12 @@ import {
   mockArchiveTask,
   mockCancelTask,
   mockCreateEnvironment,
-  mockCreateProject,
   mockCreateProjectEnvironmentReference,
   mockCreateTask,
   mockCreateTaskEdge,
   mockCreateTerminalSession,
   mockCreateWorkspace,
   mockDeleteEnvironment,
-  mockDeleteProject,
   mockDeleteProjectEnvironmentReference,
   mockDeleteTask,
   mockDeleteTaskEdge,
@@ -40,9 +36,7 @@ import {
   mockGetEnvironment,
   mockGetEnvironments,
   mockGetHealth,
-  mockGetProject,
   mockGetProjectEnvironmentReferences,
-  mockGetProjects,
   mockGetProjectTasks,
   mockGetResources,
   mockGetSession,
@@ -63,7 +57,6 @@ import {
   mockReadFile,
   mockResetTerminalSession,
   mockUpdateEnvironment,
-  mockUpdateProject,
   mockUpdateProjectEnvironmentReference,
   mockUpdateTaskProject,
   mockUpdateWorkspace,
@@ -189,17 +182,17 @@ export const legacyMockHandlers = [
     return mockJson(() => mockResetTerminalSession(body.environment_id));
   })),
 
-  http.get('/api/workspaces', () => HttpResponse.json(mockGetWorkspaces())),
-  http.get('/api/workspaces/:workspaceId', ({ params }) => mockJson(() => mockGetWorkspace(textParam(params, 'workspaceId')))),
-  http.post('/api/workspaces', resolveJson(async ({ request }) => {
+  http.get('/api/domain/workspaces', () => HttpResponse.json(mockGetWorkspaces())),
+  http.get('/api/domain/workspaces/:workspaceId', ({ params }) => mockJson(() => mockGetWorkspace(textParam(params, 'workspaceId')))),
+  http.post('/api/domain/workspaces', resolveJson(async ({ request }) => {
     const body = await request.json() as WorkspaceCreateRequest;
     return mockJson(() => mockCreateWorkspace(body));
   })),
-  http.patch('/api/workspaces/:workspaceId', resolveJson(async ({ params, request }) => {
+  http.patch('/api/domain/workspaces/:workspaceId', resolveJson(async ({ params, request }) => {
     const body = await request.json() as WorkspaceUpdateRequest;
     return mockJson(() => mockUpdateWorkspace(textParam(params, 'workspaceId'), body));
   })),
-  http.delete('/api/workspaces/:workspaceId', ({ params }) => mockEmpty(() => mockDeleteWorkspace(textParam(params, 'workspaceId')))),
+  http.post('/api/domain/workspaces/:workspaceId/unregister', ({ params }) => mockEmpty(() => mockDeleteWorkspace(textParam(params, 'workspaceId')))),
 
   http.get('/api/tasks', () => HttpResponse.json(mockGetTasks())),
   http.get('/api/tasks/token-usage', () => HttpResponse.json(taskUsage)),
@@ -220,30 +213,19 @@ export const legacyMockHandlers = [
     return mockJson(() => mockGetTaskOutput(textParam(params, 'taskId'), afterSeq));
   }),
 
-  http.get('/api/environments', () => HttpResponse.json(mockGetEnvironments())),
-  http.get('/api/environments/:environmentId', ({ params }) => mockJson(() => mockGetEnvironment(textParam(params, 'environmentId')))),
-  http.post('/api/environments', resolveJson(async ({ request }) => {
+  http.get('/api/domain/environments', () => HttpResponse.json(mockGetEnvironments())),
+  http.get('/api/domain/environments/:environmentId', ({ params }) => mockJson(() => mockGetEnvironment(textParam(params, 'environmentId')))),
+  http.post('/api/domain/environments', resolveJson(async ({ request }) => {
     const body = await request.json() as EnvironmentCreateRequest;
     return mockJson(() => mockCreateEnvironment(body));
   })),
-  http.patch('/api/environments/:environmentId', resolveJson(async ({ params, request }) => {
+  http.patch('/api/domain/environments/:environmentId', resolveJson(async ({ params, request }) => {
     const body = await request.json() as EnvironmentUpdateRequest;
     return mockJson(() => mockUpdateEnvironment(textParam(params, 'environmentId'), body));
   })),
-  http.delete('/api/environments/:environmentId', ({ params }) => mockEmpty(() => mockDeleteEnvironment(textParam(params, 'environmentId')))),
-  http.post('/api/environments/:environmentId/detect', ({ params }) => mockJson(() => mockDetectEnvironment(textParam(params, 'environmentId')))),
+  http.delete('/api/domain/environments/:environmentId', ({ params }) => mockEmpty(() => mockDeleteEnvironment(textParam(params, 'environmentId')))),
+  http.post('/api/domain/environments/:environmentId/detect', ({ params }) => mockJson(() => mockDetectEnvironment(textParam(params, 'environmentId')))),
 
-  http.get('/api/projects', () => HttpResponse.json(mockGetProjects())),
-  http.get('/api/projects/:projectId', ({ params }) => mockJson(() => mockGetProject(textParam(params, 'projectId')))),
-  http.post('/api/projects', resolveJson(async ({ request }) => {
-    const body = await request.json() as ProjectCreateRequest;
-    return mockJson(() => mockCreateProject(body));
-  })),
-  http.patch('/api/projects/:projectId', resolveJson(async ({ params, request }) => {
-    const body = await request.json() as ProjectUpdateRequest;
-    return mockJson(() => mockUpdateProject(textParam(params, 'projectId'), body));
-  })),
-  http.delete('/api/projects/:projectId', ({ params }) => mockEmpty(() => mockDeleteProject(textParam(params, 'projectId')))),
   http.get('/api/projects/:projectId/tasks', () => HttpResponse.json(mockGetProjectTasks())),
   http.get('/api/projects/:projectId/task-edges', ({ params }) => HttpResponse.json(mockGetTaskEdges(textParam(params, 'projectId')))),
   http.post('/api/projects/:projectId/task-edges', resolveJson(async ({ params, request }) => {
@@ -251,16 +233,16 @@ export const legacyMockHandlers = [
     return mockJson(() => mockCreateTaskEdge(textParam(params, 'projectId'), body));
   })),
   http.delete('/api/task-edges/:edgeId', ({ params }) => mockEmpty(() => mockDeleteTaskEdge(textParam(params, 'edgeId')))),
-  http.get('/api/projects/:projectId/environment-refs', ({ params }) => HttpResponse.json(mockGetProjectEnvironmentReferences(textParam(params, 'projectId')))),
-  http.post('/api/projects/:projectId/environment-refs', resolveJson(async ({ params, request }) => {
+  http.get('/api/domain/projects/:projectId/environment-refs', ({ params }) => HttpResponse.json(mockGetProjectEnvironmentReferences(textParam(params, 'projectId')))),
+  http.post('/api/domain/projects/:projectId/environment-refs', resolveJson(async ({ params, request }) => {
     const body = await request.json() as ProjectEnvironmentReferenceCreateRequest;
     return mockJson(() => mockCreateProjectEnvironmentReference(textParam(params, 'projectId'), body));
   })),
-  http.patch('/api/projects/:projectId/environment-refs/:environmentId', resolveJson(async ({ params, request }) => {
+  http.patch('/api/domain/projects/:projectId/environment-refs/:environmentId', resolveJson(async ({ params, request }) => {
     const body = await request.json() as ProjectEnvironmentReferenceUpdateRequest;
     return mockJson(() => mockUpdateProjectEnvironmentReference(textParam(params, 'projectId'), textParam(params, 'environmentId'), body));
   })),
-  http.delete('/api/projects/:projectId/environment-refs/:environmentId', ({ params }) => mockEmpty(() => mockDeleteProjectEnvironmentReference(textParam(params, 'projectId'), textParam(params, 'environmentId')))),
+  http.delete('/api/domain/projects/:projectId/environment-refs/:environmentId', ({ params }) => mockEmpty(() => mockDeleteProjectEnvironmentReference(textParam(params, 'projectId'), textParam(params, 'environmentId')))),
   http.get('/api/projects/:projectId/cost-summary', ({ params }) => HttpResponse.json({ project_id: textParam(params, 'projectId'), total_cost_usd: 0, total_tokens: 0, session_count: 0, by_model: {} })),
 
   http.get('/api/files/list', ({ request }) => {

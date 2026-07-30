@@ -20,7 +20,6 @@ import {
   Textarea,
 } from '@design-system';
 import { getEnvironments } from '@features/environments';
-import { unregisterWorkspace, updateWorkspace } from '../api';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useLocale, useT } from '@/shared/i18n';
@@ -32,6 +31,8 @@ import {
   getDomainProjects,
   getDomainWorkspaces,
   setDomainPrimaryWorkspace,
+  unregisterDomainWorkspace,
+  updateDomainWorkspace,
   type DomainWorkspaceProjection,
 } from '@features/domain';
 import { projectionReasonLabel } from '@features/domain';
@@ -140,7 +141,7 @@ function WorkspacesPage() {
         `${registerKey.idempotencyKey}.create`,
       );
       if (registerDraft.context.trim()) {
-        await updateWorkspace(
+        await updateDomainWorkspace(
           workspace.workspace_id,
           { workspace_prompt: registerDraft.context.trim() },
           `${registerKey.idempotencyKey}.context`,
@@ -180,7 +181,7 @@ function WorkspacesPage() {
         default_workdir: editState.canonicalPath.trim(),
         ...(editState.context.trim() ? { workspace_prompt: editState.context.trim() } : {}),
       };
-      return updateWorkspace(
+      return updateDomainWorkspace(
         selectedWorkspace.workspace_id,
         payload,
         editKey.idempotencyKey,
@@ -197,7 +198,7 @@ function WorkspacesPage() {
     mutationFn: () => {
       if (!selectedWorkspace) throw new Error('Workspace is required');
       const key = unregisterKeyManager.keyFor(semanticMutationValue({ workspaceId: selectedWorkspace.workspace_id }));
-      return unregisterWorkspace(selectedWorkspace.workspace_id, key).then(() => key);
+      return unregisterDomainWorkspace(selectedWorkspace.workspace_id, key).then(() => key);
     },
     onSuccess: (key) => {
       unregisterKeyManager.markSucceeded(key);

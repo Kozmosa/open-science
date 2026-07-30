@@ -3,29 +3,7 @@ import type {
   FileListResponse,
   FileReadResponse,
   FileUploadResponse,
-  WorkspaceListResponse,
-  WorkspaceRecord,
 } from '@/shared/types';
-import type { WorkspaceCreateRequest, WorkspaceUpdateRequest } from '@/shared/api/transportTypes';
-
-export const getWorkspaces = (): Promise<WorkspaceListResponse> => api.get('/workspaces');
-export const getWorkspace = (workspaceId: string): Promise<WorkspaceRecord> =>
-  api.get(`/workspaces/${workspaceId}`);
-export const createWorkspace = (payload: WorkspaceCreateRequest): Promise<WorkspaceRecord> =>
-  api.post('/workspaces', payload);
-export const updateWorkspace = (
-  workspaceId: string,
-  payload: WorkspaceUpdateRequest,
-  idempotencyKey: string,
-): Promise<WorkspaceRecord> => api.patch(`/workspaces/${workspaceId}`, payload, {
-  headers: { 'Idempotency-Key': idempotencyKey },
-});
-export const deleteWorkspace = (workspaceId: string): Promise<void> =>
-  api.delete(`/workspaces/${workspaceId}`);
-export const unregisterWorkspace = (workspaceId: string, idempotencyKey: string): Promise<void> =>
-  api.post(`/workspaces/${workspaceId}/unregister`, {}, {
-    headers: { 'Idempotency-Key': idempotencyKey },
-  });
 
 function fileQuery(environmentId: string, path: string, workspaceId?: string): string {
   const search = new URLSearchParams({ environment_id: environmentId, path });

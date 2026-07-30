@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, CardBody, Checkbox, ConfirmDialog, FormField, Input, NativeSelect, Textarea } from '@design-system';
-import { updateProject } from './api';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { extractErrorMessage } from '@/shared/utils/error';
@@ -11,6 +10,7 @@ import {
   removeDomainProjectMember,
   unarchiveDomainProject,
   upsertDomainProjectMember,
+  updateDomainProject,
   type DomainProjectProjection,
 } from '@features/domain';
 
@@ -31,7 +31,7 @@ export default function ProjectSettingsConsole({ project }: { project: DomainPro
     void queryClient.invalidateQueries({ queryKey: queryKeys.domain.projects(true) });
     void queryClient.invalidateQueries({ queryKey: ['domain', 'projects', project.project_id, 'members'] });
   };
-  const updateMutation = useMutation({ mutationFn: () => updateProject(project.project_id, { name: name.trim(), description: description.trim() || null }, metadataKey.idempotencyKey), onSuccess: () => { metadataKey.markSucceeded(); invalidate(); } });
+  const updateMutation = useMutation({ mutationFn: () => updateDomainProject(project.project_id, { name: name.trim(), description: description.trim() || null }, metadataKey.idempotencyKey), onSuccess: () => { metadataKey.markSucceeded(); invalidate(); } });
   const memberMutation = useMutation({ mutationFn: () => upsertDomainProjectMember(project.project_id, memberUserId.trim(), memberRole, memberCanPublish, memberKey.idempotencyKey), onSuccess: () => { memberKey.markSucceeded(); setMemberUserId(''); setMemberRole('viewer'); setMemberCanPublish(false); invalidate(); } });
   const removeMutation = useMutation({
     mutationFn: async (userId: string) => {

@@ -1,7 +1,6 @@
 import { http as mswHttp, HttpResponse } from 'msw';
 import type {
   AdminUserItem,
-  CollaboratorItem,
   EnvAccessItem,
   LiteratureCheck,
   LiteraturePaperDetail,
@@ -9,14 +8,12 @@ import type {
   LiteratureTaskIntent,
   LiteratureTopic,
   MessageItem,
-  ProjectRecord,
   SearchSettingsResponse,
   SessionDetailRecord,
   TaskCreatePayload,
   TaskEdge,
   TaskRecord,
   TaskStatus,
-  WorkspaceRecord,
 } from '@/shared/types';
 import type {
   DomainCapabilities,
@@ -84,7 +81,6 @@ interface FrontendV2MockState {
   refresh_jobs: Record<string, MockRefreshJob>;
   sessions: SessionDetailRecord[];
   admin_users: AdminUserItem[];
-  collaborators: Record<string, CollaboratorItem[]>;
   environment_access: Record<string, EnvAccessItem[]>;
   search_settings: SearchSettingsResponse;
 }
@@ -595,9 +591,6 @@ function createState(): FrontendV2MockState {
       { id: OWNER_ID, username: 'mock-owner', display_name: 'Mock Owner', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: LATER_TIME, is_online: true },
       { id: 'mock-editor-user', username: 'mock-editor', display_name: 'Mock Editor', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: BASE_TIME, is_online: false },
     ],
-    collaborators: {
-      'project-alpha': [{ user_id: 'mock-editor-user', username: 'mock-editor', display_name: 'Mock Editor', role: 'editor' }],
-    },
     environment_access: {
       'env-localhost': [{ user_id: OWNER_ID, username: 'mock-owner', display_name: 'Mock Owner', max_concurrent_tasks: 2 }],
     },
@@ -651,33 +644,6 @@ function workspaceWithCounts(workspace: DomainWorkspaceProjection): DomainWorksp
     ...workspace,
     task_count: tasks.length,
     active_task_count: tasks.filter((task) => ['queued', 'starting', 'running', 'paused'].includes(task.status)).length,
-  };
-}
-
-function legacyProject(project: DomainProjectProjection): ProjectRecord {
-  return {
-    project_id: project.project_id,
-    name: project.name,
-    description: project.description,
-    default_workspace_id: project.primary_workspace?.workspace_id ?? null,
-    default_environment_id: project.primary_workspace?.environment_id ?? null,
-    created_at: project.created_at,
-    updated_at: project.updated_at,
-    owner_user_id: project.owner_user_id,
-  };
-}
-
-function legacyWorkspace(workspace: DomainWorkspaceProjection): WorkspaceRecord {
-  return {
-    workspace_id: workspace.workspace_id,
-    project_id: workspace.project_links.find((link) => link.link_status === 'active')?.project_id ?? 'default',
-    label: workspace.label,
-    description: workspace.description,
-    default_workdir: workspace.canonical_path,
-    workspace_prompt: workspace.workspace_context ?? '',
-    created_at: workspace.created_at,
-    updated_at: workspace.updated_at,
-    owner_user_id: workspace.owner_user_id,
   };
 }
 
@@ -902,6 +868,16 @@ export const frontendV2MockHandlers = [
     const project = projectById(projectId);
     return project ? HttpResponse.json(projectWithCounts(project)) : notFound('Project', projectId);
   }),
+  http.patch('/api/domain/projects/:projectId', async ({ params, request }) => {
+    const projectId = textParam(params, 'projectId');
+    const project = projectById(projectId);
+    if (!project) return notFound('Project', projectId);
+    const payload = await requestJson<{ name?: string | null; description?: string | null }>(request);
+    if (payload.name) project.name = payload.name;
+    if (payload.description !== undefined) project.description = payload.description;
+    project.updated_at = LATER_TIME;
+    return HttpResponse.json(projectWithCounts(project));
+  }),
 
   http.get('/api/domain/workspaces', ({ request }) => {
     const includeUnregistered = new URL(request.url).searchParams.get('include_unregistered') === 'true';
@@ -926,6 +902,23 @@ export const frontendV2MockHandlers = [
     const workspaceId = textParam(params, 'workspaceId');
     const workspace = workspaceById(workspaceId);
     return workspace ? HttpResponse.json(workspaceWithCounts(workspace)) : notFound('Workspace', workspaceId);
+  }),
+  http.patch('/api/domain/workspaces/:workspaceId', async ({ params, request }) => {
+    const workspaceId = textParam(params, 'workspaceId');
+    const workspace = workspaceById(workspaceId);
+    if (!workspace) return notFound('Workspace', workspaceId);
+    const payload = await requestJson<{
+      label?: string | null;
+      description?: string | null;
+      default_workdir?: string | null;
+      workspace_prompt?: string | null;
+    }>(request);
+    if (payload.label) workspace.label = payload.label;
+    if (payload.description !== undefined) workspace.description = payload.description;
+    if (payload.default_workdir) workspace.canonical_path = payload.default_workdir;
+    if (payload.workspace_prompt !== undefined) workspace.workspace_context = payload.workspace_prompt;
+    workspace.updated_at = LATER_TIME;
+    return HttpResponse.json(workspaceWithCounts(workspace));
   }),
   http.post('/api/domain/projects/:projectId/workspaces/:workspaceId', ({ params }) => {
     const projectId = textParam(params, 'projectId');
@@ -1215,13 +1208,13 @@ export const frontendV2MockHandlers = [
     return HttpResponse.json(task, { status: 201 });
   }),
 
-  http.get('/api/projects/:projectId/members', ({ params }) => {
+  http.get('/api/domain/projects/:projectId/members', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     return projectById(projectId)
       ? HttpResponse.json({ items: state.project_members[projectId] ?? [] })
       : notFound('Project', projectId);
   }),
-  http.put('/api/projects/:projectId/members/:userId', async ({ params, request }) => {
+  http.put('/api/domain/projects/:projectId/members/:userId', async ({ params, request }) => {
     const projectId = textParam(params, 'projectId');
     const userId = textParam(params, 'userId');
     if (!projectById(projectId)) return notFound('Project', projectId);
@@ -1238,14 +1231,14 @@ export const frontendV2MockHandlers = [
     state.project_members[projectId] = [...members.filter((item) => item.user_id !== userId), member];
     return HttpResponse.json(member);
   }),
-  http.delete('/api/projects/:projectId/members/:userId', ({ params }) => {
+  http.delete('/api/domain/projects/:projectId/members/:userId', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     const userId = textParam(params, 'userId');
     if (!projectById(projectId)) return notFound('Project', projectId);
     state.project_members[projectId] = (state.project_members[projectId] ?? []).filter((item) => item.user_id !== userId);
     return noContent();
   }),
-  http.post('/api/projects/:projectId/archive', ({ params }) => {
+  http.post('/api/domain/projects/:projectId/archive', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     const project = projectById(projectId);
     if (!project) return notFound('Project', projectId);
@@ -1254,7 +1247,7 @@ export const frontendV2MockHandlers = [
     project.permissions = { ...project.permissions, can_archive: false, can_unarchive: true, can_create_task: false };
     return noContent();
   }),
-  http.post('/api/projects/:projectId/unarchive', ({ params }) => {
+  http.post('/api/domain/projects/:projectId/unarchive', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     const project = projectById(projectId);
     if (!project) return notFound('Project', projectId);
@@ -1262,7 +1255,7 @@ export const frontendV2MockHandlers = [
     project.permissions = { ...project.permissions, can_archive: !project.is_default, can_unarchive: false, can_create_task: Boolean(project.primary_workspace?.can_execute) };
     return noContent();
   }),
-  http.delete('/api/projects/:projectId/workspaces/:workspaceId', ({ params }) => {
+  http.delete('/api/domain/projects/:projectId/workspaces/:workspaceId', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     const workspaceId = textParam(params, 'workspaceId');
     const workspace = workspaceById(workspaceId);
@@ -1274,7 +1267,7 @@ export const frontendV2MockHandlers = [
     project.permissions.can_create_task = Boolean(project.primary_workspace?.can_execute);
     return noContent();
   }),
-  http.put('/api/projects/:projectId/primary-workspace/:workspaceId', ({ params, request }) => {
+  http.put('/api/domain/projects/:projectId/primary-workspace/:workspaceId', ({ params, request }) => {
     const projectId = textParam(params, 'projectId');
     const workspaceId = textParam(params, 'workspaceId');
     const project = projectById(projectId);
@@ -1331,24 +1324,7 @@ export const frontendV2MockHandlers = [
     state.task_edges = state.task_edges.filter((edge) => edge.edge_id !== edgeId);
     return noContent();
   }),
-  http.get('/api/projects', () => HttpResponse.json({ items: state.projects.map((project) => legacyProject(projectWithCounts(project))) })),
-  http.patch('/api/projects/:projectId', async ({ params, request }) => {
-    const projectId = textParam(params, 'projectId');
-    const project = projectById(projectId);
-    if (!project) return notFound('Project', projectId);
-    const payload = await requestJson<{ name?: string | null; description?: string | null }>(request);
-    if (payload.name) project.name = payload.name;
-    if (payload.description !== undefined) project.description = payload.description;
-    project.updated_at = LATER_TIME;
-    return HttpResponse.json(legacyProject(project));
-  }),
-  http.get('/api/projects/:projectId', ({ params }) => {
-    const projectId = textParam(params, 'projectId');
-    const project = projectById(projectId);
-    return project ? HttpResponse.json(legacyProject(projectWithCounts(project))) : notFound('Project', projectId);
-  }),
-
-  http.post('/api/workspaces/:workspaceId/unregister', ({ params }) => {
+  http.post('/api/domain/workspaces/:workspaceId/unregister', ({ params }) => {
     const workspaceId = textParam(params, 'workspaceId');
     const workspace = workspaceById(workspaceId);
     if (!workspace) return notFound('Workspace', workspaceId);
@@ -1357,13 +1333,6 @@ export const frontendV2MockHandlers = [
     workspace.cannot_execute_reason = 'Workspace is unregistered';
     return noContent();
   }),
-  http.get('/api/workspaces', () => HttpResponse.json({ items: state.workspaces.map((workspace) => legacyWorkspace(workspaceWithCounts(workspace))) })),
-  http.get('/api/workspaces/:workspaceId', ({ params }) => {
-    const workspaceId = textParam(params, 'workspaceId');
-    const workspace = workspaceById(workspaceId);
-    return workspace ? HttpResponse.json(legacyWorkspace(workspaceWithCounts(workspace))) : notFound('Workspace', workspaceId);
-  }),
-
   http.get('/api/literature/overview', () => HttpResponse.json(literatureOverview())),
   http.get('/api/literature/topics', () => HttpResponse.json({ items: state.topics })),
   http.post('/api/literature/topics', async ({ request }) => {
@@ -1594,32 +1563,6 @@ export const frontendV2MockHandlers = [
   http.put('/api/admin/users/:userId/password', ({ params }) => {
     const userId = textParam(params, 'userId');
     return state.admin_users.some((item) => item.id === userId) ? noContent() : notFound('User', userId);
-  }),
-  http.get('/api/projects/:projectId/collaborators', ({ params }) => {
-    const projectId = textParam(params, 'projectId');
-    return HttpResponse.json({ items: state.collaborators[projectId] ?? [] });
-  }),
-  http.put('/api/projects/:projectId/collaborators', async ({ params, request }) => {
-    const projectId = textParam(params, 'projectId');
-    const payload = await requestJson<{ user_id: string; role: string }>(request);
-    const user = state.admin_users.find((item) => item.id === payload.user_id);
-    const collaborator: CollaboratorItem = {
-      user_id: payload.user_id,
-      username: user?.username ?? payload.user_id,
-      display_name: user?.display_name ?? payload.user_id,
-      role: payload.role,
-    };
-    state.collaborators[projectId] = [
-      ...(state.collaborators[projectId] ?? []).filter((item) => item.user_id !== payload.user_id),
-      collaborator,
-    ];
-    return HttpResponse.json(collaborator);
-  }),
-  http.delete('/api/projects/:projectId/collaborators/:userId', ({ params }) => {
-    const projectId = textParam(params, 'projectId');
-    const userId = textParam(params, 'userId');
-    state.collaborators[projectId] = (state.collaborators[projectId] ?? []).filter((item) => item.user_id !== userId);
-    return noContent();
   }),
   http.get('/api/admin/environments/:environmentId/access', ({ params }) => {
     const environmentId = textParam(params, 'environmentId');

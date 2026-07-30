@@ -23,8 +23,6 @@ import {
 } from '@features/tasks/api';
 import { getCodexDefaults, getSkills } from '@features/settings/api';
 import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
-import { getProjects } from '@features/projects/api';
-import { getWorkspaces } from '@features/workspaces/api';
 import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -56,16 +54,6 @@ function stubTaskViewport(narrow: boolean): void {
     dispatchEvent: vi.fn(),
   })) as unknown as typeof window.matchMedia);
 }
-
-const project = {
-  project_id: 'default',
-  name: 'Default Project',
-  description: '',
-  default_workspace_id: 'workspace-default',
-  default_environment_id: 'env-1',
-  created_at: '2026-04-23T08:00:00Z',
-  updated_at: '2026-04-23T08:00:00Z',
-};
 
 const workspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',
@@ -266,8 +254,6 @@ vi.mock('@features/environments/api', () => ({
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(),
 }));
-vi.mock('@features/projects/api', () => ({ getProjects: vi.fn() }));
-vi.mock('@features/workspaces/api', () => ({ getWorkspaces: vi.fn() }));
 
 vi.mock('@features/domain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@features/domain')>();
@@ -388,13 +374,11 @@ const mockCreateTask = vi.mocked(createTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
-const mockGetProjects = vi.mocked(getProjects);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
 const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
-const mockGetWorkspaces = vi.mocked(getWorkspaces);
 const mockRetryTask = vi.mocked(retryTask);
 const mockGetDomainProjects = vi.mocked(getDomainProjects);
 
@@ -414,13 +398,11 @@ beforeEach(() => {
   mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
-  mockGetProjects.mockReset();
   mockGetTask.mockReset();
   mockGetTaskOutput.mockReset();
   mockGetSkills.mockReset();
   mockGetTasks.mockReset();
   mockGetTaskMessages.mockReset();
-  mockGetWorkspaces.mockReset();
   mockRetryTask.mockReset();
 
   mockBuildTaskStreamUrl.mockImplementation(
@@ -430,10 +412,8 @@ beforeEach(() => {
     codex_config_toml: null,
     codex_auth_json: null,
   });
-  mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetSkills.mockResolvedValue({ items: availableSkills });
-  mockGetProjects.mockResolvedValue({ items: [project] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
   mockGetTaskMessages.mockResolvedValue({ messages: [], has_more: false, next_sequence: null });

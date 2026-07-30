@@ -1,5 +1,6 @@
 import { useT } from '@/shared/i18n';
-import type { ProjectRecord, TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@/shared/types';
+import type { DomainProjectProjection } from '@features/domain';
 
 interface Props {
   projectId: string | null;
@@ -9,7 +10,7 @@ interface Props {
   onFromDateChange: (d: string) => void;
   onToDateChange: (d: string) => void;
   tasks: TaskSummary[];
-  projects: ProjectRecord[];
+  projects: DomainProjectProjection[];
 }
 
 function todayStr(): string {

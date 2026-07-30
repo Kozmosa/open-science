@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
-import { addCollaborator, getCollaborators, getProjects, removeCollaborator } from '@features/projects';
+import {
+  getDomainProjectMembers,
+  getDomainProjects,
+  removeDomainProjectMember,
+  upsertDomainProjectMember,
+} from '@features/domain';
 import { getAdminUsers } from '../../api';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';
@@ -15,11 +20,11 @@ export function CollaboratorsTab() {
   const queryClient = useQueryClient();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [addUserId, setAddUserId] = useState('');
-  const [addRole, setAddRole] = useState('member');
+  const [addRole, setAddRole] = useState<'editor' | 'viewer'>('editor');
 
   const { data: projects } = useQuery({
-    queryKey: queryKeys.projects.all,
-    queryFn: () => getProjects(),
+    queryKey: queryKeys.domain.projects(false),
+    queryFn: () => getDomainProjects(false),
   });
   const { data: allUsers } = useQuery({
     queryKey: queryKeys.admin.users,
@@ -32,12 +37,12 @@ export function CollaboratorsTab() {
     isError: collabsError,
   } = useQuery({
     queryKey: queryKeys.collaborators.byProject(selectedProject),
-    queryFn: () => getCollaborators(selectedProject!),
+    queryFn: () => getDomainProjectMembers(selectedProject!),
     enabled: !!selectedProject,
   });
 
   const addMutation = useMutation({
-    mutationFn: () => addCollaborator(selectedProject!, { user_id: addUserId, role: addRole }),
+    mutationFn: () => upsertDomainProjectMember(selectedProject!, addUserId, addRole, false, crypto.randomUUID()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collaborators.byProject(selectedProject) });
       setAddUserId('');
@@ -45,7 +50,7 @@ export function CollaboratorsTab() {
   });
 
   const removeMutation = useMutation({
-    mutationFn: (userId: string) => removeCollaborator(selectedProject!, userId),
+    mutationFn: (userId: string) => removeDomainProjectMember(selectedProject!, userId, crypto.randomUUID()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.collaborators.byProject(selectedProject) }),
   });
 
@@ -53,12 +58,12 @@ export function CollaboratorsTab() {
   const collaboratorList = collabs?.items ?? [];
 
   const renderRoleBadge = (role: string): ReactNode => {
-    const roleLabel = role === 'member'
+    const roleLabel = role === 'editor'
       ? t('pages.settings.collaborators.role.member')
       : role === 'viewer'
         ? t('pages.settings.collaborators.role.viewer')
         : role; // fallback: display raw role value for unknown roles
-    const isMember = role === 'member';
+    const isMember = role === 'editor';
     return (
       <span
         className={`text-xs px-2 py-0.5 rounded-full ${
@@ -133,10 +138,10 @@ export function CollaboratorsTab() {
             extraField={
               <select
                 value={addRole}
-                onChange={(e) => setAddRole(e.target.value)}
+                onChange={(e) => setAddRole(e.target.value as 'editor' | 'viewer')}
                 className="text-xs px-2 py-1.5 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text)]"
               >
-                <option value="member">
+                <option value="editor">
                   {t('pages.settings.collaborators.role.member')}
                 </option>
                 <option value="viewer">

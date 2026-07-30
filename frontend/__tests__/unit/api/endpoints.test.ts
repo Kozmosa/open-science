@@ -24,10 +24,10 @@ describe('api endpoints', () => {
       getTasks,
     } = await import('../../../src/features/tasks/api/endpoints');
     const { getTerminalSession } = await import('../../../src/features/terminal/api/endpoints');
-    const { getWorkspaces } = await import('../../../src/features/workspaces/api');
+    const { getDomainWorkspaces } = await import('../../../src/features/domain/api');
 
     const session = await getTerminalSession('env-localhost');
-    const workspaces = await getWorkspaces();
+    const workspaces = await getDomainWorkspaces(false);
     const created = await createTask({
       project_id: 'project-alpha',
       workspace_id: 'workspace-alpha',
@@ -100,7 +100,7 @@ describe('api endpoints', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/health', expect.any(Object));
   });
 
-  it('sends workspace CRUD requests through the real api client', async () => {
+  it('sends canonical workspace mutations through the real api client', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -134,38 +134,36 @@ describe('api endpoints', () => {
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { createWorkspace, updateWorkspace, deleteWorkspace } = await import('../../../src/features/workspaces/api');
+    const { createDomainWorkspace, updateDomainWorkspace, unregisterDomainWorkspace } = await import('../../../src/features/domain/api');
 
-    await createWorkspace({
+    await createDomainWorkspace({
+      environment_id: 'env-1',
+      canonical_path: '/workspace/new',
       label: 'New workspace',
-      description: null,
-      default_workdir: '/workspace/new',
-      workspace_prompt: 'Prompt',
-    });
-    await updateWorkspace('workspace-new', {
+    }, 'workspace.create:test');
+    await updateDomainWorkspace('workspace-new', {
       label: 'Updated workspace',
       description: 'Updated',
       default_workdir: '/workspace/updated',
       workspace_prompt: 'Updated prompt',
     }, 'workspace.update:test');
-    await deleteWorkspace('workspace-new');
+    await unregisterDomainWorkspace('workspace-new', 'workspace.unregister:test');
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/workspaces',
+      '/api/domain/workspaces',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
+          environment_id: 'env-1',
+          canonical_path: '/workspace/new',
           label: 'New workspace',
-          description: null,
-          default_workdir: '/workspace/new',
-          workspace_prompt: 'Prompt',
         }),
       })
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/workspaces/workspace-new',
+      '/api/domain/workspaces/workspace-new',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -179,8 +177,9 @@ describe('api endpoints', () => {
     expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('workspace.update:test');
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      '/api/workspaces/workspace-new',
-      expect.objectContaining({ method: 'DELETE' })
+      '/api/domain/workspaces/workspace-new/unregister',
+      expect.objectContaining({ method: 'POST' })
     );
+    expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('workspace.unregister:test');
   });
 });
