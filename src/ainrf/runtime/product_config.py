@@ -13,6 +13,12 @@ from ainrf.execution import ContainerConfig
 from ainrf.runtime import parse_container_config_from_runtime_config
 from ainrf.runtime.paths import RuntimePathConfig, build_runtime_path_config
 from ainrf.state import default_state_root
+from ainrf.telemetry.compatibility import (
+    CleanupCompatibilityObservation,
+    observe_cleanup_compatibility,
+)
+
+_LEGACY_ENV_ALIASES_READ: set[str] = set()
 
 
 def hash_api_key(value: str) -> str:
@@ -23,7 +29,24 @@ def _env_value(name: str, legacy_name: str, default: str = "") -> str:
     value = os.environ.get(name)
     if value is not None:
         return value
-    return os.environ.get(legacy_name, default)
+    legacy_value = os.environ.get(legacy_name)
+    if legacy_value is not None:
+        _LEGACY_ENV_ALIASES_READ.add(legacy_name)
+        return legacy_value
+    return default
+
+
+def _record_legacy_env_aliases(state_root: Path, *, production: bool) -> None:
+    for legacy_name in sorted(_LEGACY_ENV_ALIASES_READ):
+        observe_cleanup_compatibility(
+            CleanupCompatibilityObservation(
+                item=f"config.{legacy_name.lower()}",
+                observation="config_alias_read",
+                state_root=state_root,
+                production=production,
+            )
+        )
+    _LEGACY_ENV_ALIASES_READ.clear()
 
 
 def _parse_api_key_hashes(raw: str) -> frozenset[str]:
@@ -190,6 +213,7 @@ class ApiConfig:
             "AINRF_RUNTIME_RECONCILIATION_ENABLED",
             "true",
         ).lower() in ("1", "true", "yes")
+        _record_legacy_env_aliases(resolved_state_root, production=production)
         if (
             auth_cookie_namespace
             and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", auth_cookie_namespace) is None

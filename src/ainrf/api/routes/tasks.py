@@ -11,6 +11,10 @@ from ainrf.agentic_researcher.models import (
 )
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.deprecation import deprecation_headers, mark_deprecated, record_deprecated_use
+from ainrf.telemetry.compatibility import (
+    CleanupCompatibilityObservation,
+    observe_cleanup_compatibility,
+)
 from ainrf.api.schemas import (
     MessageItemResponse,
     TaskAttemptListResponse,
@@ -107,6 +111,15 @@ def _v2_task_mutation_response(
         request=request,
         route="tasks.mutation.flat_response",
         replacement="nested task, attempt, and dispatch response fields",
+    )
+    observe_cleanup_compatibility(
+        CleanupCompatibilityObservation(
+            item="task.mutation.flat_response",
+            observation="response_field_emitted",
+            state_root=request.app.state.api_config.state_root,
+            production=request.app.state.api_config.production,
+            request_id=getattr(request.state, "request_id", None),
+        )
     )
     return TaskMutationResponse(**task.model_dump(), task=task, attempt=attempt, dispatch=dispatch)
 
@@ -220,6 +233,15 @@ async def create_task(
             response,
             route="tasks.create.environment_id",
             replacement="POST /tasks without environment_id",
+        )
+        observe_cleanup_compatibility(
+            CleanupCompatibilityObservation(
+                item="task.create.environment_id",
+                observation="request_field_observed",
+                state_root=request.app.state.api_config.state_root,
+                production=request.app.state.api_config.production,
+                request_id=getattr(request.state, "request_id", None),
+            )
         )
     if not payload.project_id:
         raise HTTPException(status_code=409, detail="v2 Task creation requires an explicit Project")
@@ -638,11 +660,29 @@ async def retry_task(
     mark_deprecated(
         response, route="tasks.retry.new_task", replacement=f"GET /tasks/{task_id}/attempts"
     )
+    observe_cleanup_compatibility(
+        CleanupCompatibilityObservation(
+            item="task.retry.new_task",
+            observation="response_field_emitted",
+            state_root=request.app.state.api_config.state_root,
+            production=request.app.state.api_config.production,
+            request_id=getattr(request.state, "request_id", None),
+        )
+    )
     if body.environment_id is not None:
         mark_deprecated(
             response,
             route="tasks.retry.environment_id",
             replacement="POST /tasks/{task_id}/retry without environment_id",
+        )
+        observe_cleanup_compatibility(
+            CleanupCompatibilityObservation(
+                item="task.retry.environment_id",
+                observation="request_field_observed",
+                state_root=request.app.state.api_config.state_root,
+                production=request.app.state.api_config.production,
+                request_id=getattr(request.state, "request_id", None),
+            )
         )
     try:
         projection = _get_task_projection_service(request)
@@ -652,6 +692,15 @@ async def retry_task(
                 response,
                 route="tasks.retry.task_input",
                 replacement=f"POST /tasks/{task_id}/continue",
+            )
+            observe_cleanup_compatibility(
+                CleanupCompatibilityObservation(
+                    item="task.retry.task_input",
+                    observation="request_field_observed",
+                    state_root=request.app.state.api_config.state_root,
+                    production=request.app.state.api_config.production,
+                    request_id=getattr(request.state, "request_id", None),
+                )
             )
             raise HTTPException(
                 status_code=409,

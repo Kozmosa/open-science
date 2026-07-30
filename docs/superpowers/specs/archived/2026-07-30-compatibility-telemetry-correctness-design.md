@@ -8,12 +8,15 @@ tags:
   - compatibility
   - architecture-cleanup
 doc_state: current
-status: accepted
+status: implemented
 ---
 
 # OpenScience Compatibility Telemetry Correctness Design
 
-**Status:** Accepted — 方向已由用户确认，等待实现
+> [!warning] Historical specification
+> 本文已实现并归档，不再定义当前产品 contract。长期事实已提升到代码、测试、`docs-site/docs/architecture.md` 与 observability 文档；原文保留用于解释设计和验收来源。
+
+**Status:** Implemented and archived — 2026-07-30
 
 **Scope:** HTTP contract telemetry、compatibility field/config telemetry、Prometheus、结构化日志、Grafana、staging 验收
 
