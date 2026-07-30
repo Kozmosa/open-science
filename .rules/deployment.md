@@ -10,11 +10,12 @@ containers unless the user explicitly asks you to.
 
 ## Production Deployment Architecture (CPU-only)
 
-The current production environment uses **CPU-only Docker Compose** with host networking:
+The production environment uses **CPU-only Docker Compose** with host networking and
+an immutable release manifest:
 
 ```bash
 # Deploy command (from repo root)
-docker compose -f deploy/docker-compose.cpu.yml up -d --build
+bash deploy/release-production.sh
 ```
 
 **Architecture overview:**
@@ -28,7 +29,9 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 
 - All services use `network_mode: host` (no Docker NAT).
 - External access: `http://<host>:8192` → nginx → backend on 18000.
-- Frontend static files are served from `frontend/dist/production` (host-mounted, read-only).
+- WebUI assets and nginx configuration are baked into the release web image.
+- API, domain worker, and literature worker use the same API image reference.
+- Production services have no source, configuration, or host `dist` bind mounts.
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
@@ -92,27 +95,31 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 ## Rebuild & Redeploy
 
 ```bash
-# Backend-only changes — use the wrapper so the host git commit is stamped
-# into the image (otherwise the backend reports "Unavailable" for its version).
-bash deploy/redeploy-backend.sh
+# Build every artifact, write a release manifest, then deploy the matching set.
+bash deploy/release-production.sh
 
-# Frontend-only changes — rebuilds the target-specific host bundle, then restarts nginx.
-bash deploy/redeploy-frontend.sh
+# Build only; useful before pushing the tagged images to a registry.
+OPENSCIENCE_RELEASE_MANIFEST=/secure/releases/<sha>.env \
+  bash deploy/build-production.sh
 
 # Staging is managed only through its isolated lifecycle preflight:
 OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh up
 
-# Bare fallback (no commit stamping; backend version shows "Unavailable"):
-# docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+# Deploy prebuilt/pulled images by exporting the four image references from a
+# reviewed release manifest, then running Compose with --no-build.
 ```
 
-**Version provenance is split**: the backend bakes its OWN commit into
-`/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
-and the frontend ships its OWN target-specific `build-info.json` (built on the
-host). Because the two build at different times, they may differ — the
-Settings page shows both and flags a mismatch.
+`build-production.sh` derives one release ID from the committed Git SHA, rejects
+dirty builds by default, builds the API, web, Prometheus, and Grafana targets,
+and records their exact image references in a mode-0600 manifest. Build all
+artifacts before changing running services. Keep the previous manifest as the
+rollback unit. Production containers require only images, runtime configuration,
+secrets, and named data volumes after deployment; deleting a checkout or worktree
+cannot break their code, frontend, or service configuration.
 
-**Why host build is required**: nginx serves frontend from a **host-mounted** target directory, not from the container's built-in `/opt/ainrf/frontend/dist`. Production uses `frontend/dist/production`, staging uses `frontend/dist/staging`, and GPU deployment uses `frontend/dist/gpu`; rebuilding one environment therefore cannot replace another environment's assets. Verify the `index-*.js` hash in the target directory matches what the browser requests.
+The legacy `redeploy-backend.sh` and `redeploy-frontend.sh` production targets
+delegate to the same atomic release entrypoint. GPU remains a mutable laboratory
+target and staging remains development-oriented.
 
 Direct staging calls through the production redeploy wrappers are rejected.
 `staging.sh up` rebuilds the current staging bundle and force-recreates its nginx

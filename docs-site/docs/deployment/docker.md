@@ -108,22 +108,29 @@ GPU 透传要求宿主机已安装 NVIDIA 驱动和 [nvidia-container-toolkit](h
 
 适用于：不需要 GPU、宿主机未装 NVIDIA 驱动的服务器。使用 `docker-compose.cpu.yml`，与 GPU 版相同但无 GPU 设备透传。
 
-密钥生成步骤与 GPU 版相同，然后：
+这是正式 production 路径。密钥生成步骤与 GPU 版相同，然后：
 
 ```bash
-cd deploy
-# 编辑密钥
-vim docker-compose.cpu.yml
-# 构建并启动
-docker compose -f docker-compose.cpu.yml up -d --build
+# 在 deploy/.env 或受控环境中准备 production secrets
+# 一次构建 Web、API 和监控配置镜像，再部署同一 release manifest
+bash deploy/release-production.sh
 # 获取 admin 密码
-docker compose -f docker-compose.cpu.yml exec ainrf \
+docker compose -f deploy/docker-compose.cpu.yml exec ainrf \
   cat /opt/ainrf/state/admin_initial_password.txt
 # 查看日志
-docker compose -f docker-compose.cpu.yml logs -f ainrf
+docker compose -f deploy/docker-compose.cpu.yml logs -f ainrf
 ```
 
 访问 `http://<机器IP>:8192/`。
+
+Production Compose 不执行源码构建，也不挂载 Git checkout、worktree、`src/ainrf`
+或宿主机 `frontend/dist`。API 和所有 Python worker 使用同一个 API 镜像；WebUI 与
+nginx 配置位于配套 web 镜像中。构建脚本会先完成全部镜像，再写出包含 release ID
+及四个镜像引用的 manifest，随后 Compose 只使用这些预构建镜像启动。
+
+保留上一份 manifest 即可形成明确的回滚单位。CI/CD 接入 registry 后，应在 CI 中构建
+并推送这些镜像，在 release staging 验收相同引用，再向 production 提升同一 manifest；
+production 主机不应重新生成另一套字节。
 
 ---
 

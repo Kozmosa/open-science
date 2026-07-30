@@ -52,6 +52,14 @@ flowchart TD
 - Compatibility surface 的 removal change 必须同时更新 schema、generated artifact、contract tests、文档和 rollback evidence。
 - 生产 release acceptance、只读 post-smoke 与 rollback 属于 L4；本地或 synthetic smoke 不能替代生产观察窗口。
 
+## 环境与发布边界
+
+- Local development 不启动 Docker，使用 `uv`、npm 和 `scripts/dev.sh` 运行 repo 外隔离状态；未来 Pixi 只能补充工具链，不能削弱数据隔离。
+- Staging 默认是 development-oriented 容器环境，允许源码和 staging 专属前端产物 bind mount，用于快速联调，不作为不可变 release evidence。
+- Production 只消费同一 release manifest 绑定的不可变镜像。WebUI、nginx 配置、API 和 worker 代码均在镜像中；只允许注入 secrets、运行配置与 named persistent volumes，不依赖 Git checkout 或 worktree。
+- API、domain worker 与 literature worker 必须使用同一个 API image reference。Web、API 与监控镜像全部构建成功后才能更新运行服务，禁止独立发布前端或后端。
+- CI/CD 接入 registry 后必须 build once、在 release staging 验收同一组 image digest，再提升相同 manifest 到 production；rollback 以完整的上一份 manifest 为单位。
+
 ## Fail-closed compatibility inventory
 
 下列 surface 在 P6 继续保留。原因是没有可信生产 release telemetry 覆盖完整观察窗口，不能把缺失指标解释为零调用。

@@ -15,8 +15,8 @@ name: deploy
 #
 #   2. 编辑本文件，把 <CHANGE_ME> 替换为上面生成的值
 #
-#   3. 构建并启动
-#      docker compose -f docker-compose.cpu.yml up -d --build
+#   3. 构建并启动同一个 release
+#      bash deploy/release-production.sh
 #
 #   4. 查看日志
 #      docker compose -f docker-compose.cpu.yml logs -f ainrf
@@ -31,14 +31,7 @@ name: deploy
 
 services:
   ainrf:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-      args:
-        # Host git commit captured by deploy/redeploy-backend.sh (falls back to
-        # empty -> backend reports "Unavailable" when built without the wrapper).
-        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
-        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf
     network_mode: host
@@ -108,12 +101,7 @@ services:
   # entrypoint must not bind the same port.
   domain-worker:
     profiles: ["domain-v2"]
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-      args:
-        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
-        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-domain-worker
     network_mode: host
@@ -187,9 +175,7 @@ services:
           memory: 512M
 
   literature-worker:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-literature-worker
     network_mode: host
@@ -213,13 +199,11 @@ services:
         condition: service_healthy
 
   prometheus:
-    image: docker.1ms.run/prom/prometheus:v3.3.1
+    image: ${OPENSCIENCE_PROMETHEUS_IMAGE:?Set OPENSCIENCE_PROMETHEUS_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-prometheus
     network_mode: host
     volumes:
-      - ./config/prometheus-host.yml:/etc/prometheus/prometheus.yml:ro
-      - ./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -238,7 +222,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: docker.1ms.run/grafana/grafana:11.6.1
+    image: ${OPENSCIENCE_GRAFANA_IMAGE:?Set OPENSCIENCE_GRAFANA_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-grafana
     network_mode: host
@@ -254,8 +238,6 @@ services:
       GF_AUTH_PROXY_HEADER: "X-WEBAUTH-USER"
       GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
     volumes:
-      - ./config/grafana/provisioning-host:/etc/grafana/provisioning:ro
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -266,13 +248,10 @@ services:
         max-file: "3"
 
   nginx:
-    image: docker.1ms.run/nginx:1.27-alpine
+    image: ${OPENSCIENCE_WEB_IMAGE:?Set OPENSCIENCE_WEB_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-nginx
     network_mode: host
-    volumes:
-      - ./config/nginx-host.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/dist/production:/usr/share/nginx/html:ro
     depends_on:
       ainrf:
         condition: service_healthy

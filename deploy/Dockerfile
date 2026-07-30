@@ -9,7 +9,7 @@
 #   runtime         — minimal production image
 #
 # Build:
-#   docker build -f deploy/Dockerfile -t openscience:latest .
+#   bash deploy/build-production.sh
 #
 # Run:
 #   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... openscience:latest
@@ -45,6 +45,20 @@ ARG AINRF_BUILD_COMMITTED_AT=""
 ENV AINRF_BUILD_COMMIT=${AINRF_BUILD_COMMIT}
 ENV AINRF_BUILD_COMMITTED_AT=${AINRF_BUILD_COMMITTED_AT}
 RUN npm run build
+
+# Production web and monitoring images contain their runtime configuration and
+# static assets.  They therefore need no bind mounts from a Git checkout.
+FROM docker.1ms.run/nginx:1.27-alpine AS web
+COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html
+COPY deploy/config/nginx-host.conf /etc/nginx/conf.d/default.conf
+
+FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus
+COPY deploy/config/prometheus-host.yml /etc/prometheus/prometheus.yml
+COPY deploy/config/prometheus/rules/ainrf-alerts.yml /etc/prometheus/rules/ainrf.yml
+
+FROM docker.1ms.run/grafana/grafana:11.6.1 AS grafana
+COPY deploy/config/grafana/provisioning-host /etc/grafana/provisioning
+COPY deploy/config/grafana/dashboards /var/lib/grafana/dashboards
 
 # ── Stage 2: Backend build ────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS backend-build
