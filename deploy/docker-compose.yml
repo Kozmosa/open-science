@@ -40,7 +40,7 @@ services:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       # The committed cutover fuse requires the exact immutable artifact SHA.
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
       AINRF_ALLOWED_CIDRS: "0.0.0.0/0"
@@ -106,13 +106,13 @@ services:
         AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
         AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
     restart: unless-stopped
-    container_name: openscience-domain-worker
+    container_name: ainrf-domain-worker
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
-      OPENSCIENCE_NO_SSHD: "1"
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_NO_SSHD: "1"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}

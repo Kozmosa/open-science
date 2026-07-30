@@ -280,15 +280,15 @@ def test_legacy_config_alias_records_item_without_secret(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     secret_hash = "private-api-key-hash"
-    monkeypatch.delenv("OPENSCIENCE_API_KEY_HASHES", raising=False)
-    monkeypatch.setenv("AINRF_API_KEY_HASHES", secret_hash)
+    monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", secret_hash)
 
     config = ApiConfig.from_env(state_root=tmp_path)
 
     assert config.api_key_hashes == frozenset({secret_hash})
     text = get_metrics_text()
     assert (
-        'ainrf_cleanup_compatibility_observations_total{item="config.ainrf_api_key_hashes",'
+        'ainrf_cleanup_compatibility_observations_total{item="config.openscience_api_key_hashes",'
         'observation="config_alias_read"} 1.0' in text
     )
     assert secret_hash not in text

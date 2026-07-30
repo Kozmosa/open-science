@@ -93,7 +93,8 @@ def _start_sshd() -> None:
     staging environments running alongside production on the same
     host can each bind their own port without collision.
     """
-    if os.environ.get("OPENSCIENCE_NO_SSHD", "").strip().lower() in {
+    no_sshd = os.environ.get("AINRF_NO_SSHD", os.environ.get("OPENSCIENCE_NO_SSHD", ""))
+    if no_sshd.strip().lower() in {
         "1",
         "true",
         "yes",
@@ -185,13 +186,15 @@ def _provision_tenant_users(state_root: str) -> None:
         return
 
     # 1. Ensure the tenant group exists
-    res = subprocess.run(["getent", "group", TENANT_GROUP],
-                         capture_output=True, text=True)
+    res = subprocess.run(["getent", "group", TENANT_GROUP], capture_output=True, text=True)
     if res.returncode != 0:
-        subprocess.run(["groupadd", "--gid", str(TENANT_GID), TENANT_GROUP],
-                       check=True, capture_output=True, text=True)
-        print(f"[entrypoint] Created group {TENANT_GROUP} (gid {TENANT_GID})",
-              flush=True)
+        subprocess.run(
+            ["groupadd", "--gid", str(TENANT_GID), TENANT_GROUP],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        print(f"[entrypoint] Created group {TENANT_GROUP} (gid {TENANT_GID})", flush=True)
 
     # 2. Read all usernames from auth DB and ensure Linux users exist
     try:
@@ -199,8 +202,7 @@ def _provision_tenant_users(state_root: str) -> None:
         rows = conn.execute("SELECT username FROM users").fetchall()
         conn.close()
     except Exception as exc:
-        print(f"[entrypoint] Could not read auth DB for tenant provisioning: {exc}",
-              flush=True)
+        print(f"[entrypoint] Could not read auth DB for tenant provisioning: {exc}", flush=True)
         return
 
     created = 0
@@ -216,19 +218,26 @@ def _provision_tenant_users(state_root: str) -> None:
         subprocess.run(
             [
                 "useradd",
-                "--gid", str(TENANT_GID),
-                "--home-dir", str(home),
+                "--gid",
+                str(TENANT_GID),
+                "--home-dir",
+                str(home),
                 "--create-home",
-                "--shell", "/bin/bash",
+                "--shell",
+                "/bin/bash",
                 linux_user,
             ],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
         home.mkdir(parents=True, exist_ok=True)
         workspace.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["chown", "-R", f"{linux_user}:{TENANT_GROUP}", str(home)],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
         created += 1
 
@@ -248,7 +257,9 @@ def _provision_tenant_users(state_root: str) -> None:
             shutil.copytree(str(codex_src), str(tenant_codex), symlinks=True)
             subprocess.run(
                 ["chown", "-R", f"ainrf_{username}:{TENANT_GROUP}", str(tenant_codex)],
-                check=False, capture_output=True, text=True,
+                check=False,
+                capture_output=True,
+                text=True,
             )
             synced += 1
         if synced:
@@ -263,12 +274,11 @@ def main() -> None:
     _sync_aris_skills()
 
     # A staging clone may use a child generation inside the named state
-    # volume.  Honor the public and compatibility aliases everywhere the
-    # entrypoint creates, owns, or passes state paths; production retains the
-    # established `/opt/ainrf/state` default.
+    # volume. Honor the canonical backend variable and retain the branded
+    # compatibility alias for existing launchers.
     state_root = os.environ.get(
-        "OPENSCIENCE_STATE_ROOT",
-        os.environ.get("AINRF_STATE_ROOT", "/opt/ainrf/state"),
+        "AINRF_STATE_ROOT",
+        os.environ.get("OPENSCIENCE_STATE_ROOT", "/opt/ainrf/state"),
     )
 
     # Drop privileges to ainrf user (UID 1000) before exec-ing the server

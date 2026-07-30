@@ -58,19 +58,18 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     nginx_health_command = nginx_healthcheck["test"]
 
     assert limits["cpus"] == "8.0"
-    assert environment["OPENSCIENCE_PRODUCTION"] == "1"
-    assert environment["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "staging"
-    assert "STAGING_OPENSCIENCE_NO_SSHD" in str(environment["OPENSCIENCE_NO_SSHD"])
+    assert environment["AINRF_PRODUCTION"] == "1"
+    assert environment["AINRF_AUTH_COOKIE_NAMESPACE"] == "staging"
+    assert "STAGING_OPENSCIENCE_NO_SSHD" in str(environment["AINRF_NO_SSHD"])
     assert "STAGING_OPENSCIENCE_INTERACTIVE_AUTH_ENABLED" in str(
-        environment["OPENSCIENCE_INTERACTIVE_AUTH_ENABLED"]
+        environment["AINRF_INTERACTIVE_AUTH_ENABLED"]
     )
     assert "STAGING_PUBLIC_REGISTRATION:-false" in str(
         environment["AINRF_PUBLIC_REGISTRATION_ENABLED"]
     )
-    assert "STAGING_OPENSCIENCE_STATE_ROOT" in str(environment["OPENSCIENCE_STATE_ROOT"])
-    assert environment["OPENSCIENCE_STATE_ROOT"] == environment["AINRF_STATE_ROOT"]
+    assert "STAGING_OPENSCIENCE_STATE_ROOT" in str(environment["AINRF_STATE_ROOT"])
     assert "STAGING_OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED" in str(
-        environment["OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED"]
+        environment["AINRF_RUNTIME_RECONCILIATION_ENABLED"]
     )
     assert isinstance(nginx_health_command, list)
     assert "http://127.0.0.1:7192/api/health" in nginx_health_command

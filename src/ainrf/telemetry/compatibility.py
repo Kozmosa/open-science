@@ -132,10 +132,10 @@ for _config_name in (
     "domain_artifact_sha",
     "runtime_reconciliation_enabled",
 ):
-    CLEANUP_REGISTRY[f"config.ainrf_{_config_name}"] = CleanupItem(
+    CLEANUP_REGISTRY[f"config.openscience_{_config_name}"] = CleanupItem(
         "Runtime/Release",
         "config_alias_read",
-        f"OPENSCIENCE_{_config_name.upper()}",
+        f"AINRF_{_config_name.upper()}",
         "process startup configuration",
         "2026-07-30",
         "2026-10-28",

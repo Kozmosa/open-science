@@ -135,16 +135,15 @@ class DevelopmentStack:
         environment = os.environ.copy()
         environment.update(
             {
-                "OPENSCIENCE_STATE_ROOT": str(self.state_root),
-                "OPENSCIENCE_JWT_SECRET": f"development-{self.instance.instance_id}",
+                "AINRF_STATE_ROOT": str(self.state_root),
+                "AINRF_JWT_SECRET": f"development-{self.instance.instance_id}",
                 "OPENSCIENCE_WEBUI_API_KEY": self.api_key,
-                "OPENSCIENCE_API_KEY_HASHES": hash_api_key(self.api_key),
                 "AINRF_API_KEY_HASHES": hash_api_key(self.api_key),
-                "OPENSCIENCE_AUTH_COOKIE_NAMESPACE": f"dev-{self.instance.instance_id[-8:]}",
+                "AINRF_AUTH_COOKIE_NAMESPACE": f"dev-{self.instance.instance_id[-8:]}",
                 "OPENSCIENCE_WEBUI_BACKEND_TARGET": (
                     f"http://{self._api_probe_host()}:{self.instance.ports.api}"
                 ),
-                "OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED": "false",
+                "AINRF_RUNTIME_RECONCILIATION_ENABLED": "false",
                 "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE": self.fault_profile.value,
                 "UV_CACHE_DIR": environment.get("UV_CACHE_DIR", "/tmp/uv-cache"),
             }
@@ -155,7 +154,7 @@ class DevelopmentStack:
             environment.update(
                 {
                     "HOME": str(self.instance.runtime_root / "home"),
-                    "OPENSCIENCE_DOMAIN_ARTIFACT_SHA": self.artifact_sha,
+                    "AINRF_DOMAIN_ARTIFACT_SHA": self.artifact_sha,
                 }
             )
         return environment

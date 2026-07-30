@@ -94,8 +94,8 @@ def test_api_config_reads_onboard_minimal_config(
 def test_api_config_reads_runtime_reconciliation_flag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", hash_api_key("bootstrap-secret"))
-    monkeypatch.setenv("OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED", "false")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", hash_api_key("bootstrap-secret"))
+    monkeypatch.setenv("AINRF_RUNTIME_RECONCILIATION_ENABLED", "false")
 
     config = ApiConfig.from_env(tmp_path)
 
@@ -188,39 +188,39 @@ def test_api_config_seeds_localhost_container_profile_when_config_is_minimal(
     assert config.container_config.ssh_key_path == "/opt/ainrf/.ssh/ainrf_local"
 
 
-def test_api_config_prefers_openscience_env(
+def test_api_config_prefers_ainrf_backend_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("OPENSCIENCE_STATE_ROOT", str(tmp_path / "open"))
-    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "ainrf"))
     monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
     monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
 
     config = ApiConfig.from_env()
 
-    assert config.state_root == tmp_path / "open"
-    assert config.api_key_hashes == frozenset({"a" * 64})
+    assert config.state_root == tmp_path / "ainrf"
+    assert config.api_key_hashes == frozenset({"b" * 64})
 
 
-def test_api_config_falls_back_to_ainrf_env(
+def test_api_config_accepts_openscience_compatibility_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.delenv("OPENSCIENCE_STATE_ROOT", raising=False)
-    monkeypatch.delenv("OPENSCIENCE_API_KEY_HASHES", raising=False)
-    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
-    monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
+    monkeypatch.delenv("AINRF_STATE_ROOT", raising=False)
+    monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv("OPENSCIENCE_STATE_ROOT", str(tmp_path / "compatibility"))
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
 
     config = ApiConfig.from_env()
 
-    assert config.state_root == tmp_path / "legacy"
-    assert config.api_key_hashes == frozenset({"b" * 64})
+    assert config.state_root == tmp_path / "compatibility"
+    assert config.api_key_hashes == frozenset({"a" * 64})
 
 
 def test_api_config_builds_namespaced_auth_cookie_names(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
-    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "staging")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("AINRF_AUTH_COOKIE_NAMESPACE", "staging")
 
     config = ApiConfig.from_env(tmp_path)
 
@@ -233,8 +233,8 @@ def test_api_config_builds_namespaced_auth_cookie_names(
 def test_api_config_rejects_invalid_auth_cookie_namespace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
-    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "Staging Unsafe")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("AINRF_AUTH_COOKIE_NAMESPACE", "Staging Unsafe")
 
     with pytest.raises(ValueError, match="cookie namespace"):
         ApiConfig.from_env(tmp_path)

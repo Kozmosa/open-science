@@ -142,7 +142,7 @@ def _assert_domain_runtime_fuse(config: ApiConfig, controller: DomainCutoverCont
 
     artifact_sha = config.domain_artifact_sha
     if not artifact_sha:
-        raise ValueError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required")
+        raise ValueError("AINRF_DOMAIN_ARTIFACT_SHA is required")
     controller.assert_v2_writable(artifact_sha=artifact_sha)
 
 

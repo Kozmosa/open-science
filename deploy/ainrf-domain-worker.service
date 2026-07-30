@@ -2,7 +2,7 @@
 Description=OpenScience durable domain worker
 Documentation=https://github.com/open-science/open-science
 Wants=network-online.target
-After=network-online.target openscience-api.service
+After=network-online.target ainrf.service
 ConditionPathExists=/opt/ainrf/state/runtime/agentic_researcher.sqlite3
 
 [Service]
@@ -11,9 +11,9 @@ User=ainrf
 Group=ainrf
 SupplementaryGroups=ainrf_tenants
 # The operator-managed environment file must contain the exact immutable
-# OPENSCIENCE_DOMAIN_ARTIFACT_SHA.  The CLI rejects an absent/mismatched SHA
+# AINRF_DOMAIN_ARTIFACT_SHA. The CLI rejects an absent/mismatched SHA
 # and refuses to run before a committed v2 cutover.
-EnvironmentFile=-/etc/openscience/domain-worker.env
+EnvironmentFile=-/etc/ainrf/domain-worker.env
 # The CLI verifies the DB fuse and immutable artifact SHA before the worker
 # can claim any work.
 ExecStart=/usr/local/bin/openscience domain-worker --state-root /opt/ainrf/state

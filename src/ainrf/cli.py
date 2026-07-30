@@ -279,10 +279,10 @@ def _domain_worker_artifact_sha(state_root: Path) -> str:
     if status.state != "v2":
         raise DomainCutoverError("domain worker cannot start while cutover is prepared")
     artifact_sha = os.environ.get(
-        "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", os.environ.get("AINRF_DOMAIN_ARTIFACT_SHA", "")
+        "AINRF_DOMAIN_ARTIFACT_SHA", os.environ.get("OPENSCIENCE_DOMAIN_ARTIFACT_SHA", "")
     ).strip()
     if not artifact_sha:
-        raise DomainCutoverError("OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for domain worker")
+        raise DomainCutoverError("AINRF_DOMAIN_ARTIFACT_SHA is required for domain worker")
     controller.assert_v2_writable(artifact_sha=artifact_sha)
     return artifact_sha
 
@@ -1326,13 +1326,11 @@ def _parse_ssh_command(command: str) -> ParsedSSHCommand:
 
 
 def _ensure_api_key_hashes_configured(state_root: Path) -> None:
-    # Keep the command preflight aligned with ``ApiConfig.from_env``.  A
-    # deployment using the public OpenScience name must not fall into
-    # interactive onboarding before the server has a chance to read the same
-    # configuration.
+    # Keep the command preflight aligned with ``ApiConfig.from_env`` while
+    # retaining the branded compatibility alias for existing launchers.
     env_hashes = os.environ.get(
-        "OPENSCIENCE_API_KEY_HASHES",
-        os.environ.get("AINRF_API_KEY_HASHES", ""),
+        "AINRF_API_KEY_HASHES",
+        os.environ.get("OPENSCIENCE_API_KEY_HASHES", ""),
     ).strip()
     if env_hashes:
         return

@@ -15,9 +15,9 @@ services:
     tmpfs:
       - /tmp:mode=1777,size=64m
     volumes:
-      - l2-state:/var/lib/openscience
-      - l2-tenants:/var/lib/openscience/tenants
-      - l2-workspaces:/var/lib/openscience/workspaces
+      - l2-state:/var/lib/ainrf
+      - l2-tenants:/var/lib/ainrf/tenants
+      - l2-workspaces:/var/lib/ainrf/workspaces
     networks: [l2]
     deploy:
       resources:
@@ -31,14 +31,14 @@ services:
     env_file:
       - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
     command:
-      ["openscience", "serve", "--host", "0.0.0.0", "--port", "8000", "--state-root", "/var/lib/openscience"]
+      ["openscience", "serve", "--host", "0.0.0.0", "--port", "8000", "--state-root", "/var/lib/ainrf"]
     read_only: true
     tmpfs:
       - /tmp:mode=1777,size=128m
     volumes:
-      - l2-state:/var/lib/openscience
-      - l2-tenants:/var/lib/openscience/tenants
-      - l2-workspaces:/var/lib/openscience/workspaces
+      - l2-state:/var/lib/ainrf
+      - l2-tenants:/var/lib/ainrf/tenants
+      - l2-workspaces:/var/lib/ainrf/workspaces
     ports:
       - "127.0.0.1:${OPENSCIENCE_L2_API_PORT:?unique API port is required}:8000"
     depends_on:
@@ -62,14 +62,14 @@ services:
     image: ${OPENSCIENCE_L2_BACKEND_IMAGE_DIGEST:?immutable backend image digest is required}
     env_file:
       - ${OPENSCIENCE_L2_RUNTIME_ENV_FILE:?generated runtime env file is required}
-    command: ["openscience", "domain-worker", "--state-root", "/var/lib/openscience"]
+    command: ["openscience", "domain-worker", "--state-root", "/var/lib/ainrf"]
     read_only: true
     tmpfs:
       - /tmp:mode=1777,size=128m
     volumes:
-      - l2-state:/var/lib/openscience
-      - l2-tenants:/var/lib/openscience/tenants
-      - l2-workspaces:/var/lib/openscience/workspaces
+      - l2-state:/var/lib/ainrf
+      - l2-tenants:/var/lib/ainrf/tenants
+      - l2-workspaces:/var/lib/ainrf/workspaces
     depends_on:
       api:
         condition: service_healthy
@@ -146,12 +146,12 @@ services:
     tmpfs:
       - /tmp:mode=1777,size=128m
     volumes:
-      - l2-state:/var/lib/openscience
+      - l2-state:/var/lib/ainrf
       # The runner must inspect the synthetic Workspace/tenant trees when it
       # validates backup manifests and staged restore behavior.  These are the
       # same uniquely named cell volumes used by the API, never host paths.
-      - l2-tenants:/var/lib/openscience/tenants
-      - l2-workspaces:/var/lib/openscience/workspaces
+      - l2-tenants:/var/lib/ainrf/tenants
+      - l2-workspaces:/var/lib/ainrf/workspaces
     depends_on:
       api:
         condition: service_healthy

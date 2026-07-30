@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ainrf.literature.broker import LiteratureRuntimeConfig
 from ainrf.literature.providers.arxiv_rss import parse_rss
 from ainrf.literature.tracking import (
     DiscoveredPaper,
@@ -12,6 +13,20 @@ from ainrf.literature.tracking import (
 )
 
 pytestmark = [pytest.mark.unit]
+
+
+def test_literature_runtime_prefers_ainrf_backend_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AINRF_LITERATURE_REDIS_URL", "redis://ainrf:6379/0")
+    monkeypatch.setenv("OPENSCIENCE_LITERATURE_REDIS_URL", "redis://compatibility:6379/0")
+    monkeypatch.setenv("AINRF_LITERATURE_REDIS_NAMESPACE", "ainrf:literature")
+    monkeypatch.setenv("OPENSCIENCE_LITERATURE_REDIS_NAMESPACE", "compatibility:literature")
+
+    config = LiteratureRuntimeConfig.from_env()
+
+    assert config.redis_url == "redis://ainrf:6379/0"
+    assert config.redis_namespace == "ainrf:literature"
 
 
 def _service(tmp_path: Path) -> LiteratureTrackingService:

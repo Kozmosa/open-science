@@ -47,7 +47,7 @@ services:
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "18000"
       # The committed cutover fuse requires the immutable artifact SHA.
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -115,16 +115,16 @@ services:
         AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
         AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
     restart: unless-stopped
-    container_name: openscience-domain-worker
+    container_name: ainrf-domain-worker
     network_mode: host
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
-      OPENSCIENCE_NO_SSHD: "1"
-      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
-      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:production:literature
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_NO_SSHD: "1"
+      AINRF_LITERATURE_REDIS_URL: redis://:${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
+      AINRF_LITERATURE_REDIS_NAMESPACE: ainrf:production:literature
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
@@ -156,10 +156,10 @@ services:
   literature-redis:
     image: docker.1ms.run/redis:7-alpine
     restart: unless-stopped
-    container_name: openscience-literature-redis
+    container_name: ainrf-literature-redis
     network_mode: host
     environment:
-      OPENSCIENCE_LITERATURE_REDIS_PASSWORD: ${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+      AINRF_LITERATURE_REDIS_PASSWORD: ${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}
     command:
       - redis-server
       - --bind
@@ -173,11 +173,11 @@ services:
       - --maxmemory-policy
       - noeviction
       - --requirepass
-      - ${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+      - ${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}
     volumes:
       - literature-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$OPENSCIENCE_LITERATURE_REDIS_PASSWORD\" ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -191,15 +191,15 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
-    container_name: openscience-literature-worker
+    container_name: ainrf-literature-worker
     network_mode: host
     environment:
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
-      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:production:literature
-      OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
-      OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET: "24"
-      OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET: "8"
+      AINRF_LITERATURE_REDIS_URL: redis://:${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
+      AINRF_LITERATURE_REDIS_NAMESPACE: ainrf:production:literature
+      AINRF_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
+      AINRF_LITERATURE_DAILY_SOURCE_BUDGET: "24"
+      AINRF_LITERATURE_DAILY_SEARCH_BUDGET: "8"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}

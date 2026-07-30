@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
 _RUNTIME_LAUNCH_RECORD_VERSION = 1
 _RUNTIME_LAUNCH_PHASES = frozenset({"armed", "launching", "running", "finished"})
-_RUNTIME_PROBE_TOKEN_ENV = "OPENSCIENCE_RUNTIME_PROBE_TOKEN"
+_RUNTIME_PROBE_TOKEN_ENV = "AINRF_RUNTIME_PROBE_TOKEN"
+_RUNTIME_PROBE_TOKEN_COMPATIBILITY_ENV = "OPENSCIENCE_RUNTIME_PROBE_TOKEN"
 
 
 class RuntimeLaunchRecordError(ValueError):
@@ -507,7 +508,10 @@ def _find_marked_process(probe_token: str) -> int | None:
         entries = tuple(proc_root.iterdir())
     except OSError:
         return None
-    expected = f"{_RUNTIME_PROBE_TOKEN_ENV}={probe_token}".encode()
+    expected = {
+        f"{name}={probe_token}".encode()
+        for name in (_RUNTIME_PROBE_TOKEN_ENV, _RUNTIME_PROBE_TOKEN_COMPATIBILITY_ENV)
+    }
     for entry in entries:
         if not entry.name.isdecimal():
             continue
@@ -515,7 +519,7 @@ def _find_marked_process(probe_token: str) -> int | None:
             environment = (entry / "environ").read_bytes()
         except OSError:
             continue
-        if expected not in environment.split(b"\0"):
+        if not expected.intersection(environment.split(b"\0")):
             continue
         process_id = int(entry.name)
         if _process_start_ticks(process_id) is not None:

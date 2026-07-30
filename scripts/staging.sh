@@ -54,9 +54,6 @@ services = payload.get("services", {})
 api = services.get("ainrf-staging", {})
 environment = api.get("environment", {}) if isinstance(api, dict) else {}
 state_root = environment.get("AINRF_STATE_ROOT") if isinstance(environment, dict) else None
-public_state_root = environment.get("OPENSCIENCE_STATE_ROOT") if isinstance(environment, dict) else None
-if not isinstance(state_root, str) or state_root != public_state_root:
-    raise SystemExit("staging state-root aliases must agree")
 if not isinstance(state_root, str) or not (
     state_root == "/opt/ainrf/state"
     or __import__("re").fullmatch(r"/opt/ainrf/state/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}", state_root)

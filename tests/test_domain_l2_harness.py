@@ -231,7 +231,8 @@ def test_l2_runtime_env_emits_current_and_legacy_auth_aliases(tmp_path: Path) ->
         for line in runtime_env.read_text(encoding="utf-8").splitlines()
         if line
     )
-    assert values["AINRF_API_KEY_HASHES"] == values["OPENSCIENCE_API_KEY_HASHES"]
-    assert values["AINRF_JWT_SECRET"] == values["OPENSCIENCE_JWT_SECRET"]
     assert len(values["AINRF_API_KEY_HASHES"]) == 64
     assert len(values["AINRF_JWT_SECRET"]) == 64
+    assert values["AINRF_STATE_ROOT"] == "/var/lib/ainrf"
+    assert "OPENSCIENCE_API_KEY_HASHES" not in values
+    assert "OPENSCIENCE_JWT_SECRET" not in values

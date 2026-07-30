@@ -220,22 +220,17 @@ JWT_SECRET="$(random_hex 32)"
 API_KEY_HASH="$(printf '%s' "${API_KEY}" | sha256_text)"
 CREDENTIAL_DIGEST="$(printf '%s\n%s\n' "${API_KEY}" "${JWT_SECRET}" | sha256_text)"
 
-# ApiConfig accepts the OpenScience names first, but the current `serve`
-# preflight and JWT helper still consume the legacy aliases.  Keep both names
-# in this generated, private env file and bind each pair to the same random
-# value so the immutable L2 API can start without onboarding or a writable
-# home directory.
+# Runtime-facing configuration uses the canonical AINRF backend namespace.
+# OPENSCIENCE_L2_* remains the project-level isolated-cell controller namespace.
 printf '%s\n' \
-  "OPENSCIENCE_DOMAIN_ARTIFACT_SHA=${BACKEND_DIGEST#*@sha256:}" \
+  "AINRF_DOMAIN_ARTIFACT_SHA=${BACKEND_DIGEST#*@sha256:}" \
   "OPENSCIENCE_L2_RUN_ID=${RUN_ID}" \
   "OPENSCIENCE_L2_ARTIFACT_TAG=${ARTIFACT_TAG}" \
   "OPENSCIENCE_L2_API_KEY=${API_KEY}" \
-  "OPENSCIENCE_API_KEY_HASHES=${API_KEY_HASH}" \
   "AINRF_API_KEY_HASHES=${API_KEY_HASH}" \
-  "OPENSCIENCE_JWT_SECRET=${JWT_SECRET}" \
   "AINRF_JWT_SECRET=${JWT_SECRET}" \
-  'OPENSCIENCE_STATE_ROOT=/var/lib/openscience' \
-  'OPENSCIENCE_NO_SSHD=1' \
+  'AINRF_STATE_ROOT=/var/lib/ainrf' \
+  'AINRF_NO_SSHD=1' \
   'OPENSCIENCE_L2_SYNTHETIC_FIXTURES_ONLY=1' \
   'OPENSCIENCE_L2_API_BASE_URL=http://api:8000' \
   'OPENSCIENCE_L2_PRIOR_FRONTEND_URL=http://frontend-gateway:8080' \
