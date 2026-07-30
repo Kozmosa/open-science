@@ -22,8 +22,6 @@ def build_transport_openapi() -> dict[str, Any]:
         generate_unique_id_function=stable_operation_id,
     )
     for router in ROUTERS:
-        app.include_router(router, deprecated=True)
-        app.include_router(router, prefix="/v1", deprecated=True)
         app.include_router(router, prefix="/api")
     app.include_router(
         create_metrics_router(ApiConfig(api_key_hashes=frozenset(), state_root=Path("/tmp")))

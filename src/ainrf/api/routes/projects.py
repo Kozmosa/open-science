@@ -220,7 +220,7 @@ async def create_project(
             user,
             name=payload.name,
             description=payload.description,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
         return _serialize_domain_project(domain, project, user)
     except Exception as exc:
@@ -257,7 +257,7 @@ async def update_project(
         project = _active_domain_project(domain, project_id, user)
         domain.require_project_editor(project_id, user)
         changes = payload.model_dump(exclude_unset=True)
-        idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+        idempotency_key = require_idempotency_key(request)
         changes.pop("idempotency_key", None)
         default_workspace_id = changes.get("default_workspace_id")
         if "default_workspace_id" in changes and ("name" in changes or "description" in changes):
@@ -577,7 +577,7 @@ async def create_project_task_edge(
                 user,
                 source_task_id=payload.source_task_id,
                 target_task_id=payload.target_task_id,
-                idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+                idempotency_key=require_idempotency_key(request),
             )
         )
     except Exception as exc:
@@ -662,7 +662,7 @@ async def upsert_project_member(
             payload.role,
             payload.can_publish,
             user,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
         members = domain.list_project_members(project_id, user)
         member = next((item for item in members if item.get("user_id") == member_user_id), None)
@@ -701,7 +701,7 @@ async def transfer_project_owner(
             project_id,
             payload.new_owner_user_id,
             user,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
         return _serialize_domain_project(domain, domain.project(project_id, user), user)
     except Exception as exc:
@@ -751,7 +751,7 @@ async def add_collaborator(
             role,
             payload.can_publish,
             user,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
         return _serialize_domain_collaborator(
             {"user_id": payload.user_id, "role": role, "can_publish": payload.can_publish},

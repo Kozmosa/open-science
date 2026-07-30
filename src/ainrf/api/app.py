@@ -572,8 +572,6 @@ def create_app(
 
     app.middleware("http")(build_exception_handler_middleware())
     for router in ROUTERS:
-        app.include_router(router, deprecated=True)
-        app.include_router(router, prefix="/v1", deprecated=True)
         app.include_router(router, prefix="/api")
     # Metrics endpoint (gated by config)
     if api_config.metrics_enabled:

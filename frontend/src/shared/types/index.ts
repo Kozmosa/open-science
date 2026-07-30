@@ -93,10 +93,7 @@ export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
 export interface TaskRetryResponse {
-  new_task: TaskSummary;
-  archived_task_id: string | null;
-  edge_id: string;
-  task?: TaskSummary | null;
+  task: TaskSummary;
   attempt?: {
     attempt_id: string;
     task_id: string;

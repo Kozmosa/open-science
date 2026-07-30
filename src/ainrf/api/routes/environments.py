@@ -199,7 +199,7 @@ async def create_environment(
             display_name=payload.display_name,
             description=payload.description,
             connection=_connection_from_create_payload(payload),
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
         return _serialize_domain_environment(environment)
     except Exception as exc:
@@ -270,7 +270,7 @@ async def update_environment(
         environment = domain.update_environment(
             environment_id,
             user,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
             **kwargs,
         )
         return _serialize_domain_environment(

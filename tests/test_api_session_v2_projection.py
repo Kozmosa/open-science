@@ -94,18 +94,17 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            f"/tasks?api_key={_API_KEY}",
+            f"/api/tasks?api_key={_API_KEY}",
             headers={"Idempotency-Key": "session-v2-task"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Project durable Session compatibility",
@@ -205,7 +204,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
             )
             conn.commit()
 
-        listed = await client.get(f"/sessions?api_key={_API_KEY}")
+        listed = await client.get(f"/api/sessions?api_key={_API_KEY}")
         assert listed.status_code == 200
         listed_payload = _body(listed)
         sessions = cast(list[dict[str, object]], listed_payload["items"])
@@ -224,7 +223,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
             }
         ]
 
-        detail = await client.get(f"/sessions/{task_id}?api_key={_API_KEY}")
+        detail = await client.get(f"/api/sessions/{task_id}?api_key={_API_KEY}")
         assert detail.status_code == 200
         detail_payload = _body(detail)
         attempts = cast(list[dict[str, object]], detail_payload["attempts"])
@@ -232,15 +231,15 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
         assert attempts[0]["duration_ms"] == 3000
         assert attempts[0]["token_usage_json"] is not None
 
-        attempt_list = await client.get(f"/sessions/{task_id}/attempts?api_key={_API_KEY}")
+        attempt_list = await client.get(f"/api/sessions/{task_id}/attempts?api_key={_API_KEY}")
         assert attempt_list.status_code == 200
         assert _body(attempt_list)["items"] == attempts
 
-        batch = await client.get(f"/sessions/batch-detail?api_key={_API_KEY}&ids={task_id}")
+        batch = await client.get(f"/api/sessions/batch-detail?api_key={_API_KEY}&ids={task_id}")
         assert batch.status_code == 200
         assert _body(batch) == {"items": {task_id: attempts}}
 
-        task_detail = await client.get(f"/tasks/{task_id}?api_key={_API_KEY}")
+        task_detail = await client.get(f"/api/tasks/{task_id}?api_key={_API_KEY}")
         assert task_detail.status_code == 200
         task_detail_payload = _body(task_detail)
         # Timeline consumes Task summaries for compatibility, but v2 Task
@@ -257,7 +256,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
             "output_tokens": 3,
         }
 
-        usage_summary = await client.get(f"/tasks/token-usage?api_key={_API_KEY}")
+        usage_summary = await client.get(f"/api/tasks/token-usage?api_key={_API_KEY}")
         assert usage_summary.status_code == 200
         usage_payload = _body(usage_summary)
         assert usage_payload["task_count"] == 1
@@ -276,7 +275,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
             }
         }
 
-        cost = await client.get(f"/projects/{project_id}/cost-summary?api_key={_API_KEY}")
+        cost = await client.get(f"/api/projects/{project_id}/cost-summary?api_key={_API_KEY}")
         assert cost.status_code == 200
         assert _body(cost) == {
             "project_id": project_id,
@@ -288,7 +287,7 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
 
         assert (
             await client.post(
-                f"/sessions?api_key={_API_KEY}",
+                f"/api/sessions?api_key={_API_KEY}",
                 json={
                     "project_id": project_id,
                     "title": "must not write",
@@ -299,24 +298,26 @@ async def test_v2_sessions_are_task_attempt_projections_and_never_open_legacy_db
         # cannot observe a different contract merely by sending malformed
         # historical request data.
         assert (
-            await client.post(f"/sessions?api_key={_API_KEY}", content=b"not-json")
+            await client.post(f"/api/sessions?api_key={_API_KEY}", content=b"not-json")
         ).status_code == 405
         assert (
-            await client.patch(f"/sessions/{task_id}?api_key={_API_KEY}", json={})
+            await client.patch(f"/api/sessions/{task_id}?api_key={_API_KEY}", json={})
         ).status_code == 405
         assert (
-            await client.patch(f"/sessions/{task_id}?api_key={_API_KEY}", content=b"not-json")
+            await client.patch(f"/api/sessions/{task_id}?api_key={_API_KEY}", content=b"not-json")
         ).status_code == 405
-        assert (await client.delete(f"/sessions/{task_id}?api_key={_API_KEY}")).status_code == 405
+        assert (
+            await client.delete(f"/api/sessions/{task_id}?api_key={_API_KEY}")
+        ).status_code == 405
 
         # The compatibility projection has no delete/archive side effect.  A
         # rejected Session write must leave the authoritative Task and its
         # durable Attempt history exactly where the read projection found it.
-        task_after_session_writes = await client.get(f"/tasks/{task_id}?api_key={_API_KEY}")
+        task_after_session_writes = await client.get(f"/api/tasks/{task_id}?api_key={_API_KEY}")
         assert task_after_session_writes.status_code == 200
         assert _body(task_after_session_writes)["task_id"] == task_id
         attempts_after_session_writes = await client.get(
-            f"/tasks/{task_id}/attempts?api_key={_API_KEY}"
+            f"/api/tasks/{task_id}/attempts?api_key={_API_KEY}"
         )
         assert attempts_after_session_writes.status_code == 200
         after_items = cast(list[dict[str, object]], _body(attempts_after_session_writes)["items"])
@@ -354,7 +355,7 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
     owner_headers = _headers(app, "output-owner", "api-key-user", "member")
     viewer_headers = _headers(app, "output-viewer", "output-viewer", "member")
     administrator_headers = _headers(app, "output-admin", "output-admin", "admin")
-    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
     app.state.project_module.add_member(project_id, "output-viewer", "viewer", False, _USER)
     durable_output = json.dumps(
         {
@@ -382,12 +383,11 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            "/tasks",
+            "/api/tasks",
             headers={**owner_headers, "Idempotency-Key": "viewer-output-route-task"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Shared output redaction",
@@ -414,14 +414,14 @@ async def test_v2_project_viewer_output_routes_and_sse_redact_durable_secrets(
             )
             conn.commit()
 
-        viewer_output = await client.get(f"/tasks/{task_id}/output", headers=viewer_headers)
-        viewer_messages = await client.get(f"/tasks/{task_id}/messages", headers=viewer_headers)
-        owner_output = await client.get(f"/tasks/{task_id}/output", headers=owner_headers)
+        viewer_output = await client.get(f"/api/tasks/{task_id}/output", headers=viewer_headers)
+        viewer_messages = await client.get(f"/api/tasks/{task_id}/messages", headers=viewer_headers)
+        owner_output = await client.get(f"/api/tasks/{task_id}/output", headers=owner_headers)
         administrator_output = await client.get(
-            f"/tasks/{task_id}/output", headers=administrator_headers
+            f"/api/tasks/{task_id}/output", headers=administrator_headers
         )
         async with client.stream(
-            "GET", f"/tasks/{task_id}/stream", headers=viewer_headers
+            "GET", f"/api/tasks/{task_id}/stream", headers=viewer_headers
         ) as viewer_stream:
             assert viewer_stream.status_code == 200
             viewer_stream_body = "".join([part async for part in viewer_stream.aiter_text()])

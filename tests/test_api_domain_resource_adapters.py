@@ -112,14 +112,16 @@ async def test_v2_project_adapter_preserves_visibility_and_deprecation_headers(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        owner_read = await client.get(f"/projects/{project_id}", headers=owner_headers)
+        owner_read = await client.get(f"/api/projects/{project_id}", headers=owner_headers)
         viewer_write = await client.patch(
-            f"/projects/{project_id}",
+            f"/api/projects/{project_id}",
             headers=_write_headers(viewer_headers, "viewer-project-update"),
             json={"name": "Denied"},
         )
-        outsider_read = await client.get(f"/projects/{project_id}", headers=outsider_headers)
-        refs = await client.get(f"/projects/{project_id}/environment-refs", headers=owner_headers)
+        outsider_read = await client.get(f"/api/projects/{project_id}", headers=outsider_headers)
+        refs = await client.get(
+            f"/api/projects/{project_id}/environment-refs", headers=owner_headers
+        )
 
     assert owner_read.status_code == 200
     assert owner_read.headers["Deprecation"] == "true"
@@ -146,7 +148,7 @@ async def test_v2_workspace_delete_unregisters_without_deleting_directory(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            "/workspaces",
+            "/api/workspaces",
             headers=_write_headers(headers, "workspace-create"),
             json={
                 "project_id": project_id,
@@ -157,10 +159,10 @@ async def test_v2_workspace_delete_unregisters_without_deleting_directory(
         )
         workspace_id = created.json()["workspace_id"]
         deleted = await client.delete(
-            f"/workspaces/{workspace_id}",
+            f"/api/workspaces/{workspace_id}",
             headers=_write_headers(headers, "workspace-delete"),
         )
-        hidden = await client.get(f"/workspaces/{workspace_id}", headers=headers)
+        hidden = await client.get(f"/api/workspaces/{workspace_id}", headers=headers)
 
     assert created.status_code == 200
     assert created.headers["Deprecation"] == "true"
@@ -186,7 +188,7 @@ async def test_v2_workspace_registration_rejects_an_unusable_path_without_persis
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         rejected = await client.post(
-            "/domain/workspaces",
+            "/api/domain/workspaces",
             headers=_write_headers(headers, "workspace-preflight-create"),
             json={
                 "environment_id": environment_id,
@@ -221,9 +223,9 @@ async def test_v2_workspace_registration_replays_before_rechecking_the_path(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        created = await client.post("/domain/workspaces", headers=write_headers, json=payload)
+        created = await client.post("/api/domain/workspaces", headers=write_headers, json=payload)
         workspace_path.rmdir()
-        replayed = await client.post("/domain/workspaces", headers=write_headers, json=payload)
+        replayed = await client.post("/api/domain/workspaces", headers=write_headers, json=payload)
 
     assert created.status_code == 200
     assert replayed.status_code == 200
@@ -242,16 +244,16 @@ async def test_v2_environment_delete_disables_the_durable_environment(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            "/environments",
+            "/api/environments",
             headers=_write_headers(headers, "environment-create"),
             json={"alias": "disable-me", "display_name": "Disable me", "host": "localhost"},
         )
         environment_id = created.json()["id"]
         deleted = await client.delete(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(headers, "environment-delete"),
         )
-        hidden = await client.get(f"/environments/{environment_id}", headers=headers)
+        hidden = await client.get(f"/api/environments/{environment_id}", headers=headers)
 
     assert created.status_code == 201
     assert created.headers["Deprecation"] == "true"
@@ -274,30 +276,25 @@ async def test_compatibility_removals_preserve_idempotency_and_not_found_errors(
     app = _v2_app(state_root, tmp_path)
     headers = _headers(app, "missing-resource-admin", "missing-resource-admin", "admin")
     paths = (
-        "/environments/missing-environment",
-        "/workspaces/missing-workspace",
-        "/workspaces/missing-workspace/unregister",
+        "/api/environments/missing-environment",
+        "/api/workspaces/missing-workspace",
+        "/api/workspaces/missing-workspace/unregister",
     )
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        for prefix in ("/api", "", "/v1"):
-            for path in paths:
-                method = "POST" if path.endswith("/unregister") else "DELETE"
-                missing_key = await client.request(method, f"{prefix}{path}", headers=headers)
-                missing_resource = await client.request(
-                    method,
-                    f"{prefix}{path}",
-                    headers=_write_headers(headers, f"missing:{prefix}:{path}"),
-                )
-                assert missing_key.status_code == 409, (prefix, path, missing_key.text)
-                assert missing_key.json()["detail"] == "Idempotency-Key is required"
-                assert missing_resource.status_code == 404, (
-                    prefix,
-                    path,
-                    missing_resource.text,
-                )
+        for path in paths:
+            method = "POST" if path.endswith("/unregister") else "DELETE"
+            missing_key = await client.request(method, path, headers=headers)
+            missing_resource = await client.request(
+                method,
+                path,
+                headers=_write_headers(headers, f"missing:{path}"),
+            )
+            assert missing_key.status_code == 409, (path, missing_key.text)
+            assert missing_key.json()["detail"] == "Idempotency-Key is required"
+            assert missing_resource.status_code == 404, (path, missing_resource.text)
 
 
 @pytest.mark.anyio
@@ -330,25 +327,25 @@ async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visi
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         outsider_update = await client.patch(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(outsider_headers, "outsider-environment-update"),
             json={"display_name": "Must remain hidden"},
         )
         outsider_delete = await client.delete(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(outsider_headers, "outsider-environment-delete"),
         )
         grantee_update = await client.patch(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(grantee_headers, "grantee-environment-update"),
             json={"display_name": "Cannot manage"},
         )
         grantee_delete = await client.delete(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(grantee_headers, "grantee-environment-delete"),
         )
         admin_update = await client.patch(
-            f"/environments/{environment_id}",
+            f"/api/environments/{environment_id}",
             headers=_write_headers(admin_headers, "admin-environment-update"),
             json={"display_name": "Admin update"},
         )
@@ -372,30 +369,30 @@ async def test_v2_project_write_requires_a_stable_idempotency_transport(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        missing = await client.post("/projects", headers=headers, json={"name": "Missing"})
+        missing = await client.post("/api/projects", headers=headers, json={"name": "Missing"})
         conflict = await client.post(
-            "/projects",
+            "/api/projects",
             headers=_write_headers(headers, "header-key"),
             json={"name": "Conflict", "idempotency_key": "body-key"},
         )
         first = await client.post(
-            "/projects",
+            "/api/projects",
             headers=_write_headers(headers, "project-create"),
-            json={"name": "Stable", "idempotency_key": "project-create"},
+            json={"name": "Stable"},
         )
         replay = await client.post(
-            "/projects",
+            "/api/projects",
             headers=_write_headers(headers, "project-create"),
-            json={"name": "Stable", "idempotency_key": "project-create"},
+            json={"name": "Stable"},
         )
         changed = await client.post(
-            "/projects",
+            "/api/projects",
             headers=_write_headers(headers, "project-create"),
-            json={"name": "Different", "idempotency_key": "project-create"},
+            json={"name": "Different"},
         )
 
     assert missing.status_code == 409
-    assert conflict.status_code == 409
+    assert conflict.status_code == 422
     assert first.status_code == 201
     assert replay.status_code == 201
     assert replay.json() == first.json()
@@ -415,7 +412,7 @@ async def test_v2_compatibility_routes_fail_closed_when_cutover_readiness_is_los
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/projects", headers=headers)
+        response = await client.get("/api/projects", headers=headers)
 
     assert response.status_code == 503
 
@@ -437,13 +434,13 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         upsert = await client.put(
-            f"/projects/{project_id}/members/member-editor",
+            f"/api/projects/{project_id}/members/member-editor",
             headers=_write_headers(owner_headers, "member-upsert"),
             json={"role": "editor", "can_publish": True},
         )
-        members = await client.get(f"/projects/{project_id}/members", headers=owner_headers)
+        members = await client.get(f"/api/projects/{project_id}/members", headers=owner_headers)
         transfer = await client.post(
-            f"/projects/{project_id}/owner-transfer",
+            f"/api/projects/{project_id}/owner-transfer",
             headers=_write_headers(owner_headers, "owner-transfer"),
             json={"new_owner_user_id": "member-new-owner"},
         )
@@ -451,13 +448,15 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
             owner, name="Protected default", is_default=True
         )
         default_transfer = await client.post(
-            f"/projects/{default_project['project_id']}/owner-transfer",
+            f"/api/projects/{default_project['project_id']}/owner-transfer",
             headers=_write_headers(owner_headers, "default-owner-transfer"),
             json={"new_owner_user_id": "member-new-owner"},
         )
-        editor_members = await client.get(f"/projects/{project_id}/members", headers=editor_headers)
+        editor_members = await client.get(
+            f"/api/projects/{project_id}/members", headers=editor_headers
+        )
         new_owner_members = await client.get(
-            f"/projects/{project_id}/members", headers=new_owner_headers
+            f"/api/projects/{project_id}/members", headers=new_owner_headers
         )
 
     assert upsert.status_code == 200
@@ -507,9 +506,9 @@ async def test_v2_detection_persists_observation_without_mutating_environment(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         detected = await client.post(
-            f"/environments/{environment_id}/detect", headers=admin_headers
+            f"/api/environments/{environment_id}/detect", headers=admin_headers
         )
-        read_back = await client.get(f"/environments/{environment_id}", headers=admin_headers)
+        read_back = await client.get(f"/api/environments/{environment_id}", headers=admin_headers)
 
     assert detected.status_code == 200
     assert detected.json()["latest_detection"]["status"] == "success"

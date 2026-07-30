@@ -370,7 +370,7 @@ async def test_health_degraded_returns_200(tmp_path: Path) -> None:
     health_module.SSHExecutor.close = _noop_async
     try:
         async with client:
-            resp = await client.get("/health")
+            resp = await client.get("/api/health")
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
             assert resp.json()["status"] == "degraded"
     finally:

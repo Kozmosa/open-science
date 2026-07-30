@@ -72,11 +72,11 @@ async def test_admin_can_list_and_inspect_redacted_unmapped_legacy_records(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        listed = await client.get("/admin/domain/legacy-records", headers=admin_headers)
+        listed = await client.get("/api/admin/domain/legacy-records", headers=admin_headers)
         inspected = await client.get(
-            "/admin/domain/legacy-records/legacy-session-1", headers=admin_headers
+            "/api/admin/domain/legacy-records/legacy-session-1", headers=admin_headers
         )
-        denied = await client.get("/admin/domain/legacy-records?api_key=legacy-audit-api-key")
+        denied = await client.get("/api/admin/domain/legacy-records?api_key=legacy-audit-api-key")
 
     assert listed.status_code == 200
     assert listed.json() == {

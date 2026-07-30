@@ -58,7 +58,7 @@ def test_operation_ids_are_unique_stable_and_cover_canonical_metadata() -> None:
     generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
     assert "export type EnvironmentAuthKind = 'ssh_key' | 'password' | 'agent';" in generated_types
     assert "description?: string | null;" in generated_types
-    assert '"deprecated": true' in metadata_source
+    assert '"deprecated": true' not in metadata_source
 
 
 def test_route_modules_do_not_own_pydantic_transport_models() -> None:

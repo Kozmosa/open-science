@@ -38,7 +38,7 @@ def make_client(tmp_path: Path, scan_roots: list[Path] | None = None) -> httpx.A
 @pytest.mark.anyio
 async def test_list_registries(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/skill-registries")
+        response = await client.get("/api/skill-registries")
 
     assert response.status_code == 200
     data = response.json()
@@ -53,7 +53,7 @@ async def test_list_registries(tmp_path: Path) -> None:
 async def test_get_status_not_installed(tmp_path: Path) -> None:
     # Use an empty scan root so no skills are found
     async with make_client(tmp_path, scan_roots=[tmp_path / "empty"]) as client:
-        response = await client.get("/skill-registries/aris/status")
+        response = await client.get("/api/skill-registries/aris/status")
 
     assert response.status_code == 200
     data = response.json()
@@ -65,7 +65,7 @@ async def test_get_status_not_installed(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_get_nonexistent_registry_returns_404(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/skill-registries/nonexistent/status")
+        response = await client.get("/api/skill-registries/nonexistent/status")
 
     assert response.status_code == 404
 
@@ -78,7 +78,7 @@ async def test_install_already_installed_returns_400(tmp_path: Path) -> None:
     (skills_dir / ".ainrf-registry").write_text("aris", encoding="utf-8")
 
     async with make_client(tmp_path, scan_roots=[tmp_path]) as client:
-        response = await client.post("/skill-registries/aris/install")
+        response = await client.post("/api/skill-registries/aris/install")
 
     assert response.status_code == 400
     assert "already installed" in response.json()["detail"]
@@ -88,7 +88,7 @@ async def test_install_already_installed_returns_400(tmp_path: Path) -> None:
 async def test_update_not_installed_returns_400(tmp_path: Path) -> None:
     # Use an empty scan root so no skills are found
     async with make_client(tmp_path, scan_roots=[tmp_path / "empty"]) as client:
-        response = await client.post("/skill-registries/aris/update", json={"force": False})
+        response = await client.post("/api/skill-registries/aris/update", json={"force": False})
 
     assert response.status_code == 400
     assert "not installed" in response.json()["detail"]
@@ -98,7 +98,7 @@ async def test_update_not_installed_returns_400(tmp_path: Path) -> None:
 async def test_create_update_delete_custom_registry(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
         create_resp = await client.post(
-            "/skill-registries",
+            "/api/skill-registries",
             json={
                 "registry_id": "custom-repo",
                 "display_name": "Custom Registry",
@@ -116,13 +116,13 @@ async def test_create_update_delete_custom_registry(tmp_path: Path) -> None:
         assert data["display_name"] == "Custom Registry"
         assert data["git_url"] == "https://github.com/example/custom-skills.git"
 
-        list_resp = await client.get("/skill-registries")
+        list_resp = await client.get("/api/skill-registries")
         assert list_resp.status_code == 200
         ids = [r["registry_id"] for r in list_resp.json()["items"]]
         assert "custom-repo" in ids
 
         update_resp = await client.put(
-            "/skill-registries/custom-repo",
+            "/api/skill-registries/custom-repo",
             json={
                 "display_name": "Updated Custom Registry",
                 "git_ref": "develop",
@@ -132,15 +132,15 @@ async def test_create_update_delete_custom_registry(tmp_path: Path) -> None:
         assert update_resp.status_code == 200
         assert update_resp.json()["display_name"] == "Updated Custom Registry"
 
-        status_resp = await client.get("/skill-registries/custom-repo/status")
+        status_resp = await client.get("/api/skill-registries/custom-repo/status")
         assert status_resp.status_code == 200
         assert status_resp.json()["registry_id"] == "custom-repo"
 
-        delete_resp = await client.delete("/skill-registries/custom-repo")
+        delete_resp = await client.delete("/api/skill-registries/custom-repo")
         assert delete_resp.status_code == 200
         assert delete_resp.json()["status"] == "deleted"
 
-        list_resp = await client.get("/skill-registries")
+        list_resp = await client.get("/api/skill-registries")
         ids = [r["registry_id"] for r in list_resp.json()["items"]]
         assert "custom-repo" not in ids
 
@@ -153,17 +153,17 @@ async def test_create_duplicate_registry_returns_409(tmp_path: Path) -> None:
             "display_name": "Duplicate Registry",
             "git_url": "https://github.com/example/dup-skills.git",
         }
-        first = await client.post("/skill-registries", json=payload)
+        first = await client.post("/api/skill-registries", json=payload)
         assert first.status_code == 200
 
-        second = await client.post("/skill-registries", json=payload)
+        second = await client.post("/api/skill-registries", json=payload)
         assert second.status_code == 409
 
 
 @pytest.mark.anyio
 async def test_delete_builtin_registry_returns_403(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.delete("/skill-registries/aris")
+        response = await client.delete("/api/skill-registries/aris")
 
     assert response.status_code == 403
     assert (

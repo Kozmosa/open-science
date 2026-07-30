@@ -59,7 +59,7 @@ case "${COMMAND}" in
     echo "Perform the human acceptance pass, then run: bash deploy/release-staging.sh smoke"
     ;;
   smoke)
-    curl --fail --silent --show-error http://127.0.0.1:17000/health >/dev/null
+    curl --fail --silent --show-error http://127.0.0.1:17000/api/health >/dev/null
     curl --fail --silent --show-error http://127.0.0.1:7192/ >/dev/null
     curl --fail --silent --show-error http://127.0.0.1:7192/api/health >/dev/null
     echo "Release staging smoke passed. Human acceptance remains the release authority."

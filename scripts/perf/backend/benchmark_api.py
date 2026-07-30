@@ -23,7 +23,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
     """Get admin JWT headers, registering the perf user if needed."""
     # Try login
     resp = client.post(
-        f"{BASE_URL}/auth/login",
+        f"{BASE_URL}/api/auth/login",
         json={"username": ADMIN_USER, "password": ADMIN_PASS},
     )
     if resp.status_code == 200:
@@ -32,7 +32,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
 
     # Register then try again
     client.post(
-        f"{BASE_URL}/auth/register",
+        f"{BASE_URL}/api/auth/register",
         json={
             "username": ADMIN_USER,
             "display_name": "Perf Admin",
@@ -40,7 +40,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
         },
     )
     resp2 = client.post(
-        f"{BASE_URL}/auth/login",
+        f"{BASE_URL}/api/auth/login",
         json={"username": ADMIN_USER, "password": ADMIN_PASS},
     )
     if resp2.status_code != 200:
@@ -67,7 +67,7 @@ def auth_headers(client):
 def test_login(benchmark, client):
     benchmark(
         lambda: client.post(
-            f"{BASE_URL}/auth/login",
+            f"{BASE_URL}/api/auth/login",
             json={"username": ADMIN_USER, "password": ADMIN_PASS},
         )
     )
@@ -85,7 +85,7 @@ def test_list_projects(benchmark, client, auth_headers):
 
 
 def test_list_tasks(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/tasks", headers=auth_headers))
+    benchmark(lambda: client.get(f"{BASE_URL}/api/projects/default/tasks", headers=auth_headers))
 
 
 def test_list_task_edges(benchmark, client, auth_headers):
@@ -98,7 +98,7 @@ def test_list_task_edges(benchmark, client, auth_headers):
 def test_file_list(benchmark, client, auth_headers):
     benchmark(
         lambda: client.get(
-            f"{BASE_URL}/files/list?environment_id=env-localhost&path=/",
+            f"{BASE_URL}/api/files/list?environment_id=env-localhost&path=/",
             headers=auth_headers,
         )
     )

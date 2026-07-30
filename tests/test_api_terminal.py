@@ -119,7 +119,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            f"/terminal/session?environment_id={environment.id}",
+            f"/api/terminal/session?environment_id={environment.id}",
             headers=jwt_headers,
         )
 
@@ -170,7 +170,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
         base_url="http://testserver",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -219,7 +219,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
         base_url="http://lab.internal:5173",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -259,12 +259,12 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
         base_url="http://testserver",
     ) as client:
         first = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         second = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -301,7 +301,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
         base_url="http://testserver",
     ) as client:
         seeded = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -337,7 +337,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
         async def attach(index: int) -> None:
             await start_event.wait()
             responses[index] = await client.post(
-                "/terminal/session",
+                "/api/terminal/session",
                 headers=jwt_headers,
                 json={"environment_id": environment.id},
             )
@@ -393,17 +393,17 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
         base_url="http://testserver",
     ) as client:
         first = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": first_environment.id},
         )
         second = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": second_environment.id},
         )
         first_summary = await client.get(
-            f"/terminal/session?environment_id={first_environment.id}",
+            f"/api/terminal/session?environment_id={first_environment.id}",
             headers=jwt_headers,
         )
 
@@ -443,12 +443,12 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
         base_url="http://testserver",
     ) as client:
         created = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         detached = await client.delete(
-            f"/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
+            f"/api/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
             headers=jwt_headers,
         )
 
@@ -493,12 +493,12 @@ async def test_terminal_session_reset_returns_new_attachment(
         base_url="http://testserver",
     ) as client:
         created = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         reset = await client.post(
-            "/terminal/session/reset",
+            "/api/terminal/session/reset",
             headers=jwt_headers,
             json={
                 "environment_id": environment.id,
@@ -608,7 +608,7 @@ async def test_terminal_session_create_returns_503_when_epoch_changes(
             base_url="http://testserver",
         ) as client:
             response = await client.post(
-                "/terminal/session",
+                "/api/terminal/session",
                 headers=jwt_headers,
                 json={"environment_id": environment.id},
             )
@@ -780,7 +780,7 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
         base_url="http://testserver",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": "missing"},
         )
@@ -804,7 +804,7 @@ async def test_terminal_session_routes_require_auth(tmp_path: Path) -> None:
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            f"/terminal/session?environment_id={environment.id}",
+            f"/api/terminal/session?environment_id={environment.id}",
             # No JWT headers — should be rejected by middleware
         )
 

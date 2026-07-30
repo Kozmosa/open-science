@@ -134,9 +134,9 @@ async def test_frontend_project_contract_exposes_role_activity_and_attention(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/domain/projects", headers={"X-API-Key": _API_KEY})
+        response = await client.get("/api/domain/projects", headers={"X-API-Key": _API_KEY})
         detail = await client.get(
-            f"/domain/projects/{ids['project_id']}", headers={"X-API-Key": _API_KEY}
+            f"/api/domain/projects/{ids['project_id']}", headers={"X-API-Key": _API_KEY}
         )
 
     assert response.status_code == 200
@@ -173,12 +173,12 @@ async def test_frontend_workspace_contract_distinguishes_execution_access(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/domain/workspaces", headers={"X-API-Key": _API_KEY})
+        response = await client.get("/api/domain/workspaces", headers={"X-API-Key": _API_KEY})
         detail = await client.get(
-            f"/domain/workspaces/{ids['workspace_id']}", headers={"X-API-Key": _API_KEY}
+            f"/api/domain/workspaces/{ids['workspace_id']}", headers={"X-API-Key": _API_KEY}
         )
         missing = await client.get(
-            "/domain/workspaces/not-visible", headers={"X-API-Key": _API_KEY}
+            "/api/domain/workspaces/not-visible", headers={"X-API-Key": _API_KEY}
         )
 
     assert response.status_code == 200

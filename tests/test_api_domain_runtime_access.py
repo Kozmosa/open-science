@@ -74,16 +74,16 @@ async def test_v2_runtime_facades_hide_ungranted_environments(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         owner_files = await client.get(
-            f"/files/list?environment_id={environment_id}", headers=owner_headers
+            f"/api/files/list?environment_id={environment_id}", headers=owner_headers
         )
         outsider_terminal = await client.get(
-            f"/terminal/session?environment_id={environment_id}", headers=outsider_headers
+            f"/api/terminal/session?environment_id={environment_id}", headers=outsider_headers
         )
         outsider_session_pairs = await client.get(
-            f"/terminal/session-pairs?environment_id={environment_id}", headers=outsider_headers
+            f"/api/terminal/session-pairs?environment_id={environment_id}", headers=outsider_headers
         )
         outsider_files = await client.get(
-            f"/files/list?environment_id={environment_id}", headers=outsider_headers
+            f"/api/files/list?environment_id={environment_id}", headers=outsider_headers
         )
 
     assert owner_files.status_code == 200
@@ -120,11 +120,11 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         ) as client:
             file_read = await client.get(
-                f"/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
+                f"/api/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
                 headers=admin_headers,
             )
             terminal_exec = await client.post(
-                "/terminal/session/exec",
+                "/api/terminal/session/exec",
                 headers=admin_headers,
                 json={
                     "environment_id": environment_id,

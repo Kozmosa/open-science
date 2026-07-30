@@ -79,7 +79,7 @@ def init_telemetry(app: FastAPI, config: TelemetryConfig | None = None) -> None:
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-        FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics")
+        FastAPIInstrumentor.instrument_app(app, excluded_urls="/api/health,/metrics")
     except Exception as exc:
         _LOG.warning("otel_fastapi_instrumentation_failed error=%s", exc)
     try:

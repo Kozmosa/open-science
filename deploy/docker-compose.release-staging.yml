@@ -56,7 +56,7 @@ services:
       init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:17000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:17000/api/health')"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -76,7 +76,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7192/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7192/api/health"]
       interval: 10s
       timeout: 5s
       retries: 12

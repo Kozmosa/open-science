@@ -165,7 +165,7 @@ async def update_workspace(
         if current.get("status") != "active":
             raise LookupError(workspace_id)
         fields_set = payload.model_fields_set
-        idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+        idempotency_key = require_idempotency_key(request)
         metadata_fields = fields_set.difference({"project_id", "idempotency_key"})
         if "project_id" in fields_set and metadata_fields:
             raise ValueError("Workspace attachment and metadata must be updated separately")
@@ -235,7 +235,7 @@ async def create_workspace(
         user_id = user.get("id")
         if not isinstance(user_id, str):
             raise ValueError("Authenticated user ID is required")
-        idempotency_key = require_idempotency_key(request, payload.idempotency_key)
+        idempotency_key = require_idempotency_key(request)
         replay = domain.workspace_create_and_attach_replay(
             project_id=payload.project_id,
             user=user,

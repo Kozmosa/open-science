@@ -83,7 +83,7 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -202,7 +202,7 @@ services:
       grafana:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

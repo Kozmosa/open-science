@@ -21,15 +21,12 @@ from ainrf.api.middleware.domain_maintenance import (
 from ainrf.api.request_identity import client_ip, parse_cidrs
 
 _EXEMPT_PATH_PREFIXES = (
-    "/health",
-    "/v1/health",
     "/api/health",
-    "/auth/login",
-    "/auth/register",
-    "/auth/refresh",
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/refresh",
+    "/api/client-logs",
+    "/api/client-metrics",
     # Frontend static files (SPA assets, no auth needed)
     "/assets/",
     "/favicon",
@@ -49,26 +46,8 @@ _EXEMPT_PATH_PREFIXES = (
 # served by the frontend catch-all and do not require auth.
 _API_PATH_PREFIXES = (
     "/api/",
-    "/health",
     "/v1/",
-    "/auth/",
-    "/tasks",
-    "/sessions",
-    "/terminal",
-    "/files",
-    "/workspaces",
-    "/projects",
-    "/environments",
-    "/resources",
-    "/settings",
-    "/literature",
-    "/skills",
-    "/skill-registries",
-    "/admin",
     "/metrics",
-    "/token-usage",
-    "/task-edges",
-    "/domain",
 )
 
 # Paths exempt in dev mode only (never in production).

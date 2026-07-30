@@ -50,18 +50,20 @@ async def test_legacy_fetch_routes_create_a_durable_check(
 ) -> None:
     async with make_auth_client(tmp_path) as client:
         create_response = await client.post(
-            "/literature/subscriptions",
+            "/api/literature/subscriptions",
             json={"label": "Agents", "keywords": ["agent"], "arxiv_categories": ["cs.AI"]},
         )
         subscription_id = create_response.json()["subscription_id"]
 
-        trigger_response = await client.post(f"/literature/subscriptions/{subscription_id}/fetch")
+        trigger_response = await client.post(
+            f"/api/literature/subscriptions/{subscription_id}/fetch"
+        )
         assert trigger_response.status_code == 202
         assert trigger_response.json()["status"] == "fetch_started"
         assert trigger_response.json()["check_id"]
 
         status_response = await client.get(
-            f"/literature/subscriptions/{subscription_id}/fetch-status"
+            f"/api/literature/subscriptions/{subscription_id}/fetch-status"
         )
         assert status_response.status_code == 200
         assert status_response.json()["status"] == "running"
@@ -73,14 +75,14 @@ async def test_research_task_routes_reject_malformed_json_without_server_error(
 ) -> None:
     async with make_auth_client(tmp_path) as client:
         formal = await client.post(
-            "/literature/papers/arxiv:missing/research-task",
+            "/api/literature/papers/arxiv:missing/research-task",
             content="{",
             headers={"Content-Type": "application/json"},
         )
         assert formal.status_code == 400
 
         deprecated = await client.post(
-            "/literature/papers/arxiv:missing/convert",
+            "/api/literature/papers/arxiv:missing/convert",
             content="{",
             headers={"Content-Type": "application/json"},
         )
@@ -92,7 +94,7 @@ async def test_research_task_routes_reject_malformed_json_without_server_error(
 async def test_tracking_api_uses_topics_user_states_and_durable_checks(tmp_path: Path) -> None:
     async with make_auth_client(tmp_path) as client:
         created = await client.post(
-            "/literature/topics",
+            "/api/literature/topics",
             json={
                 "label": "Agents",
                 "include_terms": ["agent"],
@@ -124,75 +126,77 @@ async def test_tracking_api_uses_topics_user_states_and_durable_checks(tmp_path:
             ],
         )
 
-        papers = await client.get("/literature/papers?view=all")
+        papers = await client.get("/api/literature/papers?view=all")
         assert papers.status_code == 200
         item = papers.json()["items"][0]
         assert item["paper_id"] == "arxiv:2401.99999"
         assert item["matched_topics"][0]["topic_id"] == topic_id
 
         missing_state_key = await client.patch(
-            f"/literature/papers/{item['paper_id']}/state", json={"is_saved": True}
+            f"/api/literature/papers/{item['paper_id']}/state", json={"is_saved": True}
         )
         assert missing_state_key.status_code == 409
         updated = await client.patch(
-            f"/literature/papers/{item['paper_id']}/state",
+            f"/api/literature/papers/{item['paper_id']}/state",
             json={"is_saved": True},
             headers={"Idempotency-Key": "paper-state-save"},
         )
         assert updated.status_code == 200
         assert updated.json()["user_state"]["is_saved"] is True
         replayed = await client.patch(
-            f"/literature/papers/{item['paper_id']}/state",
+            f"/api/literature/papers/{item['paper_id']}/state",
             json={"is_saved": True},
             headers={"Idempotency-Key": "paper-state-save"},
         )
         assert replayed.json() == updated.json()
         state_conflict = await client.patch(
-            f"/literature/papers/{item['paper_id']}/state",
+            f"/api/literature/papers/{item['paper_id']}/state",
             json={"is_saved": False},
             headers={"Idempotency-Key": "paper-state-save"},
         )
         assert state_conflict.status_code == 409
 
         missing_summary_key = await client.post(
-            f"/literature/papers/{item['paper_id']}/summary", json={"language": "en"}
+            f"/api/literature/papers/{item['paper_id']}/summary", json={"language": "en"}
         )
         assert missing_summary_key.status_code == 409
         summary = await client.post(
-            f"/literature/papers/{item['paper_id']}/summary",
+            f"/api/literature/papers/{item['paper_id']}/summary",
             json={"language": "en"},
             headers={"Idempotency-Key": "paper-summary-en"},
         )
         assert summary.status_code == 202
         summary_replay = await client.post(
-            f"/literature/papers/{item['paper_id']}/summary",
+            f"/api/literature/papers/{item['paper_id']}/summary",
             json={"language": "en"},
             headers={"Idempotency-Key": "paper-summary-en"},
         )
         assert summary_replay.json() == summary.json()
         summary_conflict = await client.post(
-            f"/literature/papers/{item['paper_id']}/summary",
+            f"/api/literature/papers/{item['paper_id']}/summary",
             json={"language": "zh"},
             headers={"Idempotency-Key": "paper-summary-en"},
         )
         assert summary_conflict.status_code == 409
 
-        missing_check_key = await client.post("/literature/checks", json={"topic_ids": [topic_id]})
+        missing_check_key = await client.post(
+            "/api/literature/checks", json={"topic_ids": [topic_id]}
+        )
         assert missing_check_key.status_code == 409
         first_check = await client.post(
-            "/literature/checks",
+            "/api/literature/checks",
             json={"topic_ids": [topic_id]},
             headers={"Idempotency-Key": "literature-check"},
         )
         second_check = await client.post(
-            "/literature/checks",
+            "/api/literature/checks",
             json={"topic_ids": [topic_id]},
             headers={"Idempotency-Key": "literature-check"},
         )
         assert first_check.status_code == 202
         assert second_check.json() == first_check.json()
         check_conflict = await client.post(
-            "/literature/checks",
+            "/api/literature/checks",
             json={"topic_ids": []},
             headers={"Idempotency-Key": "literature-check"},
         )
@@ -293,7 +297,7 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
     ) as client:
         body = {"project_id": project_id, "task_preset": "overview"}
         first = await client.post(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "literature-route-a"},
             json=body,
         )
@@ -303,7 +307,7 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
         assert first_payload["task_id"]
 
         repeated = await client.post(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "literature-route-a"},
             json=body,
         )
@@ -311,7 +315,7 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
         assert _body(repeated)["task_id"] == first_payload["task_id"]
 
         different = await client.post(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "literature-route-b"},
             json=body,
         )
@@ -319,7 +323,7 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
         assert _body(different)["task_id"] != first_payload["task_id"]
 
         listed = await client.get(
-            f"/literature/papers/{paper_id}/research-tasks?api_key=literature-v2-key"
+            f"/api/literature/papers/{paper_id}/research-tasks?api_key=literature-v2-key"
         )
         assert listed.status_code == 200
         listed_items = _body(listed)["items"]
@@ -327,21 +331,21 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
         assert len(listed_items) == 2
 
         one = await client.get(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key"
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key"
             "&idempotency_key=literature-route-a"
         )
         assert one.status_code == 200
         assert _body(one)["task_id"] == first_payload["task_id"]
 
         mismatch = await client.post(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "header-key"},
             json={**body, "idempotency_key": "body-key"},
         )
-        assert mismatch.status_code == 409
+        assert mismatch.status_code == 422
 
         environment = await client.post(
-            f"/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "environment-key"},
             json={**body, "environment_id": "must-not-be-accepted"},
         )
@@ -358,14 +362,14 @@ async def test_v2_convert_proxy_rejects_external_task_id_and_marks_deprecation(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         rejected = await client.post(
-            f"/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
             json={"project_id": project_id, "task_id": "arbitrary-task"},
         )
         assert rejected.status_code == 400
         assert rejected.headers["deprecation"] == "true"
 
         converted = await client.post(
-            f"/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
+            f"/api/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
             headers={"Idempotency-Key": "convert-proxy-key"},
             json={"project_id": project_id},
         )

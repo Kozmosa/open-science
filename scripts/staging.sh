@@ -165,7 +165,7 @@ cmd_up() {
   _info "Waiting for backend and nginx to become healthy..."
   wait_for_compose_service "${COMPOSE_FILE}" "ainrf-staging" 60 2 "${STAGING_ENV_FILE}"
   wait_for_compose_service "${COMPOSE_FILE}" "nginx-staging" 60 2 "${STAGING_ENV_FILE}"
-  wait_for_url "http://localhost:17000/health" 60 2
+  wait_for_url "http://localhost:17000/api/health" 60 2
   wait_for_url "http://localhost:7192/api/health" 60 2
 
   echo
@@ -175,7 +175,7 @@ cmd_up() {
   echo "  API:       http://localhost:7192/api/"
   echo "  Metrics:   http://localhost:7192/metrics"
   echo "  Grafana:   http://localhost:7192/monitoring"
-  echo "  Backend:   http://localhost:17000/health"
+  echo "  Backend:   http://localhost:17000/api/health"
   echo
   _info "Admin password:"
   "${COMPOSE_CMD[@]}" exec ainrf-staging cat /opt/ainrf/state/admin_initial_password.txt 2>/dev/null || _warn "(not yet available — check again shortly)"
@@ -203,7 +203,7 @@ cmd_status() {
   "${COMPOSE_CMD[@]}" ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
   echo
 
-  if wait_for_url "http://localhost:17000/health" 1 0 >/dev/null 2>&1; then
+  if wait_for_url "http://localhost:17000/api/health" 1 0 >/dev/null 2>&1; then
     _info "Backend: ${GREEN}healthy${NC}"
   else
     _warn "Backend: not responding"
@@ -278,7 +278,7 @@ if json.loads(sys.argv[1]).get("environment") != "staging":
     raise SystemExit("target does not identify itself as staging")
 ' "${identity_payload}"
 
-  health_payload="$("${curl_cmd[@]}" --fail "${backend_url}/health")"
+  health_payload="$("${curl_cmd[@]}" --fail "${backend_url}/api/health")"
   "${python_bin}" -c '
 import json
 import sys

@@ -10,11 +10,7 @@ from ainrf.agentic_researcher.models import (
     TaskOutputEvent,
 )
 from ainrf.api.idempotency import require_idempotency_key
-from ainrf.api.deprecation import deprecation_headers, mark_deprecated, record_deprecated_use
-from ainrf.telemetry.compatibility import (
-    CleanupCompatibilityObservation,
-    observe_cleanup_compatibility,
-)
+from ainrf.api.deprecation import deprecation_headers, mark_deprecated
 from ainrf.api.schemas import (
     MessageItemResponse,
     TaskAttemptListResponse,
@@ -69,9 +65,9 @@ def _get_task_projection_service(request: Request) -> TaskProjectionService:
     return service
 
 
-def _idempotency_key(request: Request, body_key: str | None = None) -> str:
-    """Prefer the formal header while accepting the legacy body field safely."""
-    return require_idempotency_key(request, body_key)
+def _idempotency_key(request: Request) -> str:
+    """Require the canonical idempotency header."""
+    return require_idempotency_key(request)
 
 
 def _translate_v2_error(exc: Exception) -> HTTPException:
@@ -96,7 +92,6 @@ def _v2_task_mutation_response(
     projection: TaskProjectionService,
     user: dict[str, object],
     result: dict[str, object] | dict[str, str],
-    request: Request,
 ) -> TaskMutationResponse:
     task_id = result.get("task_id")
     attempt_id = result.get("attempt_id")
@@ -107,21 +102,7 @@ def _v2_task_mutation_response(
     dispatch = attempt.dispatch
     if dispatch is None:
         raise HTTPException(status_code=500, detail="Task Attempt has no dispatch summary")
-    record_deprecated_use(
-        request=request,
-        route="tasks.mutation.flat_response",
-        replacement="nested task, attempt, and dispatch response fields",
-    )
-    observe_cleanup_compatibility(
-        CleanupCompatibilityObservation(
-            item="task.mutation.flat_response",
-            observation="response_field_emitted",
-            state_root=request.app.state.api_config.state_root,
-            production=request.app.state.api_config.production,
-            request_id=getattr(request.state, "request_id", None),
-        )
-    )
-    return TaskMutationResponse(**task.model_dump(), task=task, attempt=attempt, dispatch=dispatch)
+    return TaskMutationResponse(task=task, attempt=attempt, dispatch=dispatch)
 
 
 def _parse_output_payload(content: str) -> dict:
@@ -223,26 +204,9 @@ def _output_items_to_messages(
 
 
 @router.post("", status_code=201)
-async def create_task(
-    request: Request, payload: TaskCreateRequest, response: Response
-) -> TaskSummaryResponse | TaskMutationResponse:
+async def create_task(request: Request, payload: TaskCreateRequest) -> TaskMutationResponse:
     user = get_current_user(request)
     task_application = _get_task_application_service(request)
-    if payload.environment_id is not None:
-        mark_deprecated(
-            response,
-            route="tasks.create.environment_id",
-            replacement="POST /tasks without environment_id",
-        )
-        observe_cleanup_compatibility(
-            CleanupCompatibilityObservation(
-                item="task.create.environment_id",
-                observation="request_field_observed",
-                state_root=request.app.state.api_config.state_root,
-                production=request.app.state.api_config.production,
-                request_id=getattr(request.state, "request_id", None),
-            )
-        )
     if not payload.project_id:
         raise HTTPException(status_code=409, detail="v2 Task creation requires an explicit Project")
     try:
@@ -254,13 +218,13 @@ async def create_task(
             prompt=payload.prompt,
             researcher_type=payload.researcher_type,
             harness_engine=payload.harness_engine,
-            environment_id=payload.environment_id,
+            environment_id=None,
             user_skills=payload.skills,
             user_mcp_servers=payload.mcp_servers,
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=_idempotency_key(request),
         )
         projection = _get_task_projection_service(request)
-        result = _v2_task_mutation_response(projection, user, created, request)
+        result = _v2_task_mutation_response(projection, user, created)
         return result
     except HTTPException:
         raise
@@ -343,16 +307,13 @@ async def resolve_launch_unknown_attempt(
     reason = raw_payload.get("reason")
     if not isinstance(reason, str) or not reason.strip():
         raise HTTPException(status_code=422, detail="resolution reason is required")
-    body_key = raw_payload.get("idempotency_key")
-    if body_key is not None and (not isinstance(body_key, str)):
-        raise HTTPException(status_code=422, detail="idempotency_key must be a string")
     try:
         task_application.resolve_launch_unknown(
             task_id,
             attempt_id,
             get_current_user(request),
             reason=reason,
-            idempotency_key=_idempotency_key(request, body_key),
+            idempotency_key=_idempotency_key(request),
         )
         projection = _get_task_projection_service(request)
         return TaskAttemptResponse.model_validate(
@@ -452,7 +413,7 @@ async def _continue_task(
             task_id,
             get_current_user(request),
             prompt=payload.prompt,
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=_idempotency_key(request),
         )
         sequence = result.get("message_sequence")
         if not isinstance(sequence, int):
@@ -469,14 +430,6 @@ async def continue_task(
     request: Request, task_id: str, payload: TaskPromptRequest
 ) -> TaskPromptSendResponse:
     """Append a Task input or create a durable continuation Attempt."""
-    return await _continue_task(request, task_id, payload)
-
-
-@router.post("/{task_id}/prompt")
-async def send_task_prompt(
-    request: Request, task_id: str, payload: TaskPromptRequest, response: Response
-) -> TaskPromptSendResponse:
-    mark_deprecated(response, route="tasks.prompt", replacement=f"POST /tasks/{task_id}/continue")
     return await _continue_task(request, task_id, payload)
 
 
@@ -523,15 +476,6 @@ async def unarchive_task(request: Request, task_id: str) -> TaskSummaryResponse:
         raise _translate_v2_error(exc) from exc
 
 
-@router.delete("/{task_id}", status_code=200)
-async def archive_task(request: Request, task_id: str, response: Response) -> TaskSummaryResponse:
-    """Compatibility alias for ``POST /tasks/{task_id}/archive``."""
-    mark_deprecated(
-        response, route="tasks.archive.delete", replacement=f"POST /tasks/{task_id}/archive"
-    )
-    return await _archive_task(request, task_id, pending_response=response)
-
-
 @router.delete("/{task_id}/permanent", status_code=204)
 async def delete_task(request: Request, task_id: str) -> None:
     """Permanently delete a task."""
@@ -569,7 +513,7 @@ async def update_task_project(
             user,
             project_id=payload.project_id,
             context_version_id=payload.context_version_id,
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=_idempotency_key(request),
         )
         projection = _get_task_projection_service(request)
         result = _v2_task_summary(projection, task_id, user)
@@ -592,7 +536,7 @@ async def move_task(
             user,
             project_id=payload.project_id,
             context_version_id=payload.context_version_id,
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=_idempotency_key(request),
         )
         projection = _get_task_projection_service(request)
         return _v2_task_summary(projection, task_id, user)
@@ -615,7 +559,7 @@ async def update_task(
                 task_id,
                 user,
                 title=payload.title,
-                idempotency_key=_idempotency_key(request, payload.idempotency_key),
+                idempotency_key=_idempotency_key(request),
             )
         projection = _get_task_projection_service(request)
         return _v2_task_summary(projection, task_id, user)
@@ -639,10 +583,10 @@ async def fork_task(
             project_id=payload.project_id,
             prompt=payload.prompt,
             title=payload.title,
-            idempotency_key=_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=_idempotency_key(request),
         )
         projection = _get_task_projection_service(request)
-        return _v2_task_mutation_response(projection, user, created, request)
+        return _v2_task_mutation_response(projection, user, created)
     except HTTPException:
         raise
     except Exception as exc:
@@ -651,74 +595,19 @@ async def fork_task(
 
 @router.post("/{task_id}/retry", status_code=201)
 async def retry_task(
-    request: Request, task_id: str, response: Response, payload: TaskRetryRequest | None = None
+    request: Request, task_id: str, payload: TaskRetryRequest | None = None
 ) -> TaskRetryResponse:
     """Retry through a new Attempt under the existing Task identity."""
     user = get_current_user(request)
     task_application = _get_task_application_service(request)
-    body = payload or TaskRetryRequest()
-    mark_deprecated(
-        response, route="tasks.retry.new_task", replacement=f"GET /tasks/{task_id}/attempts"
-    )
-    observe_cleanup_compatibility(
-        CleanupCompatibilityObservation(
-            item="task.retry.new_task",
-            observation="response_field_emitted",
-            state_root=request.app.state.api_config.state_root,
-            production=request.app.state.api_config.production,
-            request_id=getattr(request.state, "request_id", None),
-        )
-    )
-    if body.environment_id is not None:
-        mark_deprecated(
-            response,
-            route="tasks.retry.environment_id",
-            replacement="POST /tasks/{task_id}/retry without environment_id",
-        )
-        observe_cleanup_compatibility(
-            CleanupCompatibilityObservation(
-                item="task.retry.environment_id",
-                observation="request_field_observed",
-                state_root=request.app.state.api_config.state_root,
-                production=request.app.state.api_config.production,
-                request_id=getattr(request.state, "request_id", None),
-            )
-        )
+    _ = payload
     try:
         projection = _get_task_projection_service(request)
-        original = _v2_task_summary(projection, task_id, user)
-        if body.task_input is not None:
-            mark_deprecated(
-                response,
-                route="tasks.retry.task_input",
-                replacement=f"POST /tasks/{task_id}/continue",
-            )
-            observe_cleanup_compatibility(
-                CleanupCompatibilityObservation(
-                    item="task.retry.task_input",
-                    observation="request_field_observed",
-                    state_root=request.app.state.api_config.state_root,
-                    production=request.app.state.api_config.production,
-                    request_id=getattr(request.state, "request_id", None),
-                )
-            )
-            raise HTTPException(
-                status_code=409,
-                detail="Retry does not accept task_input; use Task continue instead",
-            )
-        if body.environment_id is not None and body.environment_id != original.environment_id:
-            raise HTTPException(
-                status_code=409,
-                detail="environment_id must equal the Task Workspace derived Environment",
-            )
         retried = task_application.retry_task(
-            task_id, user, idempotency_key=_idempotency_key(request, body.idempotency_key)
+            task_id, user, idempotency_key=_idempotency_key(request)
         )
-        mutation = _v2_task_mutation_response(projection, user, retried, request)
+        mutation = _v2_task_mutation_response(projection, user, retried)
         return TaskRetryResponse(
-            new_task=mutation.task,
-            archived_task_id=None,
-            edge_id="",
             task=mutation.task,
             attempt=mutation.attempt,
             dispatch=mutation.dispatch,

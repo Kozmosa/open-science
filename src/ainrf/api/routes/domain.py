@@ -208,13 +208,15 @@ def _translate(exc: Exception) -> HTTPException:
 @router.post("/projects")
 async def create_project(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
+        if "idempotency_key" in payload:
+            raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
         description_value = payload.get("description")
         description = description_value if isinstance(description_value, str) else None
         return _project_module(request).create_project(
             get_current_user(request),
             name=str(payload["name"]),
             description=description,
-            idempotency_key=require_idempotency_key(request, payload.get("idempotency_key")),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -250,6 +252,8 @@ async def get_domain_project(project_id: str, request: Request) -> DomainProject
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
+        if "idempotency_key" in payload:
+            raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
         service = _project_module(request)
         user = get_current_user(request)
         user_id = user.get("id")
@@ -258,7 +262,7 @@ async def create_workspace(request: Request, payload: dict[str, object]) -> dict
         environment_id = str(payload["environment_id"])
         canonical_path = service.canonical_workspace_path(str(payload["canonical_path"]))
         label = str(payload["label"])
-        idempotency_key = require_idempotency_key(request, payload.get("idempotency_key"))
+        idempotency_key = require_idempotency_key(request)
         replay = service.workspace_create_replay(
             user,
             environment_id=environment_id,
@@ -363,7 +367,7 @@ async def save_project_context_draft(
             project_id,
             payload.content,
             get_current_user(request),
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -451,7 +455,7 @@ async def create_project_context_candidate(
             source_message_end_seq=payload.source_message_end_seq,
             source_output_start_seq=payload.source_output_start_seq,
             source_output_end_seq=payload.source_output_end_seq,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -485,7 +489,7 @@ async def reject_project_context_candidate(
             candidate_id,
             get_current_user(request),
             reason=payload.reason,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -517,7 +521,7 @@ async def create_project_context_fragment(
             source_version=payload.source_version,
             sort_order=payload.sort_order,
             byte_budget=payload.byte_budget,
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -559,7 +563,7 @@ async def confirm_task_context_update(
             project_id,
             payload.preview_id,
             get_current_user(request),
-            idempotency_key=require_idempotency_key(request, payload.idempotency_key),
+            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc

@@ -81,7 +81,6 @@ class ProjectCreateRequest(BaseModel):
 
     name: str = Field(min_length=1)
     description: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -91,7 +90,6 @@ class ProjectUpdateRequest(BaseModel):
     description: str | None = None
     default_workspace_id: str | None = None
     default_environment_id: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ComponentHealth(BaseModel):
@@ -301,7 +299,6 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -324,7 +321,6 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):
@@ -418,7 +414,6 @@ class ProjectContextDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateCreateRequest(BaseModel):
@@ -434,7 +429,6 @@ class ProjectContextCandidateCreateRequest(BaseModel):
     source_message_end_seq: int | None = Field(default=None, ge=0)
     source_output_start_seq: int | None = Field(default=None, ge=0)
     source_output_end_seq: int | None = Field(default=None, ge=0)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateRejectRequest(BaseModel):
@@ -443,7 +437,6 @@ class ProjectContextCandidateRejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextFragmentCreateRequest(BaseModel):
@@ -457,7 +450,6 @@ class ProjectContextFragmentCreateRequest(BaseModel):
     source_version: str | None = None
     sort_order: int = 0
     byte_budget: int | None = Field(default=None, ge=0)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskContextConfirmRequest(BaseModel):
@@ -466,7 +458,6 @@ class TaskContextConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     preview_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskCreateRequest(BaseModel):
@@ -474,17 +465,12 @@ class TaskCreateRequest(BaseModel):
 
     project_id: str = ""
     workspace_id: str
-    # ``environment_id`` is retained during the v2 compatibility window.  The
-    # authoritative v2 service derives it from the Workspace and rejects a
-    # mismatching compatibility value.
-    environment_id: str | None = None
     researcher_type: Literal["vanilla", "aris-researcher"]
     harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
     prompt: str = Field(min_length=1)
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskUpdateProjectRequest(BaseModel):
@@ -492,14 +478,12 @@ class TaskUpdateProjectRequest(BaseModel):
 
     project_id: str = Field(min_length=1)
     context_version_id: str | None = Field(default=None, min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskMoveRequest(BaseModel):
@@ -509,7 +493,6 @@ class TaskMoveRequest(BaseModel):
 
     project_id: str = Field(min_length=1)
     context_version_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskForkRequest(BaseModel):
@@ -521,7 +504,6 @@ class TaskForkRequest(BaseModel):
     project_id: str | None = Field(default=None, min_length=1)
     prompt: str | None = Field(default=None, min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class WorkspaceResponse(BaseModel):
@@ -758,9 +740,8 @@ class TaskAttemptListResponse(BaseModel):
     items: list[TaskAttemptResponse]
 
 
-class TaskMutationResponse(TaskSummaryResponse):
-    """v2 Task write result with legacy flat Task fields kept for old clients."""
-
+class TaskMutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     task: TaskSummaryResponse
     attempt: TaskAttemptResponse
     dispatch: TaskDispatchResponse
@@ -788,28 +769,17 @@ class TaskEdgeCreateRequest(BaseModel):
 
     source_task_id: str = Field(min_length=1)
     target_task_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskRetryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_input: str | None = None
-    environment_id: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
 
 class TaskRetryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    new_task: TaskSummaryResponse
-    archived_task_id: str | None
-    edge_id: str
-    # v2 preserves the legacy ``new_task`` field, but it is the same Task.
-    # The durable Attempt and dispatcher summary are the authoritative result.
-    task: TaskSummaryResponse | None = None
-    attempt: TaskAttemptResponse | None = None
-    dispatch: TaskDispatchResponse | None = None
+    task: TaskSummaryResponse
+    attempt: TaskAttemptResponse
+    dispatch: TaskDispatchResponse
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):
@@ -1009,7 +979,6 @@ class TaskResumeResponse(BaseModel):
 class TaskPromptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskPromptSendResponse(BaseModel):
@@ -1277,7 +1246,6 @@ class CollaboratorRequest(BaseModel):
     user_id: str
     role: str = "member"
     can_publish: bool = False
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class CollaboratorResponse(BaseModel):
@@ -1301,7 +1269,6 @@ class ProjectMemberRequest(BaseModel):
 
     role: Literal["viewer", "editor"]
     can_publish: bool = False
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectMemberResponse(BaseModel):
@@ -1324,7 +1291,6 @@ class ProjectOwnerTransferRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     new_owner_user_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 # ── Environment Access schemas ────────────────────────────
@@ -1364,7 +1330,6 @@ class WorkspaceCreateRequest(BaseModel):
     description: str | None = None
     default_workdir: str | None = None
     workspace_prompt: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class WorkspaceUpdateRequest(BaseModel):
@@ -1373,7 +1338,6 @@ class WorkspaceUpdateRequest(BaseModel):
     description: str | None = None
     default_workdir: str | None = None
     workspace_prompt: str | None = Field(default=None, min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class CodexDefaultsResponse(BaseModel):

@@ -38,7 +38,7 @@ flowchart TD
 ## HTTP 与 generated transport
 
 - Canonical HTTP prefix 是 `/api`。
-- root 与 `/v1` router registrations 是 deprecated compatibility aliases，不是第二套 authority。
+- 产品 router 只注册在 `/api`。root 与产品 `/v1` aliases 已在用户确认当前无外部调用者后删除；`/v1/models`、`/v1/messages` 继续作为独立外部协议保留。
 - FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。
 - `npm --prefix frontend run generate:transport` 确定性生成 `frontend/src/generated/transport/`。
 - `npm --prefix frontend run check:transport` 重建并检查 schema manifest、operation/path metadata 与工作树 drift。
@@ -63,20 +63,14 @@ flowchart TD
 
 ## Fail-closed compatibility inventory
 
-下列 surface 在 P6 继续保留。原因是没有可信生产 release telemetry 覆盖完整观察窗口，不能把缺失指标解释为零调用。
+用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。第一批删除已完成准确识别且 caller 已迁移的浅层兼容入口；下表只保留后续批次仍需处理的兼容面。
 
 | Surface | Owner | Telemetry key | 删除条件 | P6 状态 |
 | --- | --- | --- | --- | --- |
-| root 与 `/v1` route aliases | API / release | `ainrf_http_contract_requests_total{surface=~"compat_root|compat_v1"}` | canonical caller 完整迁移；完整 release 观察窗口；指标零调用；同步 schema、tests、docs、rollback evidence | 保留，fail-closed |
 | v2-backed Project / Workspace / Environment / Session / Task compatibility projections | API / release | `ainrf_http_contract_requests_total` 的 stable operation | 同上，并复核 canonical generated operation/path metadata | 保留，fail-closed |
-| flat Task mutation response compatibility | Task / API | `ainrf_cleanup_compatibility_observations_total{item="task.mutation.flat_response",observation="response_field_emitted"}` | 静态 caller 迁移和已发布客户端证据；完整观察窗口；同步 contract 与 rollback evidence | 保留，fail-closed |
-| Task `environment_id` | Task / API | cleanup item `task.create.environment_id` / `task.retry.environment_id` | generated callers 不再发送；完整观察窗口为零；同步 schema/tests/docs | 保留，fail-closed |
-| Task `task_input` | Task / API | cleanup item `task.retry.task_input` | generated callers 不再发送；完整观察窗口为零；同步 schema/tests/docs | 保留，fail-closed |
-| Task `new_task` | Task / API | cleanup item `task.retry.new_task`，事实仅为 response emitted | 静态 caller 迁移和已发布客户端证据；完整观察窗口；同步 schema/tests/docs | 保留，fail-closed |
-| body/query idempotency aliases | API / release | cleanup item `task.request.idempotency_key` | 所有 caller 只用 `Idempotency-Key` header；完整观察窗口为零；同步 schema/tests/docs | 保留，fail-closed |
 | read-only legacy migration/audit surfaces | Domain migration / release | migration audit evidence | 外部版本化审计证据完成保留决策，且 rollback/audit 不再依赖该 surface | 保留，read-only |
 
-所有 removal 必须同时满足：canonical caller 已完整迁移、可信 release telemetry 覆盖完整观察窗口、指标明确为零调用，以及 removal change 同步更新 schema、contract tests、文档和 rollback evidence。
+后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。
 
 旧 `ainrf_deprecated_*` 指标仅在过渡 release 内并行保留用于新旧结果对照，已不再是 removal authority。新的 cleanup registry 为每个临时 item 固定 owner、replacement、2026-10-28 review deadline 与“双重门禁”；若 compatibility 尚未删除，到期必须显式复审，不能静默延期。
 

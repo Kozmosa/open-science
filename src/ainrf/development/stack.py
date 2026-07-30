@@ -181,7 +181,7 @@ class DevelopmentStack:
             )
             self._write_manifest(records)
             self._wait_http(
-                f"http://{self._api_probe_host()}:{self.instance.ports.api}/health",
+                f"http://{self._api_probe_host()}:{self.instance.ports.api}/api/health",
                 records[-1],
             )
             if not self.is_personal:
@@ -306,7 +306,7 @@ class DevelopmentStack:
         expected = {"api", "frontend"} | (set() if self.is_personal else {"worker"})
         present = set(service_payload)
         api_healthy = _http_healthy(
-            f"http://{self._api_probe_host()}:{self.instance.ports.api}/health"
+            f"http://{self._api_probe_host()}:{self.instance.ports.api}/api/health"
         )
         frontend_healthy = _http_healthy(
             f"http://{self._frontend_probe_host()}:{self.instance.ports.frontend}/"

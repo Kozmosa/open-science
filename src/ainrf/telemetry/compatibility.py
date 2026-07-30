@@ -47,68 +47,7 @@ class CleanupItem:
     evidence_after_removal: str
 
 
-CLEANUP_REGISTRY: Final[dict[str, CleanupItem]] = {
-    "task.create.environment_id": CleanupItem(
-        "Task/API",
-        "request_field_observed",
-        "Workspace-derived Environment",
-        "task create request",
-        "2026-07-30",
-        "2026-10-28",
-        "field removed and stable for one release",
-        "released caller audit plus one stable release",
-    ),
-    "task.retry.environment_id": CleanupItem(
-        "Task/API",
-        "request_field_observed",
-        "existing Task Workspace Environment",
-        "task retry request",
-        "2026-07-30",
-        "2026-10-28",
-        "field removed and stable for one release",
-        "released caller audit plus one stable release",
-    ),
-    "task.retry.task_input": CleanupItem(
-        "Task/API",
-        "request_field_observed",
-        "Task continue operation",
-        "task retry request",
-        "2026-07-30",
-        "2026-10-28",
-        "field removed and stable for one release",
-        "released caller audit plus one stable release",
-    ),
-    "task.request.idempotency_key": CleanupItem(
-        "API/Release",
-        "request_field_observed",
-        "Idempotency-Key header",
-        "mutation request bodies",
-        "2026-07-30",
-        "2026-10-28",
-        "body aliases removed and stable for one release",
-        "released caller audit plus one stable release",
-    ),
-    "task.mutation.flat_response": CleanupItem(
-        "Task/API",
-        "response_field_emitted",
-        "nested task, attempt, and dispatch fields",
-        "task mutation response",
-        "2026-07-30",
-        "2026-10-28",
-        "flat projection removed and stable for one release",
-        "static caller migration and released-client evidence",
-    ),
-    "task.retry.new_task": CleanupItem(
-        "Task/API",
-        "response_field_emitted",
-        "task field and attempts operation",
-        "task retry response",
-        "2026-07-30",
-        "2026-10-28",
-        "field removed and stable for one release",
-        "static caller migration and released-client evidence",
-    ),
-}
+CLEANUP_REGISTRY: Final[dict[str, CleanupItem]] = {}
 
 for _config_name in (
     "state_root",

@@ -1048,9 +1048,6 @@ export const frontendV2MockHandlers = [
     task.completed_at = null;
     task.exit_code = null;
     return HttpResponse.json({
-      new_task: task,
-      archived_task_id: null,
-      edge_id: `retry-${taskId}-${sequence}`,
       task,
       attempt,
       dispatch: attempt.dispatch,

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 # Paths that generate high traffic but have low debugging value.
 _SKIP_PATHS: frozenset[str] = frozenset(
-    {"/health", "/metrics", "/api/metrics", "/v1/metrics", "/favicon.ico"}
+    {"/api/health", "/metrics", "/api/metrics", "/v1/metrics", "/favicon.ico"}
 )
 
 

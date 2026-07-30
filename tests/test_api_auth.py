@@ -30,7 +30,7 @@ def make_client(tmp_path: Path) -> httpx.AsyncClient:
 @pytest.mark.anyio
 async def test_health_is_public(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/health")
+        response = await client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -49,7 +49,7 @@ async def test_non_api_route_is_not_auth_gated(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_terminal_session_requires_api_key(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/terminal/session")
+        response = await client.get("/api/terminal/session")
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Unauthorized"}
@@ -118,14 +118,14 @@ async def test_interactive_auth_can_be_disabled_without_disabling_api_key_auth(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         login_response = await client.post(
-            "/auth/login",
+            "/api/auth/login",
             json={"username": "admin", "password": "not-used"},
         )
         refresh_response = await client.post(
-            "/auth/refresh",
+            "/api/auth/refresh",
             json={"refresh_token": "not-used"},
         )
-        health_response = await client.get("/health", headers={"X-API-Key": "clone-review-key"})
+        health_response = await client.get("/api/health", headers={"X-API-Key": "clone-review-key"})
 
     assert login_response.status_code == 403
     assert refresh_response.status_code == 403
@@ -276,7 +276,7 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"username": "v2alice", "display_name": "V2 Alice", "password": "secret123"},
         )
 

@@ -23,7 +23,7 @@ def _config(tmp_path: Path) -> ApiConfig:
 async def test_request_log_uses_route_template_without_query_or_raw_path(tmp_path: Path) -> None:
     app = FastAPI()
 
-    @app.get("/literature/papers/{paper_id}")
+    @app.get("/api/literature/papers/{paper_id}")
     async def paper_detail(paper_id: str) -> dict[str, str]:
         return {"paper_id": paper_id}
 
@@ -36,14 +36,14 @@ async def test_request_log_uses_route_template_without_query_or_raw_path(tmp_pat
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.get(
-                f"/literature/papers/{opaque_paper_id}?token={query_secret}"
+                f"/api/literature/papers/{opaque_paper_id}?token={query_secret}"
             )
 
     assert response.status_code == 200
     assert len(logs) == 1
     entry = logs[0]
     assert entry["event"] == "request"
-    assert entry["route"] == "/literature/papers/{paper_id}"
+    assert entry["route"] == "/api/literature/papers/{paper_id}"
     assert "path" not in entry
     assert "query" not in entry
     assert opaque_paper_id not in str(entry)

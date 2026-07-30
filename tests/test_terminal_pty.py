@@ -238,7 +238,7 @@ def test_terminal_attachment_websocket_bridge(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"hello from bridge\n")
         assert ws.receive_json() == {"type": "output", "data": "hello from bridge\n"}
@@ -425,7 +425,7 @@ def test_terminal_attachment_websocket_preserves_split_utf8_output(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, "中文\n".encode("utf-8"))
         os.close(write_fd)
@@ -479,7 +479,7 @@ def test_terminal_attachment_websocket_flushes_decoder_on_eof(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"A\xe4\xb8")
         os.close(write_fd)
@@ -528,7 +528,7 @@ def test_terminal_attachment_websocket_drains_output_before_exit_status(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"hello before exit\n")
         process.returncode = 0
@@ -599,7 +599,7 @@ def test_terminal_attachment_websocket_soft_backpressure_pauses_and_resumes_read
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"abcdefghijkl")
         os.close(write_fd)
@@ -641,7 +641,7 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
 
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect(
-            f"/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
+            f"/api/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
         ) as ws:
             ws.receive_text()
 
@@ -687,7 +687,7 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         ws.send_text(json.dumps({"type": "input", "data": "ls\n"}))
         with pytest.raises(WebSocketDisconnect):
@@ -743,7 +743,7 @@ def test_task_attachment_websocket_close_tolerates_missing_task_manager(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ):
         pass
 

@@ -34,7 +34,7 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/domain/projects?api_key=domain-key",
+            "/api/domain/projects?api_key=domain-key",
             headers={"Idempotency-Key": "v2-project-create"},
             json={"name": "V2"},
         )
@@ -84,12 +84,11 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/tasks?api_key=domain-key",
+            "/api/tasks?api_key=domain-key",
             headers={"Idempotency-Key": "create"},
             json={
                 "project_id": project["project_id"],
                 "workspace_id": workspace["workspace_id"],
-                "environment_id": environment["environment_id"],
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Prompt",
@@ -98,4 +97,4 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
         )
 
     assert response.status_code == 201
-    assert response.json()["project_id"] == project["project_id"]
+    assert response.json()["task"]["project_id"] == project["project_id"]

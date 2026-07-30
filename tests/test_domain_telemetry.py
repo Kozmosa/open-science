@@ -721,7 +721,7 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     _seed_control_plane(tmp_path)
     domain_telemetry.record_deprecated_route(
         route="tasks.retry.new_task",
-        replacement="/tasks/{task_id}/retry",
+        replacement="/api/tasks/{task_id}/retry",
         state_root=tmp_path,
     )
     expected = refresh_domain_metrics(tmp_path, runtime_mode="validate")

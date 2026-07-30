@@ -43,7 +43,7 @@ elif [[ "$*" == *"/staging-identity.json"* ]]; then
   printf '{"environment":"staging"}'
 elif [[ "$*" == *"/build-info.json"* ]]; then
   printf '{"short_commit":"abc123","committed_at":"20260711-0100"}'
-elif [[ "$*" == *"/health"* ]]; then
+elif [[ "$*" == *"/api/health"* ]]; then
   printf '{"status":"ok","checks":{"database":{"status":"ok"},"filesystem":{"status":"ok"}}}'
 else
   printf '<html>OpenScience</html>'
@@ -204,7 +204,7 @@ def test_staging_lane_is_non_destructive_smoke_against_running_instance(tmp_path
     assert result.returncode == 0, result.stderr
     commands = _command_lines(log_path)
     assert any("http://127.0.0.1:27192/staging-identity.json" in command for command in commands)
-    assert any("http://127.0.0.1:27000/health" in command for command in commands)
+    assert any("http://127.0.0.1:27000/api/health" in command for command in commands)
     assert any("http://127.0.0.1:27192/api/health" in command for command in commands)
     assert any("http://127.0.0.1:27000/v1/models" in command for command in commands)
     assert any("http://127.0.0.1:27192/docs" in command for command in commands)

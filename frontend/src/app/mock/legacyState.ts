@@ -744,12 +744,13 @@ export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
   };
   const prompt = payload.prompt ?? legacyPayload.task_input ?? '';
   const harnessEngine = payload.harness_engine ?? legacyPayload.task_profile ?? 'claude-code';
-  const environmentId = payload.environment_id ?? mockEnvironments[0]?.id;
+  const workspace = findWorkspace(payload.workspace_id);
+  const project = findProject(payload.project_id?.trim() ? payload.project_id : DEFAULT_PROJECT_ID);
+  const environmentId = project.default_environment_id ?? mockEnvironments[0]?.id;
   if (!environmentId) {
     throw new Error('No mock environment is available for Task creation');
   }
   const environment = findEnvironment(environmentId);
-  const workspace = findWorkspace(payload.workspace_id);
   const timestamp = nowIso();
   const taskId = `task-${++mockTaskCounter}`;
   const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(prompt);

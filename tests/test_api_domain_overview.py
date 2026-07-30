@@ -51,7 +51,7 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         ) as client:
-            unavailable = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            unavailable = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             assert unavailable.status_code == 200
             unavailable_payload = _payload(unavailable)
             assert unavailable_payload["overview_snapshot"] is False
@@ -60,17 +60,19 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             # work; those capabilities require the separate domain worker.
             assert unavailable_payload["literature_research_task"] is False
 
-            before_refresh = await client.get(f"/domain/overview/today?api_key={_API_KEY}")
+            before_refresh = await client.get(f"/api/domain/overview/today?api_key={_API_KEY}")
             assert before_refresh.status_code == 404
 
-            missing_key = await client.post(f"/domain/overview/today/refresh?api_key={_API_KEY}")
+            missing_key = await client.post(
+                f"/api/domain/overview/today/refresh?api_key={_API_KEY}"
+            )
             assert missing_key.status_code == 409
             refresh_headers = {"Idempotency-Key": "overview-api-refresh"}
             first = await client.post(
-                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+                f"/api/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
             )
             second = await client.post(
-                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+                f"/api/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
             )
             assert first.status_code == 202
             assert second.status_code == 202
@@ -84,7 +86,7 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
 
             job_id = str(first_job["job_id"])
             status_response = await client.get(
-                f"/domain/overview/refresh/{job_id}?api_key={_API_KEY}"
+                f"/api/domain/overview/refresh/{job_id}?api_key={_API_KEY}"
             )
             assert status_response.status_code == 200
             status_payload = _payload(status_response)
@@ -96,16 +98,16 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             assert job_id in planner_result.completed_job_ids
 
             terminal_replay = await client.post(
-                f"/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
+                f"/api/domain/overview/today/refresh?api_key={_API_KEY}", headers=refresh_headers
             )
             assert _payload(terminal_replay)["job_id"] == job_id
             next_refresh = await client.post(
-                f"/domain/overview/today/refresh?api_key={_API_KEY}",
+                f"/api/domain/overview/today/refresh?api_key={_API_KEY}",
                 headers={"Idempotency-Key": "overview-api-refresh-next"},
             )
             assert _payload(next_refresh)["job_id"] != job_id
 
-            available = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            available = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             assert available.status_code == 200
             available_payload = _payload(available)
             assert available_payload["overview_snapshot"] is True
@@ -113,7 +115,7 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
             assert isinstance(planner_status, dict)
             assert cast(dict[str, object], planner_status)["planner_ready"] is True
 
-            refreshed = await client.get(f"/domain/overview/today?api_key={_API_KEY}")
+            refreshed = await client.get(f"/api/domain/overview/today?api_key={_API_KEY}")
             assert refreshed.status_code == 200
             snapshot = _payload(refreshed)
             cards = snapshot["cards"]

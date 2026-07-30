@@ -128,7 +128,7 @@ services:
           cpus: "8.0"
           memory: 4G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:17000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:17000/api/health')"]
       interval: 15s
       retries: 5
       start_period: 15s

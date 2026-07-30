@@ -114,7 +114,7 @@ async def test_http_matrix_preserves_prefix_and_shared_operation(tmp_path: Path)
 
 
 @pytest.mark.anyio
-async def test_product_resource_matrix_covers_all_retained_prefixes(tmp_path: Path) -> None:
+async def test_product_resource_matrix_only_exposes_canonical_prefix(tmp_path: Path) -> None:
     app = create_v2_test_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("telemetry-key")}),
@@ -128,18 +128,20 @@ async def test_product_resource_matrix_covers_all_retained_prefixes(tmp_path: Pa
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         for resource in resources:
-            for prefix in ("/api", "", "/v1"):
-                response = await client.get(f"{prefix}/{resource}", headers=headers)
-                assert response.status_code == 200, (resource, prefix, response.text)
+            canonical = await client.get(f"/api/{resource}", headers=headers)
+            root_alias = await client.get(f"/{resource}", headers=headers)
+            v1_alias = await client.get(f"/v1/{resource}", headers=headers)
+            assert canonical.status_code == 200, (resource, canonical.text)
+            assert root_alias.status_code == 404, (resource, root_alias.text)
+            assert v1_alias.status_code == 404, (resource, v1_alias.text)
 
     text = get_metrics_text()
     for resource in resources:
         operation = f"get_{resource}"
-        for surface in ("canonical", "compat_root", "compat_v1"):
-            assert (
-                f'ainrf_http_contract_requests_total{{method="GET",operation="{operation}",'
-                f'status_class="2xx",surface="{surface}"}} 1.0' in text
-            )
+        assert (
+            f'ainrf_http_contract_requests_total{{method="GET",operation="{operation}",'
+            'status_class="2xx",surface="canonical"} 1.0' in text
+        )
 
 
 @pytest.mark.anyio
@@ -233,8 +235,8 @@ def test_durable_failure_is_latched_without_raising(
 
 def test_cleanup_registry_is_precise_and_durable(tmp_path: Path) -> None:
     observation = CleanupCompatibilityObservation(
-        item="task.retry.new_task",
-        observation="response_field_emitted",
+        item="config.openscience_state_root",
+        observation="config_alias_read",
         state_root=tmp_path,
         production=False,
     )
@@ -244,8 +246,8 @@ def test_cleanup_registry_is_precise_and_durable(tmp_path: Path) -> None:
 
     text = get_metrics_text()
     assert (
-        'ainrf_cleanup_compatibility_observations_total{item="task.retry.new_task",'
-        'observation="response_field_emitted"} 1.0' in text
+        'ainrf_cleanup_compatibility_observations_total{item="config.openscience_state_root",'
+        'observation="config_alias_read"} 1.0' in text
     )
     assert (tmp_path / "runtime" / "compatibility_telemetry.sqlite3").is_file()
 

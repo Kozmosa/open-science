@@ -116,8 +116,9 @@ async def _json_object(request: Request, *, label: str) -> dict[str, object]:
 
 
 def _research_task_idempotency_key(request: Request, body: dict[str, object]) -> str:
-    body_key = _text_field(body, "idempotency_key")
-    return require_idempotency_key(request, body_key)
+    if "idempotency_key" in body:
+        raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
+    return require_idempotency_key(request)
 
 
 def _research_task_request(body: dict[str, object]) -> dict[str, str | None]:

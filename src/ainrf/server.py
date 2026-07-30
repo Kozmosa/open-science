@@ -113,7 +113,7 @@ def stop_server_daemon(pid_file: Path) -> bool:
 
 async def _wait_until_healthy_async(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
     deadline = time.monotonic() + timeout_seconds
-    url = f"http://{host}:{port}/health"
+    url = f"http://{host}:{port}/api/health"
     async with httpx.AsyncClient() as client:
         while time.monotonic() < deadline:
             try:
