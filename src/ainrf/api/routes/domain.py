@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NotRequired, TypedDict
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from ainrf.api.domain_schemas import (
@@ -11,17 +13,39 @@ from ainrf.api.domain_schemas import (
     DomainWorkspaceResponse,
 )
 from ainrf.api.idempotency import require_idempotency_key
+from ainrf.api.domain_presenters import (
+    auth_service,
+    environment_connection,
+    environment_connection_from_create,
+    latest_environment_detection,
+    serialize_environment,
+    serialize_project_member,
+)
 from ainrf.api.workspace_preflight import validate_workspace_registration_path
 from ainrf.api.schemas import (
+    EnvironmentCreateRequest,
+    EnvironmentListResponse,
+    EnvironmentResponse,
+    EnvironmentUpdateRequest,
+    ProjectEnvironmentReferenceListResponse,
+    ProjectEnvironmentReferenceCreateRequest,
+    ProjectEnvironmentReferenceResponse,
+    ProjectEnvironmentReferenceUpdateRequest,
+    ProjectMemberListResponse,
+    ProjectMemberRequest,
+    ProjectMemberResponse,
+    ProjectUpdateRequest,
     ProjectContextCandidateCreateRequest,
     ProjectContextCandidateRejectRequest,
     ProjectContextDraftRequest,
     ProjectContextFragmentCreateRequest,
     TaskContextConfirmRequest,
+    WorkspaceUpdateRequest,
 )
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     DomainPermissionError,
+    EnvironmentModule,
     ProjectModule,
     ProjectContextService,
     TaskApplicationService,
@@ -30,6 +54,12 @@ from ainrf.domain import (
 from ainrf.domain.overview_jobs import OverviewSnapshotService
 from ainrf.domain_control import DomainMaintenanceService
 from ainrf.literature.task_saga import LiteratureTaskSagaService
+class _WorkspaceUpdateKwargs(TypedDict):
+    label: NotRequired[str | None]
+    description: NotRequired[str | None]
+    canonical_path: NotRequired[str]
+    workspace_prompt: NotRequired[str | None]
+
 
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
 
@@ -171,6 +201,13 @@ def _workspace_module(request: Request) -> WorkspaceModule:
     return service
 
 
+def _environment_module(request: Request) -> EnvironmentModule:
+    service = getattr(request.app.state, "environment_module", None)
+    if not isinstance(service, EnvironmentModule) or not service.v2_ready():
+        raise HTTPException(status_code=503, detail="Domain cutover is not ready")
+    return service
+
+
 def _overview_service(request: Request) -> OverviewSnapshotService:
     _project_module(request)
     service = getattr(request.app.state, "overview_snapshot_service", None)
@@ -249,6 +286,125 @@ async def get_domain_project(project_id: str, request: Request) -> DomainProject
         raise _translate(exc) from exc
 
 
+@router.patch("/projects/{project_id}", response_model=DomainProjectSummaryResponse)
+async def update_domain_project(
+    project_id: str, payload: ProjectUpdateRequest, request: Request
+) -> DomainProjectSummaryResponse:
+    try:
+        changes = payload.model_dump(exclude_unset=True)
+        if not changes:
+            raise ValueError("Project update requires at least one mutable field")
+        if set(changes).difference({"name", "description"}):
+            raise ValueError("Workspace selection must use the Primary Workspace endpoint")
+        module = _project_module(request)
+        user = get_current_user(request)
+        module.update_project(
+            project_id,
+            user,
+            idempotency_key=require_idempotency_key(request),
+            **changes,
+        )
+        return DomainProjectSummaryResponse.model_validate(
+            module.project_console_summary(project_id, user)
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post("/projects/{project_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_domain_project(project_id: str, request: Request) -> None:
+    try:
+        user = get_current_user(request)
+        _project_module(request).require_project_owner(project_id, user)
+        _task_application_service(request).archive_project(
+            project_id,
+            user,
+            reason="user archived project",
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post("/projects/{project_id}/unarchive", status_code=status.HTTP_204_NO_CONTENT)
+async def unarchive_domain_project(project_id: str, request: Request) -> None:
+    try:
+        user = get_current_user(request)
+        _project_module(request).require_project_owner(project_id, user)
+        _task_application_service(request).unarchive_project(
+            project_id, user, idempotency_key=require_idempotency_key(request)
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/projects/{project_id}/members", response_model=ProjectMemberListResponse)
+async def list_domain_project_members(
+    project_id: str, request: Request
+) -> ProjectMemberListResponse:
+    try:
+        module = _project_module(request)
+        return ProjectMemberListResponse(
+            items=[
+                serialize_project_member(member, auth_service(request))
+                for member in module.list_project_members(project_id, get_current_user(request))
+            ]
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.put("/projects/{project_id}/members/{member_user_id}", response_model=ProjectMemberResponse)
+async def upsert_domain_project_member(
+    project_id: str,
+    member_user_id: str,
+    payload: ProjectMemberRequest,
+    request: Request,
+) -> ProjectMemberResponse:
+    try:
+        module = _project_module(request)
+        user = get_current_user(request)
+        module.add_member(
+            project_id,
+            member_user_id,
+            payload.role,
+            payload.can_publish,
+            user,
+            idempotency_key=require_idempotency_key(request),
+        )
+        member = next(
+            (
+                item
+                for item in module.list_project_members(project_id, user)
+                if item.get("user_id") == member_user_id
+            ),
+            None,
+        )
+        if member is None:
+            raise RuntimeError("Updated Project member could not be read")
+        return serialize_project_member(member, auth_service(request))
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.delete(
+    "/projects/{project_id}/members/{member_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_domain_project_member(
+    project_id: str, member_user_id: str, request: Request
+) -> None:
+    try:
+        _project_module(request).remove_member(
+            project_id,
+            member_user_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
 @router.post("/workspaces")
 async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
     try:
@@ -318,6 +474,52 @@ async def get_domain_workspace(workspace_id: str, request: Request) -> DomainWor
         raise _translate(exc) from exc
 
 
+@router.patch("/workspaces/{workspace_id}", response_model=DomainWorkspaceResponse)
+async def update_domain_workspace(
+    workspace_id: str, payload: WorkspaceUpdateRequest, request: Request
+) -> DomainWorkspaceResponse:
+    try:
+        fields = payload.model_fields_set
+        if not fields:
+            raise ValueError("Workspace update requires at least one mutable field")
+        if "project_id" in fields:
+            raise ValueError("Workspace attachment must use the Project Workspace endpoint")
+        kwargs: _WorkspaceUpdateKwargs = {}
+        if "label" in fields:
+            kwargs["label"] = payload.label
+        if "description" in fields:
+            kwargs["description"] = payload.description
+        if "default_workdir" in fields and payload.default_workdir is not None:
+            kwargs["canonical_path"] = payload.default_workdir
+        if "workspace_prompt" in fields:
+            kwargs["workspace_prompt"] = payload.workspace_prompt
+        module = _workspace_module(request)
+        user = get_current_user(request)
+        module.update_workspace(
+            workspace_id,
+            user,
+            idempotency_key=require_idempotency_key(request),
+            **kwargs,
+        )
+        return DomainWorkspaceResponse.model_validate(
+            module.workspace_console_entry(workspace_id, user)
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post("/workspaces/{workspace_id}/unregister", status_code=status.HTTP_204_NO_CONTENT)
+async def unregister_domain_workspace(workspace_id: str, request: Request) -> None:
+    try:
+        _workspace_module(request).unregister_workspace(
+            workspace_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
 @router.post("/projects/{project_id}/workspaces/{workspace_id}")
 async def attach_workspace(
     project_id: str, workspace_id: str, request: Request
@@ -333,12 +535,46 @@ async def attach_workspace(
         raise _translate(exc) from exc
 
 
+@router.delete(
+    "/projects/{project_id}/workspaces/{workspace_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def detach_domain_workspace(
+    project_id: str,
+    workspace_id: str,
+    request: Request,
+    allow_no_primary: bool = Query(False),
+) -> None:
+    try:
+        _workspace_module(request).detach_workspace(
+            project_id,
+            workspace_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
+            allow_no_primary=allow_no_primary,
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
 @router.put("/projects/{project_id}/primary-workspace/{workspace_id}")
 async def set_primary_workspace(
-    project_id: str, workspace_id: str, request: Request
+    project_id: str,
+    workspace_id: str,
+    request: Request,
+    previous_workspace_id: str | None = Query(None),
 ) -> dict[str, object]:
     try:
-        return _project_module(request).set_primary_workspace(
+        module = _project_module(request)
+        if previous_workspace_id is not None:
+            return module.replace_primary_workspace(
+                project_id,
+                previous_workspace_id,
+                workspace_id,
+                get_current_user(request),
+                idempotency_key=require_idempotency_key(request),
+            )
+        return module.set_primary_workspace(
             project_id,
             workspace_id,
             get_current_user(request),
@@ -346,6 +582,233 @@ async def set_primary_workspace(
         )
     except Exception as exc:
         raise _translate(exc) from exc
+
+
+@router.get("/environments", response_model=EnvironmentListResponse)
+async def list_domain_environments(request: Request) -> EnvironmentListResponse:
+    try:
+        return EnvironmentListResponse(
+            items=[
+                serialize_environment(
+                    environment,
+                    latest_detection=latest_environment_detection(
+                        request, str(environment["environment_id"])
+                    ),
+                )
+                for environment in _environment_module(request).list_environments(
+                    get_current_user(request)
+                )
+            ]
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post(
+    "/environments", response_model=EnvironmentResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_domain_environment(
+    payload: EnvironmentCreateRequest, request: Request
+) -> EnvironmentResponse:
+    try:
+        environment = _environment_module(request).create_environment(
+            get_current_user(request),
+            alias=payload.alias,
+            display_name=payload.display_name,
+            description=payload.description,
+            connection=environment_connection_from_create(payload),
+            idempotency_key=require_idempotency_key(request),
+        )
+        return serialize_environment(environment)
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get("/environments/{environment_id}", response_model=EnvironmentResponse)
+async def get_domain_environment(environment_id: str, request: Request) -> EnvironmentResponse:
+    try:
+        return serialize_environment(
+            _environment_module(request).environment(
+                environment_id, get_current_user(request), include_disabled=False
+            ),
+            latest_detection=latest_environment_detection(request, environment_id),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.patch("/environments/{environment_id}", response_model=EnvironmentResponse)
+async def update_domain_environment(
+    environment_id: str,
+    payload: EnvironmentUpdateRequest,
+    request: Request,
+) -> EnvironmentResponse:
+    try:
+        module = _environment_module(request)
+        user = get_current_user(request)
+        current = module.environment(environment_id, user)
+        fields = payload.model_fields_set
+        connection = environment_connection(current.get("connection_json"))
+        for name in (
+            "host",
+            "port",
+            "user",
+            "identity_file",
+            "proxy_jump",
+            "proxy_command",
+            "ssh_options",
+            "default_workdir",
+            "preferred_python",
+            "preferred_env_manager",
+            "preferred_runtime_notes",
+            "task_harness_profile",
+            "tags",
+        ):
+            if name in fields:
+                connection[name] = getattr(payload, name)
+        if "auth_kind" in fields:
+            connection["auth_kind"] = (
+                payload.auth_kind.value if payload.auth_kind is not None else None
+            )
+        kwargs: dict[str, object] = {"connection": connection}
+        for name in ("alias", "display_name", "description"):
+            if name in fields:
+                kwargs[name] = getattr(payload, name)
+        environment = module.update_environment(
+            environment_id,
+            user,
+            idempotency_key=require_idempotency_key(request),
+            **kwargs,
+        )
+        return serialize_environment(
+            environment, latest_detection=latest_environment_detection(request, environment_id)
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.delete("/environments/{environment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def disable_domain_environment(environment_id: str, request: Request) -> None:
+    try:
+        _environment_module(request).disable_environment(
+            environment_id,
+            get_current_user(request),
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post("/environments/{environment_id}/detect", response_model=EnvironmentResponse)
+async def detect_domain_environment(environment_id: str, request: Request) -> EnvironmentResponse:
+    try:
+        user = get_current_user(request)
+        environment = _environment_module(request).environment(
+            environment_id, user, include_disabled=False
+        )
+        observations = getattr(request.app.state, "environment_observation_service", None)
+        detect = getattr(observations, "detect_environment", None)
+        if not callable(detect):
+            raise HTTPException(
+                status_code=500, detail="Environment observation service is unavailable"
+            )
+        snapshot = await detect(
+            environment_id,
+            app_user_id=user.get("id") if isinstance(user.get("id"), str) else None,
+            terminal_session_manager=getattr(request.app.state, "terminal_session_manager", None),
+        )
+        return serialize_environment(environment, latest_detection=snapshot)
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get(
+    "/projects/{project_id}/environment-refs",
+    response_model=ProjectEnvironmentReferenceListResponse,
+)
+async def list_domain_project_environment_refs(
+    project_id: str, request: Request
+) -> ProjectEnvironmentReferenceListResponse:
+    try:
+        links = _project_module(request).workspace_links(project_id, get_current_user(request))
+        primary = next(
+            (
+                link
+                for link in links
+                if link.get("status") == "active" and link.get("is_primary") is True
+            ),
+            None,
+        )
+        environment_id = primary.get("environment_id") if primary is not None else None
+        return ProjectEnvironmentReferenceListResponse(
+            items=[
+                ProjectEnvironmentReferenceResponse(environment_id=environment_id, is_default=True)
+            ]
+            if isinstance(environment_id, str)
+            else []
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post(
+    "/projects/{project_id}/environment-refs",
+    response_model=ProjectEnvironmentReferenceResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_domain_project_environment_ref(
+    project_id: str,
+    payload: ProjectEnvironmentReferenceCreateRequest,
+    request: Request,
+) -> ProjectEnvironmentReferenceResponse:
+    _ = payload
+    try:
+        _project_module(request).require_project_editor(project_id, get_current_user(request))
+    except Exception as exc:
+        raise _translate(exc) from exc
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Project environments are managed through explicit Workspace links",
+    )
+
+
+@router.patch(
+    "/projects/{project_id}/environment-refs/{environment_id}",
+    response_model=ProjectEnvironmentReferenceResponse,
+)
+async def update_domain_project_environment_ref(
+    project_id: str,
+    environment_id: str,
+    payload: ProjectEnvironmentReferenceUpdateRequest,
+    request: Request,
+) -> ProjectEnvironmentReferenceResponse:
+    _ = (environment_id, payload)
+    try:
+        _project_module(request).require_project_editor(project_id, get_current_user(request))
+    except Exception as exc:
+        raise _translate(exc) from exc
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Project environments are managed through explicit Workspace links",
+    )
+
+
+@router.delete(
+    "/projects/{project_id}/environment-refs/{environment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_domain_project_environment_ref(
+    project_id: str, environment_id: str, request: Request
+) -> None:
+    _ = environment_id
+    try:
+        _project_module(request).require_project_editor(project_id, get_current_user(request))
+    except Exception as exc:
+        raise _translate(exc) from exc
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Project environments are managed through explicit Workspace links",
+    )
 
 
 @router.get("/projects/{project_id}/context")

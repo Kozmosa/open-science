@@ -2,5 +2,5 @@
   "generator": "@hey-api/openapi-ts",
   "generatorVersion": "0.99.0",
   "openapiVersion": "3.1.0",
-  "schemaSha256": "21b0daff700b9aa2bb19c2cff86ed0605e20b3a2f6e70f3b47a40a28cb99364a"
+  "schemaSha256": "6e186e6d3e5cf498428cac6ff741e0bd132956e02e9a424eb2939d983fc83b41"
 }
