@@ -77,6 +77,10 @@ Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.jso
 | 敏感文件访问 | 柱状图 | `ainrf_files_sensitive_path_access_total` | 敏感路径访问事件 |
 | 环境更新 | 时序图 | `ainrf_environment_update_total` | 环境检测/更新操作 |
 | 代码会话创建 | Stat | `ainrf_code_session_created_total` | 最近 1 小时代码会话数 |
+| HTTP contract traffic | 时序图 | `ainrf_http_contract_requests_total` | 按 canonical/root/`v1`/external-compatible 与 stable operation 展示长期流量 |
+| HTTP contract errors | 时序图 | `ainrf_http_contract_requests_total` | 按 surface/operation 展示 4xx/5xx |
+| Telemetry guard | Stat | unmatched + delivery latch | unknown 分类或 durable delivery failure 时保持 fail-closed |
+| TEMPORARY cleanup evidence | 时序图 | `ainrf_cleanup_compatibility_observations_total` | 与长期 health panel 明确分离，展示 registry item 与 observation |
 
 ## 配置文件结构
 
