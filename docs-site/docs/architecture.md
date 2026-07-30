@@ -47,10 +47,11 @@ flowchart TD
 ## Release 与 rollback contract
 
 - L0 是有界开发内循环；L1 是不依赖 Docker 或外部服务的完整确定性 gate。
-- Frontend artifact 与 backend contract 必须通过 build info、contract version、capability preflight 和 release smoke 一起验证，不能只用相同 Git SHA 推断兼容。
+- 默认 production 模型是实验室内部的计划维护窗口，允许约 2–3 小时停机，不要求零停机切换或任意中断后的自动接管恢复。
+- Frontend、backend 与 worker 必须来自同一份简单 release manifest，并通过 build info、contract version 和 release smoke 验证版本一致；不要求高保证供应链证明或逐步骤发布 ledger。
 - 领域结构重构保持 durable schema 与 canonical HTTP behavior 不变，可以回滚代码 artifact。
-- Compatibility surface 的 removal change 必须同时更新 schema、generated artifact、contract tests、文档和 rollback evidence。
-- 生产 release acceptance、只读 post-smoke 与 rollback 属于 L4；本地或 synthetic smoke 不能替代生产观察窗口。
+- Compatibility surface 的 removal change 必须同时更新 schema、generated artifact、contract tests、文档和 rollback 验证记录。
+- L4 采用人工维护窗口流程：发布前完成完整备份及隔离恢复验证，停止 writer 后执行必要迁移，启动同版本服务并执行只读 post-smoke；失败时按 runbook 人工恢复数据和上一份 release manifest。
 
 ## 环境与发布边界
 
@@ -58,7 +59,7 @@ flowchart TD
 - Staging 默认是 development-oriented 容器环境，允许源码和 staging 专属前端产物 bind mount，用于快速联调，不作为不可变 release evidence。
 - Production 只消费同一 release manifest 绑定的不可变镜像。WebUI、nginx 配置、API 和 worker 代码均在镜像中；只允许注入 secrets、运行配置与 named persistent volumes，不依赖 Git checkout 或 worktree。
 - API、domain worker 与 literature worker 必须使用同一个 API image reference。Web、API 与监控镜像全部构建成功后才能更新运行服务，禁止独立发布前端或后端。
-- CI/CD 接入 registry 后必须 build once、在 release staging 验收同一组 image digest，再提升相同 manifest 到 production；rollback 以完整的上一份 manifest 为单位。
+- 默认发布不要求独立 release staging。若未来接入 registry 或确有额外验收需求，可以对同一组镜像引用增加 staging 验收，但不能把它扩张为默认的复杂发布控制面。代码 rollback 以上一份完整 manifest 为单位，数据 rollback 使用发布前验证过的完整备份。
 
 ## Fail-closed compatibility inventory
 

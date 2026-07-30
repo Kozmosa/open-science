@@ -8,7 +8,7 @@
 
 | Spec | 状态 | 说明 |
 | --- | --- | --- |
-| `2026-07-11-five-layer-hybrid-ci-design.md` | accepted / partially implemented | L0/L1 已落地，L2–L4 仍定义后续验证边界 |
+| `2026-07-11-five-layer-hybrid-ci-design.md` | accepted / partially implemented | L0/L1 已落地；L2/L3 保持有界验证，L4 采用允许停机的简单维护窗口发布，独立 release staging 可选 |
 | `2026-07-11-literature-tracking-service-redesign-design.md` | accepted | 文献追踪产品和服务重设计 |
 | `2026-07-11-openscience-console-design.md` | accepted | OpenScience WebUI 品牌、导航和外壳 |
 | `2026-07-11-osci-design-system-design.md` | accepted | 前端设计系统；`osci` 不替代内部 `ainrf` 身份 |
