@@ -5,22 +5,23 @@
 ## 项目目标与当前边界
 
 - 项目名称：`OpenScience`
-- 当前主要目标：把 OpenScience 持续收敛为本仓库的核心前后端产品，包括可安装 CLI、后端 API、WebUI 控制面，以及与 environment / terminal / task / workspace browser 相关的运行时能力。
-- **OpenScience** 是用户可见的产品与品牌名称；`AINRF` / `ainrf` 是稳定的内部工程与运行时标识，不属于等待全量删除的历史债务。Python package/import namespace、状态路径、Linux identity、部署资源和 telemetry namespace 默认继续使用 `ainrf`。
-- 面向用户的 WebUI、产品文档、CLI help 和品牌物料使用 OpenScience；用户文档优先使用 `openscience` CLI 与 `OPENSCIENCE_*` 配置。`ainrf` CLI 与 `AINRF_*` 作为稳定工程入口或兼容配置保留，除非未来有单独迁移决策。
-- `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 OpenScience 的产品设计、实现取舍和历史追溯提供参考输入，而不是继续充当仓库的默认产品中心。
+- **OpenScience** 是用户可见的产品与品牌名称，以及前端使用的标识（缩写可以使用osci）；`AINRF` / `ainrf` 是稳定的内部工程与后端使用的标识。Python package/import namespace、状态路径、Linux identity、部署资源和 telemetry namespace 等和后端相关部分默认使用 `ainrf`。
+- 面向用户的 WebUI、产品文档、CLI help 和项目宣传材料的品牌标识等用 OpenScience。
+- 后端配置规范使用 `AINRF_*`；对应的 `OPENSCIENCE_*` 后端变量仅作为兼容别名。前端配置以及仓库级开发、CI 和编排配置使用 `OPENSCIENCE_*`。
+- `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 OpenScience 的产品设计、实现取舍和历史追溯提供参考输入，不是工程实现的权威文档。
 - `vsa` 在本项目中指工作在容器内的 vibe scientist agent 研究员预设。
 
 ## 约束优先级
 
-- 更高优先级的局部约束文件，尤其是仓库根目录的 `AGENTS.md`，在用户当次指令和目录内更近的局部约束上优先级更高。
-- 本文件声明的长期工程约定必须遵守，当本文档与工程出现冲突，显式提示用户处理。
+- 本文件是最高优先级、经过人工审阅的长期项目事实与规则来源，只允许由用户人工修改；任何 Agent 都不得修改本文件。
+- `AGENTS.md`、`CLAUDE.md`、局部 Agent 指令及其他文档不得与本文件冲突。发现冲突时，Agent 必须停止受影响的判断并显式询问用户，不得自行选择或修正文档。
+- 当本文件与代码、schema、测试、部署配置或其他可靠工程事实出现漂移时，Agent 必须请用户重新审阅工程事实，由用户决定修正工程实现还是人工修订本文件。
 
 ## LLM 协作与文档目录约定
 
-- `docs-site/docs/` 是当前产品事实、用户说明、部署运维和公开架构 contract 的长期目录。
-- `docs/` 是内部长期知识库，保存活跃设计、工程参考、研究输入、历史决策和工作日志；它不是当前产品 contract 的唯一 authority。
-- `docs/documentation-governance.md` 定义文档 authority、生命周期、活跃 spec 与归档规则；新增或移动长期文档必须遵守该文件。
+- `docs-site/docs/` 是当前对外的公开产品文档的长期目录。
+- `docs/` 是工程内部的文档目录，保存活跃设计、工程参考、研究输入、历史决策和工作日志；它不是当前产品 contract 的唯一 authority。
+- `docs/documentation-governance.md` 定义文档优先级、生命周期、活跃 spec 与归档规则等文档治理策略；新增或移动长期文档必须遵守该文件。
 - `docs/framework/` 用于框架设计、RFC、路线图和体系化方法论。
 - `docs/projects/` 用于外部项目调研与对照分析。
 - `docs/summary/` 用于跨项目综述、矩阵和汇总结论。
@@ -161,8 +162,7 @@
 
 - 默认采用 worktree-first 开发范式：非微小改动优先在独立 worktree 中实施。
 - 主工作区应尽量保持干净，主要用于同步、检查、轻量文档修改与受控清理动作，而不是默认功能开发现场。
-- 正式开发 worktree 统一放在 `/.worktrees/<branch>`。
-- `/.claude/worktrees/` 仅作为 agent 临时执行空间使用，不作为长期开发工作区。
+- 正式开发与 Agent 工作区统一放在 `.claude/worktrees/<branch>`。
 - 合并完成或确认放弃后，应删除对应本地分支和 worktree。
 - 远程不应长期保留 `worktree-*`、`agent/*` 或其他明显过程性命名分支。
 - 进行仓库卫生巡检时，应使用 `git fetch --prune origin` 清理 stale remote-tracking refs，避免把本地过期引用误判为真实远程状态。
