@@ -22,7 +22,7 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     assert all("container_name" not in service for service in services.values())
     assert services["api"]["environment"]["AINRF_PORT"] == "17000"
     assert services["api"]["environment"]["AINRF_DOMAIN_ARTIFACT_SHA"].startswith(
-        "${OPENSCIENCE_RELEASE_GIT_SHA"
+        "${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA"
     )
     assert services["api"]["depends_on"]["init"]["condition"] == (
         "service_completed_successfully"
@@ -37,7 +37,7 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
         for value in services["init"]["command"]
     )
     assert any(
-        value.startswith("${OPENSCIENCE_RELEASE_GIT_SHA")
+        value.startswith("${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA")
         for value in services["init"]["command"]
     )
     assert services["web"]["environment"]["AINRF_WEB_PORT"] == "7192"
@@ -70,6 +70,7 @@ def test_release_staging_is_human_gated_and_never_drives_production() -> None:
     assert "promote-production" not in script
     assert "ledger" not in script
     assert "OPENSCIENCE_RELEASE_STAGING_API_KEY" in script
+    assert '"${OPENSCIENCE_API_IMAGE_ID#sha256:}"' in script
 
 
 def test_web_image_uses_one_port_parameterized_nginx_template() -> None:

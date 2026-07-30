@@ -16,7 +16,7 @@ services:
       - --api-key
       - ${OPENSCIENCE_RELEASE_STAGING_API_KEY:-}
       - --artifact-sha
-      - ${OPENSCIENCE_RELEASE_GIT_SHA:-}
+      - ${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA:-}
       - --profile
       - full
     volumes:
@@ -36,7 +36,7 @@ services:
       AINRF_HOST: 127.0.0.1
       AINRF_PORT: "17000"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      AINRF_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_RELEASE_GIT_SHA:-}
+      AINRF_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA:-}
       AINRF_JWT_SECRET: ${STAGING_OPENSCIENCE_JWT_SECRET:?Set a staging-only JWT secret}
       AINRF_API_KEY_HASHES: ${STAGING_OPENSCIENCE_API_KEY_HASHES:?Set a staging-only API key hash}
       AINRF_PUBLIC_REGISTRATION_ENABLED: "false"

@@ -42,6 +42,8 @@ load_release() {
   source "${MANIFEST_PATH}"
   set +a
   "${REPO_ROOT}/deploy/verify-release-manifest.sh" "${MANIFEST_PATH}"
+  OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA="${OPENSCIENCE_API_IMAGE_ID#sha256:}"
+  export OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA
 }
 
 compose() {
