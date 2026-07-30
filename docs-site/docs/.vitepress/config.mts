@@ -15,6 +15,7 @@ export default defineConfig({
     nav: [
       { text: "快速开始", link: "/quickstart" },
       { text: "部署", link: "/deployment/" },
+      { text: "架构", link: "/architecture" },
       { text: "开发", link: "/development" },
     ],
     sidebar: [
@@ -30,6 +31,7 @@ export default defineConfig({
         ],
       },
       { text: "部署", items: [{ text: "部署概览", link: "/deployment/" }, { text: "裸机部署", link: "/deployment/bare-metal" }, { text: "Docker Compose", link: "/deployment/docker" }, { text: "Kubernetes", link: "/deployment/kubernetes" }] },
+      { text: "架构", items: [{ text: "架构与兼容契约", link: "/architecture" }] },
       { text: "安全", items: [{ text: "安全架构", link: "/security/" }, { text: "生产检查清单", link: "/security/checklist" }] },
       { text: "可观测性", items: [{ text: "可观测性概览", link: "/observability/" }, { text: "审计日志", link: "/observability/audit-logs" }, { text: "Prometheus 指标", link: "/observability/metrics" }, { text: "监控栈", link: "/observability/monitoring-stack" }] },
       { text: "开发", collapsed: true, items: [{ text: "开发指南", link: "/development" }] },

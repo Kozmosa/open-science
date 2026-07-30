@@ -71,6 +71,11 @@
 - `docs/` 负责长期知识资产与产品文档；不要把仅用于一次调试的中间日志混入知识库主目录。
 - `docs/projects/`、`docs/summary/`、`ref-repos/` 与其他调研材料默认视为参考语料层，不直接定义 OpenScience 当前产品 contract。
 - 未来扩展 `ainrf` 时，优先把核心研究逻辑设计为可脱离具体宿主 CLI 复用的模块，再在 Typer 命令层做装配。
+- Backend 以 committed-v2 state 为唯一 product authority；不得重新引入 legacy writer、legacy read fallback、双读或双写。产品 import graph 必须保持无 cycle，且 non-API 模块不得反向依赖 `ainrf.api`。
+- Canonical HTTP prefix 是 `/api`；root 与 `/v1` 仅作为受 telemetry 约束的 compatibility aliases。没有完整生产观察窗口的零调用证据时，compatibility removal 必须 fail-closed。
+- FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。Frontend generated transport 必须可确定性重建并通过 drift gate；UI 通过 feature adapter 消费 view model，不直接消费 raw generated payload。
+- Frontend 依赖方向为 `app -> features -> shared/design-system`；`shared`、`design-system` 和 legacy component 层不得反向依赖 feature。
+- 当前架构、release/rollback contract 与 compatibility inventory 的长期产品文档位于 `docs-site/docs/architecture.md`。
 
 ## 目录约定
 
@@ -109,6 +114,11 @@
 - 后端全量测试：`bash scripts/test.sh all`（默认最多 8 个 worker，并将 race/contention 测试串行运行）
 - 预览：`cd docs-site && npm run dev`
 - 其他关键命令：
+  - `npm --prefix frontend run check:transport`
+  - `npm --prefix frontend run lint`
+  - `npm --prefix frontend run test:run`
+  - `npm --prefix frontend run build`
+  - `npm --prefix docs-site run build`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`

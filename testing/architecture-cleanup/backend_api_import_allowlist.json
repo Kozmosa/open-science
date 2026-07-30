@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "policy": "non-api modules must not import ainrf.api",
-  "owner": "P2",
-  "removal_phase": "P2",
-  "final_state": "delete",
-  "items": []
-}
