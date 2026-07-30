@@ -25,7 +25,7 @@ Reference repositories live under `ref-repos/` and are treated as read-only rese
 
 ## Project Overview
 
-`scholar-agent` currently centers on the OpenScience frontend/backend product surface. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities; `src/ainrf/` remains the compatibility Python package name during the OpenScience transition. The legacy `ainrf` CLI remains available during the OpenScience compatibility phase. `docs/`, `ref-repos/`, and the historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
+`scholar-agent` currently centers on the OpenScience frontend/backend product surface. OpenScience is the user-facing product brand; `ainrf` is the stable internal Python package and runtime identity and must not be treated as a blanket rename target. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities. User-facing docs prefer the `openscience` CLI and `OPENSCIENCE_*` configuration while the `ainrf` CLI and `AINRF_*` remain supported engineering surfaces. `docs/`, `ref-repos/`, and historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
 
 ## LLM Working Log
 
@@ -165,9 +165,10 @@ Use shared layout primitives (`PageShell`, `SplitPane`, `SectionStack`, `CardGri
 
 - Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
 - Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+- Documentation authority and lifecycle rules: `docs/documentation-governance.md`
 
 **Commit rules for spec/plan documents:**
-- Design specs (`docs/superpowers/specs/`) are part of the long-lived knowledge base and should be committed.
+- Active design specs (`docs/superpowers/specs/`) are part of the long-lived knowledge base and should be committed. Once implemented, superseded, retired, or contradicted by the current contract, move them to `docs/superpowers/specs/archived/` and update the active inventory.
 - Implementation plans (`docs/superpowers/plans/`) are transient agent working artifacts and must **not** be committed to git. They should be kept in the working directory only and discarded after implementation completes.
 
 ### Note Conventions

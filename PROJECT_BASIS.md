@@ -5,7 +5,9 @@
 ## 项目目标与当前边界
 
 - 项目名称：`OpenScience`
-- 当前主要目标：把 OpenScience 持续收敛为本仓库的核心前后端产品，包括可安装 CLI、后端 API、WebUI 控制面，以及与 environment / terminal / task / workspace browser 相关的运行时能力。当前 Python 包与部分运行时路径仍保留 `ainrf` 作为兼容性内部名称；新增对外入口优先使用 `openscience` 与 `OPENSCIENCE_*`。
+- 当前主要目标：把 OpenScience 持续收敛为本仓库的核心前后端产品，包括可安装 CLI、后端 API、WebUI 控制面，以及与 environment / terminal / task / workspace browser 相关的运行时能力。
+- **OpenScience** 是用户可见的产品与品牌名称；`AINRF` / `ainrf` 是稳定的内部工程与运行时标识，不属于等待全量删除的历史债务。Python package/import namespace、状态路径、Linux identity、部署资源和 telemetry namespace 默认继续使用 `ainrf`。
+- 面向用户的 WebUI、产品文档、CLI help 和品牌物料使用 OpenScience；用户文档优先使用 `openscience` CLI 与 `OPENSCIENCE_*` 配置。`ainrf` CLI 与 `AINRF_*` 作为稳定工程入口或兼容配置保留，除非未来有单独迁移决策。
 - `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 OpenScience 的产品设计、实现取舍和历史追溯提供参考输入，而不是继续充当仓库的默认产品中心。
 - `vsa` 在本项目中指工作在容器内的 vibe scientist agent 研究员预设。
 
@@ -16,8 +18,9 @@
 
 ## LLM 协作与文档目录约定
 
-- 本仓库现有长期文档主目录是 `docs/`；新增需要长期维护、会被纳入知识库与站点构建的 Markdown 内容，默认放入 `docs/` 下合适子目录。
-- `docs/` 的默认入口与主叙事应服务于当前 `ainrf` 产品面；研究笔记、外部项目调研与历史设计文档继续保留，但不应再与 OpenScience 当前实现面竞争同等入口地位。
+- `docs-site/docs/` 是当前产品事实、用户说明、部署运维和公开架构 contract 的长期目录。
+- `docs/` 是内部长期知识库，保存活跃设计、工程参考、研究输入、历史决策和工作日志；它不是当前产品 contract 的唯一 authority。
+- `docs/documentation-governance.md` 定义文档 authority、生命周期、活跃 spec 与归档规则；新增或移动长期文档必须遵守该文件。
 - `docs/framework/` 用于框架设计、RFC、路线图和体系化方法论。
 - `docs/projects/` 用于外部项目调研与对照分析。
 - `docs/summary/` 用于跨项目综述、矩阵和汇总结论。
@@ -68,7 +71,7 @@
 - `src/ainrf/` 负责可安装 Python 包与 CLI/服务运行时代码，避免把仓库级脚本逻辑直接堆入命令入口。
 - `frontend/` 负责 OpenScience 的 WebUI 前端；它与 `src/ainrf/` 一起构成仓库的核心产品实现面。
 - `scripts/` 负责本地构建与辅助流程；若脚本演化为可复用运行时能力，应回收进入 `src/ainrf/`。
-- `docs/` 负责长期知识资产与产品文档；不要把仅用于一次调试的中间日志混入知识库主目录。
+- `docs/` 负责内部长期知识资产；不要把仅用于一次调试的中间日志混入知识库主目录。
 - `docs/projects/`、`docs/summary/`、`ref-repos/` 与其他调研材料默认视为参考语料层，不直接定义 OpenScience 当前产品 contract。
 - 未来扩展 `ainrf` 时，优先把核心研究逻辑设计为可脱离具体宿主 CLI 复用的模块，再在 Typer 命令层做装配。
 - Backend 以 committed-v2 state 为唯一 product authority；不得重新引入 legacy writer、legacy read fallback、双读或双写。产品 import graph 必须保持无 cycle，且 non-API 模块不得反向依赖 `ainrf.api`。
@@ -82,7 +85,7 @@
 - `docs/`：研究知识库与历史设计材料（Obsidian 笔记）。
 - `docs-site/`：OpenScience 产品文档站点（VitePress，部署至 GitHub Pages）。
 - `frontend/`：OpenScience WebUI 前端。
-- `src/ainrf/`：OpenScience Python 包兼容性内部目录、CLI 入口、后端 API、日志与运行时代码。
+- `src/ainrf/`：OpenScience 稳定的 Python package/import namespace、CLI 入口、后端 API、日志与运行时代码。
 - `src/ainrf/agentic_researcher/`：OpenScience 任务管理门面，提供统一的任务 CRUD 和研究员预设
 - `src/ainrf/harness_engine/`：OpenScience 执行引擎抽象，封装 claude-code、agent-sdk、codex-app-server
 - `tests/`：CLI smoke tests 与后续 Python 测试。
@@ -168,7 +171,7 @@
 ## 变更维护原则
 
 - 修改长期工程约定时，优先更新本文件。
-- 新增长期有效的知识结构、构建规则或运行时约束时，应同步更新相关 `docs/` 文档，并在必要时从本文件补充索引。
+- 新增长期有效的知识结构、构建规则或运行时约束时，应同步更新相关 `docs-site/docs/` 或 `docs/` 文档，并在必要时从本文件补充索引。
 - 新增 CLI 表面、解析行为或构建脚本契约时，必须同步补充或更新 `tests/` 中的 smoke tests。
 - `LLM-Working`目录也需要纳入版本管理
 - 对仓库进行实际修改、开发、验证或提交时，应同步追加当日 `docs/LLM-Working/worklog/YYYY-MM-DD.md`，不得把工作记录只留在会话上下文中。
