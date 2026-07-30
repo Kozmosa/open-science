@@ -21,6 +21,8 @@ set -a
 source "${OPENSCIENCE_RELEASE_MANIFEST}"
 set +a
 
+"${REPO_ROOT}/deploy/verify-release-manifest.sh" "${OPENSCIENCE_RELEASE_MANIFEST}"
+
 docker compose -f "${COMPOSE_FILE}" up -d --no-build
 wait_for_compose_service "${COMPOSE_FILE}" ainrf 60 2
 wait_for_compose_service "${COMPOSE_FILE}" nginx 60 2

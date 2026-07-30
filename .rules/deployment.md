@@ -152,6 +152,27 @@ Deployment wrappers explicitly clear `VITE_OPENSCIENCE_API_KEY` and
 the Vite proxy process and must never be embedded into a deployed browser
 bundle through a lingering `.env.local` file.
 
+## Simple release staging and production acceptance
+
+The repository has three deliberately separate environments:
+
+- `scripts/dev.sh`: fast local development without Docker;
+- `scripts/staging.sh`: mutable, hot-reload staging for integration and telemetry work;
+- `deploy/release-staging.sh`: immutable API/Web images from the exact production release manifest, using isolated disposable data and offset ports.
+
+Release staging is a human acceptance surface, not an automated production
+controller. It performs a small health smoke and then leaves feature acceptance
+to the operator. Production continues through `deploy/release-production.sh`
+during a maintenance window. Before deployment, the same manifest is verified
+against the local Docker image IDs; production then starts the matching image
+set with `--no-build`.
+
+The required production record is intentionally small: Git SHA, release
+manifest, backup/restore result, human acceptance, deployment result, and
+rollback notes. Do not add a multi-stage release ledger, automatic cutover
+recovery state machine, or per-file supply-chain evidence without a new
+deployment requirement reviewed in `PROJECT_BASIS.md`.
+
 ## First-Time Admin Password
 
 ```bash

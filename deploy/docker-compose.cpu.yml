@@ -252,6 +252,12 @@ services:
     restart: unless-stopped
     container_name: ainrf-nginx
     network_mode: host
+    environment:
+      AINRF_WEB_PORT: "8192"
+      AINRF_BACKEND_PORT: "18000"
+      AINRF_GRAFANA_PORT: "3000"
+      AINRF_PROMETHEUS_PORT: "9091"
+      AINRF_LITEFUSE_PORT: "13000"
     depends_on:
       ainrf:
         condition: service_healthy

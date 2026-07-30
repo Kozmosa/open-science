@@ -50,7 +50,8 @@ RUN npm run build
 # static assets.  They therefore need no bind mounts from a Git checkout.
 FROM docker.1ms.run/nginx:1.27-alpine AS web
 COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html
-COPY deploy/config/nginx-host.conf /etc/nginx/conf.d/default.conf
+COPY deploy/config/nginx-release.conf.template /etc/nginx/templates/default.conf.template
+ENV NGINX_ENVSUBST_FILTER=^AINRF_
 
 FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus
 COPY deploy/config/prometheus-host.yml /etc/prometheus/prometheus.yml

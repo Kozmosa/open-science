@@ -35,14 +35,28 @@ build_target web "${WEB_IMAGE}"
 build_target prometheus "${PROMETHEUS_IMAGE}"
 build_target grafana "${GRAFANA_IMAGE}"
 
+image_id() {
+  docker image inspect --format '{{.Id}}' "$1"
+}
+
+API_IMAGE_ID="$(image_id "${API_IMAGE}")"
+WEB_IMAGE_ID="$(image_id "${WEB_IMAGE}")"
+PROMETHEUS_IMAGE_ID="$(image_id "${PROMETHEUS_IMAGE}")"
+GRAFANA_IMAGE_ID="$(image_id "${GRAFANA_IMAGE}")"
+
 umask 077
 mkdir -p "$(dirname "${MANIFEST_PATH}")"
 {
   printf 'OPENSCIENCE_RELEASE_ID=%s\n' "${RELEASE_ID}"
+  printf 'OPENSCIENCE_RELEASE_GIT_SHA=%s\n' "$(git -C "${REPO_ROOT}" rev-parse HEAD)"
   printf 'OPENSCIENCE_API_IMAGE=%s\n' "${API_IMAGE}"
+  printf 'OPENSCIENCE_API_IMAGE_ID=%s\n' "${API_IMAGE_ID}"
   printf 'OPENSCIENCE_WEB_IMAGE=%s\n' "${WEB_IMAGE}"
+  printf 'OPENSCIENCE_WEB_IMAGE_ID=%s\n' "${WEB_IMAGE_ID}"
   printf 'OPENSCIENCE_PROMETHEUS_IMAGE=%s\n' "${PROMETHEUS_IMAGE}"
+  printf 'OPENSCIENCE_PROMETHEUS_IMAGE_ID=%s\n' "${PROMETHEUS_IMAGE_ID}"
   printf 'OPENSCIENCE_GRAFANA_IMAGE=%s\n' "${GRAFANA_IMAGE}"
+  printf 'OPENSCIENCE_GRAFANA_IMAGE_ID=%s\n' "${GRAFANA_IMAGE_ID}"
 } >"${MANIFEST_PATH}"
 chmod 600 "${MANIFEST_PATH}"
 

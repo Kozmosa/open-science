@@ -138,6 +138,22 @@ production 仍应使用已经构建的同一组镜像引用，而不是在主机
 构建同版本制品、部署和健康检查。在维护窗口自动化补齐前，操作员必须先按受控 runbook 手工
 完成备份与恢复验证，不能把该脚本的成功输出视为完整 L4 验收。
 
+### Release staging 人工验收
+
+先用 `build-production.sh` 生成 release manifest，再用仓库外、权限为 `0600` 的
+staging 独立配置启动相同的 API/Web 镜像：
+
+```bash
+export OPENSCIENCE_RELEASE_MANIFEST=/secure/releases/<sha>.env
+export OPENSCIENCE_RELEASE_STAGING_ENV_FILE=/secure/releases/staging.env
+bash deploy/release-staging.sh up
+bash deploy/release-staging.sh smoke
+```
+
+浏览器入口为 `http://127.0.0.1:7192/`。完成登录、核心页面和本次变更的人工验收后，
+用 `down` 停止；只有明确确认时才用 `purge` 删除其一次性数据。这个环境不会执行生产
+迁移、切换或回滚，也不会把自动 smoke 当作人工验收结论。
+
 ---
 
 ## 监控栈

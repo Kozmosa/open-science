@@ -1,0 +1,60 @@
+name: openscience-release-staging
+
+services:
+  api:
+    image: ${OPENSCIENCE_API_IMAGE:-openscience-release-staging-api-unavailable}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      AINRF_PRODUCTION: "1"
+      AINRF_STAGING: "1"
+      AINRF_NO_SSHD: "1"
+      AINRF_AUTH_COOKIE_NAMESPACE: release-staging
+      AINRF_HOST: 127.0.0.1
+      AINRF_PORT: "17000"
+      AINRF_STATE_ROOT: /opt/ainrf/state
+      AINRF_JWT_SECRET: ${STAGING_OPENSCIENCE_JWT_SECRET:?Set a staging-only JWT secret}
+      AINRF_API_KEY_HASHES: ${STAGING_OPENSCIENCE_API_KEY_HASHES:?Set a staging-only API key hash}
+      AINRF_PUBLIC_REGISTRATION_ENABLED: "false"
+      AINRF_METRICS_ENABLED: "true"
+      ANTHROPIC_API_KEY: ${STAGING_ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${STAGING_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      ANTHROPIC_MODEL: ${STAGING_ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      CODEX_API_KEY: ${STAGING_CODEX_API_KEY:-}
+      CODEX_BASE_URL: ${STAGING_CODEX_BASE_URL:-https://api.openai.com/v1}
+      CODEX_MODEL: ${STAGING_CODEX_MODEL:-gpt-5.5}
+    volumes:
+      - release-staging-state:/opt/ainrf/state
+      - release-staging-workspaces:/opt/ainrf/.ainrf_workspaces
+      - release-staging-tenants:/home/ainrf_tenants
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:17000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  web:
+    image: ${OPENSCIENCE_WEB_IMAGE:-openscience-release-staging-web-unavailable}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      AINRF_WEB_PORT: "7192"
+      AINRF_BACKEND_PORT: "17000"
+      AINRF_GRAFANA_PORT: "2300"
+      AINRF_PROMETHEUS_PORT: "9092"
+      AINRF_LITEFUSE_PORT: "13001"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:7192/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  release-staging-state:
+  release-staging-workspaces:
+  release-staging-tenants:

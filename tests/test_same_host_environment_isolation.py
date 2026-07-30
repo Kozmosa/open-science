@@ -281,4 +281,8 @@ def test_production_release_builds_all_artifacts_before_compose_up() -> None:
         'docker compose -f "${COMPOSE_FILE}" up -d --no-build'
     )
     assert "COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html" in dockerfile
-    assert "COPY deploy/config/nginx-host.conf /etc/nginx/conf.d/default.conf" in dockerfile
+    assert (
+        "COPY deploy/config/nginx-release.conf.template "
+        "/etc/nginx/templates/default.conf.template" in dockerfile
+    )
+    assert "ENV NGINX_ENVSUBST_FILTER=^AINRF_" in dockerfile
