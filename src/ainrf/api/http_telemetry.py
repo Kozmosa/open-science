@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
+from re import Pattern
 
 from fastapi import Request
 from fastapi.routing import APIRoute
@@ -42,8 +44,32 @@ def contract_operation_for_route(route: object, method: str) -> str:
     return stable_operation_id(normalized)
 
 
+@dataclass(frozen=True, slots=True)
+class ContractRoute:
+    path: str
+    path_regex: Pattern[str]
+    methods: frozenset[str]
+
+
+def _contract_routes(app: object) -> tuple[ContractRoute, ...]:
+    frozen: list[ContractRoute] = []
+    for route in getattr(app, "routes", ()):
+        if isinstance(route, APIRoute):
+            candidates: tuple[object, ...] = (route,)
+        else:
+            effective = getattr(route, "effective_route_contexts", None)
+            candidates = tuple(effective()) if callable(effective) else ()
+        for candidate in candidates:
+            path = getattr(candidate, "path", None)
+            path_regex = getattr(candidate, "path_regex", None)
+            methods = getattr(candidate, "methods", None)
+            if isinstance(path, str) and hasattr(path_regex, "fullmatch") and methods:
+                frozen.append(ContractRoute(path, path_regex, frozenset(methods)))
+    return tuple(frozen)
+
+
 def frozen_contract_operations(app: object) -> frozenset[str]:
-    routes = getattr(app, "routes", ())
+    routes = _contract_routes(app)
     operations = {
         contract_operation_for_route(route, method)
         for route in routes
@@ -54,17 +80,27 @@ def frozen_contract_operations(app: object) -> frozenset[str]:
     return frozenset(operations)
 
 
-def contract_operation_for_request(request: Request) -> str:
+def frozen_contract_routes(app: object) -> tuple[ContractRoute, ...]:
+    return _contract_routes(app)
+
+
+def contract_operation_for_request(
+    request: Request, contract_routes: tuple[ContractRoute, ...]
+) -> str:
     if request.url.path == "/v1/models":
         return "get_models"
     if request.url.path == "/v1/messages":
         return "post_messages"
-    return contract_operation_for_route(request.scope.get("route"), request.method)
+    for route in contract_routes:
+        if request.method in (route.methods or ()) and route.path_regex.fullmatch(request.url.path):
+            return contract_operation_for_route(route, request.method)
+    return "unmatched"
 
 
 def build_http_metrics_middleware(
     *,
     allowed_operations: frozenset[str] | None = None,
+    contract_routes: tuple[ContractRoute, ...] = (),
     state_root: Path | None = None,
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Record HTTP request counts and latency through neutral telemetry."""
@@ -104,7 +140,7 @@ def build_http_metrics_middleware(
                 observe_http_contract(
                     HttpContractObservation(
                         actual_path=request.url.path,
-                        operation=contract_operation_for_request(request),
+                        operation=contract_operation_for_request(request, contract_routes),
                         method=request.method,
                         status=500,
                         duration_seconds=elapsed,
@@ -130,7 +166,7 @@ def build_http_metrics_middleware(
             observe_http_contract(
                 HttpContractObservation(
                     actual_path=request.url.path,
-                    operation=contract_operation_for_request(request),
+                    operation=contract_operation_for_request(request, contract_routes),
                     method=request.method,
                     status=response.status_code,
                     duration_seconds=elapsed,

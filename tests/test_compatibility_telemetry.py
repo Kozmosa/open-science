@@ -10,7 +10,11 @@ import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
 
-from ainrf.api.http_telemetry import build_http_metrics_middleware, frozen_contract_operations
+from ainrf.api.http_telemetry import (
+    build_http_metrics_middleware,
+    frozen_contract_operations,
+    frozen_contract_routes,
+)
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.telemetry.compatibility import (
     CleanupCompatibilityObservation,
@@ -49,6 +53,24 @@ def test_surface_classification_has_external_protocol_precedence(path: str, expe
     assert classify_surface(path) == expected
 
 
+def test_frozen_contract_inventory_expands_lazy_included_routers() -> None:
+    route = APIRouter(prefix="/projects")
+
+    @route.get("")
+    async def list_projects() -> dict[str, list[object]]:
+        return {"items": []}
+
+    concrete = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+    concrete.include_router(route, prefix="/api")
+    included = tuple(concrete.routes)
+    lazy_app = SimpleNamespace(routes=(SimpleNamespace(effective_route_contexts=lambda: included),))
+
+    frozen_routes = frozen_contract_routes(lazy_app)
+
+    assert {item.path for item in frozen_routes} == {"/api/projects"}
+    assert frozen_contract_operations(lazy_app) >= {"get_projects", "unmatched"}
+
+
 @pytest.mark.anyio
 async def test_http_matrix_preserves_prefix_and_shared_operation(tmp_path: Path) -> None:
     router = APIRouter(prefix="/projects")
@@ -64,7 +86,11 @@ async def test_http_matrix_preserves_prefix_and_shared_operation(tmp_path: Path)
     app.include_router(router, prefix="/api")
     operations = frozen_contract_operations(app)
     app.middleware("http")(
-        build_http_metrics_middleware(allowed_operations=operations, state_root=tmp_path)
+        build_http_metrics_middleware(
+            allowed_operations=operations,
+            contract_routes=frozen_contract_routes(app),
+            state_root=tmp_path,
+        )
     )
 
     async with httpx.AsyncClient(

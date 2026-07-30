@@ -580,12 +580,14 @@ def create_app(
         from ainrf.api.http_telemetry import (
             build_http_metrics_middleware,
             frozen_contract_operations,
+            frozen_contract_routes,
         )
         from ainrf.api.routes.metrics import create_metrics_router
 
         app.middleware("http")(
             build_http_metrics_middleware(
                 allowed_operations=frozen_contract_operations(app),
+                contract_routes=frozen_contract_routes(app),
                 state_root=api_config.state_root,
             )
         )
