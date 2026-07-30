@@ -5,7 +5,14 @@ description: OpenScience 当前架构、HTTP contract、generated transport、re
 
 # 架构与兼容契约
 
-本文是 OpenScience 当前架构与 compatibility surface 的长期 owner。历史设计和迁移审计保留在 `docs/superpowers/specs/`；当前产品 contract 以代码、generated OpenAPI artifact、正常测试和本文为准。
+本文是 OpenScience 当前架构与 compatibility surface 的长期 owner。活跃设计保留在 `docs/superpowers/specs/`，已完成或被取代的设计保留在 `docs/superpowers/specs/archived/`；当前产品 contract 以代码、generated OpenAPI artifact、正常测试和本文为准。
+
+## 品牌与工程身份
+
+- **OpenScience** 是产品与用户可见品牌，用于 WebUI、公开文档、CLI help 和发布物料。
+- `AINRF` / `ainrf` 是稳定内部工程身份，用于 Python package/import namespace、状态路径、Linux identity、部署资源和 Prometheus metric namespace。
+- `osci` 只用于前端设计系统、CSS 命名空间或紧凑品牌展示，不建立第三套后端 package、状态目录或部署身份。
+- 用户文档优先使用 `openscience` CLI 与 `OPENSCIENCE_*`；`ainrf` CLI 与 `AINRF_*` 保持支持。它们不是等待一次性全量删除的 compatibility debt。
 
 ## 当前架构
 
@@ -59,7 +66,6 @@ flowchart TD
 | Task `new_task` | Task / API | `ainrf_deprecated_contract_calls_total` | generated callers 不再消费；完整观察窗口为零；同步 schema/tests/docs | 保留，fail-closed |
 | body/query idempotency aliases | API / release | `ainrf_deprecated_contract_calls_total` | 所有 caller 只用 `Idempotency-Key` header；完整观察窗口为零；同步 schema/tests/docs | 保留，fail-closed |
 | read-only legacy migration/audit surfaces | Domain migration / release | migration audit evidence | 外部版本化审计证据完成保留决策，且 rollback/audit 不再依赖该 surface | 保留，read-only |
-| `ainrf` package/CLI、`.ainrf` state 与 `AINRF_*` config aliases | Runtime / release | release config audit | 已发布兼容窗口结束；canonical `openscience` / `OPENSCIENCE_*` caller 迁移完成；完整观察窗口证明零使用 | 保留，fail-closed |
 
 所有 removal 必须同时满足：canonical caller 已完整迁移、可信 release telemetry 覆盖完整观察窗口、指标明确为零调用，以及 removal change 同步更新 schema、contract tests、文档和 rollback evidence。
 

@@ -3,7 +3,7 @@
 **Status:** Accepted foundation — 已确认品牌、视觉语言、导航、默认入口、命令面板、首批范围与主题策略；Project / Task / Workspace 领域模型已由独立契约确定
 **Date:** 2026-07-11
 **Scope:** OpenScience WebUI 的品牌表达、导航与页面外壳、视觉语言、核心交互组件和后续重构边界
-**Supersedes:** 当本文与 [`2026-06-14-frontend-redesign-proposal.md`](../../LLM-Working/2026-06-14-frontend-redesign-proposal.md) 的品牌、视觉或页面外壳方向冲突时，以本文为准；该旧提案保留为重构历史与已完成工作记录。
+**Supersedes:** 当本文与 [`2026-06-14-frontend-redesign-proposal.md`](../../archive/working-notes/2026-06-14-frontend-redesign-proposal.md) 的品牌、视觉或页面外壳方向冲突时，以本文为准；该旧提案保留为重构历史与已完成工作记录。
 **Related:** 视觉 token、主题、字体、组件状态与 shadcn 采用边界由 [`2026-07-11-osci-design-system-design.md`](2026-07-11-osci-design-system-design.md) 统一定义。
 **Domain model:** Project、Task、Workspace 与共享 Context 的职责见 [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md)。
 
@@ -39,7 +39,7 @@ OpenScience 已经具备一个可用的前端基础：共享设计系统、严�
 ### 3.1 产品名称
 
 - 面向用户的完整名称：`OpenScience`。
-- 官方缩写：`osci`。它用于紧凑标识、技术语境、设计系统命名空间和文档，不替代常规界面中的完整产品名称。
+- 品牌缩写：`osci`。它用于紧凑展示、设计系统和 CSS 命名空间，不替代常规界面中的完整产品名称，也不替代内部稳定的 `ainrf` 工程身份。
 - `ainrf` 只保留在必要的运行时兼容路径、数据字段和迁移层；它不能出现在新的用户界面文案、样式或组件名称中。
 
 ### 3.2 设计系统命名空间

@@ -12,7 +12,7 @@
 
 1. 产品级 engine family 只有 `codex` 与 `claude`；`codex-app-server`、`agent-sdk`、`claude-cli` 是 driver/surface，不再作为彼此平级的业务 engine。
 2. Codex 规范 driver 是长驻 Codex App Server；Claude 规范 driver 是 `ClaudeSDKClient` 双向模式；Claude CLI 是降级 fallback。
-3. OSci 是开源 compatible-API 平台，不使用 OpenAI/Anthropic 官方 API、官方 OAuth、ChatGPT login、Claude subscription/keychain 或其他账号态作为运行契约。
+3. OpenScience 是开源 compatible-API 平台，不使用 OpenAI/Anthropic 官方 API、官方 OAuth、ChatGPT login、Claude subscription/keychain 或其他账号态作为运行契约。
 4. 首期 provider protocol 只定义：
    - `openai_responses`；
    - `anthropic_messages`；

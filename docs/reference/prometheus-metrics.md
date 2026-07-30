@@ -215,13 +215,13 @@ Histogram bucket suffixes (`_bucket`, `_sum`, `_count`) are added automatically 
 
 ## Prometheus Alerting Rules
 
-Alerting rules are at `deploy/config/prometheus/rules/ainrf-alerts.yml`. The bundled example at `deploy/examples/prometheus-rules.example.yml` provides a starter set (see Section 5 of the [observability stack design doc](../superpowers/specs/2026-06-15-observability-stack-design.md) for the full 14-rule inventory).
+Alerting rules are at `deploy/config/prometheus/rules/ainrf-alerts.yml`. The bundled example at `deploy/examples/prometheus-rules.example.yml` provides a starter set (see Section 5 of the [archived observability stack design doc](../superpowers/specs/archived/2026-06-15-observability-stack-design.md) for the original 14-rule inventory).
 
 ---
 
 ## Related Documents
 
-- [Observability Stack Architecture](../superpowers/specs/2026-06-15-observability-stack-design.md) — design spec for the three-layer observability system
+- [Observability Stack Architecture](../superpowers/specs/archived/2026-06-15-observability-stack-design.md) — archived design record for the three-layer observability system
 - `src/ainrf/api/routes/metrics.py` — metric pre-declaration table, public mutation API, exposition endpoint
 - `src/ainrf/api/routes/sla_metrics.py` — SLA metrics definitions and recording helpers
 - `src/ainrf/api/routes/client_metrics.py` — client-side web vitals ingestion endpoint

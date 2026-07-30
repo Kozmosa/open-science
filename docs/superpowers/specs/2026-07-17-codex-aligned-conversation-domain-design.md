@@ -5,7 +5,7 @@
 **Scope:** Task、Turn、Item、steer、interrupt、fork、context transfer、运行状态投影与控制请求
 **Depends on:** [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md) 中的 Project、Workspace、Environment、Context 关系仍然有效
 **Follow-ups:** [`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-17-conversation-domain-standalone-migration-design.md`](2026-07-17-conversation-domain-standalone-migration-design.md)
-**Supersedes:** 本文取代 [`2026-07-12-openscience-domain-refactor-execution-spec.md`](2026-07-12-openscience-domain-refactor-execution-spec.md) B5 中 `Task → TaskAttempt → RuntimeSession`、`continue/retry/resume` 共用 Attempt，以及 Task 以最新 Attempt 终态作为生命周期的设计
+**Supersedes:** 本文取代 [`2026-07-12-openscience-domain-refactor-execution-spec.md`](archived/2026-07-12-openscience-domain-refactor-execution-spec.md) B5 中 `Task → TaskAttempt → RuntimeSession`、`continue/retry/resume` 共用 Attempt，以及 Task 以最新 Attempt 终态作为生命周期的设计
 
 ## 1. 决策摘要
 

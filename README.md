@@ -168,7 +168,7 @@ cd docs-site && npm run build
 
 ```text
 .
-├── src/ainrf/        # Python package: CLI, API, runtime services（兼容性内部包名）
+├── src/ainrf/        # 稳定内部 Python package：CLI、API 与 runtime services
 ├── frontend/         # React + Vite WebUI
 ├── tests/            # Python test suite
 ├── scripts/          # 本地开发、WebUI、docs 构建辅助脚本

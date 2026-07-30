@@ -24,7 +24,7 @@ features:
     details: 支持裸机、Docker Compose 与 Kubernetes 部署。
 ---
 
-OpenScience 的官方缩写为 `osci`。
+`osci` 可用于前端设计系统、CSS 命名空间和紧凑品牌展示；它不替代内部稳定的 `ainrf` package 与运行时标识。
 
 ## 文档导航
 
