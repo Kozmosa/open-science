@@ -2,9 +2,14 @@ import { SectionStack, semanticToneClasses } from '@design-system';
 import { useLocale, useT } from '@/shared/i18n';
 import { formatTaskDateTime, taskStatusLabel } from '@features/tasks';
 import type { TaskRecord } from '@/shared/types';
+import type { DomainTaskAttempt } from '@features/domain';
+import type { ProjectUsageSummaryResponse } from '@/shared/api/transportTypes';
+import { AttemptChain } from './AttemptChain';
 
 interface Props {
   detail: TaskRecord | null;
+  attempts: DomainTaskAttempt[];
+  usage: ProjectUsageSummaryResponse | null;
   loading: boolean;
   selectedId: string | null;
 }
@@ -29,14 +34,14 @@ function DetailRow({ label, value }: { label: string; value: string | number | n
   );
 }
 
-export function SessionDetail({ detail, loading, selectedId }: Props) {
+export function RunDetail({ detail, attempts, usage, loading, selectedId }: Props) {
   const t = useT();
   const locale = useLocale();
 
   if (!selectedId) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        {t('pages.sessions.selectPrompt')}
+        {t('pages.runs.selectPrompt')}
       </div>
     );
   }
@@ -52,7 +57,7 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
   if (!detail) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--text-tertiary)]">
-        {t('pages.sessions.notFound')}
+        {t('pages.runs.notFound')}
       </div>
     );
   }
@@ -74,17 +79,17 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
         </div>
 
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <DetailRow label={t('pages.sessions.detail.prompt')} value={detail.prompt} />
-          <DetailRow label={t('pages.sessions.detail.engine')} value={engine} />
-          <DetailRow label={t('pages.sessions.detail.project')} value={detail.project_id} />
-          <DetailRow label={t('pages.sessions.detail.workspace')} value={detail.workspace_id} />
-          <DetailRow label={t('pages.sessions.detail.environment')} value={detail.environment_id} />
-          <DetailRow label={t('pages.sessions.detail.workdir')} value={workdir} />
-          <DetailRow label={t('pages.sessions.detail.command')} value={command} />
-          <DetailRow label={t('pages.sessions.detail.started')} value={formatTaskDateTime(detail.started_at, locale)} />
-          <DetailRow label={t('pages.sessions.detail.completed')} value={formatTaskDateTime(detail.completed_at, locale)} />
-          <DetailRow label={t('pages.sessions.detail.outputSeq')} value={detail.latest_output_seq ?? 0} />
-          <DetailRow label={t('pages.sessions.detail.exitCode')} value={detail.exit_code} />
+          <DetailRow label={t('pages.runs.detail.prompt')} value={detail.prompt} />
+          <DetailRow label={t('pages.runs.detail.engine')} value={engine} />
+          <DetailRow label={t('pages.runs.detail.project')} value={detail.project_id} />
+          <DetailRow label={t('pages.runs.detail.workspace')} value={detail.workspace_id} />
+          <DetailRow label={t('pages.runs.detail.environment')} value={detail.environment_id} />
+          <DetailRow label={t('pages.runs.detail.workdir')} value={workdir} />
+          <DetailRow label={t('pages.runs.detail.command')} value={command} />
+          <DetailRow label={t('pages.runs.detail.started')} value={formatTaskDateTime(detail.started_at, locale)} />
+          <DetailRow label={t('pages.runs.detail.completed')} value={formatTaskDateTime(detail.completed_at, locale)} />
+          <DetailRow label={t('pages.runs.detail.outputSeq')} value={detail.latest_output_seq ?? 0} />
+          <DetailRow label={t('pages.runs.detail.exitCode')} value={detail.exit_code} />
         </div>
 
         {detail.error_summary ? (
@@ -92,6 +97,17 @@ export function SessionDetail({ detail, loading, selectedId }: Props) {
             {detail.error_summary}
           </div>
         ) : null}
+
+        {usage ? (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+            <DetailRow label={t('pages.runs.usage.tasks')} value={usage.task_count} />
+            <DetailRow label={t('pages.runs.usage.attempts')} value={usage.attempt_count} />
+            <DetailRow label={t('pages.runs.usage.tokens')} value={usage.total_tokens} />
+            <DetailRow label={t('pages.runs.usage.cost')} value={`$${usage.total_cost_usd.toFixed(2)}`} />
+          </div>
+        ) : null}
+
+        <AttemptChain attempts={attempts} />
       </SectionStack>
     </div>
   );

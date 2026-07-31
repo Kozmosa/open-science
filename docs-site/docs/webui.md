@@ -34,7 +34,7 @@ scripts/webui.sh         # 预览模式（构建后，端口 4173）
 | `/tasks` | TasksPage | 任务列表与详情 |
 | `/terminal` | TerminalPage | 终端会话 |
 | `/workspace-browser` | FileBrowserPage | 文件浏览器 |
-| `/sessions` | SessionsPage | 会话追踪 |
+| `/runs` | RunsPage | Task 运行记录与 Attempt 历史 |
 | `/timeline` | TimelinePage | 时间线（Gantt 图） |
 | `/resources` | ResourcesPage | 资源监控（GPU/CPU/内存） |
 | `/environments` | EnvironmentsPage | 环境管理 |

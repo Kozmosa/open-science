@@ -20,7 +20,7 @@ const STATUS_COLOR: Record<string, 'success' | 'warning' | 'error' | 'idle'> = {
   failed: 'error',
   cancelled: 'idle',
 };
-export function SessionList({ tasks, selectedId, onSelect, loading }: Props) {
+export function RunList({ tasks, selectedId, onSelect, loading }: Props) {
   const t = useT();
   const [search, setSearch] = useState('');
 
@@ -32,20 +32,20 @@ export function SessionList({ tasks, selectedId, onSelect, loading }: Props) {
   return (
     <div className="flex flex-col gap-3 p-2 min-h-0">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">{t('pages.sessions.sidebarTitle')}</h3>
+        <h3 className="text-sm font-semibold">{t('pages.runs.sidebarTitle')}</h3>
         <span className="text-xs text-[var(--text-secondary)]">
-          {t('pages.sessions.sidebarCount', { count: tasks.length })}
+          {t('pages.runs.sidebarCount', { count: tasks.length })}
         </span>
       </div>
       <Input
-        placeholder={t('pages.sessions.searchPlaceholder')}
+        placeholder={t('pages.runs.searchPlaceholder')}
         value={search}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
       />
       {loading && filtered.length === 0 ? (
         <p className="px-1 text-sm text-[var(--text-tertiary)]">{t('common.loading')}</p>
       ) : filtered.length === 0 ? (
-        <p className="px-1 text-sm text-[var(--text-tertiary)]">{t('pages.sessions.empty')}</p>
+        <p className="px-1 text-sm text-[var(--text-tertiary)]">{t('pages.runs.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {filtered.map((task) => (
@@ -66,7 +66,7 @@ export function SessionList({ tasks, selectedId, onSelect, loading }: Props) {
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--text-secondary)]">
                   <span>{taskStatusLabel(t, task.status)}</span>
                   <span>{task.harness_engine ?? task.task_profile ?? 'agent'}</span>
-                  <span>{t('pages.sessions.outputCount', { count: task.latest_output_seq ?? 0 })}</span>
+                  <span>{t('pages.runs.outputCount', { count: task.latest_output_seq ?? 0 })}</span>
                 </div>
               </button>
             </li>

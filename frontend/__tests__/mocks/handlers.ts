@@ -63,11 +63,11 @@ export const handlers = [
     return HttpResponse.json({ items: [domainWorkspace()] })
   }),
 
-  http.get('/api/projects/default/tasks', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
+  http.get('/api/tasks', () => {
+    return HttpResponse.json({ items: [], total: 0 })
   }),
 
-  http.get('/api/projects/default/task-edges', () => {
+  http.get('/api/domain/projects/default/task-relationships', () => {
     return HttpResponse.json({ items: [] })
   }),
 
@@ -75,11 +75,7 @@ export const handlers = [
     return HttpResponse.json({ items: [] })
   }),
 
-  http.get('/api/projects/:projectId/tasks', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
-  }),
-
-  http.get('/api/projects/:projectId/task-edges', () => {
+  http.get('/api/domain/projects/:projectId/task-relationships', () => {
     return HttpResponse.json({ items: [] })
   }),
 
@@ -103,14 +99,6 @@ export const handlers = [
     return HttpResponse.json({ entries: [], path: '/' })
   }),
 
-  // Sessions
-  http.get('/api/sessions', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
-  }),
-
-  http.get('/api/sessions/batch-detail', () => {
-    return HttpResponse.json({ items: {} })
-  }),
 ]
 
 function domainProject() {

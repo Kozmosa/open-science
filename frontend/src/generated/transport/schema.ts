@@ -1576,6 +1576,44 @@ export type ProjectUpdateRequest = {
 };
 
 /**
+ * ProjectUsageSummaryResponse
+ */
+export type ProjectUsageSummaryResponse = {
+    /**
+     * Attempt Count
+     */
+    attempt_count: number;
+    /**
+     * By Model
+     */
+    by_model?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Task Count
+     */
+    task_count: number;
+    /**
+     * Total Cost Usd
+     */
+    total_cost_usd: number;
+    /**
+     * Total Duration Ms
+     */
+    total_duration_ms: number;
+    /**
+     * Total Tokens
+     */
+    total_tokens: number;
+};
+
+/**
  * RefreshRequest
  */
 export type RefreshRequest = {
@@ -2371,7 +2409,7 @@ export type TaskCreateRequest = {
     /**
      * Project Id
      */
-    project_id?: string;
+    project_id: string;
     /**
      * Prompt
      */
@@ -2492,6 +2530,8 @@ export type TaskEdgeListResponse = {
 
 /**
  * TaskEdgeResponse
+ *
+ * Compatibility transport retained until Gate A completes.
  */
 export type TaskEdgeResponse = {
     /**
@@ -2712,6 +2752,60 @@ export type TaskPromptSendResponse = {
 };
 
 /**
+ * TaskRelationshipCreateRequest
+ */
+export type TaskRelationshipCreateRequest = {
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Target Task Id
+     */
+    target_task_id: string;
+};
+
+/**
+ * TaskRelationshipListResponse
+ */
+export type TaskRelationshipListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TaskRelationshipResponse>;
+};
+
+/**
+ * TaskRelationshipResponse
+ */
+export type TaskRelationshipResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Relationship Id
+     */
+    relationship_id: string;
+    /**
+     * Relationship Type
+     */
+    relationship_type?: string;
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Target Task Id
+     */
+    target_task_id: string;
+};
+
+/**
  * TaskResumeResponse
  */
 export type TaskResumeResponse = {
@@ -2723,22 +2817,6 @@ export type TaskResumeResponse = {
      * Task Id
      */
     task_id: string;
-};
-
-/**
- * TaskRetryRequest
- */
-export type TaskRetryRequest = {
-    [key: string]: never;
-};
-
-/**
- * TaskRetryResponse
- */
-export type TaskRetryResponse = {
-    attempt: TaskAttemptResponse;
-    dispatch: TaskDispatchResponse;
-    task: TaskSummaryResponse;
 };
 
 /**
@@ -4825,6 +4903,100 @@ export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses = 
 
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponse = PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses[keyof PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses];
 
+export type GetApiDomainProjectsProjectIdTaskRelationshipsData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships';
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsError = GetApiDomainProjectsProjectIdTaskRelationshipsErrors[keyof GetApiDomainProjectsProjectIdTaskRelationshipsErrors];
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskRelationshipListResponse;
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsResponse = GetApiDomainProjectsProjectIdTaskRelationshipsResponses[keyof GetApiDomainProjectsProjectIdTaskRelationshipsResponses];
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsData = {
+    body: TaskRelationshipCreateRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships';
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsError = PostApiDomainProjectsProjectIdTaskRelationshipsErrors[keyof PostApiDomainProjectsProjectIdTaskRelationshipsErrors];
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsResponses = {
+    /**
+     * Successful Response
+     */
+    201: TaskRelationshipResponse;
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsResponse = PostApiDomainProjectsProjectIdTaskRelationshipsResponses[keyof PostApiDomainProjectsProjectIdTaskRelationshipsResponses];
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Relationship Id
+         */
+        relationship_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships/{relationship_id}';
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdError = DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors[keyof DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors];
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponse = DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses[keyof DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses];
+
 export type PostApiDomainProjectsProjectIdUnarchiveData = {
     body?: never;
     path: {
@@ -4854,6 +5026,36 @@ export type PostApiDomainProjectsProjectIdUnarchiveResponses = {
 };
 
 export type PostApiDomainProjectsProjectIdUnarchiveResponse = PostApiDomainProjectsProjectIdUnarchiveResponses[keyof PostApiDomainProjectsProjectIdUnarchiveResponses];
+
+export type GetApiDomainProjectsProjectIdUsageSummaryData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/usage-summary';
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryError = GetApiDomainProjectsProjectIdUsageSummaryErrors[keyof GetApiDomainProjectsProjectIdUsageSummaryErrors];
+
+export type GetApiDomainProjectsProjectIdUsageSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectUsageSummaryResponse;
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryResponse = GetApiDomainProjectsProjectIdUsageSummaryResponses[keyof GetApiDomainProjectsProjectIdUsageSummaryResponses];
 
 export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdData = {
     body?: never;
@@ -7432,10 +7634,7 @@ export type PostApiTasksTaskIdResumeResponses = {
 export type PostApiTasksTaskIdResumeResponse = PostApiTasksTaskIdResumeResponses[keyof PostApiTasksTaskIdResumeResponses];
 
 export type PostApiTasksTaskIdRetryData = {
-    /**
-     * Payload
-     */
-    body?: TaskRetryRequest | null;
+    body?: never;
     path: {
         /**
          * Task Id
@@ -7459,7 +7658,7 @@ export type PostApiTasksTaskIdRetryResponses = {
     /**
      * Successful Response
      */
-    201: TaskRetryResponse;
+    201: TaskMutationResponse;
 };
 
 export type PostApiTasksTaskIdRetryResponse = PostApiTasksTaskIdRetryResponses[keyof PostApiTasksTaskIdRetryResponses];

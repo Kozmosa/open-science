@@ -1,1 +1,1 @@
-export { default as SessionsPage } from './SessionsPage';
+export { default as RunsPage } from './RunsPage';

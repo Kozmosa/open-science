@@ -364,10 +364,38 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
+  "get_api_domain_projects_project_id_task_relationships": {
+    "method": "GET",
+    "path": "/api/domain/projects/{project_id}/task-relationships",
+    "clientPath": "/domain/projects/{project_id}/task-relationships",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_projects_project_id_task_relationships": {
+    "method": "POST",
+    "path": "/api/domain/projects/{project_id}/task-relationships",
+    "clientPath": "/domain/projects/{project_id}/task-relationships",
+    "canonical": true,
+    "deprecated": false
+  },
+  "delete_api_domain_projects_project_id_task_relationships_relationship_id": {
+    "method": "DELETE",
+    "path": "/api/domain/projects/{project_id}/task-relationships/{relationship_id}",
+    "clientPath": "/domain/projects/{project_id}/task-relationships/{relationship_id}",
+    "canonical": true,
+    "deprecated": false
+  },
   "post_api_domain_projects_project_id_unarchive": {
     "method": "POST",
     "path": "/api/domain/projects/{project_id}/unarchive",
     "clientPath": "/domain/projects/{project_id}/unarchive",
+    "canonical": true,
+    "deprecated": false
+  },
+  "get_api_domain_projects_project_id_usage_summary": {
+    "method": "GET",
+    "path": "/api/domain/projects/{project_id}/usage-summary",
+    "clientPath": "/domain/projects/{project_id}/usage-summary",
     "canonical": true,
     "deprecated": false
   },

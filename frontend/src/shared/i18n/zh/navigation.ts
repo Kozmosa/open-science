@@ -33,7 +33,7 @@ const navigation = {
         label: '资源监控',
         description: '系统资源占用与使用情况',
       },
-      sessions: {
+      runs: {
         label: '任务运行',
         description: '来自真实 Agent 任务的运行历史',
       },

@@ -1,18 +1,20 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTask, getTasks } from '@features/tasks';
+import { getDomainTaskAttempts } from '@features/domain';
+import { getProjectUsageSummary } from '@features/projects';
 import { PageShell, SplitPane } from '@design-system';
-import { SessionDetail } from './sessions/SessionDetail';
-import { SessionList } from './sessions/SessionList';
+import { RunDetail } from './runs/RunDetail';
+import { RunList } from './runs/RunList';
 import { queryKeys } from '@/shared/api/queryKeys';
 
-export default function SessionsPage() {
+export default function RunsPage() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(320);
 
   const tasksQuery = useQuery({
-    queryKey: queryKeys.sessions.taskRuns,
+    queryKey: queryKeys.runs.taskRuns,
     queryFn: () => getTasks({ includeArchived: false, limit: 200, sort: 'updated' }),
     refetchInterval: 10000,
   });
@@ -28,6 +30,19 @@ export default function SessionsPage() {
     enabled: selectedId !== null,
   });
 
+  const attemptsQuery = useQuery({
+    queryKey: queryKeys.domain.taskAttempts(selectedId),
+    queryFn: () => getDomainTaskAttempts(selectedId!),
+    enabled: selectedId !== null,
+  });
+
+  const projectId = detailQuery.data?.project_id ?? null;
+  const usageQuery = useQuery({
+    queryKey: queryKeys.domain.projectUsage(projectId),
+    queryFn: () => getProjectUsageSummary(projectId!),
+    enabled: projectId !== null,
+  });
+
   const handleSelect = useCallback(
     (id: string) => {
       setSelectedId(id);
@@ -40,7 +55,7 @@ export default function SessionsPage() {
     <PageShell>
       <SplitPane
         sidebar={
-          <SessionList
+          <RunList
             tasks={tasks}
             selectedId={selectedId}
             onSelect={handleSelect}
@@ -50,8 +65,10 @@ export default function SessionsPage() {
         sidebarWidth={sidebarWidth}
         onSidebarWidthChange={setSidebarWidth}
       >
-        <SessionDetail
+        <RunDetail
           detail={detailQuery.data ?? null}
+          attempts={attemptsQuery.data?.items ?? []}
+          usage={usageQuery.data ?? null}
           loading={detailQuery.isLoading}
           selectedId={selectedId}
         />

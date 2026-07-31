@@ -1,1 +1,1 @@
-export { SessionsPage as default } from '@features/sessions/pages';
+export { RunsPage as default } from '@features/runs/pages';

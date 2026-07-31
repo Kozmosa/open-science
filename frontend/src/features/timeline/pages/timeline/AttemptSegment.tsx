@@ -26,10 +26,10 @@ function formatDuration(ms: number | null): string {
 export function AttemptSegment({ attempt, leftPct, widthPct, onClick }: Props) {
   const t = useT();
   const tooltip = [
-    t('pages.sessions.timeline.attemptSeq', { seq: attempt.attempt_seq }),
-    `${t('pages.sessions.timeline.status')} ${attempt.status}`,
-    `${t('pages.sessions.timeline.duration')} ${formatDuration(attempt.duration_ms)}`,
-    attempt.intervention_reason ? `${t('pages.sessions.timeline.reason')} ${attempt.intervention_reason}` : '',
+    t('pages.runs.timeline.attemptSeq', { seq: attempt.attempt_seq }),
+    `${t('pages.runs.timeline.status')} ${attempt.status}`,
+    `${t('pages.runs.timeline.duration')} ${formatDuration(attempt.duration_ms)}`,
+    attempt.intervention_reason ? `${t('pages.runs.timeline.reason')} ${attempt.intervention_reason}` : '',
   ]
     .filter(Boolean)
     .join(' · ');

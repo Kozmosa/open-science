@@ -427,26 +427,7 @@ beforeEach(() => {
       }),
     ])
   );
-  mockRetryTask.mockResolvedValue({
-    new_task: taskSummary,
-    archived_task_id: null,
-    edge_id: 'retry:task-1:2',
-    task: taskSummary,
-    attempt: {
-      attempt_id: 'attempt-2',
-      task_id: 'task-1',
-      attempt_seq: 2,
-      trigger: 'retry',
-      status: 'queued',
-    },
-    dispatch: {
-      dispatch_id: 'dispatch-2',
-      task_id: 'task-1',
-      attempt_id: 'attempt-2',
-      status: 'pending',
-      launch_state: 'pending',
-    },
-  });
+  mockRetryTask.mockResolvedValue(taskSummary);
 });
 
 describe('task output helpers', () => {
@@ -558,18 +539,7 @@ describe('TasksPage', () => {
         },
       }],
     });
-    mockRetryTask.mockResolvedValue({
-      new_task: failedTask,
-      task: failedTask,
-      archived_task_id: null,
-      edge_id: 'retry:task-1:2',
-      attempt: {
-        attempt_id: 'attempt-2', task_id: 'task-1', attempt_seq: 2, trigger: 'retry', status: 'queued',
-      },
-      dispatch: {
-        dispatch_id: 'dispatch-2', task_id: 'task-1', attempt_id: 'attempt-2', status: 'pending', launch_state: 'pending',
-      },
-    });
+    mockRetryTask.mockResolvedValue(failedTask);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
 

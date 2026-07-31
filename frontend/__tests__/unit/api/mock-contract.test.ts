@@ -15,7 +15,6 @@ import {
 } from '@/features/literature';
 import { createTask, retryTask } from '@/features/tasks';
 import { getAdminUsers, getSearchSettings } from '@/features/settings';
-import { getSessionsBatchDetail } from '@/features/sessions';
 import {
   acceptDomainContextCandidate,
   getDomainCapabilities,
@@ -92,8 +91,7 @@ describe('frontend v2 mock contract', () => {
     });
     expect(initialAttempts.items).toHaveLength(1);
     expect(initialAttempts.items[0]).toMatchObject({ trigger: 'initial', status: 'queued' });
-    expect(retried.task?.task_id ?? retried.new_task.task_id).toBe(task.task_id);
-    expect(retried.attempt).toMatchObject({ task_id: task.task_id, attempt_seq: 2, trigger: 'retry' });
+    expect(retried.task_id).toBe(task.task_id);
     expect(attempts.items.map((attempt) => attempt.trigger)).toEqual(['initial', 'retry']);
   });
 
@@ -183,13 +181,10 @@ describe('frontend v2 mock contract', () => {
     });
   });
 
-  it('covers Sessions batch and settings/admin support endpoints used by current pages', async () => {
-    const sessions = await getSessionsBatchDetail(['session-seed', 'missing-session']);
+  it('covers settings/admin support endpoints used by current pages', async () => {
     const users = await getAdminUsers();
     const search = await getSearchSettings();
 
-    expect(sessions.items['session-seed']?.[0]).toMatchObject({ task_id: 'task-seed', status: 'completed' });
-    expect(sessions.items['missing-session']).toEqual([]);
     expect(users.items.some((user) => user.id === 'mock-browser-user')).toBe(true);
     expect(search).toMatchObject({ active_backend: 'builtin', auto_start_mcp_servers: [] });
   });
@@ -222,7 +217,6 @@ describe('frontend mock architecture guard', () => {
       join(srcRoot, 'features/terminal/api/endpoints.ts'),
       join(srcRoot, 'features/workspaces/api.ts'),
       join(srcRoot, 'features/resources/api.ts'),
-      join(srcRoot, 'features/sessions/api.ts'),
       join(srcRoot, 'features/literature/api.ts'),
       join(srcRoot, 'features/domain/api.ts'),
       join(srcRoot, 'features/settings/api/endpoints.ts'),

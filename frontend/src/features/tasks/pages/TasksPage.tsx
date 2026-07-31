@@ -242,7 +242,7 @@ function TasksPage() {
     },
     onSuccess: ({ result, key }) => {
       retryKeyManager.markSucceeded(key);
-      const retriedTask = result.task;
+      const retriedTask = result;
       const affectedProjectIds = new Set([
         selectedTask?.project_id,
         retriedTask.project_id,

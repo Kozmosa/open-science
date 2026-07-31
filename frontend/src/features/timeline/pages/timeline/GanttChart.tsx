@@ -91,7 +91,7 @@ export function GanttChart({ tasks, loading }: Props) {
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-[var(--border)] p-4 text-sm text-[var(--text-tertiary)]">
-        {t('pages.sessions.timeline.loading')}
+        {t('pages.runs.timeline.loading')}
       </div>
     );
   }
@@ -99,7 +99,7 @@ export function GanttChart({ tasks, loading }: Props) {
   if (tasks.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-[var(--border)] p-4 text-sm text-[var(--text-tertiary)]">
-        {t('pages.sessions.timeline.empty')}
+        {t('pages.runs.timeline.empty')}
       </div>
     );
   }
@@ -108,7 +108,7 @@ export function GanttChart({ tasks, loading }: Props) {
     <div className="flex min-h-0 flex-1 w-full flex-col overflow-x-auto overflow-y-auto rounded-lg border border-[var(--border)]">
       <div className="flex border-b border-[var(--border)] bg-[var(--bg)]">
         <div className="w-[280px] min-w-[280px] border-r-2 border-[var(--border)] p-2 text-xs font-semibold text-[var(--text-secondary)]">
-          {t('pages.sessions.timeline.title')}
+          {t('pages.runs.timeline.title')}
         </div>
         <div className="relative h-8 flex-1">
           {timeLabels.map((tl) => (

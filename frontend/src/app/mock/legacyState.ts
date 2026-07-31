@@ -1,6 +1,5 @@
 import type {
   AnthropicEnvStatus,
-  AttemptListResponse,
   EnvironmentListResponse,
   EnvironmentRecord,
   FileListResponse,
@@ -9,9 +8,6 @@ import type {
   ProjectEnvironmentReferenceListResponse,
   ProjectListResponse,
   ProjectRecord,
-  SessionDetailRecord,
-  SessionListResponse,
-  SessionRecord,
   SkillDetail,
   SkillImportResponse,
   SkillItem,
@@ -40,10 +36,9 @@ import type {
   ProjectUpdateRequest,
   SkillImportRequest,
   TaskCreatePayload,
-  TaskEdgeCreateRequest,
+  TaskRelationshipCreateRequest,
   WorkspaceUpdateRequest,
 } from '@/shared/api/transportTypes';
-import { ApiError } from '@/shared/api/client';
 
 interface MockProjectCreateRequest {
   name: string;
@@ -1116,7 +1111,7 @@ export function mockGetTaskEdges(projectId: string): TaskEdgeListResponse {
 
 export function mockCreateTaskEdge(
   projectId: string,
-  payload: TaskEdgeCreateRequest
+  payload: TaskRelationshipCreateRequest
 ): TaskEdge {
   const edge: TaskEdge = {
     edge_id: `edge-${Math.random().toString(36).slice(2, 8)}`,
@@ -1232,27 +1227,4 @@ export function mockReadFile(_environmentId: string, path: string): FileReadResp
     language,
     mime_type: null,
   };
-}
-
-// ── Session mocks ───────────────────────────────────────
-
-const _mockSessions: SessionRecord[] = [];
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function mockGetSessions(_filters?: {
-  projectId?: string;
-  status?: string;
-}): SessionListResponse {
-  return { items: _mockSessions, has_more: false, next_cursor: null };
-}
-
-export function mockGetSession(id: string): SessionDetailRecord {
-  const s = _mockSessions.find((x) => x.id === id);
-  if (!s) throw new ApiError('Session not found', 404, `/sessions/${id}`);
-  return { ...s, attempts: [] };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function mockGetAttempts(_sessionId: string): AttemptListResponse {
-  return { items: [] };
 }

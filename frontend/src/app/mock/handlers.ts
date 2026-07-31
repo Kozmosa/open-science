@@ -9,7 +9,7 @@ import type {
   ProjectEnvironmentReferenceUpdateRequest,
   SkillImportRequest,
   TaskCreatePayload,
-  TaskEdgeCreateRequest,
+  TaskRelationshipCreateRequest,
   WorkspaceUpdateRequest,
 } from '@/shared/api/transportTypes';
 import { ApiError } from '@/shared/api/client';
@@ -26,21 +26,16 @@ import {
   mockCreateWorkspace,
   mockDeleteEnvironment,
   mockDeleteProjectEnvironmentReference,
-  mockDeleteTask,
   mockDeleteTaskEdge,
   mockDeleteTerminalSession,
   mockDeleteWorkspace,
   mockDetectEnvironment,
-  mockGetAttempts,
   mockGetEnvironment,
   mockGetEnvironments,
   mockGetHealth,
   mockGetProjectEnvironmentReferences,
-  mockGetProjectTasks,
   mockGetResources,
-  mockGetSession,
   mockGetSessionPairs,
-  mockGetSessions,
   mockGetSkillDetail,
   mockGetSkills,
   mockGetTask,
@@ -57,7 +52,6 @@ import {
   mockResetTerminalSession,
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
-  mockUpdateTaskProject,
   mockUpdateWorkspace,
   resetMockEnvironmentState,
   resetMockTaskState,
@@ -198,15 +192,11 @@ export const legacyMockHandlers = [
   http.get('/api/tasks/:taskId', ({ params }) => mockJson(() => mockGetTask(textParam(params, 'taskId')))),
   http.post('/api/tasks', resolveJson(async ({ request }) => {
     const body = await request.json() as TaskCreatePayload;
-    return mockJson(() => mockCreateTask(body));
+    const task = mockCreateTask(body);
+    return HttpResponse.json({ task, attempt: {}, dispatch: {} }, { status: 201 });
   })),
   http.post('/api/tasks/:taskId/archive', ({ params }) => mockJson(() => mockArchiveTask(textParam(params, 'taskId')))),
   http.post('/api/tasks/:taskId/cancel', ({ params }) => mockJson(() => mockCancelTask(textParam(params, 'taskId')))),
-  http.patch('/api/tasks/:taskId/project', resolveJson(async ({ params, request }) => {
-    const body = await request.json() as { project_id: string };
-    return mockJson(() => mockUpdateTaskProject(textParam(params, 'taskId'), body.project_id));
-  })),
-  http.delete('/api/tasks/:taskId/permanent', ({ params }) => mockEmpty(() => mockDeleteTask(textParam(params, 'taskId')))),
   http.get('/api/tasks/:taskId/output', ({ params, request }) => {
     const afterSeq = Number(new URL(request.url).searchParams.get('after_seq') ?? 0);
     return mockJson(() => mockGetTaskOutput(textParam(params, 'taskId'), afterSeq));
@@ -225,13 +215,18 @@ export const legacyMockHandlers = [
   http.delete('/api/domain/environments/:environmentId', ({ params }) => mockEmpty(() => mockDeleteEnvironment(textParam(params, 'environmentId')))),
   http.post('/api/domain/environments/:environmentId/detect', ({ params }) => mockJson(() => mockDetectEnvironment(textParam(params, 'environmentId')))),
 
-  http.get('/api/projects/:projectId/tasks', () => HttpResponse.json(mockGetProjectTasks())),
-  http.get('/api/projects/:projectId/task-edges', ({ params }) => HttpResponse.json(mockGetTaskEdges(textParam(params, 'projectId')))),
-  http.post('/api/projects/:projectId/task-edges', resolveJson(async ({ params, request }) => {
-    const body = await request.json() as TaskEdgeCreateRequest;
-    return mockJson(() => mockCreateTaskEdge(textParam(params, 'projectId'), body));
+  http.get('/api/domain/projects/:projectId/task-relationships', ({ params }) => HttpResponse.json({
+    items: mockGetTaskEdges(textParam(params, 'projectId')).items.map(({ edge_id, ...edge }) => ({
+      ...edge,
+      relationship_id: edge_id,
+    })),
   })),
-  http.delete('/api/task-edges/:edgeId', ({ params }) => mockEmpty(() => mockDeleteTaskEdge(textParam(params, 'edgeId')))),
+  http.post('/api/domain/projects/:projectId/task-relationships', resolveJson(async ({ params, request }) => {
+    const body = await request.json() as TaskRelationshipCreateRequest;
+    const { edge_id, ...edge } = mockCreateTaskEdge(textParam(params, 'projectId'), body);
+    return HttpResponse.json({ ...edge, relationship_id: edge_id }, { status: 201 });
+  })),
+  http.delete('/api/domain/projects/:projectId/task-relationships/:relationshipId', ({ params }) => mockEmpty(() => mockDeleteTaskEdge(textParam(params, 'relationshipId')))),
   http.get('/api/domain/projects/:projectId/environment-refs', ({ params }) => HttpResponse.json(mockGetProjectEnvironmentReferences(textParam(params, 'projectId')))),
   http.post('/api/domain/projects/:projectId/environment-refs', resolveJson(async ({ params, request }) => {
     const body = await request.json() as ProjectEnvironmentReferenceCreateRequest;
@@ -242,7 +237,7 @@ export const legacyMockHandlers = [
     return mockJson(() => mockUpdateProjectEnvironmentReference(textParam(params, 'projectId'), textParam(params, 'environmentId'), body));
   })),
   http.delete('/api/domain/projects/:projectId/environment-refs/:environmentId', ({ params }) => mockEmpty(() => mockDeleteProjectEnvironmentReference(textParam(params, 'projectId'), textParam(params, 'environmentId')))),
-  http.get('/api/projects/:projectId/cost-summary', ({ params }) => HttpResponse.json({ project_id: textParam(params, 'projectId'), total_cost_usd: 0, total_tokens: 0, session_count: 0, by_model: {} })),
+  http.get('/api/domain/projects/:projectId/usage-summary', ({ params }) => HttpResponse.json({ project_id: textParam(params, 'projectId'), task_count: 0, attempt_count: 0, total_duration_ms: 0, total_cost_usd: 0, total_tokens: 0, by_model: {} })),
 
   http.get('/api/files/list', ({ request }) => {
     const search = new URL(request.url).searchParams;
@@ -263,13 +258,6 @@ export const legacyMockHandlers = [
   http.get('/api/skill-registries/:registryId/status', ({ params }) => HttpResponse.json({ registry_id: textParam(params, 'registryId'), installed: false, installed_count: 0, last_sync_at: null, remote_commit: null, local_commit: null, has_update: false, is_dirty: false, sync_in_progress: false })),
   http.post('/api/skill-registries/:registryId/install', ({ params }) => HttpResponse.json({ registry_id: textParam(params, 'registryId'), installed_count: 0, skills: [] })),
   http.post('/api/skill-registries/:registryId/update', ({ params }) => HttpResponse.json({ registry_id: textParam(params, 'registryId'), updated_count: 0, added: [], removed: [] })),
-
-  http.get('/api/sessions', ({ request }) => {
-    const search = new URL(request.url).searchParams;
-    return HttpResponse.json(mockGetSessions({ projectId: search.get('project_id') ?? undefined, status: search.get('status') ?? undefined }));
-  }),
-  http.get('/api/sessions/:sessionId', ({ params }) => mockJson(() => mockGetSession(textParam(params, 'sessionId')))),
-  http.get('/api/sessions/:sessionId/attempts', ({ params }) => HttpResponse.json(mockGetAttempts(textParam(params, 'sessionId')))),
 
   http.get('/api/literature/overview', () => HttpResponse.json({ last_successful_check_at: null, next_scheduled_check_at: null, active_check: null, counts: { today: 0, unread: 0, saved: 0, updated: 0 } })),
   http.get('/api/literature/topics', () => HttpResponse.json({ items: [] })),

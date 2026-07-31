@@ -25,14 +25,14 @@ test.describe('Projects E2E', () => {
         }),
       })
     })
-    await page.route('**/api/projects/proj-001/tasks**', (route) => {
+    await page.route('**/api/tasks?**project_id=proj-001**', (route) => {
       void route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ items: [], total: 0 }),
       })
     })
-    await page.route('**/api/projects/proj-001/task-edges**', (route) => {
+    await page.route('**/api/domain/projects/proj-001/task-relationships**', (route) => {
       void route.fulfill({
         status: 200,
         contentType: 'application/json',

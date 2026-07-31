@@ -85,11 +85,16 @@ def test_list_projects(benchmark, client, auth_headers):
 
 
 def test_list_tasks(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/api/projects/default/tasks", headers=auth_headers))
+    benchmark(lambda: client.get(f"{BASE_URL}/api/tasks?project_id=default", headers=auth_headers))
 
 
 def test_list_task_edges(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/task-edges", headers=auth_headers))
+    benchmark(
+        lambda: client.get(
+            f"{BASE_URL}/api/domain/projects/default/task-relationships",
+            headers=auth_headers,
+        )
+    )
 
 
 # --- File endpoints ---
@@ -104,13 +109,6 @@ def test_file_list(benchmark, client, auth_headers):
     )
 
 
-# --- Session endpoints ---
-
-
-def test_list_sessions(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/sessions", headers=auth_headers))
-
-
 # --- Task creation ---
 
 
@@ -118,9 +116,11 @@ def test_create_task_minimal(benchmark, client, auth_headers):
     payload = {
         "project_id": "default",
         "workspace_id": "workspace-default",
-        "environment_id": "env-localhost",
-        "task_profile": "claude-code",
-        "task_input": "benchmark",
+        "researcher_type": "vanilla",
+        "harness_engine": "claude-code",
+        "prompt": "benchmark",
+        "skills": [],
+        "mcp_servers": [],
         "title": "perf-bench-task",
     }
     benchmark(lambda: client.post(f"{BASE_URL}/tasks", json=payload, headers=auth_headers))

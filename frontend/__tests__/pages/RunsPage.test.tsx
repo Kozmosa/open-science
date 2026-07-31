@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test-support/render';
-import SessionsPage from '../../src/pages/SessionsPage';
+import RunsPage from '../../src/pages/RunsPage';
 import * as api from '@features/tasks/api';
 
 vi.mock('@features/tasks/api', () => ({
@@ -55,9 +55,9 @@ beforeEach(() => {
   mockGetTask.mockResolvedValue(taskRecord);
 });
 
-describe('SessionsPage', () => {
+describe('RunsPage', () => {
   it('renders the task run list sidebar from real tasks', async () => {
-    renderWithProviders(<SessionsPage />);
+    renderWithProviders(<RunsPage />);
 
     await waitFor(() => {
       expect(mockGetTasks).toHaveBeenCalledWith({ includeArchived: false, limit: 200, sort: 'updated' });
@@ -68,7 +68,7 @@ describe('SessionsPage', () => {
 
   it('shows empty state when no task runs exist', async () => {
     mockGetTasks.mockResolvedValue({ items: [], total: 0 });
-    renderWithProviders(<SessionsPage />);
+    renderWithProviders(<RunsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('No task runs yet')).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('SessionsPage', () => {
   });
 
   it('prompts to select a task run initially', async () => {
-    renderWithProviders(<SessionsPage />);
+    renderWithProviders(<RunsPage />);
 
     await waitFor(() => {
       expect(
@@ -86,7 +86,7 @@ describe('SessionsPage', () => {
   });
 
   it('loads task detail on click', async () => {
-    renderWithProviders(<SessionsPage />);
+    renderWithProviders(<RunsPage />);
 
     await waitFor(() => {
       fireEvent.click(screen.getByText('Train model'));
