@@ -242,7 +242,7 @@ function TasksPage() {
     },
     onSuccess: ({ result, key }) => {
       retryKeyManager.markSucceeded(key);
-      const retriedTask = result.task;
+      const retriedTask = result;
       const affectedProjectIds = new Set([
         selectedTask?.project_id,
         retriedTask.project_id,
@@ -314,10 +314,10 @@ function TasksPage() {
       );
       return { task, key };
     },
-    onSuccess: ({ task, key }) => {
+    onSuccess: async ({ task, key }) => {
       forkKeyManager.markSucceeded(key);
       setOperationDialog(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       selectTask(task.task_id);
     },
   });

@@ -1499,7 +1499,7 @@ class _DomainWriteKernel:
             rows = self._repository(conn).list_related_task_relationships(project_id)
         return [
             {
-                "edge_id": str(row["relationship_id"]),
+                "relationship_id": str(row["relationship_id"]),
                 "project_id": project_id,
                 "source_task_id": str(row["source_task_id"]),
                 "target_task_id": str(row["target_task_id"]),
@@ -1518,7 +1518,7 @@ class _DomainWriteKernel:
         target_task_id: str,
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
-        """Create the compatibility ``related_to`` edge in SQLite."""
+        """Create a durable Project-scoped ``related_to`` Task relationship."""
 
         relationship_type = "related_to"
         relationship_id = self._relationship_id(source_task_id, target_task_id, relationship_type)
@@ -1565,7 +1565,7 @@ class _DomainWriteKernel:
             if row is None:
                 raise DomainConflictError("Task relationship was not created")
             result: dict[str, object] = {
-                "edge_id": str(row["relationship_id"]),
+                "relationship_id": str(row["relationship_id"]),
                 "project_id": project_id,
                 "source_task_id": source_task_id,
                 "target_task_id": target_task_id,

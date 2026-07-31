@@ -93,70 +93,6 @@ export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
 export type ApiStatus = 'ok' | 'degraded';
 
 /**
- * AttemptListResponse
- */
-export type AttemptListResponse = {
-    /**
-     * Items
-     */
-    items: Array<AttemptResponse>;
-};
-
-/**
- * AttemptResponse
- */
-export type AttemptResponse = {
-    /**
-     * Attempt Seq
-     */
-    attempt_seq: number;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Duration Ms
-     */
-    duration_ms?: number | null;
-    /**
-     * Finished At
-     */
-    finished_at?: string | null;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Intervention Reason
-     */
-    intervention_reason?: string | null;
-    /**
-     * Parent Attempt Id
-     */
-    parent_attempt_id?: string | null;
-    /**
-     * Session Id
-     */
-    session_id: string;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id?: string | null;
-    /**
-     * Token Usage Json
-     */
-    token_usage_json?: string | null;
-};
-
-/**
  * AuthTokenResponse
  */
 export type AuthTokenResponse = {
@@ -224,60 +160,6 @@ export type CodexDefaultsResponse = {
      * Codex Config Toml
      */
     codex_config_toml?: string | null;
-};
-
-/**
- * CollaboratorListResponse
- */
-export type CollaboratorListResponse = {
-    /**
-     * Items
-     */
-    items: Array<CollaboratorResponse>;
-};
-
-/**
- * CollaboratorRequest
- */
-export type CollaboratorRequest = {
-    /**
-     * Can Publish
-     */
-    can_publish?: boolean;
-    /**
-     * Role
-     */
-    role?: string;
-    /**
-     * User Id
-     */
-    user_id: string;
-};
-
-/**
- * CollaboratorResponse
- */
-export type CollaboratorResponse = {
-    /**
-     * Can Publish
-     */
-    can_publish?: boolean;
-    /**
-     * Display Name
-     */
-    display_name: string;
-    /**
-     * Role
-     */
-    role: string;
-    /**
-     * User Id
-     */
-    user_id: string;
-    /**
-     * Username
-     */
-    username: string;
 };
 
 /**
@@ -1434,50 +1316,6 @@ export type ProjectContextFragmentCreateRequest = {
 };
 
 /**
- * ProjectCostSummaryResponse
- */
-export type ProjectCostSummaryResponse = {
-    /**
-     * By Model
-     */
-    by_model?: {
-        [key: string]: {
-            [key: string]: unknown;
-        };
-    };
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Session Count
-     */
-    session_count: number;
-    /**
-     * Total Cost Usd
-     */
-    total_cost_usd: number;
-    /**
-     * Total Tokens
-     */
-    total_tokens: number;
-};
-
-/**
- * ProjectCreateRequest
- */
-export type ProjectCreateRequest = {
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Name
-     */
-    name: string;
-};
-
-/**
  * ProjectEnvironmentReferenceCreateRequest
  */
 export type ProjectEnvironmentReferenceCreateRequest = {
@@ -1578,16 +1416,6 @@ export type ProjectEnvironmentReferenceUpdateRequest = {
 };
 
 /**
- * ProjectListResponse
- */
-export type ProjectListResponse = {
-    /**
-     * Items
-     */
-    items: Array<ProjectResponse>;
-};
-
-/**
  * ProjectMemberListResponse
  */
 export type ProjectMemberListResponse = {
@@ -1640,65 +1468,9 @@ export type ProjectMemberResponse = {
 };
 
 /**
- * ProjectOwnerTransferRequest
- */
-export type ProjectOwnerTransferRequest = {
-    /**
-     * New Owner User Id
-     */
-    new_owner_user_id: string;
-};
-
-/**
- * ProjectResponse
- */
-export type ProjectResponse = {
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Default Environment Id
-     */
-    default_environment_id?: string | null;
-    /**
-     * Default Workspace Id
-     */
-    default_workspace_id?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Owner User Id
-     */
-    owner_user_id?: string | null;
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Updated At
-     */
-    updated_at: string;
-};
-
-/**
  * ProjectUpdateRequest
  */
 export type ProjectUpdateRequest = {
-    /**
-     * Default Environment Id
-     */
-    default_environment_id?: string | null;
-    /**
-     * Default Workspace Id
-     */
-    default_workspace_id?: string | null;
     /**
      * Description
      */
@@ -1707,6 +1479,44 @@ export type ProjectUpdateRequest = {
      * Name
      */
     name?: string | null;
+};
+
+/**
+ * ProjectUsageSummaryResponse
+ */
+export type ProjectUsageSummaryResponse = {
+    /**
+     * Attempt Count
+     */
+    attempt_count: number;
+    /**
+     * By Model
+     */
+    by_model?: {
+        [key: string]: {
+            [key: string]: unknown;
+        };
+    };
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Task Count
+     */
+    task_count: number;
+    /**
+     * Total Cost Usd
+     */
+    total_cost_usd: number;
+    /**
+     * Total Duration Ms
+     */
+    total_duration_ms: number;
+    /**
+     * Total Tokens
+     */
+    total_tokens: number;
 };
 
 /**
@@ -1833,124 +1643,6 @@ export type SearchSettingsUpdateRequest = {
      * Auto Start Mcp Servers
      */
     auto_start_mcp_servers?: Array<string> | null;
-};
-
-/**
- * SessionDetailResponse
- */
-export type SessionDetailResponse = {
-    /**
-     * Attempts
-     */
-    attempts?: Array<AttemptResponse>;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Owner User Id
-     */
-    owner_user_id?: string | null;
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Count
-     */
-    task_count: number;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Total Cost Usd
-     */
-    total_cost_usd: number;
-    /**
-     * Total Duration Ms
-     */
-    total_duration_ms: number;
-    /**
-     * Updated At
-     */
-    updated_at: string;
-};
-
-/**
- * SessionListResponse
- */
-export type SessionListResponse = {
-    /**
-     * Has More
-     */
-    has_more?: boolean;
-    /**
-     * Items
-     */
-    items: Array<SessionResponse>;
-    /**
-     * Next Cursor
-     */
-    next_cursor?: string | null;
-    /**
-     * Total
-     */
-    total?: number | null;
-};
-
-/**
- * SessionResponse
- */
-export type SessionResponse = {
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Owner User Id
-     */
-    owner_user_id?: string | null;
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Count
-     */
-    task_count: number;
-    /**
-     * Title
-     */
-    title: string;
-    /**
-     * Total Cost Usd
-     */
-    total_cost_usd: number;
-    /**
-     * Total Duration Ms
-     */
-    total_duration_ms: number;
-    /**
-     * Updated At
-     */
-    updated_at: string;
 };
 
 /**
@@ -2505,7 +2197,7 @@ export type TaskCreateRequest = {
     /**
      * Project Id
      */
-    project_id?: string;
+    project_id: string;
     /**
      * Prompt
      */
@@ -2598,60 +2290,6 @@ export type TaskDispatchResponse = {
      * Updated At
      */
     updated_at?: string | null;
-};
-
-/**
- * TaskEdgeCreateRequest
- */
-export type TaskEdgeCreateRequest = {
-    /**
-     * Source Task Id
-     */
-    source_task_id: string;
-    /**
-     * Target Task Id
-     */
-    target_task_id: string;
-};
-
-/**
- * TaskEdgeListResponse
- */
-export type TaskEdgeListResponse = {
-    /**
-     * Items
-     */
-    items: Array<TaskEdgeResponse>;
-};
-
-/**
- * TaskEdgeResponse
- */
-export type TaskEdgeResponse = {
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Edge Id
-     */
-    edge_id: string;
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Relationship Type
-     */
-    relationship_type?: string;
-    /**
-     * Source Task Id
-     */
-    source_task_id: string;
-    /**
-     * Target Task Id
-     */
-    target_task_id: string;
 };
 
 /**
@@ -2846,6 +2484,60 @@ export type TaskPromptSendResponse = {
 };
 
 /**
+ * TaskRelationshipCreateRequest
+ */
+export type TaskRelationshipCreateRequest = {
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Target Task Id
+     */
+    target_task_id: string;
+};
+
+/**
+ * TaskRelationshipListResponse
+ */
+export type TaskRelationshipListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TaskRelationshipResponse>;
+};
+
+/**
+ * TaskRelationshipResponse
+ */
+export type TaskRelationshipResponse = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Relationship Id
+     */
+    relationship_id: string;
+    /**
+     * Relationship Type
+     */
+    relationship_type?: string;
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Target Task Id
+     */
+    target_task_id: string;
+};
+
+/**
  * TaskResumeResponse
  */
 export type TaskResumeResponse = {
@@ -2857,22 +2549,6 @@ export type TaskResumeResponse = {
      * Task Id
      */
     task_id: string;
-};
-
-/**
- * TaskRetryRequest
- */
-export type TaskRetryRequest = {
-    [key: string]: never;
-};
-
-/**
- * TaskRetryResponse
- */
-export type TaskRetryResponse = {
-    attempt: TaskAttemptResponse;
-    dispatch: TaskDispatchResponse;
-    task: TaskSummaryResponse;
 };
 
 /**
@@ -3081,20 +2757,6 @@ export type TaskTokenUsageSummaryResponse = {
      * Total Tokens
      */
     total_tokens: number;
-};
-
-/**
- * TaskUpdateProjectRequest
- */
-export type TaskUpdateProjectRequest = {
-    /**
-     * Context Version Id
-     */
-    context_version_id?: string | null;
-    /**
-     * Project Id
-     */
-    project_id: string;
 };
 
 /**
@@ -3383,84 +3045,6 @@ export type ValidationError = {
      * Error Type
      */
     type: string;
-};
-
-/**
- * WorkspaceCreateRequest
- */
-export type WorkspaceCreateRequest = {
-    /**
-     * Default Workdir
-     */
-    default_workdir?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Project Id
-     */
-    project_id?: string;
-    /**
-     * Workspace Prompt
-     */
-    workspace_prompt: string;
-};
-
-/**
- * WorkspaceListResponse
- */
-export type WorkspaceListResponse = {
-    /**
-     * Items
-     */
-    items: Array<WorkspaceResponse>;
-};
-
-/**
- * WorkspaceResponse
- */
-export type WorkspaceResponse = {
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Default Workdir
-     */
-    default_workdir?: string | null;
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Owner User Id
-     */
-    owner_user_id?: string | null;
-    /**
-     * Project Id
-     */
-    project_id: string;
-    /**
-     * Updated At
-     */
-    updated_at: string;
-    /**
-     * Workspace Id
-     */
-    workspace_id: string;
-    /**
-     * Workspace Prompt
-     */
-    workspace_prompt: string;
 };
 
 /**
@@ -5037,6 +4621,100 @@ export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses = 
 
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponse = PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses[keyof PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses];
 
+export type GetApiDomainProjectsProjectIdTaskRelationshipsData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships';
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsError = GetApiDomainProjectsProjectIdTaskRelationshipsErrors[keyof GetApiDomainProjectsProjectIdTaskRelationshipsErrors];
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskRelationshipListResponse;
+};
+
+export type GetApiDomainProjectsProjectIdTaskRelationshipsResponse = GetApiDomainProjectsProjectIdTaskRelationshipsResponses[keyof GetApiDomainProjectsProjectIdTaskRelationshipsResponses];
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsData = {
+    body: TaskRelationshipCreateRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships';
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsError = PostApiDomainProjectsProjectIdTaskRelationshipsErrors[keyof PostApiDomainProjectsProjectIdTaskRelationshipsErrors];
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsResponses = {
+    /**
+     * Successful Response
+     */
+    201: TaskRelationshipResponse;
+};
+
+export type PostApiDomainProjectsProjectIdTaskRelationshipsResponse = PostApiDomainProjectsProjectIdTaskRelationshipsResponses[keyof PostApiDomainProjectsProjectIdTaskRelationshipsResponses];
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Relationship Id
+         */
+        relationship_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/task-relationships/{relationship_id}';
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdError = DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors[keyof DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdErrors];
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponse = DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses[keyof DeleteApiDomainProjectsProjectIdTaskRelationshipsRelationshipIdResponses];
+
 export type PostApiDomainProjectsProjectIdUnarchiveData = {
     body?: never;
     path: {
@@ -5066,6 +4744,36 @@ export type PostApiDomainProjectsProjectIdUnarchiveResponses = {
 };
 
 export type PostApiDomainProjectsProjectIdUnarchiveResponse = PostApiDomainProjectsProjectIdUnarchiveResponses[keyof PostApiDomainProjectsProjectIdUnarchiveResponses];
+
+export type GetApiDomainProjectsProjectIdUsageSummaryData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/usage-summary';
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryError = GetApiDomainProjectsProjectIdUsageSummaryErrors[keyof GetApiDomainProjectsProjectIdUsageSummaryErrors];
+
+export type GetApiDomainProjectsProjectIdUsageSummaryResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectUsageSummaryResponse;
+};
+
+export type GetApiDomainProjectsProjectIdUsageSummaryResponse = GetApiDomainProjectsProjectIdUsageSummaryResponses[keyof GetApiDomainProjectsProjectIdUsageSummaryResponses];
 
 export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdData = {
     body?: never;
@@ -5399,167 +5107,6 @@ export type PostApiDomainWorkspacesWorkspaceIdUnregisterResponses = {
 };
 
 export type PostApiDomainWorkspacesWorkspaceIdUnregisterResponse = PostApiDomainWorkspacesWorkspaceIdUnregisterResponses[keyof PostApiDomainWorkspacesWorkspaceIdUnregisterResponses];
-
-export type GetApiEnvironmentsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/environments';
-};
-
-export type GetApiEnvironmentsResponses = {
-    /**
-     * Successful Response
-     */
-    200: EnvironmentListResponse;
-};
-
-export type GetApiEnvironmentsResponse = GetApiEnvironmentsResponses[keyof GetApiEnvironmentsResponses];
-
-export type PostApiEnvironmentsData = {
-    body: EnvironmentCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/environments';
-};
-
-export type PostApiEnvironmentsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiEnvironmentsError = PostApiEnvironmentsErrors[keyof PostApiEnvironmentsErrors];
-
-export type PostApiEnvironmentsResponses = {
-    /**
-     * Successful Response
-     */
-    201: EnvironmentResponse;
-};
-
-export type PostApiEnvironmentsResponse = PostApiEnvironmentsResponses[keyof PostApiEnvironmentsResponses];
-
-export type DeleteApiEnvironmentsEnvironmentIdData = {
-    body?: never;
-    path: {
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/environments/{environment_id}';
-};
-
-export type DeleteApiEnvironmentsEnvironmentIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiEnvironmentsEnvironmentIdError = DeleteApiEnvironmentsEnvironmentIdErrors[keyof DeleteApiEnvironmentsEnvironmentIdErrors];
-
-export type DeleteApiEnvironmentsEnvironmentIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiEnvironmentsEnvironmentIdResponse = DeleteApiEnvironmentsEnvironmentIdResponses[keyof DeleteApiEnvironmentsEnvironmentIdResponses];
-
-export type GetApiEnvironmentsEnvironmentIdData = {
-    body?: never;
-    path: {
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/environments/{environment_id}';
-};
-
-export type GetApiEnvironmentsEnvironmentIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiEnvironmentsEnvironmentIdError = GetApiEnvironmentsEnvironmentIdErrors[keyof GetApiEnvironmentsEnvironmentIdErrors];
-
-export type GetApiEnvironmentsEnvironmentIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: EnvironmentResponse;
-};
-
-export type GetApiEnvironmentsEnvironmentIdResponse = GetApiEnvironmentsEnvironmentIdResponses[keyof GetApiEnvironmentsEnvironmentIdResponses];
-
-export type PatchApiEnvironmentsEnvironmentIdData = {
-    body: EnvironmentUpdateRequest;
-    path: {
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/environments/{environment_id}';
-};
-
-export type PatchApiEnvironmentsEnvironmentIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiEnvironmentsEnvironmentIdError = PatchApiEnvironmentsEnvironmentIdErrors[keyof PatchApiEnvironmentsEnvironmentIdErrors];
-
-export type PatchApiEnvironmentsEnvironmentIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: EnvironmentResponse;
-};
-
-export type PatchApiEnvironmentsEnvironmentIdResponse = PatchApiEnvironmentsEnvironmentIdResponses[keyof PatchApiEnvironmentsEnvironmentIdResponses];
-
-export type PostApiEnvironmentsEnvironmentIdDetectData = {
-    body?: never;
-    path: {
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/environments/{environment_id}/detect';
-};
-
-export type PostApiEnvironmentsEnvironmentIdDetectErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiEnvironmentsEnvironmentIdDetectError = PostApiEnvironmentsEnvironmentIdDetectErrors[keyof PostApiEnvironmentsEnvironmentIdDetectErrors];
-
-export type PostApiEnvironmentsEnvironmentIdDetectResponses = {
-    /**
-     * Successful Response
-     */
-    200: EnvironmentResponse;
-};
-
-export type PostApiEnvironmentsEnvironmentIdDetectResponse = PostApiEnvironmentsEnvironmentIdDetectResponses[keyof PostApiEnvironmentsEnvironmentIdDetectResponses];
 
 export type GetApiFilesListData = {
     body?: never;
@@ -6415,834 +5962,6 @@ export type PatchApiLiteratureTopicsTopicIdResponses = {
     200: unknown;
 };
 
-export type GetApiProjectsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/projects';
-};
-
-export type GetApiProjectsResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectListResponse;
-};
-
-export type GetApiProjectsResponse = GetApiProjectsResponses[keyof GetApiProjectsResponses];
-
-export type PostApiProjectsData = {
-    body: ProjectCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/projects';
-};
-
-export type PostApiProjectsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsError = PostApiProjectsErrors[keyof PostApiProjectsErrors];
-
-export type PostApiProjectsResponses = {
-    /**
-     * Successful Response
-     */
-    201: ProjectResponse;
-};
-
-export type PostApiProjectsResponse = PostApiProjectsResponses[keyof PostApiProjectsResponses];
-
-export type DeleteApiProjectsProjectIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}';
-};
-
-export type DeleteApiProjectsProjectIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiProjectsProjectIdError = DeleteApiProjectsProjectIdErrors[keyof DeleteApiProjectsProjectIdErrors];
-
-export type DeleteApiProjectsProjectIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiProjectsProjectIdResponse = DeleteApiProjectsProjectIdResponses[keyof DeleteApiProjectsProjectIdResponses];
-
-export type GetApiProjectsProjectIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}';
-};
-
-export type GetApiProjectsProjectIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdError = GetApiProjectsProjectIdErrors[keyof GetApiProjectsProjectIdErrors];
-
-export type GetApiProjectsProjectIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectResponse;
-};
-
-export type GetApiProjectsProjectIdResponse = GetApiProjectsProjectIdResponses[keyof GetApiProjectsProjectIdResponses];
-
-export type PatchApiProjectsProjectIdData = {
-    body: ProjectUpdateRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}';
-};
-
-export type PatchApiProjectsProjectIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiProjectsProjectIdError = PatchApiProjectsProjectIdErrors[keyof PatchApiProjectsProjectIdErrors];
-
-export type PatchApiProjectsProjectIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectResponse;
-};
-
-export type PatchApiProjectsProjectIdResponse = PatchApiProjectsProjectIdResponses[keyof PatchApiProjectsProjectIdResponses];
-
-export type PostApiProjectsProjectIdArchiveData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/archive';
-};
-
-export type PostApiProjectsProjectIdArchiveErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdArchiveError = PostApiProjectsProjectIdArchiveErrors[keyof PostApiProjectsProjectIdArchiveErrors];
-
-export type PostApiProjectsProjectIdArchiveResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type PostApiProjectsProjectIdArchiveResponse = PostApiProjectsProjectIdArchiveResponses[keyof PostApiProjectsProjectIdArchiveResponses];
-
-export type GetApiProjectsProjectIdCollaboratorsData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/collaborators';
-};
-
-export type GetApiProjectsProjectIdCollaboratorsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdCollaboratorsError = GetApiProjectsProjectIdCollaboratorsErrors[keyof GetApiProjectsProjectIdCollaboratorsErrors];
-
-export type GetApiProjectsProjectIdCollaboratorsResponses = {
-    /**
-     * Successful Response
-     */
-    200: CollaboratorListResponse;
-};
-
-export type GetApiProjectsProjectIdCollaboratorsResponse = GetApiProjectsProjectIdCollaboratorsResponses[keyof GetApiProjectsProjectIdCollaboratorsResponses];
-
-export type PutApiProjectsProjectIdCollaboratorsData = {
-    body: CollaboratorRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/collaborators';
-};
-
-export type PutApiProjectsProjectIdCollaboratorsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PutApiProjectsProjectIdCollaboratorsError = PutApiProjectsProjectIdCollaboratorsErrors[keyof PutApiProjectsProjectIdCollaboratorsErrors];
-
-export type PutApiProjectsProjectIdCollaboratorsResponses = {
-    /**
-     * Successful Response
-     */
-    201: CollaboratorResponse;
-};
-
-export type PutApiProjectsProjectIdCollaboratorsResponse = PutApiProjectsProjectIdCollaboratorsResponses[keyof PutApiProjectsProjectIdCollaboratorsResponses];
-
-export type DeleteApiProjectsProjectIdCollaboratorsUserIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * User Id
-         */
-        user_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/collaborators/{user_id}';
-};
-
-export type DeleteApiProjectsProjectIdCollaboratorsUserIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiProjectsProjectIdCollaboratorsUserIdError = DeleteApiProjectsProjectIdCollaboratorsUserIdErrors[keyof DeleteApiProjectsProjectIdCollaboratorsUserIdErrors];
-
-export type DeleteApiProjectsProjectIdCollaboratorsUserIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiProjectsProjectIdCollaboratorsUserIdResponse = DeleteApiProjectsProjectIdCollaboratorsUserIdResponses[keyof DeleteApiProjectsProjectIdCollaboratorsUserIdResponses];
-
-export type GetApiProjectsProjectIdCostSummaryData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/cost-summary';
-};
-
-export type GetApiProjectsProjectIdCostSummaryErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdCostSummaryError = GetApiProjectsProjectIdCostSummaryErrors[keyof GetApiProjectsProjectIdCostSummaryErrors];
-
-export type GetApiProjectsProjectIdCostSummaryResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectCostSummaryResponse;
-};
-
-export type GetApiProjectsProjectIdCostSummaryResponse = GetApiProjectsProjectIdCostSummaryResponses[keyof GetApiProjectsProjectIdCostSummaryResponses];
-
-export type GetApiProjectsProjectIdEnvironmentRefsData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/environment-refs';
-};
-
-export type GetApiProjectsProjectIdEnvironmentRefsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdEnvironmentRefsError = GetApiProjectsProjectIdEnvironmentRefsErrors[keyof GetApiProjectsProjectIdEnvironmentRefsErrors];
-
-export type GetApiProjectsProjectIdEnvironmentRefsResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectEnvironmentReferenceListResponse;
-};
-
-export type GetApiProjectsProjectIdEnvironmentRefsResponse = GetApiProjectsProjectIdEnvironmentRefsResponses[keyof GetApiProjectsProjectIdEnvironmentRefsResponses];
-
-export type PostApiProjectsProjectIdEnvironmentRefsData = {
-    body: ProjectEnvironmentReferenceCreateRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/environment-refs';
-};
-
-export type PostApiProjectsProjectIdEnvironmentRefsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdEnvironmentRefsError = PostApiProjectsProjectIdEnvironmentRefsErrors[keyof PostApiProjectsProjectIdEnvironmentRefsErrors];
-
-export type PostApiProjectsProjectIdEnvironmentRefsResponses = {
-    /**
-     * Successful Response
-     */
-    201: ProjectEnvironmentReferenceResponse;
-};
-
-export type PostApiProjectsProjectIdEnvironmentRefsResponse = PostApiProjectsProjectIdEnvironmentRefsResponses[keyof PostApiProjectsProjectIdEnvironmentRefsResponses];
-
-export type DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/environment-refs/{environment_id}';
-};
-
-export type DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdError = DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors[keyof DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors];
-
-export type DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponse = DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses[keyof DeleteApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses];
-
-export type PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdData = {
-    body: ProjectEnvironmentReferenceUpdateRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Environment Id
-         */
-        environment_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/environment-refs/{environment_id}';
-};
-
-export type PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdError = PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors[keyof PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdErrors];
-
-export type PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectEnvironmentReferenceResponse;
-};
-
-export type PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponse = PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses[keyof PatchApiProjectsProjectIdEnvironmentRefsEnvironmentIdResponses];
-
-export type GetApiProjectsProjectIdMembersData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/members';
-};
-
-export type GetApiProjectsProjectIdMembersErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdMembersError = GetApiProjectsProjectIdMembersErrors[keyof GetApiProjectsProjectIdMembersErrors];
-
-export type GetApiProjectsProjectIdMembersResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectMemberListResponse;
-};
-
-export type GetApiProjectsProjectIdMembersResponse = GetApiProjectsProjectIdMembersResponses[keyof GetApiProjectsProjectIdMembersResponses];
-
-export type DeleteApiProjectsProjectIdMembersMemberUserIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Member User Id
-         */
-        member_user_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/members/{member_user_id}';
-};
-
-export type DeleteApiProjectsProjectIdMembersMemberUserIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiProjectsProjectIdMembersMemberUserIdError = DeleteApiProjectsProjectIdMembersMemberUserIdErrors[keyof DeleteApiProjectsProjectIdMembersMemberUserIdErrors];
-
-export type DeleteApiProjectsProjectIdMembersMemberUserIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiProjectsProjectIdMembersMemberUserIdResponse = DeleteApiProjectsProjectIdMembersMemberUserIdResponses[keyof DeleteApiProjectsProjectIdMembersMemberUserIdResponses];
-
-export type PutApiProjectsProjectIdMembersMemberUserIdData = {
-    body: ProjectMemberRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Member User Id
-         */
-        member_user_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/members/{member_user_id}';
-};
-
-export type PutApiProjectsProjectIdMembersMemberUserIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PutApiProjectsProjectIdMembersMemberUserIdError = PutApiProjectsProjectIdMembersMemberUserIdErrors[keyof PutApiProjectsProjectIdMembersMemberUserIdErrors];
-
-export type PutApiProjectsProjectIdMembersMemberUserIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectMemberResponse;
-};
-
-export type PutApiProjectsProjectIdMembersMemberUserIdResponse = PutApiProjectsProjectIdMembersMemberUserIdResponses[keyof PutApiProjectsProjectIdMembersMemberUserIdResponses];
-
-export type PostApiProjectsProjectIdOwnerTransferData = {
-    body: ProjectOwnerTransferRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/owner-transfer';
-};
-
-export type PostApiProjectsProjectIdOwnerTransferErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdOwnerTransferError = PostApiProjectsProjectIdOwnerTransferErrors[keyof PostApiProjectsProjectIdOwnerTransferErrors];
-
-export type PostApiProjectsProjectIdOwnerTransferResponses = {
-    /**
-     * Successful Response
-     */
-    200: ProjectResponse;
-};
-
-export type PostApiProjectsProjectIdOwnerTransferResponse = PostApiProjectsProjectIdOwnerTransferResponses[keyof PostApiProjectsProjectIdOwnerTransferResponses];
-
-export type PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: {
-        /**
-         * Previous Workspace Id
-         */
-        previous_workspace_id?: string | null;
-    };
-    url: '/api/projects/{project_id}/primary-workspace/{workspace_id}';
-};
-
-export type PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdError = PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdErrors[keyof PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdErrors];
-
-export type PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses = {
-    /**
-     * Response Put Api Projects Project Id Primary Workspace Workspace Id
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-
-export type PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponse = PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses[keyof PutApiProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses];
-
-export type GetApiProjectsProjectIdTaskEdgesData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/task-edges';
-};
-
-export type GetApiProjectsProjectIdTaskEdgesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdTaskEdgesError = GetApiProjectsProjectIdTaskEdgesErrors[keyof GetApiProjectsProjectIdTaskEdgesErrors];
-
-export type GetApiProjectsProjectIdTaskEdgesResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskEdgeListResponse;
-};
-
-export type GetApiProjectsProjectIdTaskEdgesResponse = GetApiProjectsProjectIdTaskEdgesResponses[keyof GetApiProjectsProjectIdTaskEdgesResponses];
-
-export type PostApiProjectsProjectIdTaskEdgesData = {
-    body: TaskEdgeCreateRequest;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/task-edges';
-};
-
-export type PostApiProjectsProjectIdTaskEdgesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdTaskEdgesError = PostApiProjectsProjectIdTaskEdgesErrors[keyof PostApiProjectsProjectIdTaskEdgesErrors];
-
-export type PostApiProjectsProjectIdTaskEdgesResponses = {
-    /**
-     * Successful Response
-     */
-    201: TaskEdgeResponse;
-};
-
-export type PostApiProjectsProjectIdTaskEdgesResponse = PostApiProjectsProjectIdTaskEdgesResponses[keyof PostApiProjectsProjectIdTaskEdgesResponses];
-
-export type GetApiProjectsProjectIdTasksData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: {
-        /**
-         * Include Archived
-         */
-        include_archived?: boolean;
-        /**
-         * Limit
-         */
-        limit?: number;
-        /**
-         * Sort
-         */
-        sort?: string;
-    };
-    url: '/api/projects/{project_id}/tasks';
-};
-
-export type GetApiProjectsProjectIdTasksErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdTasksError = GetApiProjectsProjectIdTasksErrors[keyof GetApiProjectsProjectIdTasksErrors];
-
-export type GetApiProjectsProjectIdTasksResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskListResponse;
-};
-
-export type GetApiProjectsProjectIdTasksResponse = GetApiProjectsProjectIdTasksResponses[keyof GetApiProjectsProjectIdTasksResponses];
-
-export type PostApiProjectsProjectIdUnarchiveData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/unarchive';
-};
-
-export type PostApiProjectsProjectIdUnarchiveErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdUnarchiveError = PostApiProjectsProjectIdUnarchiveErrors[keyof PostApiProjectsProjectIdUnarchiveErrors];
-
-export type PostApiProjectsProjectIdUnarchiveResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type PostApiProjectsProjectIdUnarchiveResponse = PostApiProjectsProjectIdUnarchiveResponses[keyof PostApiProjectsProjectIdUnarchiveResponses];
-
-export type GetApiProjectsProjectIdWorkspacesData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/workspaces';
-};
-
-export type GetApiProjectsProjectIdWorkspacesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiProjectsProjectIdWorkspacesError = GetApiProjectsProjectIdWorkspacesErrors[keyof GetApiProjectsProjectIdWorkspacesErrors];
-
-export type GetApiProjectsProjectIdWorkspacesResponses = {
-    /**
-     * Response Get Api Projects Project Id Workspaces
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-
-export type GetApiProjectsProjectIdWorkspacesResponse = GetApiProjectsProjectIdWorkspacesResponses[keyof GetApiProjectsProjectIdWorkspacesResponses];
-
-export type DeleteApiProjectsProjectIdWorkspacesWorkspaceIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: {
-        /**
-         * Allow No Primary
-         */
-        allow_no_primary?: boolean;
-    };
-    url: '/api/projects/{project_id}/workspaces/{workspace_id}';
-};
-
-export type DeleteApiProjectsProjectIdWorkspacesWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiProjectsProjectIdWorkspacesWorkspaceIdError = DeleteApiProjectsProjectIdWorkspacesWorkspaceIdErrors[keyof DeleteApiProjectsProjectIdWorkspacesWorkspaceIdErrors];
-
-export type DeleteApiProjectsProjectIdWorkspacesWorkspaceIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiProjectsProjectIdWorkspacesWorkspaceIdResponse = DeleteApiProjectsProjectIdWorkspacesWorkspaceIdResponses[keyof DeleteApiProjectsProjectIdWorkspacesWorkspaceIdResponses];
-
-export type PostApiProjectsProjectIdWorkspacesWorkspaceIdData = {
-    body?: never;
-    path: {
-        /**
-         * Project Id
-         */
-        project_id: string;
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/api/projects/{project_id}/workspaces/{workspace_id}';
-};
-
-export type PostApiProjectsProjectIdWorkspacesWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiProjectsProjectIdWorkspacesWorkspaceIdError = PostApiProjectsProjectIdWorkspacesWorkspaceIdErrors[keyof PostApiProjectsProjectIdWorkspacesWorkspaceIdErrors];
-
-export type PostApiProjectsProjectIdWorkspacesWorkspaceIdResponses = {
-    /**
-     * Response Post Api Projects Project Id Workspaces Workspace Id
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: unknown;
-    };
-};
-
-export type PostApiProjectsProjectIdWorkspacesWorkspaceIdResponse = PostApiProjectsProjectIdWorkspacesWorkspaceIdResponses[keyof PostApiProjectsProjectIdWorkspacesWorkspaceIdResponses];
-
 export type GetApiResourcesData = {
     body?: never;
     path?: never;
@@ -7258,214 +5977,6 @@ export type GetApiResourcesResponses = {
 };
 
 export type GetApiResourcesResponse = GetApiResourcesResponses[keyof GetApiResourcesResponses];
-
-export type GetApiSessionsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Project Id
-         */
-        project_id?: string | null;
-        /**
-         * Status
-         */
-        status?: string | null;
-        /**
-         * Cursor
-         */
-        cursor?: string | null;
-        /**
-         * Limit
-         */
-        limit?: number;
-    };
-    url: '/api/sessions';
-};
-
-export type GetApiSessionsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiSessionsError = GetApiSessionsErrors[keyof GetApiSessionsErrors];
-
-export type GetApiSessionsResponses = {
-    /**
-     * Successful Response
-     */
-    200: SessionListResponse;
-};
-
-export type GetApiSessionsResponse = GetApiSessionsResponses[keyof GetApiSessionsResponses];
-
-export type PostApiSessionsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/sessions';
-};
-
-export type PostApiSessionsResponses = {
-    /**
-     * Successful Response
-     */
-    201: SessionResponse;
-};
-
-export type PostApiSessionsResponse = PostApiSessionsResponses[keyof PostApiSessionsResponses];
-
-export type GetApiSessionsBatchDetailData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Ids
-         *
-         * Comma-separated session IDs
-         */
-        ids: string;
-    };
-    url: '/api/sessions/batch-detail';
-};
-
-export type GetApiSessionsBatchDetailErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiSessionsBatchDetailError = GetApiSessionsBatchDetailErrors[keyof GetApiSessionsBatchDetailErrors];
-
-export type GetApiSessionsBatchDetailResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
-export type DeleteApiSessionsSessionIdData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/api/sessions/{session_id}';
-};
-
-export type DeleteApiSessionsSessionIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiSessionsSessionIdError = DeleteApiSessionsSessionIdErrors[keyof DeleteApiSessionsSessionIdErrors];
-
-export type DeleteApiSessionsSessionIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiSessionsSessionIdResponse = DeleteApiSessionsSessionIdResponses[keyof DeleteApiSessionsSessionIdResponses];
-
-export type GetApiSessionsSessionIdData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/api/sessions/{session_id}';
-};
-
-export type GetApiSessionsSessionIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiSessionsSessionIdError = GetApiSessionsSessionIdErrors[keyof GetApiSessionsSessionIdErrors];
-
-export type GetApiSessionsSessionIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: SessionDetailResponse;
-};
-
-export type GetApiSessionsSessionIdResponse = GetApiSessionsSessionIdResponses[keyof GetApiSessionsSessionIdResponses];
-
-export type PatchApiSessionsSessionIdData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/api/sessions/{session_id}';
-};
-
-export type PatchApiSessionsSessionIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiSessionsSessionIdError = PatchApiSessionsSessionIdErrors[keyof PatchApiSessionsSessionIdErrors];
-
-export type PatchApiSessionsSessionIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: SessionResponse;
-};
-
-export type PatchApiSessionsSessionIdResponse = PatchApiSessionsSessionIdResponses[keyof PatchApiSessionsSessionIdResponses];
-
-export type GetApiSessionsSessionIdAttemptsData = {
-    body?: never;
-    path: {
-        /**
-         * Session Id
-         */
-        session_id: string;
-    };
-    query?: never;
-    url: '/api/sessions/{session_id}/attempts';
-};
-
-export type GetApiSessionsSessionIdAttemptsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiSessionsSessionIdAttemptsError = GetApiSessionsSessionIdAttemptsErrors[keyof GetApiSessionsSessionIdAttemptsErrors];
-
-export type GetApiSessionsSessionIdAttemptsResponses = {
-    /**
-     * Successful Response
-     */
-    200: AttemptListResponse;
-};
-
-export type GetApiSessionsSessionIdAttemptsResponse = GetApiSessionsSessionIdAttemptsResponses[keyof GetApiSessionsSessionIdAttemptsResponses];
 
 export type GetApiSettingsCodexDefaultsData = {
     body?: never;
@@ -7867,36 +6378,6 @@ export type GetApiSkillsSkillIdPreviewResponses = {
 };
 
 export type GetApiSkillsSkillIdPreviewResponse = GetApiSkillsSkillIdPreviewResponses[keyof GetApiSkillsSkillIdPreviewResponses];
-
-export type DeleteApiTaskEdgesEdgeIdData = {
-    body?: never;
-    path: {
-        /**
-         * Edge Id
-         */
-        edge_id: string;
-    };
-    query?: never;
-    url: '/api/task-edges/{edge_id}';
-};
-
-export type DeleteApiTaskEdgesEdgeIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiTaskEdgesEdgeIdError = DeleteApiTaskEdgesEdgeIdErrors[keyof DeleteApiTaskEdgesEdgeIdErrors];
-
-export type DeleteApiTaskEdgesEdgeIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiTaskEdgesEdgeIdResponse = DeleteApiTaskEdgesEdgeIdResponses[keyof DeleteApiTaskEdgesEdgeIdResponses];
 
 export type GetApiTasksData = {
     body?: never;
@@ -8409,66 +6890,6 @@ export type PostApiTasksTaskIdPauseResponses = {
 
 export type PostApiTasksTaskIdPauseResponse = PostApiTasksTaskIdPauseResponses[keyof PostApiTasksTaskIdPauseResponses];
 
-export type DeleteApiTasksTaskIdPermanentData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/permanent';
-};
-
-export type DeleteApiTasksTaskIdPermanentErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiTasksTaskIdPermanentError = DeleteApiTasksTaskIdPermanentErrors[keyof DeleteApiTasksTaskIdPermanentErrors];
-
-export type DeleteApiTasksTaskIdPermanentResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiTasksTaskIdPermanentResponse = DeleteApiTasksTaskIdPermanentResponses[keyof DeleteApiTasksTaskIdPermanentResponses];
-
-export type PatchApiTasksTaskIdProjectData = {
-    body: TaskUpdateProjectRequest;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/project';
-};
-
-export type PatchApiTasksTaskIdProjectErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiTasksTaskIdProjectError = PatchApiTasksTaskIdProjectErrors[keyof PatchApiTasksTaskIdProjectErrors];
-
-export type PatchApiTasksTaskIdProjectResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskSummaryResponse;
-};
-
-export type PatchApiTasksTaskIdProjectResponse = PatchApiTasksTaskIdProjectResponses[keyof PatchApiTasksTaskIdProjectResponses];
-
 export type PostApiTasksTaskIdResumeData = {
     body?: never;
     path: {
@@ -8500,10 +6921,7 @@ export type PostApiTasksTaskIdResumeResponses = {
 export type PostApiTasksTaskIdResumeResponse = PostApiTasksTaskIdResumeResponses[keyof PostApiTasksTaskIdResumeResponses];
 
 export type PostApiTasksTaskIdRetryData = {
-    /**
-     * Payload
-     */
-    body?: TaskRetryRequest | null;
+    body?: never;
     path: {
         /**
          * Task Id
@@ -8527,7 +6945,7 @@ export type PostApiTasksTaskIdRetryResponses = {
     /**
      * Successful Response
      */
-    201: TaskRetryResponse;
+    201: TaskMutationResponse;
 };
 
 export type PostApiTasksTaskIdRetryResponse = PostApiTasksTaskIdRetryResponses[keyof PostApiTasksTaskIdRetryResponses];
@@ -8790,181 +7208,6 @@ export type PostApiTerminalSessionResetResponses = {
 };
 
 export type PostApiTerminalSessionResetResponse = PostApiTerminalSessionResetResponses[keyof PostApiTerminalSessionResetResponses];
-
-export type GetApiWorkspacesData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Project Id
-         */
-        project_id?: string | null;
-    };
-    url: '/api/workspaces';
-};
-
-export type GetApiWorkspacesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiWorkspacesError = GetApiWorkspacesErrors[keyof GetApiWorkspacesErrors];
-
-export type GetApiWorkspacesResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceListResponse;
-};
-
-export type GetApiWorkspacesResponse = GetApiWorkspacesResponses[keyof GetApiWorkspacesResponses];
-
-export type PostApiWorkspacesData = {
-    body: WorkspaceCreateRequest;
-    path?: never;
-    query?: never;
-    url: '/api/workspaces';
-};
-
-export type PostApiWorkspacesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiWorkspacesError = PostApiWorkspacesErrors[keyof PostApiWorkspacesErrors];
-
-export type PostApiWorkspacesResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceResponse;
-};
-
-export type PostApiWorkspacesResponse = PostApiWorkspacesResponses[keyof PostApiWorkspacesResponses];
-
-export type DeleteApiWorkspacesWorkspaceIdData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/api/workspaces/{workspace_id}';
-};
-
-export type DeleteApiWorkspacesWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type DeleteApiWorkspacesWorkspaceIdError = DeleteApiWorkspacesWorkspaceIdErrors[keyof DeleteApiWorkspacesWorkspaceIdErrors];
-
-export type DeleteApiWorkspacesWorkspaceIdResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type DeleteApiWorkspacesWorkspaceIdResponse = DeleteApiWorkspacesWorkspaceIdResponses[keyof DeleteApiWorkspacesWorkspaceIdResponses];
-
-export type GetApiWorkspacesWorkspaceIdData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/api/workspaces/{workspace_id}';
-};
-
-export type GetApiWorkspacesWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiWorkspacesWorkspaceIdError = GetApiWorkspacesWorkspaceIdErrors[keyof GetApiWorkspacesWorkspaceIdErrors];
-
-export type GetApiWorkspacesWorkspaceIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceResponse;
-};
-
-export type GetApiWorkspacesWorkspaceIdResponse = GetApiWorkspacesWorkspaceIdResponses[keyof GetApiWorkspacesWorkspaceIdResponses];
-
-export type PatchApiWorkspacesWorkspaceIdData = {
-    body: WorkspaceUpdateRequest;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/api/workspaces/{workspace_id}';
-};
-
-export type PatchApiWorkspacesWorkspaceIdErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PatchApiWorkspacesWorkspaceIdError = PatchApiWorkspacesWorkspaceIdErrors[keyof PatchApiWorkspacesWorkspaceIdErrors];
-
-export type PatchApiWorkspacesWorkspaceIdResponses = {
-    /**
-     * Successful Response
-     */
-    200: WorkspaceResponse;
-};
-
-export type PatchApiWorkspacesWorkspaceIdResponse = PatchApiWorkspacesWorkspaceIdResponses[keyof PatchApiWorkspacesWorkspaceIdResponses];
-
-export type PostApiWorkspacesWorkspaceIdUnregisterData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace Id
-         */
-        workspace_id: string;
-    };
-    query?: never;
-    url: '/api/workspaces/{workspace_id}/unregister';
-};
-
-export type PostApiWorkspacesWorkspaceIdUnregisterErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiWorkspacesWorkspaceIdUnregisterError = PostApiWorkspacesWorkspaceIdUnregisterErrors[keyof PostApiWorkspacesWorkspaceIdUnregisterErrors];
-
-export type PostApiWorkspacesWorkspaceIdUnregisterResponses = {
-    /**
-     * Successful Response
-     */
-    204: void;
-};
-
-export type PostApiWorkspacesWorkspaceIdUnregisterResponse = PostApiWorkspacesWorkspaceIdUnregisterResponses[keyof PostApiWorkspacesWorkspaceIdUnregisterResponses];
 
 export type GetMetricsData = {
     body?: never;

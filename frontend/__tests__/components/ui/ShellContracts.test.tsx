@@ -10,7 +10,7 @@ describe('osci shell contracts', () => {
     expect(new Set(ROUTE_REGISTRY.map((route) => route.path)).size).toBe(ROUTE_REGISTRY.length);
     expect(getRouteDefinition('/tasks')?.titleKey).toBe('navigation.tasks.label');
     expect(getVisibleRoutes(false, true).some((route) => route.id === 'sessions')).toBe(false);
-    expect(getVisibleRoutes(true, true).some((route) => route.id === 'sessions')).toBe(true);
+    expect(getVisibleRoutes(true, true).some((route) => route.id === 'runs')).toBe(true);
     expect(getVisibleRoutes(true, true).some((route) => route.id === 'workspace-browser')).toBe(false);
     expect(getVisibleRoutes(true, false).some((route) => route.id === 'workspace-browser')).toBe(true);
     expect(getRouteDefinition('/literature')?.keywords).toContain('papers');

@@ -9,7 +9,6 @@ import type {
   LiteratureTopic,
   MessageItem,
   SearchSettingsResponse,
-  SessionDetailRecord,
   TaskCreatePayload,
   TaskEdge,
   TaskRecord,
@@ -79,7 +78,6 @@ interface FrontendV2MockState {
   intents: Record<string, MockIntent>;
   overview: OverviewSnapshot;
   refresh_jobs: Record<string, MockRefreshJob>;
-  sessions: SessionDetailRecord[];
   admin_users: AdminUserItem[];
   environment_access: Record<string, EnvAccessItem[]>;
   search_settings: SearchSettingsResponse;
@@ -562,31 +560,6 @@ function createState(): FrontendV2MockState {
       next_scheduled_at: '2026-07-17T06:00:00+08:00',
     },
     refresh_jobs: {},
-    sessions: [{
-      id: 'session-seed',
-      project_id: 'project-alpha',
-      title: 'Seeded research session',
-      status: 'completed',
-      task_count: 1,
-      total_duration_ms: 300000,
-      total_cost_usd: 0.42,
-      created_at: BASE_TIME,
-      updated_at: LATER_TIME,
-      attempts: [{
-        id: 'session-attempt-seed',
-        session_id: 'session-seed',
-        task_id: 'task-seed',
-        parent_attempt_id: null,
-        attempt_seq: 1,
-        intervention_reason: null,
-        status: 'completed',
-        started_at: BASE_TIME,
-        finished_at: LATER_TIME,
-        duration_ms: 300000,
-        token_usage_json: '{"input_tokens":120,"output_tokens":80}',
-        created_at: BASE_TIME,
-      }],
-    }],
     admin_users: [
       { id: OWNER_ID, username: 'mock-owner', display_name: 'Mock Owner', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: LATER_TIME, is_online: true },
       { id: 'mock-editor-user', username: 'mock-editor', display_name: 'Mock Editor', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: BASE_TIME, is_online: false },
@@ -1123,7 +1096,8 @@ export const frontendV2MockHandlers = [
       payload.prompt ?? source.prompt,
     );
     state.tasks.unshift(task);
-    state.attempts[taskId] = [makeAttempt(taskId, 1, 'initial', 'queued')];
+    const attempt = makeAttempt(taskId, 1, 'initial', 'queued');
+    state.attempts[taskId] = [attempt];
     state.messages[taskId] = [{
       id: `message-${taskId}-1`,
       type: 'user',
@@ -1138,16 +1112,7 @@ export const frontendV2MockHandlers = [
       relationship_type: 'derived_from',
       created_at: LATER_TIME,
     });
-    return HttpResponse.json(task, { status: 201 });
-  }),
-  http.patch('/api/tasks/:taskId/project', async ({ params, request }) => {
-    const taskId = textParam(params, 'taskId');
-    const task = taskById(taskId);
-    if (!task) return notFound('Task', taskId);
-    const payload = await requestJson<{ project_id: string }>(request);
-    task.project_id = payload.project_id;
-    task.updated_at = LATER_TIME;
-    return HttpResponse.json(task);
+    return HttpResponse.json({ task, attempt, dispatch: attempt.dispatch }, { status: 201 });
   }),
   http.patch('/api/tasks/:taskId', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');
@@ -1158,14 +1123,6 @@ export const frontendV2MockHandlers = [
     task.updated_at = LATER_TIME;
     return HttpResponse.json(task);
   }),
-  http.delete('/api/tasks/:taskId/permanent', ({ params }) => {
-    const taskId = textParam(params, 'taskId');
-    if (!taskById(taskId)) return notFound('Task', taskId);
-    state.tasks = state.tasks.filter((task) => task.task_id !== taskId);
-    delete state.attempts[taskId];
-    delete state.messages[taskId];
-    return noContent();
-  }),
   http.get('/api/tasks/:taskId', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     const task = taskById(taskId);
@@ -1174,8 +1131,10 @@ export const frontendV2MockHandlers = [
   http.get('/api/tasks', ({ request }) => {
     const search = new URL(request.url).searchParams;
     const includeArchived = search.get('include_archived') === 'true';
-    const items = state.tasks.filter((task) => includeArchived || !task.archived_at);
-    return HttpResponse.json({ items, total: items.length, has_more: false, next_cursor: null });
+    const projectId = search.get('project_id');
+    const items = state.tasks.filter((task) =>
+      (!projectId || task.project_id === projectId) && (includeArchived || !task.archived_at));
+    return HttpResponse.json({ items, total: items.length });
   }),
   http.post('/api/tasks', async ({ request }) => {
     const payload = await requestJson<TaskCreatePayload>(request);
@@ -1205,7 +1164,7 @@ export const frontendV2MockHandlers = [
       content: task.prompt,
       metadata: { timestamp: BASE_TIME, sequence: 1, sourceKind: 'message' },
     }];
-    return HttpResponse.json(task, { status: 201 });
+    return HttpResponse.json({ task, attempt, dispatch: attempt.dispatch }, { status: 201 });
   }),
 
   http.get('/api/domain/projects/:projectId/members', ({ params }) => {
@@ -1291,20 +1250,13 @@ export const frontendV2MockHandlers = [
       previous_workspace_id: new URL(request.url).searchParams.get('previous_workspace_id'),
     });
   }),
-  http.get('/api/projects/:projectId/tasks', ({ params, request }) => {
-    const projectId = textParam(params, 'projectId');
-    if (!projectById(projectId)) return notFound('Project', projectId);
-    const includeArchived = new URL(request.url).searchParams.get('include_archived') === 'true';
-    const items = state.tasks.filter((task) => task.project_id === projectId && (includeArchived || !task.archived_at));
-    return HttpResponse.json({ items, total: items.length, has_more: false, next_cursor: null });
-  }),
-  http.get('/api/projects/:projectId/task-edges', ({ params }) => {
+  http.get('/api/domain/projects/:projectId/task-relationships', ({ params }) => {
     const projectId = textParam(params, 'projectId');
     return projectById(projectId)
-      ? HttpResponse.json({ items: state.task_edges.filter((edge) => edge.project_id === projectId) })
+      ? HttpResponse.json({ items: state.task_edges.filter((edge) => edge.project_id === projectId).map(({ edge_id, ...edge }) => ({ ...edge, relationship_id: edge_id })) })
       : notFound('Project', projectId);
   }),
-  http.post('/api/projects/:projectId/task-edges', async ({ params, request }) => {
+  http.post('/api/domain/projects/:projectId/task-relationships', async ({ params, request }) => {
     const projectId = textParam(params, 'projectId');
     if (!projectById(projectId)) return notFound('Project', projectId);
     const payload = await requestJson<{ source_task_id: string; target_task_id: string; relationship_type?: string }>(request);
@@ -1317,11 +1269,12 @@ export const frontendV2MockHandlers = [
       created_at: LATER_TIME,
     };
     state.task_edges.push(edge);
-    return HttpResponse.json(edge, { status: 201 });
+    const { edge_id, ...relationship } = edge;
+    return HttpResponse.json({ ...relationship, relationship_id: edge_id }, { status: 201 });
   }),
-  http.delete('/api/task-edges/:edgeId', ({ params }) => {
-    const edgeId = textParam(params, 'edgeId');
-    state.task_edges = state.task_edges.filter((edge) => edge.edge_id !== edgeId);
+  http.delete('/api/domain/projects/:projectId/task-relationships/:relationshipId', ({ params }) => {
+    const relationshipId = textParam(params, 'relationshipId');
+    state.task_edges = state.task_edges.filter((edge) => edge.edge_id !== relationshipId);
     return noContent();
   }),
   http.post('/api/domain/workspaces/:workspaceId/unregister', ({ params }) => {
@@ -1525,32 +1478,6 @@ export const frontendV2MockHandlers = [
     return record ? HttpResponse.json(advanceRefreshJob(record)) : notFound('Overview Refresh Job', jobId);
   }),
   http.get('/api/domain/overview/today', () => HttpResponse.json(state.overview)),
-
-  http.get('/api/sessions/batch-detail', ({ request }) => {
-    const ids = (new URL(request.url).searchParams.get('ids') ?? '').split(',').filter(Boolean);
-    return HttpResponse.json({
-      items: Object.fromEntries(ids.map((id) => [id, state.sessions.find((session) => session.id === id)?.attempts ?? []])),
-    });
-  }),
-  http.get('/api/sessions', () => HttpResponse.json({
-    items: state.sessions.map(({ attempts, ...session }) => {
-      void attempts;
-      return session;
-    }),
-    total: state.sessions.length,
-    has_more: false,
-    next_cursor: null,
-  })),
-  http.get('/api/sessions/:sessionId', ({ params }) => {
-    const sessionId = textParam(params, 'sessionId');
-    const session = state.sessions.find((item) => item.id === sessionId);
-    return session ? HttpResponse.json(session) : notFound('Session', sessionId);
-  }),
-  http.get('/api/sessions/:sessionId/attempts', ({ params }) => {
-    const sessionId = textParam(params, 'sessionId');
-    const session = state.sessions.find((item) => item.id === sessionId);
-    return session ? HttpResponse.json({ items: session.attempts }) : notFound('Session', sessionId);
-  }),
 
   http.get('/api/admin/users', () => HttpResponse.json({ items: state.admin_users })),
   http.patch('/api/admin/users/:userId', async ({ params, request }) => {

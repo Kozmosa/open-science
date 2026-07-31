@@ -13,6 +13,7 @@
 - 2026-07-12 领域执行规范：大部分执行阶段已完成，剩余 Conversation/Runtime 方向由 2026-07-17 活跃 spec 接管。
 - 2026-07-29 架构清理设计：P0–P6 已完成，当前架构 contract 已提升到 `docs-site/docs/architecture.md` 和 `PROJECT_BASIS.md`。
 - 2026-07-30 compatibility telemetry correctness：已实现长期 HTTP contract 指标、临时 cleanup registry、durable evidence、Grafana 与 staging 验收 contract；当前事实见 observability 文档。
+- 2026-07-31 Task / Session HTTP contract cutover：正式化 `/api/tasks` 与 Project relationship/usage Interface，迁移 WebUI、Mock 和 generated transport，并在双 Gate 与 immutable release staging 验收后删除 Session 投影和旧 Task/Project 兼容入口。
 
 ## 2026-07-11 领域设计归档批次
 

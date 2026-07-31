@@ -8,7 +8,28 @@ interface Props {
 function parseTokenUsage(json: string | null): TokenUsage | null {
   if (!json) return null;
   try {
-    return JSON.parse(json) as TokenUsage;
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
+    const totalValue = record.total && typeof record.total === 'object'
+      ? record.total as Record<string, unknown>
+      : record;
+    const numberValue = (key: string): number => (
+      typeof totalValue[key] === 'number' ? totalValue[key] : 0
+    );
+    return {
+      total: {
+        input_tokens: numberValue('input_tokens'),
+        output_tokens: numberValue('output_tokens'),
+        cache_creation_input_tokens: numberValue('cache_creation_input_tokens'),
+        cache_read_input_tokens: numberValue('cache_read_input_tokens'),
+        cost_usd: typeof totalValue.cost_usd === 'number' ? totalValue.cost_usd : undefined,
+      },
+      by_model: record.by_model && typeof record.by_model === 'object'
+        ? record.by_model as TokenUsage['by_model']
+        : undefined,
+      source: record.source === 'claude-session-meta' ? 'claude-session-meta' : 'agent-sdk',
+    };
   } catch {
     return null;
   }

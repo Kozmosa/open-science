@@ -57,39 +57,11 @@ class TaskAgentWriteState(StrEnum):
     RESUME_REQUESTED = "resume_requested"
 
 
-class ProjectResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str
-    name: str
-    description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class ProjectListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[ProjectResponse]
-
-
-class ProjectCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1)
-    description: str | None = None
-
-
 class ProjectUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
     description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
 
 
 class ComponentHealth(BaseModel):
@@ -463,21 +435,14 @@ class TaskContextConfirmRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    project_id: str = ""
-    workspace_id: str
+    project_id: str = Field(min_length=1)
+    workspace_id: str = Field(min_length=1)
     researcher_type: Literal["vanilla", "aris-researcher"]
     harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
     prompt: str = Field(min_length=1)
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
-
-
-class TaskUpdateProjectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str = Field(min_length=1)
-    context_version_id: str | None = Field(default=None, min_length=1)
 
 
 class TaskUpdateRequest(BaseModel):
@@ -504,26 +469,6 @@ class TaskForkRequest(BaseModel):
     project_id: str | None = Field(default=None, min_length=1)
     prompt: str | None = Field(default=None, min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class WorkspaceResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    workspace_id: str
-    project_id: str
-    label: str
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str
-    created_at: datetime
-    updated_at: datetime
-    owner_user_id: str | None = None
-
-
-class WorkspaceListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[WorkspaceResponse]
 
 
 class SkillItemResponse(BaseModel):
@@ -747,10 +692,10 @@ class TaskMutationResponse(BaseModel):
     dispatch: TaskDispatchResponse
 
 
-class TaskEdgeResponse(BaseModel):
+class TaskRelationshipResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    edge_id: str
+    relationship_id: str
     project_id: str
     source_task_id: str
     target_task_id: str
@@ -758,28 +703,29 @@ class TaskEdgeResponse(BaseModel):
     created_at: str
 
 
-class TaskEdgeListResponse(BaseModel):
+class TaskRelationshipListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    items: list[TaskEdgeResponse]
+    items: list[TaskRelationshipResponse]
 
 
-class TaskEdgeCreateRequest(BaseModel):
+class TaskRelationshipCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str = Field(min_length=1)
     target_task_id: str = Field(min_length=1)
 
 
-class TaskRetryRequest(BaseModel):
+class ProjectUsageSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-
-class TaskRetryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    task: TaskSummaryResponse
-    attempt: TaskAttemptResponse
-    dispatch: TaskDispatchResponse
+    project_id: str
+    task_count: int
+    attempt_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    total_tokens: int
+    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):
@@ -1101,65 +1047,6 @@ class SkillRegistryUpdateResponse(BaseModel):
     removed: list[str] = Field(default_factory=list)
 
 
-# ── Session schemas ──────────────────────────────────────────────
-
-
-class AttemptResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    session_id: str
-    task_id: str | None = None
-    parent_attempt_id: str | None = None
-    attempt_seq: int
-    intervention_reason: str | None = None
-    status: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_ms: int | None = None
-    token_usage_json: str | None = None
-    created_at: str
-
-
-class SessionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    project_id: str
-    title: str
-    status: str
-    task_count: int
-    total_duration_ms: int
-    total_cost_usd: float
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class SessionDetailResponse(SessionResponse):
-    attempts: list["AttemptResponse"] = Field(default_factory=list)
-
-
-class SessionListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["SessionResponse"]
-    total: int | None = None
-    has_more: bool = False
-    next_cursor: str | None = None
-
-
-class AttemptListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["AttemptResponse"]
-
-
-class ProjectCostSummaryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: str
-    total_cost_usd: float
-    total_tokens: int
-    session_count: int
-    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
-
-
 # ── Auth schemas ──────────────────────────────────────────
 
 
@@ -1241,27 +1128,6 @@ class AdminUserListResponse(BaseModel):
 # ── Collaborator schemas ──────────────────────────────────
 
 
-class CollaboratorRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    role: str = "member"
-    can_publish: bool = False
-
-
-class CollaboratorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    username: str
-    display_name: str
-    role: str
-    can_publish: bool = False
-
-
-class CollaboratorListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list[CollaboratorResponse]
-
-
 class ProjectMemberRequest(BaseModel):
     """Authoritative v2 Project membership and publishing capability."""
 
@@ -1285,12 +1151,6 @@ class ProjectMemberListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ProjectMemberResponse]
-
-
-class ProjectOwnerTransferRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    new_owner_user_id: str = Field(min_length=1)
 
 
 # ── Environment Access schemas ────────────────────────────
@@ -1322,14 +1182,6 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=4)
-
-
-class WorkspaceCreateRequest(BaseModel):
-    project_id: str = Field(default="default", min_length=1)
-    label: str = Field(min_length=1)
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str = Field(min_length=1)
 
 
 class WorkspaceUpdateRequest(BaseModel):

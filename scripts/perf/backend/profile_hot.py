@@ -38,7 +38,7 @@ token = get_token()
 h = {"Authorization": f"Bearer {token}"}
 
 for i in range(10):
-    httpx.get(f"{BASE}/api/projects/default/tasks", headers=h)
+    httpx.get(f"{BASE}/api/tasks?project_id=default", headers=h)
     httpx.get(f"{BASE}/api/files/list?environment_id=env-localhost&path=/", headers=h)
     httpx.post(f"{BASE}/api/tasks", json={
         "project_id": "default", "workspace_id": "workspace-default",

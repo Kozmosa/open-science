@@ -1,4 +1,4 @@
-"""v2 compatibility coverage for Project, Workspace, and Environment routes."""
+"""Canonical Project, Workspace, and Environment HTTP contract coverage."""
 
 from __future__ import annotations
 
@@ -51,6 +51,32 @@ def _write_headers(headers: dict[str, str], idempotency_key: str) -> dict[str, s
     return {**headers, "Idempotency-Key": idempotency_key}
 
 
+@pytest.mark.anyio
+async def test_removed_resource_compatibility_routes_are_not_registered(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    headers = _headers(app, "removed-route-user", "removed-route-user", "admin")
+    paths = (
+        "/api/environments",
+        "/api/workspaces",
+        "/api/projects",
+        "/api/projects/removed-project",
+        "/api/projects/removed-project/members",
+        "/api/projects/removed-project/workspaces",
+        "/api/projects/removed-project/environment-refs",
+        "/api/projects/removed-project/collaborators",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        responses = [await client.get(path, headers=headers) for path in paths]
+
+    assert [response.status_code for response in responses] == [404] * len(paths)
+
+
 def _project_with_primary(
     app: FastAPI,
     state_root: Path,
@@ -97,7 +123,7 @@ def _project_with_primary(
 
 
 @pytest.mark.anyio
-async def test_v2_project_adapter_preserves_visibility_and_deprecation_headers(
+async def test_domain_project_interface_preserves_visibility(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -112,20 +138,22 @@ async def test_v2_project_adapter_preserves_visibility_and_deprecation_headers(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        owner_read = await client.get(f"/api/projects/{project_id}", headers=owner_headers)
+        owner_read = await client.get(f"/api/domain/projects/{project_id}", headers=owner_headers)
         viewer_write = await client.patch(
-            f"/api/projects/{project_id}",
+            f"/api/domain/projects/{project_id}",
             headers=_write_headers(viewer_headers, "viewer-project-update"),
             json={"name": "Denied"},
         )
-        outsider_read = await client.get(f"/api/projects/{project_id}", headers=outsider_headers)
+        outsider_read = await client.get(
+            f"/api/domain/projects/{project_id}", headers=outsider_headers
+        )
         refs = await client.get(
-            f"/api/projects/{project_id}/environment-refs", headers=owner_headers
+            f"/api/domain/projects/{project_id}/environment-refs", headers=owner_headers
         )
 
     assert owner_read.status_code == 200
-    assert owner_read.headers["Deprecation"] == "true"
-    assert owner_read.json()["default_workspace_id"]
+    assert "Deprecation" not in owner_read.headers
+    assert owner_read.json()["primary_workspace"]
     assert viewer_write.status_code == 403
     assert outsider_read.status_code == 404
     assert refs.status_code == 200
@@ -133,7 +161,7 @@ async def test_v2_project_adapter_preserves_visibility_and_deprecation_headers(
 
 
 @pytest.mark.anyio
-async def test_v2_workspace_delete_unregisters_without_deleting_directory(
+async def test_domain_workspace_unregister_preserves_directory(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -148,28 +176,29 @@ async def test_v2_workspace_delete_unregisters_without_deleting_directory(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            "/api/workspaces",
+            "/api/domain/workspaces",
             headers=_write_headers(headers, "workspace-create"),
             json={
-                "project_id": project_id,
+                "environment_id": app.state.project_module.workspace_links(project_id, owner)[0][
+                    "environment_id"
+                ],
                 "label": "Retained",
-                "default_workdir": str(workspace_path),
-                "workspace_prompt": "Keep the directory.",
+                "canonical_path": str(workspace_path),
             },
         )
         workspace_id = created.json()["workspace_id"]
-        deleted = await client.delete(
-            f"/api/workspaces/{workspace_id}",
+        deleted = await client.post(
+            f"/api/domain/workspaces/{workspace_id}/unregister",
             headers=_write_headers(headers, "workspace-delete"),
         )
-        hidden = await client.get(f"/api/workspaces/{workspace_id}", headers=headers)
+        hidden = await client.get(f"/api/domain/workspaces/{workspace_id}", headers=headers)
 
     assert created.status_code == 200
-    assert created.headers["Deprecation"] == "true"
+    assert "Deprecation" not in created.headers
     assert deleted.status_code == 204
-    assert deleted.headers["Deprecation"] == "true"
     assert workspace_path.is_dir()
-    assert hidden.status_code == 404
+    assert hidden.status_code == 200
+    assert hidden.json()["status"] == "unregistered"
     assert app.state.workspace_module.workspace(workspace_id, owner)["status"] == "unregistered"
 
 
@@ -233,7 +262,7 @@ async def test_v2_workspace_registration_replays_before_rechecking_the_path(
 
 
 @pytest.mark.anyio
-async def test_v2_environment_delete_disables_the_durable_environment(
+async def test_domain_environment_delete_disables_the_durable_environment(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -244,21 +273,20 @@ async def test_v2_environment_delete_disables_the_durable_environment(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            "/api/environments",
+            "/api/domain/environments",
             headers=_write_headers(headers, "environment-create"),
             json={"alias": "disable-me", "display_name": "Disable me", "host": "localhost"},
         )
         environment_id = created.json()["id"]
         deleted = await client.delete(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(headers, "environment-delete"),
         )
-        hidden = await client.get(f"/api/environments/{environment_id}", headers=headers)
+        hidden = await client.get(f"/api/domain/environments/{environment_id}", headers=headers)
 
     assert created.status_code == 201
-    assert created.headers["Deprecation"] == "true"
+    assert "Deprecation" not in created.headers
     assert deleted.status_code == 204
-    assert deleted.headers["Deprecation"] == "true"
     assert hidden.status_code == 404
     assert (
         app.state.environment_module.environment(environment_id, {"id": "admin", "role": "admin"})[
@@ -404,16 +432,15 @@ async def test_canonical_domain_environment_mutations_cover_ui_contract(
 
 
 @pytest.mark.anyio
-async def test_compatibility_removals_preserve_idempotency_and_not_found_errors(
+async def test_canonical_removals_preserve_idempotency_and_not_found_errors(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     headers = _headers(app, "missing-resource-admin", "missing-resource-admin", "admin")
     paths = (
-        "/api/environments/missing-environment",
-        "/api/workspaces/missing-workspace",
-        "/api/workspaces/missing-workspace/unregister",
+        "/api/domain/environments/missing-environment",
+        "/api/domain/workspaces/missing-workspace/unregister",
     )
 
     async with httpx.AsyncClient(
@@ -433,7 +460,7 @@ async def test_compatibility_removals_preserve_idempotency_and_not_found_errors(
 
 
 @pytest.mark.anyio
-async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visible_grantees(
+async def test_domain_environment_mutation_hides_ungranted_resources_but_denies_visible_grantees(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -462,25 +489,25 @@ async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visi
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         outsider_update = await client.patch(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(outsider_headers, "outsider-environment-update"),
             json={"display_name": "Must remain hidden"},
         )
         outsider_delete = await client.delete(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(outsider_headers, "outsider-environment-delete"),
         )
         grantee_update = await client.patch(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(grantee_headers, "grantee-environment-update"),
             json={"display_name": "Cannot manage"},
         )
         grantee_delete = await client.delete(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(grantee_headers, "grantee-environment-delete"),
         )
         admin_update = await client.patch(
-            f"/api/environments/{environment_id}",
+            f"/api/domain/environments/{environment_id}",
             headers=_write_headers(admin_headers, "admin-environment-update"),
             json={"display_name": "Admin update"},
         )
@@ -494,7 +521,7 @@ async def test_v2_environment_mutation_hides_ungranted_resources_but_denies_visi
 
 
 @pytest.mark.anyio
-async def test_v2_project_write_requires_a_stable_idempotency_transport(
+async def test_domain_project_write_requires_a_stable_idempotency_transport(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -504,38 +531,40 @@ async def test_v2_project_write_requires_a_stable_idempotency_transport(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        missing = await client.post("/api/projects", headers=headers, json={"name": "Missing"})
+        missing = await client.post(
+            "/api/domain/projects", headers=headers, json={"name": "Missing"}
+        )
         conflict = await client.post(
-            "/api/projects",
+            "/api/domain/projects",
             headers=_write_headers(headers, "header-key"),
             json={"name": "Conflict", "idempotency_key": "body-key"},
         )
         first = await client.post(
-            "/api/projects",
+            "/api/domain/projects",
             headers=_write_headers(headers, "project-create"),
             json={"name": "Stable"},
         )
         replay = await client.post(
-            "/api/projects",
+            "/api/domain/projects",
             headers=_write_headers(headers, "project-create"),
             json={"name": "Stable"},
         )
         changed = await client.post(
-            "/api/projects",
+            "/api/domain/projects",
             headers=_write_headers(headers, "project-create"),
             json={"name": "Different"},
         )
 
     assert missing.status_code == 409
     assert conflict.status_code == 422
-    assert first.status_code == 201
-    assert replay.status_code == 201
+    assert first.status_code == 200
+    assert replay.status_code == 200
     assert replay.json() == first.json()
     assert changed.status_code == 409
 
 
 @pytest.mark.anyio
-async def test_v2_compatibility_routes_fail_closed_when_cutover_readiness_is_lost(
+async def test_domain_routes_fail_closed_when_cutover_readiness_is_lost(
     state_root: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -547,13 +576,13 @@ async def test_v2_compatibility_routes_fail_closed_when_cutover_readiness_is_los
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/api/projects", headers=headers)
+        response = await client.get("/api/domain/projects", headers=headers)
 
     assert response.status_code == 503
 
 
 @pytest.mark.anyio
-async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http(
+async def test_domain_member_capabilities_are_available_over_http(
     state_root: Path,
     tmp_path: Path,
 ) -> None:
@@ -561,7 +590,6 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
     owner: dict[str, object] = {"id": "member-owner", "role": "member"}
     owner_headers = _headers(app, "member-owner", "member-owner", "member")
     editor_headers = _headers(app, "member-editor", "member-editor", "member")
-    new_owner_headers = _headers(app, "member-new-owner", "member-new-owner", "member")
     project = app.state.project_module.create_project(owner, name="Transferable project")
     project_id = str(project["project_id"])
 
@@ -569,44 +597,26 @@ async def test_v2_member_capabilities_and_owner_transfer_are_available_over_http
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         upsert = await client.put(
-            f"/api/projects/{project_id}/members/member-editor",
+            f"/api/domain/projects/{project_id}/members/member-editor",
             headers=_write_headers(owner_headers, "member-upsert"),
             json={"role": "editor", "can_publish": True},
         )
-        members = await client.get(f"/api/projects/{project_id}/members", headers=owner_headers)
-        transfer = await client.post(
-            f"/api/projects/{project_id}/owner-transfer",
-            headers=_write_headers(owner_headers, "owner-transfer"),
-            json={"new_owner_user_id": "member-new-owner"},
-        )
-        default_project = app.state.project_module.create_project(
-            owner, name="Protected default", is_default=True
-        )
-        default_transfer = await client.post(
-            f"/api/projects/{default_project['project_id']}/owner-transfer",
-            headers=_write_headers(owner_headers, "default-owner-transfer"),
-            json={"new_owner_user_id": "member-new-owner"},
+        members = await client.get(
+            f"/api/domain/projects/{project_id}/members", headers=owner_headers
         )
         editor_members = await client.get(
-            f"/api/projects/{project_id}/members", headers=editor_headers
-        )
-        new_owner_members = await client.get(
-            f"/api/projects/{project_id}/members", headers=new_owner_headers
+            f"/api/domain/projects/{project_id}/members", headers=editor_headers
         )
 
     assert upsert.status_code == 200
     assert upsert.json()["can_publish"] is True
     assert members.status_code == 200
     assert members.json()["items"] == [upsert.json()]
-    assert transfer.status_code == 200
-    assert transfer.json()["owner_user_id"] == "member-new-owner"
-    assert default_transfer.status_code == 409
     assert editor_members.status_code == 200
-    assert new_owner_members.status_code == 200
 
 
 @pytest.mark.anyio
-async def test_v2_detection_persists_observation_without_mutating_environment(
+async def test_domain_detection_persists_observation_without_mutating_environment(
     state_root: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -641,9 +651,11 @@ async def test_v2_detection_persists_observation_without_mutating_environment(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         detected = await client.post(
-            f"/api/environments/{environment_id}/detect", headers=admin_headers
+            f"/api/domain/environments/{environment_id}/detect", headers=admin_headers
         )
-        read_back = await client.get(f"/api/environments/{environment_id}", headers=admin_headers)
+        read_back = await client.get(
+            f"/api/domain/environments/{environment_id}", headers=admin_headers
+        )
 
     assert detected.status_code == 200
     assert detected.json()["latest_detection"]["status"] == "success"

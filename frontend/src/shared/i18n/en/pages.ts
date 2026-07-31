@@ -743,7 +743,7 @@ const pages = {
           unavailable: 'Unavailable',
         },
       },
-      sessions: {
+      runs: {
         sidebarTitle: 'Task runs',
         sidebarCount: '{{count}} runs',
         searchPlaceholder: 'Search task runs...',
@@ -782,6 +782,12 @@ const pages = {
           outputSeq: 'Output events',
           exitCode: 'Exit code',
         },
+        usage: {
+          tasks: 'Project tasks',
+          attempts: 'Project attempts',
+          tokens: 'Project tokens',
+          cost: 'Project cost',
+        },
         totalTokens: '{{count}} tokens',
         fileBrowser: {
           emptyDirectory: 'Empty directory',
@@ -814,7 +820,7 @@ const pages = {
           reason: 'Reason:',
           attemptLabel: 'Attempt #{{seq}}',
           viewTask: 'View task',
-          viewSession: 'View session',
+          viewSession: 'View run',
         },
       },
     },

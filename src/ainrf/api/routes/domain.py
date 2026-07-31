@@ -34,17 +34,22 @@ from ainrf.api.schemas import (
     ProjectMemberListResponse,
     ProjectMemberRequest,
     ProjectMemberResponse,
+    ProjectUsageSummaryResponse,
     ProjectUpdateRequest,
     ProjectContextCandidateCreateRequest,
     ProjectContextCandidateRejectRequest,
     ProjectContextDraftRequest,
     ProjectContextFragmentCreateRequest,
     TaskContextConfirmRequest,
+    TaskRelationshipCreateRequest,
+    TaskRelationshipListResponse,
+    TaskRelationshipResponse,
     WorkspaceUpdateRequest,
 )
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     DomainPermissionError,
+    AttemptProjectionService,
     EnvironmentModule,
     ProjectModule,
     ProjectContextService,
@@ -234,6 +239,13 @@ def _task_application_service(request: Request) -> TaskApplicationService:
     return service
 
 
+def _attempt_projection_service(request: Request) -> AttemptProjectionService:
+    service = getattr(request.app.state, "attempt_projection_service", None)
+    if not isinstance(service, AttemptProjectionService):
+        raise HTTPException(status_code=503, detail="Task Attempt projection is unavailable")
+    return service
+
+
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, DomainPermissionError):
         return HTTPException(status_code=403, detail="Domain permission denied")
@@ -284,6 +296,82 @@ async def get_domain_project(project_id: str, request: Request) -> DomainProject
         return DomainProjectSummaryResponse.model_validate(
             _project_module(request).project_console_summary(project_id, get_current_user(request))
         )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get(
+    "/projects/{project_id}/task-relationships",
+    response_model=TaskRelationshipListResponse,
+)
+async def list_project_task_relationships(
+    project_id: str, request: Request
+) -> TaskRelationshipListResponse:
+    try:
+        items = _project_module(request).list_task_relationships(
+            project_id, get_current_user(request)
+        )
+        return TaskRelationshipListResponse.model_validate({"items": items})
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.post(
+    "/projects/{project_id}/task-relationships",
+    response_model=TaskRelationshipResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_task_relationship(
+    project_id: str, payload: TaskRelationshipCreateRequest, request: Request
+) -> TaskRelationshipResponse:
+    try:
+        result = _project_module(request).create_task_relationship(
+            project_id,
+            get_current_user(request),
+            source_task_id=payload.source_task_id,
+            target_task_id=payload.target_task_id,
+            idempotency_key=require_idempotency_key(request),
+        )
+        return TaskRelationshipResponse.model_validate(result)
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.delete(
+    "/projects/{project_id}/task-relationships/{relationship_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_project_task_relationship(
+    project_id: str, relationship_id: str, request: Request
+) -> None:
+    try:
+        module = _project_module(request)
+        user = get_current_user(request)
+        module.require_project_editor(project_id, user)
+        relationships = module.list_task_relationships(project_id, user)
+        if not any(item["relationship_id"] == relationship_id for item in relationships):
+            raise HTTPException(status_code=404, detail="Task relationship not found")
+        module.delete_task_relationship(
+            relationship_id,
+            user,
+            idempotency_key=require_idempotency_key(request),
+        )
+    except Exception as exc:
+        raise _translate(exc) from exc
+
+
+@router.get(
+    "/projects/{project_id}/usage-summary",
+    response_model=ProjectUsageSummaryResponse,
+)
+async def get_project_usage_summary(
+    project_id: str, request: Request
+) -> ProjectUsageSummaryResponse:
+    try:
+        user = get_current_user(request)
+        _project_module(request).project(project_id, user)
+        summary = _attempt_projection_service(request).project_usage_summary(project_id, user)
+        return ProjectUsageSummaryResponse.model_validate(summary)
     except Exception as exc:
         raise _translate(exc) from exc
 

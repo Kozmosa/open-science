@@ -63,18 +63,11 @@ export const handlers = [
     return HttpResponse.json({ items: [domainWorkspace()] })
   }),
 
-  // Projects
-  http.get('/api/projects', () => {
-    return HttpResponse.json({
-      items: [{ project_id: 'default', name: 'Default Project', description: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', owner_user_id: 'u1' }],
-    })
+  http.get('/api/tasks', () => {
+    return HttpResponse.json({ items: [], total: 0 })
   }),
 
-  http.get('/api/projects/default/tasks', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
-  }),
-
-  http.get('/api/projects/default/task-edges', () => {
+  http.get('/api/domain/projects/default/task-relationships', () => {
     return HttpResponse.json({ items: [] })
   }),
 
@@ -82,25 +75,7 @@ export const handlers = [
     return HttpResponse.json({ items: [] })
   }),
 
-  http.get('/api/projects/:projectId', ({ params }) => {
-    const projectId = String(params.projectId)
-    return HttpResponse.json({
-      project_id: projectId,
-      name: projectId === 'default' ? 'Default Project' : 'Created Project',
-      description: '',
-      default_workspace_id: null,
-      default_environment_id: null,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      owner_user_id: 'u1',
-    })
-  }),
-
-  http.get('/api/projects/:projectId/tasks', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
-  }),
-
-  http.get('/api/projects/:projectId/task-edges', () => {
+  http.get('/api/domain/projects/:projectId/task-relationships', () => {
     return HttpResponse.json({ items: [] })
   }),
 
@@ -124,14 +99,6 @@ export const handlers = [
     return HttpResponse.json({ entries: [], path: '/' })
   }),
 
-  // Sessions
-  http.get('/api/sessions', () => {
-    return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
-  }),
-
-  http.get('/api/sessions/batch-detail', () => {
-    return HttpResponse.json({ items: {} })
-  }),
 ]
 
 function domainProject() {

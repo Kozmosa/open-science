@@ -10,7 +10,6 @@ from ainrf.agentic_researcher.models import (
     TaskOutputEvent,
 )
 from ainrf.api.idempotency import require_idempotency_key
-from ainrf.api.deprecation import deprecation_headers, mark_deprecated
 from ainrf.api.schemas import (
     MessageItemResponse,
     TaskAttemptListResponse,
@@ -27,12 +26,9 @@ from ainrf.api.schemas import (
     TaskPauseResponse,
     TaskPromptRequest,
     TaskPromptSendResponse,
-    TaskRetryRequest,
     TaskResumeResponse,
-    TaskRetryResponse,
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
-    TaskUpdateProjectRequest,
     TaskUpdateRequest,
 )
 from ainrf.auth.permissions import get_current_user
@@ -476,54 +472,6 @@ async def unarchive_task(request: Request, task_id: str) -> TaskSummaryResponse:
         raise _translate_v2_error(exc) from exc
 
 
-@router.delete("/{task_id}/permanent", status_code=204)
-async def delete_task(request: Request, task_id: str) -> None:
-    """Permanently delete a task."""
-    projection = _get_task_projection_service(request)
-    try:
-        projection.task(task_id, get_current_user(request))
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-    raise HTTPException(
-        status_code=410,
-        detail="Permanent Task deletion is unavailable; archive the Task instead",
-        headers=deprecation_headers(
-            route="tasks.permanent_delete", replacement=f"POST /tasks/{task_id}/archive"
-        ),
-    )
-
-
-@router.patch("/{task_id}/project", response_model=TaskSummaryResponse)
-async def update_task_project(
-    task_id: str, payload: TaskUpdateProjectRequest, request: Request, response: Response
-) -> TaskSummaryResponse:
-    """Compatibility alias for the explicit v2 Task move contract."""
-    task_application = _get_task_application_service(request)
-    mark_deprecated(
-        response, route="tasks.update_project", replacement=f"POST /tasks/{task_id}/move"
-    )
-    if payload.context_version_id is None:
-        raise HTTPException(
-            status_code=422, detail="context_version_id is required when moving a v2 Task"
-        )
-    user = get_current_user(request)
-    try:
-        task_application.move_task(
-            task_id,
-            user,
-            project_id=payload.project_id,
-            context_version_id=payload.context_version_id,
-            idempotency_key=_idempotency_key(request),
-        )
-        projection = _get_task_projection_service(request)
-        result = _v2_task_summary(projection, task_id, user)
-        return result
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
 @router.post("/{task_id}/move", response_model=TaskSummaryResponse)
 async def move_task(
     task_id: str, payload: TaskMoveRequest, request: Request
@@ -594,24 +542,18 @@ async def fork_task(
 
 
 @router.post("/{task_id}/retry", status_code=201)
-async def retry_task(
-    request: Request, task_id: str, payload: TaskRetryRequest | None = None
-) -> TaskRetryResponse:
+async def retry_task(request: Request, task_id: str) -> TaskMutationResponse:
     """Retry through a new Attempt under the existing Task identity."""
+    if (await request.body()).strip():
+        raise HTTPException(status_code=422, detail="Task retry does not accept a request body")
     user = get_current_user(request)
     task_application = _get_task_application_service(request)
-    _ = payload
     try:
         projection = _get_task_projection_service(request)
         retried = task_application.retry_task(
             task_id, user, idempotency_key=_idempotency_key(request)
         )
-        mutation = _v2_task_mutation_response(projection, user, retried)
-        return TaskRetryResponse(
-            task=mutation.task,
-            attempt=mutation.attempt,
-            dispatch=mutation.dispatch,
-        )
+        return _v2_task_mutation_response(projection, user, retried)
     except HTTPException:
         raise
     except Exception as exc:

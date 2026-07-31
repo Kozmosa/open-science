@@ -40,9 +40,9 @@ export function TimelineControls({
         value={projectId ?? ''}
         onChange={(e) => onProjectChange(e.target.value || null)}
         className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)]"
-        aria-label={t('pages.sessions.timeline.projectFilter')}
+        aria-label={t('pages.runs.timeline.projectFilter')}
       >
-        <option value="">{t('pages.sessions.timeline.allProjects')}</option>
+        <option value="">{t('pages.runs.timeline.allProjects')}</option>
         {projects.map((p) => (
           <option key={p.project_id} value={p.project_id}>
             {p.name}
@@ -53,7 +53,7 @@ export function TimelineControls({
       <span className="text-[var(--border)]">|</span>
 
       <label className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-        {t('pages.sessions.timeline.from')}
+        {t('pages.runs.timeline.from')}
         <input
           type="date"
           value={fromDate}
@@ -62,7 +62,7 @@ export function TimelineControls({
         />
       </label>
       <label className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
-        {t('pages.sessions.timeline.to')}
+        {t('pages.runs.timeline.to')}
         <input
           type="date"
           value={toDate}
@@ -81,7 +81,7 @@ export function TimelineControls({
         }}
         className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.sessions.timeline.today')}
+        {t('pages.runs.timeline.today')}
       </button>
       <button
         type="button"
@@ -91,7 +91,7 @@ export function TimelineControls({
         }}
         className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.sessions.timeline.past7Days')}
+        {t('pages.runs.timeline.past7Days')}
       </button>
       <button
         type="button"
@@ -101,13 +101,13 @@ export function TimelineControls({
         }}
         className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg-secondary)]"
       >
-        {t('pages.sessions.timeline.past30Days')}
+        {t('pages.runs.timeline.past30Days')}
       </button>
 
       <span className="flex-1" />
 
       <span className="text-xs text-[var(--text-secondary)]">
-        {t('pages.sessions.timeline.taskCount', { count: tasks.length })}
+        {t('pages.runs.timeline.taskCount', { count: tasks.length })}
       </span>
     </div>
   );

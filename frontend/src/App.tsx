@@ -21,7 +21,7 @@ const FileBrowserPage = lazy(() => import('./pages/FileBrowserPage'));
 const ResourcesPage = lazy(() => import('./pages/ResourcesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
-const SessionsPage = lazy(() => import('./pages/SessionsPage'));
+const RunsPage = lazy(() => import('./pages/RunsPage'));
 const TimelinePage = lazy(() => import('./pages/TimelinePage'));
 const ChangePasswordPage = lazy(() => import("./pages/ChangePasswordPage"));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -67,7 +67,7 @@ const routeComponents: Record<AppRouteId, LazyExoticComponent<ComponentType>> = 
   'workspace-browser': FileBrowserPage,
   environments: EnvironmentsPage,
   resources: ResourcesPage,
-  sessions: SessionsPage,
+  runs: RunsPage,
   timeline: TimelinePage,
   literature: LiteraturePage,
   settings: SettingsPage,

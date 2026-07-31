@@ -30,7 +30,6 @@ _EXPORTS = {
     "TaskDispatcher": ("ainrf.domain.worker", "TaskDispatcher"),
     "TaskApplicationService": ("ainrf.domain.tasks", "TaskApplicationService"),
     "TaskProjectionService": ("ainrf.domain.task_projection", "TaskProjectionService"),
-    "SessionProjectionService": ("ainrf.domain.session_projection", "SessionProjectionService"),
     "OverviewSnapshotPlanner": ("ainrf.domain.overview", "OverviewSnapshotPlanner"),
     "OverviewSnapshotService": ("ainrf.domain.overview", "OverviewSnapshotService"),
 }

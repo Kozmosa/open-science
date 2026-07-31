@@ -92,26 +92,6 @@ export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'mes
 export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
-export interface TaskRetryResponse {
-  task: TaskSummary;
-  attempt?: {
-    attempt_id: string;
-    task_id: string;
-    attempt_seq: number;
-    trigger: string;
-    status: string;
-    [key: string]: unknown;
-  } | null;
-  dispatch?: {
-    dispatch_id: string;
-    task_id: string;
-    attempt_id: string;
-    status: string;
-    launch_state: string;
-    [key: string]: unknown;
-  } | null;
-}
-
 export interface ProjectRecord {
   project_id: string;
   name: string;
@@ -603,57 +583,6 @@ export interface TaskMessagesResponse {
   next_sequence: number | null;
 }
 
-// ── Session types ──────────────────────────────────────
-
-export type SessionStatus = 'active' | 'completed' | 'archived';
-export type AttemptStatus = 'running' | 'completed' | 'failed' | 'interrupted';
-
-export interface AttemptRecord {
-  id: string;
-  session_id: string;
-  task_id: string | null;
-  parent_attempt_id: string | null;
-  attempt_seq: number;
-  intervention_reason: string | null;
-  status: AttemptStatus;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
-  token_usage_json: string | null;
-  created_at: string;
-}
-
-export interface SessionRecord {
-  id: string;
-  project_id: string;
-  title: string;
-  status: SessionStatus;
-  task_count: number;
-  total_duration_ms: number;
-  total_cost_usd: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SessionDetailRecord extends SessionRecord {
-  attempts: AttemptRecord[];
-}
-
-export interface SessionListResponse {
-  items: SessionRecord[];
-  total?: number;
-  has_more: boolean;
-  next_cursor?: string | null;
-}
-
-export interface SessionsBatchDetailResponse {
-  items: Record<string, AttemptRecord[]>;
-}
-
-export interface AttemptListResponse {
-  items: AttemptRecord[];
-}
-
 // ── Token types ──────────────────────────────────────────
 
 export interface TokenUsage {
@@ -696,14 +625,6 @@ export interface TaskTokenUsageSummary {
     cost_usd: number;
     duration_ms: number | null;
   }>;
-}
-
-export interface ProjectCostSummary {
-  project_id: string;
-  total_cost_usd: number;
-  total_tokens: number;
-  session_count: number;
-  by_model: Record<string, { cost_usd: number; tokens: number }>;
 }
 
 export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null; is_online: boolean }

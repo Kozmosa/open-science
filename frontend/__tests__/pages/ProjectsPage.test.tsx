@@ -97,8 +97,8 @@ const environmentAlt = {
     server.use(
       http.get('/api/projects', () => HttpResponse.json({ items: [project] })),
       http.get('/api/projects/default', () => HttpResponse.json(project)),
-      http.get('/api/projects/default/tasks', () => HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })),
-      http.get('/api/projects/default/task-edges', () => HttpResponse.json({ items: [] })),
+      http.get('/api/tasks', () => HttpResponse.json({ items: [], total: 0 })),
+      http.get('/api/domain/projects/default/task-relationships', () => HttpResponse.json({ items: [] })),
       http.get('/api/workspaces', () => HttpResponse.json({ items: [workspaceDefault, workspaceAlt] })),
       http.get('/api/environments', () => HttpResponse.json({ items: [environmentDefault, environmentAlt] })),
       http.get('/api/skills', () => HttpResponse.json({ items: [] })),

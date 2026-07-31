@@ -20,7 +20,7 @@ import { Button } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useResolvedOsciTheme } from '@/shared/hooks/useResolvedOsciTheme';
 import { readMigratedLocalStorage, removeLocalStorage } from '@/shared/utils/storage';
-import { createTaskEdge } from '@features/tasks';
+import { createTaskEdge, deleteTaskEdge } from '@features/tasks';
 import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 import type { ProjectRecord, TaskEdge, TaskSummary } from '@/shared/types';
 import TaskNode from './TaskNode';
@@ -91,6 +91,9 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
   const [flowEdges, setFlowEdges] = useState<Edge[]>(initialEdges);
   const manualEdgeIds = useRef<Set<string>>(new Set());
   const relationshipKeyManager = useRef(new IdempotencyKeyManager('task.relationship')).current;
+  const relationshipDeleteKeyManager = useRef(
+    new IdempotencyKeyManager('task.relationship.delete')
+  ).current;
 
   const runLayout = useCallback(() => {
     const saved = readMigratedLocalStorage(LAYOUT_KEY(projectId), [LEGACY_LAYOUT_KEY(projectId)]);
@@ -166,13 +169,41 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
       };
       const key = relationshipKeyManager.keyFor(semanticMutationValue({ projectId, ...payload }));
       createTaskEdge(projectId, payload, key)
-        .then(() => relationshipKeyManager.markSucceeded(key))
+        .then((createdEdge) => {
+          relationshipKeyManager.markSucceeded(key);
+          manualEdgeIds.current.delete(edgeId);
+          setFlowEdges((current) => current.map((edge) => (
+            edge.id === edgeId ? { ...edge, id: createdEdge.edge_id } : edge
+          )));
+        })
         .catch(() => {
           manualEdgeIds.current.delete(edgeId);
           setFlowEdges((current) => current.filter((e) => e.id !== edgeId));
         });
     },
     [canEditRelationships, projectId, relationshipKeyManager]
+  );
+
+  const onEdgesDelete = useCallback(
+    (deletedEdges: Edge[]) => {
+      if (!canEditRelationships) return;
+      for (const deletedEdge of deletedEdges) {
+        const key = relationshipDeleteKeyManager.keyFor(semanticMutationValue({
+          projectId,
+          relationshipId: deletedEdge.id,
+        }));
+        deleteTaskEdge(projectId, deletedEdge.id, key)
+          .then(() => relationshipDeleteKeyManager.markSucceeded(key))
+          .catch(() => {
+            setFlowEdges((current) => (
+              current.some((edge) => edge.id === deletedEdge.id)
+                ? current
+                : [...current, deletedEdge]
+            ));
+          });
+      }
+    },
+    [canEditRelationships, projectId, relationshipDeleteKeyManager]
   );
 
   const onNodeDrag = useCallback(
@@ -234,6 +265,7 @@ function CanvasInner({ projectId, tasks, edges, projects, onNodeClick, onMoveTas
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgesDelete={onEdgesDelete}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={handleNodeClick}

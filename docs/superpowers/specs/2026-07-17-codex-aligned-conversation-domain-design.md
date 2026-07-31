@@ -411,7 +411,7 @@ POST /tasks/{task_id}/reopen
 - control request 返回 request status，不把“已入队”伪装成 engine 已执行；
 - streaming endpoint 从规范 TurnItem/event journal 输出；
 - 旧 `/continue`、`/retry`、`/pause`、`/resume` 在兼容期分别映射为 create Turn、create retry Turn、410 Gone、410 Gone，并带 deprecation metadata；
-- `/sessions` 只保留管理投影，不能继续作为用户 conversation 写接口。
+- 旧 `/sessions` 管理投影已经删除；当前 `/runs` 管理页直接读取 Task / TaskAttempt，目标迁移仍以本 spec 的 Task / Turn / Item / RuntimeExecution 为准。
 
 ## 12. Usage、token 与事件完整性
 

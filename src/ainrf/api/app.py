@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TypeVar
 from anyio import to_thread
 from fastapi import APIRouter, FastAPI
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from ainrf.runtime.product_config import ApiConfig
 from ainrf.api.middleware import (
@@ -27,19 +27,15 @@ from ainrf.api.middleware.request_logging import build_request_logging_middlewar
 from ainrf.api.openapi import stable_operation_id
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
-from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.literature import router as literature_router
-from ainrf.api.routes.projects import router as projects_router, task_edges_router
 from ainrf.api.routes.resources import router as resources_router
-from ainrf.api.routes.sessions import router as sessions_router
 from ainrf.api.routes.settings import router as settings_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
-from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.api.routes.client_logs import router as client_logs_router
 from ainrf.api.routes.client_metrics import router as client_metrics_router
 from ainrf.api.routes.domain import router as domain_router
@@ -67,7 +63,6 @@ from ainrf.domain import (
     PersistentEnvironmentFacade,
     PersistentWorkspaceFacade,
     ProjectContextService,
-    SessionProjectionService,
     TaskApplicationService,
     TaskProjectionService,
 )
@@ -150,16 +145,11 @@ ROUTERS: tuple[APIRouter, ...] = (
     admin_router,
     auth_router,
     health_router,
-    environments_router,
     files_router,
-    projects_router,
-    task_edges_router,
     skills_router,
     skill_registries_router,
-    workspaces_router,
     terminal_router,
     tasks_router,
-    sessions_router,
     literature_router,
     resources_router,
     settings_router,
@@ -472,15 +462,6 @@ def create_app(
             api_config.state_root,
             attempt_projection=attempt_projection,
         )
-        # The ``/projects/{id}/tasks`` compatibility adapter consumes the same
-        # authoritative projection as the canonical Task routes.
-        app.state.project_task_projection_service = app.state.task_projection_service
-        app.state.session_projection_service = SessionProjectionService(
-            api_config.state_root,
-            attempt_projection=attempt_projection,
-        )
-        # Project costs are another read-only view over the same Attempt rows.
-        app.state.project_cost_projection_service = attempt_projection
         app.state.overview_snapshot_service = OverviewSnapshotService(
             api_config.state_root,
             artifact_sha=artifact_sha,
@@ -601,6 +582,8 @@ def create_app(
             """StaticFiles that returns index.html for non-file paths (SPA fallback)."""
 
             async def get_response(self, path: str, scope) -> Response:
+                if path == "api" or path.startswith("api/"):
+                    return JSONResponse({"detail": "Not Found"}, status_code=404)
                 try:
                     response = await super().get_response(path, scope)
                     if response.status_code == 404:

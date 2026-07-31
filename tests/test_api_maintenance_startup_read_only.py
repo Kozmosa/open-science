@@ -77,10 +77,10 @@ async def test_maintenance_startup_exposes_only_evidence_without_initializing_se
             )
             blocked_reads = [
                 await client.get("/api/tasks?api_key=maintenance-startup-key"),
-                await client.get("/v1/sessions?api_key=maintenance-startup-key"),
+                await client.get("/v1/tasks?api_key=maintenance-startup-key"),
                 await client.get("/token-usage?api_key=maintenance-startup-key"),
                 await client.get(
-                    "/api/projects",
+                    "/api/domain/projects",
                     headers={"Authorization": f"Bearer {bearer}"},
                 ),
             ]
