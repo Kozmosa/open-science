@@ -435,8 +435,8 @@ class TaskContextConfirmRequest(BaseModel):
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    project_id: str = ""
-    workspace_id: str
+    project_id: str = Field(min_length=1)
+    workspace_id: str = Field(min_length=1)
     researcher_type: Literal["vanilla", "aris-researcher"]
     harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
     prompt: str = Field(min_length=1)
@@ -699,7 +699,33 @@ class TaskMutationResponse(BaseModel):
     dispatch: TaskDispatchResponse
 
 
+class TaskRelationshipResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relationship_id: str
+    project_id: str
+    source_task_id: str
+    target_task_id: str
+    relationship_type: str = "related_to"
+    created_at: str
+
+
+class TaskRelationshipListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TaskRelationshipResponse]
+
+
+class TaskRelationshipCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_task_id: str = Field(min_length=1)
+    target_task_id: str = Field(min_length=1)
+
+
 class TaskEdgeResponse(BaseModel):
+    """Compatibility transport retained until Gate A completes."""
+
     model_config = ConfigDict(extra="forbid")
 
     edge_id: str
@@ -723,15 +749,16 @@ class TaskEdgeCreateRequest(BaseModel):
     target_task_id: str = Field(min_length=1)
 
 
-class TaskRetryRequest(BaseModel):
+class ProjectUsageSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-
-class TaskRetryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    task: TaskSummaryResponse
-    attempt: TaskAttemptResponse
-    dispatch: TaskDispatchResponse
+    project_id: str
+    task_count: int
+    attempt_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    total_tokens: int
+    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):

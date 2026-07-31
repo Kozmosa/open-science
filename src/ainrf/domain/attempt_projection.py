@@ -246,12 +246,12 @@ class AttemptProjectionService:
 
         return self._usage_summary_for_tasks(task_rows, attempts_by_task)
 
-    def project_cost_summary(
+    def project_usage_summary(
         self,
         project_id: str,
         _user: Mapping[str, object],
     ) -> dict[str, object]:
-        """Return a Project cost projection after the route checked visibility.
+        """Return Project usage after the route checked visibility.
 
         Project visibility is intentionally enforced by the Project Module at the
         route boundary: project members may see aggregate cost for every Task in
@@ -273,11 +273,28 @@ class AttemptProjectionService:
         )
         return {
             "project_id": project_id,
+            "task_count": len(task_rows),
+            "attempt_count": sum(len(items) for items in attempts_by_task.values()),
+            "total_duration_ms": total.duration_ms,
             "total_cost_usd": total.cost_usd,
             "total_tokens": total.tokens,
-            # A v2 Session is a compatibility projection of one Task.
-            "session_count": len(task_rows),
             "by_model": total.by_model,
+        }
+
+    def project_cost_summary(
+        self,
+        project_id: str,
+        user: Mapping[str, object],
+    ) -> dict[str, object]:
+        """Compatibility projection retained only until the Task cutover gate."""
+
+        summary = self.project_usage_summary(project_id, user)
+        return {
+            "project_id": summary["project_id"],
+            "total_cost_usd": summary["total_cost_usd"],
+            "total_tokens": summary["total_tokens"],
+            "session_count": summary["task_count"],
+            "by_model": summary["by_model"],
         }
 
     @staticmethod

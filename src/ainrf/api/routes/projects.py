@@ -122,7 +122,12 @@ async def list_project_task_edges(
     try:
         return TaskEdgeListResponse(
             items=[
-                TaskEdgeResponse.model_validate(edge)
+                TaskEdgeResponse.model_validate(
+                    {
+                        **{key: value for key, value in edge.items() if key != "relationship_id"},
+                        "edge_id": edge["relationship_id"],
+                    }
+                )
                 for edge in module.list_task_relationships(project_id, user)
             ]
         )
@@ -150,14 +155,18 @@ async def create_project_task_edge(
     )
     try:
         module.require_project_editor(project_id, user)
+        relationship = module.create_task_relationship(
+            project_id,
+            user,
+            source_task_id=payload.source_task_id,
+            target_task_id=payload.target_task_id,
+            idempotency_key=require_idempotency_key(request),
+        )
         return TaskEdgeResponse.model_validate(
-            module.create_task_relationship(
-                project_id,
-                user,
-                source_task_id=payload.source_task_id,
-                target_task_id=payload.target_task_id,
-                idempotency_key=require_idempotency_key(request),
-            )
+            {
+                **{key: value for key, value in relationship.items() if key != "relationship_id"},
+                "edge_id": relationship["relationship_id"],
+            }
         )
     except Exception as exc:
         raise _translate_task_edge_error(exc) from exc

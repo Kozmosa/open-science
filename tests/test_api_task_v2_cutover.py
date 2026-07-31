@@ -172,7 +172,6 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         retried = await client.post(
             f"/api/tasks/{task_id}/retry?api_key={_API_KEY}",
             headers={"Idempotency-Key": "task-v2-retry"},
-            json={},
         )
         assert retried.status_code == 201
         assert "deprecation" not in retried.headers
@@ -203,16 +202,47 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         assert forked_task_id != task_id
 
         relationships = await client.get(
-            f"/api/projects/{project_id}/task-edges?api_key={_API_KEY}"
+            f"/api/domain/projects/{project_id}/task-relationships?api_key={_API_KEY}"
         )
         assert relationships.status_code == 200
         relationship_items = cast(list[dict[str, object]], _body(relationships)["items"])
+        assert all(
+            "relationship_id" in item and "edge_id" not in item for item in relationship_items
+        )
         assert any(
             item["source_task_id"] == forked_task_id
             and item["target_task_id"] == task_id
             and item["relationship_type"] == "derived_from"
             for item in relationship_items
         )
+
+        related = await client.post(
+            f"/api/domain/projects/{project_id}/task-relationships?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-related"},
+            json={"source_task_id": task_id, "target_task_id": forked_task_id},
+        )
+        assert related.status_code == 201
+        related_payload = _body(related)
+        relationship_id = str(related_payload["relationship_id"])
+        assert "edge_id" not in related_payload
+
+        usage = await client.get(
+            f"/api/domain/projects/{project_id}/usage-summary?api_key={_API_KEY}"
+        )
+        assert usage.status_code == 200
+        usage_payload = _body(usage)
+        assert usage_payload["project_id"] == project_id
+        assert usage_payload["task_count"] == 2
+        assert usage_payload["attempt_count"] == 3
+        assert usage_payload["total_duration_ms"] == 0
+        assert "session_count" not in usage_payload
+
+        deleted_relationship = await client.delete(
+            f"/api/domain/projects/{project_id}/task-relationships/{relationship_id}"
+            f"?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-related-delete"},
+        )
+        assert deleted_relationship.status_code == 204
 
         archived = await client.post(
             f"/api/tasks/{forked_task_id}/archive?api_key={_API_KEY}",
@@ -222,6 +252,52 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         archived_task = _body(archived)
         assert isinstance(archived_task["archived_at"], str)
         assert archived_task["archive_reason"] == "user_archived"
+
+
+@pytest.mark.anyio
+async def test_task_create_and_retry_reject_legacy_request_shapes(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    payload = {
+        "project_id": project_id,
+        "workspace_id": workspace_id,
+        "researcher_type": "vanilla",
+        "harness_engine": "claude-code",
+        "prompt": "Reject compatibility input",
+        "skills": [],
+    }
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        empty_project = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-empty-project"},
+            json={**payload, "project_id": ""},
+        )
+        environment_alias = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-environment-alias"},
+            json={**payload, "environment_id": environment_id},
+        )
+        created = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-canonical-create"},
+            json=payload,
+        )
+        task_id = str(_mapping(_body(created)["task"])["task_id"])
+        retry_body = await client.post(
+            f"/api/tasks/{task_id}/retry?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-retry-body"},
+            json={},
+        )
+
+    assert empty_project.status_code == 422
+    assert environment_alias.status_code == 422
+    assert created.status_code == 201
+    assert retry_body.status_code == 422
 
 
 @pytest.mark.anyio

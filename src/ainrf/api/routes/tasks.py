@@ -27,9 +27,7 @@ from ainrf.api.schemas import (
     TaskPauseResponse,
     TaskPromptRequest,
     TaskPromptSendResponse,
-    TaskRetryRequest,
     TaskResumeResponse,
-    TaskRetryResponse,
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
     TaskUpdateProjectRequest,
@@ -594,24 +592,18 @@ async def fork_task(
 
 
 @router.post("/{task_id}/retry", status_code=201)
-async def retry_task(
-    request: Request, task_id: str, payload: TaskRetryRequest | None = None
-) -> TaskRetryResponse:
+async def retry_task(request: Request, task_id: str) -> TaskMutationResponse:
     """Retry through a new Attempt under the existing Task identity."""
+    if (await request.body()).strip():
+        raise HTTPException(status_code=422, detail="Task retry does not accept a request body")
     user = get_current_user(request)
     task_application = _get_task_application_service(request)
-    _ = payload
     try:
         projection = _get_task_projection_service(request)
         retried = task_application.retry_task(
             task_id, user, idempotency_key=_idempotency_key(request)
         )
-        mutation = _v2_task_mutation_response(projection, user, retried)
-        return TaskRetryResponse(
-            task=mutation.task,
-            attempt=mutation.attempt,
-            dispatch=mutation.dispatch,
-        )
+        return _v2_task_mutation_response(projection, user, retried)
     except HTTPException:
         raise
     except Exception as exc:
