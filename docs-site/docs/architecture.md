@@ -79,6 +79,12 @@ flowchart TD
 
 临时 `ainrf_cleanup_*` registry、指标、持久化表、日志和 Dashboard，以及 superseded `ainrf_deprecated_*` 指标、旧统计 helper 与 Release E 告警已在架构清理最终收口中删除。Compatibility route 观察统一由长期、低基数的 `ainrf_http_contract_*` 指标和 durable aggregate 承担；正式长期 alias 不再产生 cleanup-only 遥测。
 
+## 最终收口验收
+
+2026-08-01 的最终收口使用提交 SHA 对应的不可变 release manifest，在 `openscience-release-staging` 的独立 named volumes 与 `127.0.0.1:7192` / `127.0.0.1:17000` 上完成。API、Web 与 fixture worker 使用同一 release SHA；验收覆盖登录、用户、设置、Project、Workspace、Environment、文件读写与租户权限、Task 全生命周期、Runs、Timeline、Literature、Skills、Terminal、正式 HTTP contract 与已删除入口的 404。浏览器 Console、page error、真实 Network failure 与 5xx 均为零；Task 由 fixture worker 成功执行，API 重启后 Task、上传文件与 durable HTTP contract evidence 仍可读取。隔离 API、Web、init 与 worker 日志未发现相关 schema、权限或未处理异常。
+
+该验收没有访问或操作 production 容器、数据、日志、端口或 HTTP。最终可审计的准确 SHA、manifest 与 required checks 以对应 pull request 记录为准。
+
 ## 长期验证 owner
 
 - Backend Module 与 HTTP contract：`tests/` 和 `bash scripts/test.sh <lane>`。

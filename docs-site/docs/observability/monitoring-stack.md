@@ -115,6 +115,8 @@ deploy/config/
 | `AINRFHighRequestRate` | 总请求 > 100/s 持续 2min | warning | 流量异常 |
 | `AINRFHighErrorRate` | 5xx 占比 > 10% 持续 2min | critical | 后端异常 |
 
+架构清理使用的临时 Grafana cleanup panel、`ainrf_cleanup_*` / `ainrf_deprecated_*` 查询和 Release E 专用告警已经删除。当前 Dashboard 与规则只消费长期指标；正式长期配置/CLI alias 不建立 removal 告警。
+
 ### 启用告警通知
 
 预置规则仅定义了告警条件，未配置通知渠道。在 Grafana 中添加：

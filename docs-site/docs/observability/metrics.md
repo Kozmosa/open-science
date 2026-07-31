@@ -64,6 +64,8 @@ HTTP contract durable evidence 按日期、surface、operation、method、status
 
 架构清理期间使用的 `ainrf_cleanup_*` 与 superseded `ainrf_deprecated_*` 指标已删除。正式配置/CLI alias 不属于待删除债务；route compatibility 只使用上述长期、低基数 contract 指标，不再维护平行的临时统计。
 
+2026-08-01 的不可变 release staging 验收确认：正式请求产生 `ainrf_http_contract_*`，已删除 route 以 `surface="non_product"`、`operation="unmatched"`、`status_class="4xx"` 归类；API 重启后 durable aggregate 继续存在，而 process-local Prometheus counter 按设计重新开始。指标 exposition 中不存在 `ainrf_cleanup_*` 或 `ainrf_deprecated_*`。
+
 ## 相关文档
 
 - [可观测性概览](/observability/) — 审计事件目录
