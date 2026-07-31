@@ -40,6 +40,7 @@ flowchart TD
 - Canonical HTTP prefix 是 `/api`。
 - 产品 router 只注册在 `/api`。root 与产品 `/v1` aliases 已在用户确认当前无外部调用者后删除；`/v1/models`、`/v1/messages` 继续作为独立外部协议保留。
 - FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。
+- `/api/tasks` 是唯一正式 Task HTTP Interface；Project-owned relationship 与 usage 投影位于 `/api/domain/projects/{project_id}/task-relationships` 和 `/usage-summary`。管理侧 `/runs` 直接读取 Task 与 TaskAttempt，不存在独立 Session 资源。
 - `npm --prefix frontend run generate:transport` 确定性生成 `frontend/src/generated/transport/`。
 - `npm --prefix frontend run check:transport` 重建并检查 schema manifest、operation/path metadata 与工作树 drift。
 - Generated transport 的长期验证由正常 drift gate、真实 HTTP contract tests 和 MSW Adapter tests 负责；临时 architecture-cleanup suite 已在 P6 删除。
@@ -63,11 +64,10 @@ flowchart TD
 
 ## Fail-closed compatibility inventory
 
-用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。前两批删除了已证明无调用方的浅层入口；第三批在 WebUI 迁移到正式 domain 入口后，删除了 Project、Workspace 和 Environment 的资源兼容入口。下表只保留尚有调用方或具有审计价值的兼容面。
+用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。资源兼容入口以及 Session / Task compatibility projections 已在 caller、generated transport、Gate A/Gate B 和 immutable release staging 验收完成后删除。下表只保留具有审计价值的兼容面。
 
 | Surface | Owner | Telemetry key | 删除条件 | P6 状态 |
 | --- | --- | --- | --- | --- |
-| Session / Task compatibility projections，以及 Project 下仍被 WebUI 使用的 Task 列表、Task edge 和 cost summary | API / release | `ainrf_http_contract_requests_total` 的 stable operation | caller 迁移后复核 canonical generated operation/path metadata，并同步更新 schema、contract test 和文档 | 保留，尚有调用方 |
 | read-only legacy migration/audit surfaces | Domain migration / release | migration audit evidence | 外部版本化审计证据完成保留决策，且 rollback/audit 不再依赖该 surface | 保留，read-only |
 
 后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。
