@@ -314,10 +314,10 @@ function TasksPage() {
       );
       return { task, key };
     },
-    onSuccess: ({ task, key }) => {
+    onSuccess: async ({ task, key }) => {
       forkKeyManager.markSucceeded(key);
       setOperationDialog(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       selectTask(task.task_id);
     },
   });

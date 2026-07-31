@@ -15,6 +15,7 @@ import type {
 import {
   buildTaskStreamUrl,
   createTask,
+  forkTask,
   getTask,
   getTaskMessages,
   getTaskOutput,
@@ -240,6 +241,7 @@ function createOutputPage(
 vi.mock('@features/tasks/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
+  forkTask: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTaskMessages: vi.fn(),
@@ -371,6 +373,7 @@ vi.mock('@features/auth', async (importOriginal) => {
 
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
+const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
@@ -395,6 +398,7 @@ beforeEach(() => {
 
   mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
+  mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
@@ -519,6 +523,34 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('keeps a newly forked Task selected after the Task list refreshes', async () => {
+    const user = userEvent.setup();
+    const forkedTask = {
+      ...taskSummary,
+      task_id: 'task-forked',
+      title: 'Forked task',
+      status: 'queued' as const,
+    };
+    const forkedRecord = { ...taskRecord, ...forkedTask };
+    mockGetTasks
+      .mockResolvedValueOnce({ items: [taskSummary] })
+      .mockResolvedValue({ items: [forkedTask, taskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => (
+      taskId === forkedTask.task_id ? forkedRecord : taskRecord
+    ));
+    mockForkTask.mockResolvedValue(forkedTask);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Fork Task' }));
+
+    expect(await screen.findByRole('heading', { name: 'Forked task' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-forked'));
+  });
+
   it('refreshes the same Task Attempt and actual Project caches after retry', async () => {
     const user = userEvent.setup();
     const failedTask = { ...taskSummary, status: 'failed' as const, project_id: 'project-retry' };
