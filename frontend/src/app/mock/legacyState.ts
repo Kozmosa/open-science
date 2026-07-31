@@ -35,17 +35,28 @@ import type {
 import type {
   EnvironmentCreateRequest,
   EnvironmentUpdateRequest,
-  ProjectCreateRequest,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
   ProjectUpdateRequest,
   SkillImportRequest,
   TaskCreatePayload,
   TaskEdgeCreateRequest,
-  WorkspaceCreateRequest,
   WorkspaceUpdateRequest,
 } from '@/shared/api/transportTypes';
 import { ApiError } from '@/shared/api/client';
+
+interface MockProjectCreateRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface MockWorkspaceCreateRequest {
+  project_id?: string;
+  label: string;
+  description?: string | null;
+  default_workdir?: string | null;
+  workspace_prompt: string;
+}
 
 const DEFAULT_PROJECT_ID = 'default';
 const MOCK_STATE_ROOT = '.ainrf';
@@ -611,7 +622,7 @@ export function mockGetWorkspace(workspaceId: string): WorkspaceRecord {
   return cloneWorkspace(findWorkspace(workspaceId));
 }
 
-export function mockCreateWorkspace(payload: WorkspaceCreateRequest): WorkspaceRecord {
+export function mockCreateWorkspace(payload: MockWorkspaceCreateRequest): WorkspaceRecord {
   const workspace = createMockWorkspace(payload);
   mockWorkspaces = [...mockWorkspaces, workspace];
   return cloneWorkspace(workspace);
@@ -647,7 +658,7 @@ export function mockGetProject(projectId: string): ProjectRecord {
   return cloneProject(findProject(projectId));
 }
 
-export function mockCreateProject(payload: ProjectCreateRequest): ProjectRecord {
+export function mockCreateProject(payload: MockProjectCreateRequest): ProjectRecord {
   const project = createMockProject(payload);
   mockProjects = [...mockProjects, project];
   mockProjectEnvironmentReferences = {
@@ -679,13 +690,14 @@ export function mockDeleteProject(projectId: string): void {
 }
 
 function createMockWorkspace(
-  payload: WorkspaceCreateRequest | WorkspaceUpdateRequest,
+  payload: MockWorkspaceCreateRequest | WorkspaceUpdateRequest,
   existing?: WorkspaceRecord
 ): WorkspaceRecord {
   const timestamp = nowIso();
   return {
     workspace_id: existing?.workspace_id ?? `workspace-${++mockWorkspaceCounter}`,
-    project_id: (payload as WorkspaceCreateRequest).project_id ?? existing?.project_id ?? DEFAULT_PROJECT_ID,
+    project_id:
+      (payload as MockWorkspaceCreateRequest).project_id ?? existing?.project_id ?? DEFAULT_PROJECT_ID,
     label: payload.label ?? existing?.label ?? 'Mock Workspace',
     description: payload.description ?? existing?.description ?? null,
     default_workdir: payload.default_workdir ?? existing?.default_workdir ?? null,
@@ -697,7 +709,7 @@ function createMockWorkspace(
 }
 
 function createMockProject(
-  payload: ProjectCreateRequest | ProjectUpdateRequest,
+  payload: MockProjectCreateRequest | ProjectUpdateRequest,
   existing?: ProjectRecord
 ): ProjectRecord {
   const timestamp = nowIso();
@@ -705,14 +717,8 @@ function createMockProject(
     project_id: existing?.project_id ?? `project-${++mockProjectCounter}`,
     name: payload.name ?? existing?.name ?? 'Mock Project',
     description: payload.description ?? existing?.description ?? null,
-    default_workspace_id:
-      ('default_workspace_id' in payload ? payload.default_workspace_id : undefined) ??
-      existing?.default_workspace_id ??
-      null,
-    default_environment_id:
-      ('default_environment_id' in payload ? payload.default_environment_id : undefined) ??
-      existing?.default_environment_id ??
-      null,
+    default_workspace_id: existing?.default_workspace_id ?? null,
+    default_environment_id: existing?.default_environment_id ?? null,
     created_at: existing?.created_at ?? timestamp,
     updated_at: timestamp,
     owner_user_id: existing?.owner_user_id ?? null,

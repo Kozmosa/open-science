@@ -123,12 +123,18 @@ async def test_product_resource_matrix_only_exposes_canonical_prefix(tmp_path: P
         )
     )
     headers = get_jwt_headers(app)
-    resources = ("projects", "workspaces", "environments", "sessions", "tasks")
+    resources = {
+        "projects": ("/api/domain/projects", "get_domain_projects"),
+        "workspaces": ("/api/domain/workspaces", "get_domain_workspaces"),
+        "environments": ("/api/domain/environments", "get_domain_environments"),
+        "sessions": ("/api/sessions", "get_sessions"),
+        "tasks": ("/api/tasks", "get_tasks"),
+    }
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
-        for resource in resources:
-            canonical = await client.get(f"/api/{resource}", headers=headers)
+        for resource, (canonical_path, _) in resources.items():
+            canonical = await client.get(canonical_path, headers=headers)
             root_alias = await client.get(f"/{resource}", headers=headers)
             v1_alias = await client.get(f"/v1/{resource}", headers=headers)
             assert canonical.status_code == 200, (resource, canonical.text)
@@ -136,8 +142,7 @@ async def test_product_resource_matrix_only_exposes_canonical_prefix(tmp_path: P
             assert v1_alias.status_code == 404, (resource, v1_alias.text)
 
     text = get_metrics_text()
-    for resource in resources:
-        operation = f"get_{resource}"
+    for _, operation in resources.values():
         assert (
             f'ainrf_http_contract_requests_total{{method="GET",operation="{operation}",'
             'status_class="2xx",surface="canonical"} 1.0' in text

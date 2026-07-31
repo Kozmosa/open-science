@@ -441,48 +441,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_environments": {
-    "method": "GET",
-    "path": "/api/environments",
-    "clientPath": "/environments",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_environments": {
-    "method": "POST",
-    "path": "/api/environments",
-    "clientPath": "/environments",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_environments_environment_id": {
-    "method": "DELETE",
-    "path": "/api/environments/{environment_id}",
-    "clientPath": "/environments/{environment_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_environments_environment_id": {
-    "method": "GET",
-    "path": "/api/environments/{environment_id}",
-    "clientPath": "/environments/{environment_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_environments_environment_id": {
-    "method": "PATCH",
-    "path": "/api/environments/{environment_id}",
-    "clientPath": "/environments/{environment_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_environments_environment_id_detect": {
-    "method": "POST",
-    "path": "/api/environments/{environment_id}/detect",
-    "clientPath": "/environments/{environment_id}/detect",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_files_list": {
     "method": "GET",
     "path": "/api/files/list",
@@ -707,136 +665,10 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_projects": {
-    "method": "GET",
-    "path": "/api/projects",
-    "clientPath": "/projects",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects": {
-    "method": "POST",
-    "path": "/api/projects",
-    "clientPath": "/projects",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_projects_project_id": {
-    "method": "DELETE",
-    "path": "/api/projects/{project_id}",
-    "clientPath": "/projects/{project_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}",
-    "clientPath": "/projects/{project_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_projects_project_id": {
-    "method": "PATCH",
-    "path": "/api/projects/{project_id}",
-    "clientPath": "/projects/{project_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_archive": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/archive",
-    "clientPath": "/projects/{project_id}/archive",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_collaborators": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/collaborators",
-    "clientPath": "/projects/{project_id}/collaborators",
-    "canonical": true,
-    "deprecated": false
-  },
-  "put_api_projects_project_id_collaborators": {
-    "method": "PUT",
-    "path": "/api/projects/{project_id}/collaborators",
-    "clientPath": "/projects/{project_id}/collaborators",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_projects_project_id_collaborators_user_id": {
-    "method": "DELETE",
-    "path": "/api/projects/{project_id}/collaborators/{user_id}",
-    "clientPath": "/projects/{project_id}/collaborators/{user_id}",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_projects_project_id_cost_summary": {
     "method": "GET",
     "path": "/api/projects/{project_id}/cost-summary",
     "clientPath": "/projects/{project_id}/cost-summary",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_environment_refs": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/environment-refs",
-    "clientPath": "/projects/{project_id}/environment-refs",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_environment_refs": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/environment-refs",
-    "clientPath": "/projects/{project_id}/environment-refs",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_projects_project_id_environment_refs_environment_id": {
-    "method": "DELETE",
-    "path": "/api/projects/{project_id}/environment-refs/{environment_id}",
-    "clientPath": "/projects/{project_id}/environment-refs/{environment_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_projects_project_id_environment_refs_environment_id": {
-    "method": "PATCH",
-    "path": "/api/projects/{project_id}/environment-refs/{environment_id}",
-    "clientPath": "/projects/{project_id}/environment-refs/{environment_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_members": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/members",
-    "clientPath": "/projects/{project_id}/members",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_projects_project_id_members_member_user_id": {
-    "method": "DELETE",
-    "path": "/api/projects/{project_id}/members/{member_user_id}",
-    "clientPath": "/projects/{project_id}/members/{member_user_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "put_api_projects_project_id_members_member_user_id": {
-    "method": "PUT",
-    "path": "/api/projects/{project_id}/members/{member_user_id}",
-    "clientPath": "/projects/{project_id}/members/{member_user_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_owner_transfer": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/owner-transfer",
-    "clientPath": "/projects/{project_id}/owner-transfer",
-    "canonical": true,
-    "deprecated": false
-  },
-  "put_api_projects_project_id_primary_workspace_workspace_id": {
-    "method": "PUT",
-    "path": "/api/projects/{project_id}/primary-workspace/{workspace_id}",
-    "clientPath": "/projects/{project_id}/primary-workspace/{workspace_id}",
     "canonical": true,
     "deprecated": false
   },
@@ -858,34 +690,6 @@ export const transportOperations = {
     "method": "GET",
     "path": "/api/projects/{project_id}/tasks",
     "clientPath": "/projects/{project_id}/tasks",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_unarchive": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/unarchive",
-    "clientPath": "/projects/{project_id}/unarchive",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_workspaces": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/workspaces",
-    "clientPath": "/projects/{project_id}/workspaces",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_projects_project_id_workspaces_workspace_id": {
-    "method": "DELETE",
-    "path": "/api/projects/{project_id}/workspaces/{workspace_id}",
-    "clientPath": "/projects/{project_id}/workspaces/{workspace_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_workspaces_workspace_id": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/workspaces/{workspace_id}",
-    "clientPath": "/projects/{project_id}/workspaces/{workspace_id}",
     "canonical": true,
     "deprecated": false
   },
@@ -1264,48 +1068,6 @@ export const transportOperations = {
     "method": "POST",
     "path": "/api/terminal/session/reset",
     "clientPath": "/terminal/session/reset",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_workspaces": {
-    "method": "GET",
-    "path": "/api/workspaces",
-    "clientPath": "/workspaces",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_workspaces": {
-    "method": "POST",
-    "path": "/api/workspaces",
-    "clientPath": "/workspaces",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_workspaces_workspace_id": {
-    "method": "DELETE",
-    "path": "/api/workspaces/{workspace_id}",
-    "clientPath": "/workspaces/{workspace_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_workspaces_workspace_id": {
-    "method": "GET",
-    "path": "/api/workspaces/{workspace_id}",
-    "clientPath": "/workspaces/{workspace_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_workspaces_workspace_id": {
-    "method": "PATCH",
-    "path": "/api/workspaces/{workspace_id}",
-    "clientPath": "/workspaces/{workspace_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_workspaces_workspace_id_unregister": {
-    "method": "POST",
-    "path": "/api/workspaces/{workspace_id}/unregister",
-    "clientPath": "/workspaces/{workspace_id}/unregister",
     "canonical": true,
     "deprecated": false
   },

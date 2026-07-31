@@ -27,7 +27,6 @@ from ainrf.api.middleware.request_logging import build_request_logging_middlewar
 from ainrf.api.openapi import stable_operation_id
 from ainrf.api.routes.admin import router as admin_router
 from ainrf.api.routes.auth import router as auth_router
-from ainrf.api.routes.environments import router as environments_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.literature import router as literature_router
@@ -39,7 +38,6 @@ from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
-from ainrf.api.routes.workspaces import router as workspaces_router
 from ainrf.api.routes.client_logs import router as client_logs_router
 from ainrf.api.routes.client_metrics import router as client_metrics_router
 from ainrf.api.routes.domain import router as domain_router
@@ -150,13 +148,11 @@ ROUTERS: tuple[APIRouter, ...] = (
     admin_router,
     auth_router,
     health_router,
-    environments_router,
     files_router,
     projects_router,
     task_edges_router,
     skills_router,
     skill_registries_router,
-    workspaces_router,
     terminal_router,
     tasks_router,
     sessions_router,

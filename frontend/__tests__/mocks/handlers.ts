@@ -63,13 +63,6 @@ export const handlers = [
     return HttpResponse.json({ items: [domainWorkspace()] })
   }),
 
-  // Projects
-  http.get('/api/projects', () => {
-    return HttpResponse.json({
-      items: [{ project_id: 'default', name: 'Default Project', description: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', owner_user_id: 'u1' }],
-    })
-  }),
-
   http.get('/api/projects/default/tasks', () => {
     return HttpResponse.json({ items: [], total: 0, has_more: false, next_cursor: null })
   }),
@@ -80,20 +73,6 @@ export const handlers = [
 
   http.get('/api/domain/projects/default/environment-refs', () => {
     return HttpResponse.json({ items: [] })
-  }),
-
-  http.get('/api/projects/:projectId', ({ params }) => {
-    const projectId = String(params.projectId)
-    return HttpResponse.json({
-      project_id: projectId,
-      name: projectId === 'default' ? 'Default Project' : 'Created Project',
-      description: '',
-      default_workspace_id: null,
-      default_environment_id: null,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      owner_user_id: 'u1',
-    })
   }),
 
   http.get('/api/projects/:projectId/tasks', () => {

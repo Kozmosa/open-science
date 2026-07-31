@@ -63,11 +63,11 @@ flowchart TD
 
 ## Fail-closed compatibility inventory
 
-用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。第一批删除已完成准确识别且 caller 已迁移的浅层兼容入口；下表只保留后续批次仍需处理的兼容面。
+用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。前两批删除了已证明无调用方的浅层入口；第三批在 WebUI 迁移到正式 domain 入口后，删除了 Project、Workspace 和 Environment 的资源兼容入口。下表只保留尚有调用方或具有审计价值的兼容面。
 
 | Surface | Owner | Telemetry key | 删除条件 | P6 状态 |
 | --- | --- | --- | --- | --- |
-| v2-backed Project / Workspace / Environment / Session / Task compatibility projections | API / release | `ainrf_http_contract_requests_total` 的 stable operation | 同上，并复核 canonical generated operation/path metadata | 保留，fail-closed |
+| Session / Task compatibility projections，以及 Project 下仍被 WebUI 使用的 Task 列表、Task edge 和 cost summary | API / release | `ainrf_http_contract_requests_total` 的 stable operation | caller 迁移后复核 canonical generated operation/path metadata，并同步更新 schema、contract test 和文档 | 保留，尚有调用方 |
 | read-only legacy migration/audit surfaces | Domain migration / release | migration audit evidence | 外部版本化审计证据完成保留决策，且 rollback/audit 不再依赖该 surface | 保留，read-only |
 
 后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。

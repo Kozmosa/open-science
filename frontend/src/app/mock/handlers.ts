@@ -10,7 +10,6 @@ import type {
   SkillImportRequest,
   TaskCreatePayload,
   TaskEdgeCreateRequest,
-  WorkspaceCreateRequest,
   WorkspaceUpdateRequest,
 } from '@/shared/api/transportTypes';
 import { ApiError } from '@/shared/api/client';
@@ -185,7 +184,7 @@ export const legacyMockHandlers = [
   http.get('/api/domain/workspaces', () => HttpResponse.json(mockGetWorkspaces())),
   http.get('/api/domain/workspaces/:workspaceId', ({ params }) => mockJson(() => mockGetWorkspace(textParam(params, 'workspaceId')))),
   http.post('/api/domain/workspaces', resolveJson(async ({ request }) => {
-    const body = await request.json() as WorkspaceCreateRequest;
+    const body = await request.json() as import('./legacyState').MockWorkspaceCreateRequest;
     return mockJson(() => mockCreateWorkspace(body));
   })),
   http.patch('/api/domain/workspaces/:workspaceId', resolveJson(async ({ params, request }) => {

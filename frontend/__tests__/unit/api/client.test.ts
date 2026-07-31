@@ -110,9 +110,9 @@ describe('api client', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { api } = await import('../../../src/shared/api/client');
-    await expect(api.patch<{ id: string }>('/environments/env-1', { display_name: 'GPU Lab' })).resolves.toEqual({
-      id: 'env-1',
-    });
+    await expect(
+      api.patch<{ id: string }>('/domain/environments/env-1', { display_name: 'GPU Lab' })
+    ).resolves.toEqual({ id: 'env-1' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;

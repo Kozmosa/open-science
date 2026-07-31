@@ -57,39 +57,11 @@ class TaskAgentWriteState(StrEnum):
     RESUME_REQUESTED = "resume_requested"
 
 
-class ProjectResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str
-    name: str
-    description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class ProjectListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[ProjectResponse]
-
-
-class ProjectCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1)
-    description: str | None = None
-
-
 class ProjectUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
     description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
 
 
 class ComponentHealth(BaseModel):
@@ -504,26 +476,6 @@ class TaskForkRequest(BaseModel):
     project_id: str | None = Field(default=None, min_length=1)
     prompt: str | None = Field(default=None, min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class WorkspaceResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    workspace_id: str
-    project_id: str
-    label: str
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str
-    created_at: datetime
-    updated_at: datetime
-    owner_user_id: str | None = None
-
-
-class WorkspaceListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[WorkspaceResponse]
 
 
 class SkillItemResponse(BaseModel):
@@ -1241,27 +1193,6 @@ class AdminUserListResponse(BaseModel):
 # ── Collaborator schemas ──────────────────────────────────
 
 
-class CollaboratorRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    role: str = "member"
-    can_publish: bool = False
-
-
-class CollaboratorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    username: str
-    display_name: str
-    role: str
-    can_publish: bool = False
-
-
-class CollaboratorListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list[CollaboratorResponse]
-
-
 class ProjectMemberRequest(BaseModel):
     """Authoritative v2 Project membership and publishing capability."""
 
@@ -1285,12 +1216,6 @@ class ProjectMemberListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ProjectMemberResponse]
-
-
-class ProjectOwnerTransferRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    new_owner_user_id: str = Field(min_length=1)
 
 
 # ── Environment Access schemas ────────────────────────────
@@ -1322,14 +1247,6 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=4)
-
-
-class WorkspaceCreateRequest(BaseModel):
-    project_id: str = Field(default="default", min_length=1)
-    label: str = Field(min_length=1)
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str = Field(min_length=1)
 
 
 class WorkspaceUpdateRequest(BaseModel):

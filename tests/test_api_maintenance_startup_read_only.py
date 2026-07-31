@@ -80,7 +80,7 @@ async def test_maintenance_startup_exposes_only_evidence_without_initializing_se
                 await client.get("/v1/sessions?api_key=maintenance-startup-key"),
                 await client.get("/token-usage?api_key=maintenance-startup-key"),
                 await client.get(
-                    "/api/projects",
+                    "/api/domain/projects",
                     headers={"Authorization": f"Bearer {bearer}"},
                 ),
             ]
