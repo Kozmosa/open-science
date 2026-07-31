@@ -107,9 +107,15 @@ async def list_files(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
-        listing = await service.list_directory(environment_id, path, workspace_id)
+        listing = await service.list_directory(
+            environment_id,
+            path,
+            workspace_id,
+            run_as_user=tenant_user,
+        )
     except Exception as exc:
         raise _translate_file_browser_error(exc) from exc
     return FileListResponse(
@@ -139,9 +145,15 @@ async def read_file(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
-        content = await service.read_file(environment_id, path, workspace_id)
+        content = await service.read_file(
+            environment_id,
+            path,
+            workspace_id,
+            run_as_user=tenant_user,
+        )
     except Exception as exc:
         raise _translate_file_browser_error(exc) from exc
     return FileReadResponse(
@@ -166,6 +178,7 @@ async def stream_file(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
         is_local, resolved_path, environment = await service.resolve_stream_target(
@@ -179,6 +192,19 @@ async def stream_file(
         media_type = "application/octet-stream"
 
     if is_local:
+        if tenant_user is not None:
+            try:
+                content = await service.read_stream_file(
+                    resolved_path,
+                    run_as_user=tenant_user,
+                )
+            except Exception as exc:
+                raise _translate_file_browser_error(exc) from exc
+            return StreamingResponse(
+                iter((content,)),
+                media_type=media_type,
+                headers={"X-Frame-Options": "SAMEORIGIN"},
+            )
         return FileResponse(
             resolved_path,
             media_type=media_type,
@@ -263,11 +289,15 @@ async def upload_file(
                     )
                 tmp.write(chunk)
 
+        if tenant_user is not None:
+            tmp_path.chmod(0o644)
+
         result = await service.upload_file(
             environment_id=environment_id,
             path=path,
             local_temp_path=tmp_path,
             workspace_id=workspace_id,
+            run_as_user=tenant_user,
         )
         # Chown uploaded file to tenant user so agent processes can access it
         if tenant_user is not None:
