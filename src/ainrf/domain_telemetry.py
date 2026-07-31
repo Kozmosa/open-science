@@ -95,7 +95,7 @@ _OUTBOX_BACKLOG_STATES = (
     "launch_unknown",
 )
 _IDEMPOTENCY_OUTCOMES = ("accepted", "missing", "invalid", "conflict", "reused", "stored", "other")
-_LEGACY_WRITE_SOURCES = ("legacy_json", "legacy_session", "other")
+_LEGACY_WRITE_SOURCES = ("legacy_json", "other")
 _DEPRECATED_CONTRACT_KINDS = ("route", "request_field", "response_field", "other")
 _PERMISSION_RESOURCES = (
     "project",
@@ -978,10 +978,8 @@ def _deprecated_route_group(route: str) -> str:
 
 def _deprecated_contract_kind(route: str) -> str:
     field = route.rsplit(".", 1)[-1]
-    if field in {"environment_id", "idempotency_key", "task_input"}:
+    if field == "idempotency_key":
         return "request_field"
-    if field in {"flat_response", "new_task"}:
-        return "response_field"
     if "." in route:
         return "route"
     return "other"

@@ -95,7 +95,6 @@ export const pauseTask = (taskId: string, key: string): Promise<TaskPauseRespons
 export const resumeTask = (taskId: string, key: string): Promise<TaskResumeResponse> =>
   api.post(`/tasks/${taskId}/resume`, {}, { headers: { 'Idempotency-Key': key } });
 
-export const deleteTask = (taskId: string): Promise<void> => api.delete(`/tasks/${taskId}/permanent`);
 export const retryTask = async (taskId: string, key: string): Promise<TaskSummary> => {
   const response = await api.post<TaskMutationResponse>(`/tasks/${taskId}/retry`, undefined, {
     headers: { 'Idempotency-Key': key },

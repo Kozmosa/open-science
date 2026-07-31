@@ -693,87 +693,10 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_projects_project_id_cost_summary": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/cost-summary",
-    "clientPath": "/projects/{project_id}/cost-summary",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_task_edges": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/task-edges",
-    "clientPath": "/projects/{project_id}/task-edges",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_projects_project_id_task_edges": {
-    "method": "POST",
-    "path": "/api/projects/{project_id}/task-edges",
-    "clientPath": "/projects/{project_id}/task-edges",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_projects_project_id_tasks": {
-    "method": "GET",
-    "path": "/api/projects/{project_id}/tasks",
-    "clientPath": "/projects/{project_id}/tasks",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_resources": {
     "method": "GET",
     "path": "/api/resources",
     "clientPath": "/resources",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_sessions": {
-    "method": "GET",
-    "path": "/api/sessions",
-    "clientPath": "/sessions",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_sessions": {
-    "method": "POST",
-    "path": "/api/sessions",
-    "clientPath": "/sessions",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_sessions_batch_detail": {
-    "method": "GET",
-    "path": "/api/sessions/batch-detail",
-    "clientPath": "/sessions/batch-detail",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_sessions_session_id": {
-    "method": "DELETE",
-    "path": "/api/sessions/{session_id}",
-    "clientPath": "/sessions/{session_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_sessions_session_id": {
-    "method": "GET",
-    "path": "/api/sessions/{session_id}",
-    "clientPath": "/sessions/{session_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_sessions_session_id": {
-    "method": "PATCH",
-    "path": "/api/sessions/{session_id}",
-    "clientPath": "/sessions/{session_id}",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_sessions_session_id_attempts": {
-    "method": "GET",
-    "path": "/api/sessions/{session_id}/attempts",
-    "clientPath": "/sessions/{session_id}/attempts",
     "canonical": true,
     "deprecated": false
   },
@@ -896,13 +819,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "delete_api_task_edges_edge_id": {
-    "method": "DELETE",
-    "path": "/api/task-edges/{edge_id}",
-    "clientPath": "/task-edges/{edge_id}",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_tasks": {
     "method": "GET",
     "path": "/api/tasks",
@@ -1012,20 +928,6 @@ export const transportOperations = {
     "method": "POST",
     "path": "/api/tasks/{task_id}/pause",
     "clientPath": "/tasks/{task_id}/pause",
-    "canonical": true,
-    "deprecated": false
-  },
-  "delete_api_tasks_task_id_permanent": {
-    "method": "DELETE",
-    "path": "/api/tasks/{task_id}/permanent",
-    "clientPath": "/tasks/{task_id}/permanent",
-    "canonical": true,
-    "deprecated": false
-  },
-  "patch_api_tasks_task_id_project": {
-    "method": "PATCH",
-    "path": "/api/tasks/{task_id}/project",
-    "clientPath": "/tasks/{task_id}/project",
     "canonical": true,
     "deprecated": false
   },

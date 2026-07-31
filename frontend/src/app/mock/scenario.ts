@@ -9,7 +9,6 @@ import type {
   LiteratureTopic,
   MessageItem,
   SearchSettingsResponse,
-  SessionDetailRecord,
   TaskCreatePayload,
   TaskEdge,
   TaskRecord,
@@ -79,7 +78,6 @@ interface FrontendV2MockState {
   intents: Record<string, MockIntent>;
   overview: OverviewSnapshot;
   refresh_jobs: Record<string, MockRefreshJob>;
-  sessions: SessionDetailRecord[];
   admin_users: AdminUserItem[];
   environment_access: Record<string, EnvAccessItem[]>;
   search_settings: SearchSettingsResponse;
@@ -562,31 +560,6 @@ function createState(): FrontendV2MockState {
       next_scheduled_at: '2026-07-17T06:00:00+08:00',
     },
     refresh_jobs: {},
-    sessions: [{
-      id: 'session-seed',
-      project_id: 'project-alpha',
-      title: 'Seeded research session',
-      status: 'completed',
-      task_count: 1,
-      total_duration_ms: 300000,
-      total_cost_usd: 0.42,
-      created_at: BASE_TIME,
-      updated_at: LATER_TIME,
-      attempts: [{
-        id: 'session-attempt-seed',
-        session_id: 'session-seed',
-        task_id: 'task-seed',
-        parent_attempt_id: null,
-        attempt_seq: 1,
-        intervention_reason: null,
-        status: 'completed',
-        started_at: BASE_TIME,
-        finished_at: LATER_TIME,
-        duration_ms: 300000,
-        token_usage_json: '{"input_tokens":120,"output_tokens":80}',
-        created_at: BASE_TIME,
-      }],
-    }],
     admin_users: [
       { id: OWNER_ID, username: 'mock-owner', display_name: 'Mock Owner', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: LATER_TIME, is_online: true },
       { id: 'mock-editor-user', username: 'mock-editor', display_name: 'Mock Editor', role: 'member', status: 'active', created_at: BASE_TIME, last_login_at: BASE_TIME, is_online: false },

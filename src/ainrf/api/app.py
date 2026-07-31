@@ -30,9 +30,7 @@ from ainrf.api.routes.auth import router as auth_router
 from ainrf.api.routes.files import router as files_router
 from ainrf.api.routes.health import router as health_router
 from ainrf.api.routes.literature import router as literature_router
-from ainrf.api.routes.projects import router as projects_router, task_edges_router
 from ainrf.api.routes.resources import router as resources_router
-from ainrf.api.routes.sessions import router as sessions_router
 from ainrf.api.routes.settings import router as settings_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.skills import router as skills_router
@@ -65,7 +63,6 @@ from ainrf.domain import (
     PersistentEnvironmentFacade,
     PersistentWorkspaceFacade,
     ProjectContextService,
-    SessionProjectionService,
     TaskApplicationService,
     TaskProjectionService,
 )
@@ -149,13 +146,10 @@ ROUTERS: tuple[APIRouter, ...] = (
     auth_router,
     health_router,
     files_router,
-    projects_router,
-    task_edges_router,
     skills_router,
     skill_registries_router,
     terminal_router,
     tasks_router,
-    sessions_router,
     literature_router,
     resources_router,
     settings_router,
@@ -468,15 +462,6 @@ def create_app(
             api_config.state_root,
             attempt_projection=attempt_projection,
         )
-        # The ``/projects/{id}/tasks`` compatibility adapter consumes the same
-        # authoritative projection as the canonical Task routes.
-        app.state.project_task_projection_service = app.state.task_projection_service
-        app.state.session_projection_service = SessionProjectionService(
-            api_config.state_root,
-            attempt_projection=attempt_projection,
-        )
-        # Project costs are another read-only view over the same Attempt rows.
-        app.state.project_cost_projection_service = attempt_projection
         app.state.overview_snapshot_service = OverviewSnapshotService(
             api_config.state_root,
             artifact_sha=artifact_sha,

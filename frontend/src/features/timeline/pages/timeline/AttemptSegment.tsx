@@ -1,8 +1,14 @@
 import { useT } from '@/shared/i18n';
-import type { AttemptRecord } from '@/shared/types';
+
+interface TimelineAttempt {
+  attempt_seq: number;
+  status: string;
+  duration_ms: number | null;
+  intervention_reason: string | null;
+}
 
 interface Props {
-  attempt: AttemptRecord;
+  attempt: TimelineAttempt;
   leftPct: number;
   widthPct: number;
   onClick: () => void;

@@ -692,7 +692,7 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         state_root=tmp_path,
     )
     domain_telemetry.record_legacy_write_attempt(
-        source="legacy_session",
+        source="legacy_json",
         state_root=tmp_path,
     )
     domain_telemetry.record_sqlite_error(
@@ -708,7 +708,7 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         'ainrf_domain_overview_refresh_events_total{outcome="succeeded",trigger="scheduled"} 1.0'
         in text
     )
-    assert 'ainrf_domain_legacy_write_attempts_total{source="legacy_session"} 1.0' in text
+    assert 'ainrf_domain_legacy_write_attempts_total{source="legacy_json"} 1.0' in text
     assert (
         'ainrf_domain_sqlite_errors_total{error_type="OperationalError",kind="busy_or_locked",operation="connection_execute"} 1.0'
         in text
@@ -720,7 +720,7 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
 ) -> None:
     _seed_control_plane(tmp_path)
     domain_telemetry.record_deprecated_route(
-        route="tasks.retry.new_task",
+        route="tasks.prompt",
         replacement="/api/tasks/{task_id}/retry",
         state_root=tmp_path,
     )
@@ -749,17 +749,14 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     assert "ainrf_domain_metrics_risk_state_known 1.0" in text
     assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
     assert 'ainrf_deprecated_route_calls_total{route="tasks"} 1.0' in text
-    assert 'ainrf_deprecated_contract_calls_total{kind="response_field",route="tasks"} 1.0' in text
+    assert 'ainrf_deprecated_contract_calls_total{kind="route",route="tasks"} 1.0' in text
 
 
 @pytest.mark.parametrize(
     ("surface", "expected_kind"),
     [
         ("tasks.prompt", "route"),
-        ("tasks.create.environment_id", "request_field"),
-        ("tasks.retry.task_input", "request_field"),
-        ("tasks.retry.new_task", "response_field"),
-        ("tasks.mutation.flat_response", "response_field"),
+        ("tasks.create.idempotency_key", "request_field"),
         ("unknown", "other"),
     ],
 )

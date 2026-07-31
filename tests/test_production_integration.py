@@ -315,7 +315,6 @@ async def test_production_api_routes_require_auth(tmp_path: Path) -> None:
     async with client:
         for path in [
             "/api/tasks",
-            "/api/sessions",
             "/api/domain/environments",
             "/api/settings/codex-defaults",
             "/api/settings/deployment-version",

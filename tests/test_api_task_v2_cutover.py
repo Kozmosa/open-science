@@ -1,4 +1,4 @@
-"""B7 v2 Task route, Attempt projection, and compatibility contracts."""
+"""Canonical Task route and retired compatibility contract tests."""
 
 from __future__ import annotations
 
@@ -104,8 +104,34 @@ async def test_task_module_fuse_failure_never_falls_back_to_a_legacy_writer(
         sessions = await client.get(f"/api/sessions?api_key={_API_KEY}")
 
     assert tasks.status_code == 503
-    assert sessions.status_code == 200
+    assert sessions.status_code == 404
     assert _body(tasks)["detail"] == "Task domain v2 is not ready"
+
+
+@pytest.mark.anyio
+async def test_retired_task_and_session_contracts_are_unroutable(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    retired = [
+        ("GET", "/api/sessions"),
+        ("GET", "/api/sessions/session-id"),
+        ("GET", "/api/sessions/session-id/attempts"),
+        ("GET", "/api/projects/project-id/tasks"),
+        ("GET", "/api/projects/project-id/task-edges"),
+        ("POST", "/api/projects/project-id/task-edges"),
+        ("DELETE", "/api/task-edges/edge-id"),
+        ("GET", "/api/projects/project-id/cost-summary"),
+        ("PATCH", "/api/tasks/task-id/project"),
+        ("DELETE", "/api/tasks/task-id/permanent"),
+    ]
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        for method, path in retired:
+            response = await client.request(method, f"{path}?api_key={_API_KEY}")
+            assert response.status_code == 404, (method, path, response.text)
 
 
 @pytest.mark.anyio

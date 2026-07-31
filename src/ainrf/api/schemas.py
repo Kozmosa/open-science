@@ -445,13 +445,6 @@ class TaskCreateRequest(BaseModel):
     title: str | None = None
 
 
-class TaskUpdateProjectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str = Field(min_length=1)
-    context_version_id: str | None = Field(default=None, min_length=1)
-
-
 class TaskUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -717,32 +710,6 @@ class TaskRelationshipListResponse(BaseModel):
 
 
 class TaskRelationshipCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    source_task_id: str = Field(min_length=1)
-    target_task_id: str = Field(min_length=1)
-
-
-class TaskEdgeResponse(BaseModel):
-    """Compatibility transport retained until Gate A completes."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    edge_id: str
-    project_id: str
-    source_task_id: str
-    target_task_id: str
-    relationship_type: str = "related_to"
-    created_at: str
-
-
-class TaskEdgeListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[TaskEdgeResponse]
-
-
-class TaskEdgeCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str = Field(min_length=1)
@@ -1078,65 +1045,6 @@ class SkillRegistryUpdateResponse(BaseModel):
     updated_count: int
     added: list[str] = Field(default_factory=list)
     removed: list[str] = Field(default_factory=list)
-
-
-# ── Session schemas ──────────────────────────────────────────────
-
-
-class AttemptResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    session_id: str
-    task_id: str | None = None
-    parent_attempt_id: str | None = None
-    attempt_seq: int
-    intervention_reason: str | None = None
-    status: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_ms: int | None = None
-    token_usage_json: str | None = None
-    created_at: str
-
-
-class SessionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    project_id: str
-    title: str
-    status: str
-    task_count: int
-    total_duration_ms: int
-    total_cost_usd: float
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class SessionDetailResponse(SessionResponse):
-    attempts: list["AttemptResponse"] = Field(default_factory=list)
-
-
-class SessionListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["SessionResponse"]
-    total: int | None = None
-    has_more: bool = False
-    next_cursor: str | None = None
-
-
-class AttemptListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["AttemptResponse"]
-
-
-class ProjectCostSummaryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: str
-    total_cost_usd: float
-    total_tokens: int
-    session_count: int
-    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 # ── Auth schemas ──────────────────────────────────────────

@@ -127,7 +127,6 @@ async def test_product_resource_matrix_only_exposes_canonical_prefix(tmp_path: P
         "projects": ("/api/domain/projects", "get_domain_projects"),
         "workspaces": ("/api/domain/workspaces", "get_domain_workspaces"),
         "environments": ("/api/domain/environments", "get_domain_environments"),
-        "sessions": ("/api/sessions", "get_sessions"),
         "tasks": ("/api/tasks", "get_tasks"),
     }
     async with httpx.AsyncClient(
