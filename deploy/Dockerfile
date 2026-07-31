@@ -50,6 +50,7 @@ RUN npm run build
 # static assets.  They therefore need no bind mounts from a Git checkout.
 FROM docker.1ms.run/nginx:1.27-alpine AS web
 COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html
+RUN chmod -R a+rX /usr/share/nginx/html
 COPY deploy/config/nginx-release.conf.template /etc/nginx/templates/default.conf.template
 ENV NGINX_ENVSUBST_FILTER=^AINRF_
 
@@ -173,6 +174,7 @@ COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience
 
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
+RUN chmod -R a+rX /opt/ainrf/frontend/dist
 
 # ── Stage 3.5: ARIS skill registry ──────────────────────────────────
 # Download the ARIS repo as a zip archive via codeload.github.com

@@ -87,6 +87,8 @@ def test_web_image_uses_one_port_parameterized_nginx_template() -> None:
     assert "listen ${AINRF_WEB_PORT};" in template
     assert "127.0.0.1:${AINRF_BACKEND_PORT}" in template
     assert 'AINRF_WEB_PORT: "8192"' in production
+    assert "RUN chmod -R a+rX /usr/share/nginx/html" in dockerfile
+    assert "RUN chmod -R a+rX /opt/ainrf/frontend/dist" in dockerfile
 
 
 def test_development_and_mutable_staging_remain_separate_paths() -> None:
