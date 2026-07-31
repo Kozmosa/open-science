@@ -16,5 +16,6 @@
 | `2026-07-17-codex-aligned-conversation-domain-design.md` | accepted / awaiting implementation | Task/Turn/Item 目标领域模型 |
 | `2026-07-17-conversation-domain-standalone-migration-design.md` | proposed | 等待 schema 冻结的数据迁移设计 |
 | `2026-07-17-engine-runtime-and-credential-injection-design.md` | accepted / awaiting implementation | Engine runtime 与 credential 目标设计 |
+| `2026-07-31-task-session-http-contract-cutover-design.md` | accepted / awaiting implementation | 收口 `/api/tasks`、迁移 Project/Run caller，验证后删除 Session 与 Task 兼容格式和入口 |
 
 已实现、被替代、退役或与当前 contract 冲突的设计位于 [`archived/`](archived/README.md)。
