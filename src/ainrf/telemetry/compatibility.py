@@ -14,15 +14,6 @@ import structlog
 from ainrf.telemetry.metrics import inc_counter, observe_histogram, set_gauge
 
 Surface = Literal["canonical", "compat_root", "compat_v1", "external_compatible", "non_product"]
-CleanupObservationKind = Literal[
-    "request_field_observed",
-    "response_field_emitted",
-    "config_alias_read",
-    "cli_alias_invoked",
-    "state_alias_selected",
-    "audit_surface_called",
-]
-
 _LOG = structlog.get_logger("compatibility_telemetry")
 _SURFACES: Final = frozenset(
     {"canonical", "compat_root", "compat_v1", "external_compatible", "non_product"}
@@ -36,54 +27,6 @@ _RETENTION_DAYS: Final = 180
 
 
 @dataclass(frozen=True, slots=True)
-class CleanupItem:
-    owner: str
-    observed_fact: CleanupObservationKind
-    replacement: str
-    related_surface: str
-    introduced_release: str
-    review_deadline: str
-    removal_conditions: str
-    evidence_after_removal: str
-
-
-CLEANUP_REGISTRY: Final[dict[str, CleanupItem]] = {}
-
-for _config_name in (
-    "state_root",
-    "api_key_hashes",
-    "production",
-    "allowed_cidrs",
-    "max_concurrent_requests",
-    "login_max_failures",
-    "login_lockout_hours",
-    "metrics_enabled",
-    "metrics_path",
-    "slow_request_threshold_seconds",
-    "public_registration_enabled",
-    "interactive_auth_enabled",
-    "trusted_proxy_cidrs",
-    "observability_enabled",
-    "observability_base_url",
-    "observability_secret_key",
-    "observability_public_key",
-    "auth_cookie_namespace",
-    "domain_artifact_sha",
-    "runtime_reconciliation_enabled",
-):
-    CLEANUP_REGISTRY[f"config.openscience_{_config_name}"] = CleanupItem(
-        "Runtime/Release",
-        "config_alias_read",
-        f"AINRF_{_config_name.upper()}",
-        "process startup configuration",
-        "2026-07-30",
-        "2026-10-28",
-        "legacy alias removed and stable for one release",
-        "deployment inventory plus one stable release",
-    )
-
-
-@dataclass(frozen=True, slots=True)
 class HttpContractObservation:
     actual_path: str
     operation: str
@@ -92,15 +35,6 @@ class HttpContractObservation:
     duration_seconds: float
     allowed_operations: frozenset[str]
     state_root: Path
-    request_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class CleanupCompatibilityObservation:
-    item: str
-    observation: CleanupObservationKind
-    state_root: Path
-    production: bool
     request_id: str | None = None
 
 
@@ -168,28 +102,6 @@ def observe_http_contract(observation: HttpContractObservation) -> None:
     )
 
 
-def observe_cleanup_compatibility(observation: CleanupCompatibilityObservation) -> None:
-    item = CLEANUP_REGISTRY.get(observation.item)
-    if item is None or item.observed_fact != observation.observation:
-        error = ValueError("cleanup compatibility observation is not registered")
-        if observation.production:
-            _latch_failure(observation.state_root, "cleanup_registry", error)
-            return
-        raise error
-    labels = {"item": observation.item, "observation": observation.observation}
-    try:
-        inc_counter("ainrf_cleanup_compatibility_observations_total", labels)
-        _persist_cleanup_observation(observation.state_root, labels)
-    except Exception as exc:
-        _latch_failure(observation.state_root, "cleanup_delivery", exc)
-    _LOG.info(
-        "cleanup_compatibility_observed",
-        request_id=observation.request_id,
-        item=observation.item,
-        observation=observation.observation,
-    )
-
-
 def durable_http_observations(state_root: Path) -> list[dict[str, object]]:
     path = _store_path(state_root)
     if not path.is_file():
@@ -229,15 +141,6 @@ def _connect(state_root: Path) -> sqlite3.Connection:
             last_seen_at TEXT NOT NULL,
             PRIMARY KEY(bucket_date, surface, operation, method, status_class)
         );
-        CREATE TABLE IF NOT EXISTS cleanup_compatibility_daily (
-            bucket_date TEXT NOT NULL,
-            item TEXT NOT NULL,
-            observation TEXT NOT NULL,
-            count INTEGER NOT NULL CHECK (count >= 0),
-            first_seen_at TEXT NOT NULL,
-            last_seen_at TEXT NOT NULL,
-            PRIMARY KEY(bucket_date, item, observation)
-        );
         """
     )
     return connection
@@ -257,25 +160,6 @@ def _persist_http_observation(state_root: Path, labels: dict[str, str]) -> None:
             (now.date().isoformat(), *labels.values(), now.isoformat(), now.isoformat()),
         )
         connection.execute("DELETE FROM http_contract_daily WHERE bucket_date < ?", (cutoff,))
-        connection.commit()
-
-
-def _persist_cleanup_observation(state_root: Path, labels: dict[str, str]) -> None:
-    now = datetime.now(UTC)
-    cutoff = (now - timedelta(days=_RETENTION_DAYS)).date().isoformat()
-    with _connect(state_root) as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        connection.execute(
-            """INSERT INTO cleanup_compatibility_daily
-            (bucket_date, item, observation, count, first_seen_at, last_seen_at)
-            VALUES (?, ?, ?, 1, ?, ?)
-            ON CONFLICT(bucket_date, item, observation) DO UPDATE SET
-              count = count + 1, last_seen_at = excluded.last_seen_at""",
-            (now.date().isoformat(), *labels.values(), now.isoformat(), now.isoformat()),
-        )
-        connection.execute(
-            "DELETE FROM cleanup_compatibility_daily WHERE bucket_date < ?", (cutoff,)
-        )
         connection.commit()
 
 

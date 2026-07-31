@@ -17,11 +17,9 @@ from ainrf.api.http_telemetry import (
 )
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.telemetry.compatibility import (
-    CleanupCompatibilityObservation,
     HttpContractObservation,
     classify_surface,
     durable_http_observations,
-    observe_cleanup_compatibility,
     observe_http_contract,
 )
 from ainrf.telemetry import compatibility as compatibility_telemetry
@@ -237,52 +235,7 @@ def test_durable_failure_is_latched_without_raising(
     assert "ainrf_http_contract_telemetry_delivery_failure_latched 1.0" in get_metrics_text()
 
 
-def test_cleanup_registry_is_precise_and_durable(tmp_path: Path) -> None:
-    observation = CleanupCompatibilityObservation(
-        item="config.openscience_state_root",
-        observation="config_alias_read",
-        state_root=tmp_path,
-        production=False,
-    )
-    observe_cleanup_compatibility(observation)
-    reset_metrics()
-    observe_cleanup_compatibility(observation)
-
-    text = get_metrics_text()
-    assert (
-        'ainrf_cleanup_compatibility_observations_total{item="config.openscience_state_root",'
-        'observation="config_alias_read"} 1.0' in text
-    )
-    assert (tmp_path / "runtime" / "compatibility_telemetry.sqlite3").is_file()
-
-
-def test_unregistered_cleanup_item_fails_fast_outside_production(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="not registered"):
-        observe_cleanup_compatibility(
-            CleanupCompatibilityObservation(
-                item="task.dynamic.private-value",
-                observation="request_field_observed",
-                state_root=tmp_path,
-                production=False,
-            )
-        )
-
-
-def test_unregistered_cleanup_item_latches_in_production(tmp_path: Path) -> None:
-    observe_cleanup_compatibility(
-        CleanupCompatibilityObservation(
-            item="task.dynamic.private-value",
-            observation="request_field_observed",
-            state_root=tmp_path,
-            production=True,
-        )
-    )
-
-    assert (tmp_path / "runtime" / "compatibility_telemetry_delivery_failure.json").is_file()
-    assert "ainrf_http_contract_telemetry_delivery_failure_latched 1.0" in get_metrics_text()
-
-
-def test_legacy_config_alias_records_item_without_secret(
+def test_supported_config_alias_remains_available_without_secret_exposure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     secret_hash = "private-api-key-hash"
@@ -292,9 +245,4 @@ def test_legacy_config_alias_records_item_without_secret(
     config = ApiConfig.from_env(state_root=tmp_path)
 
     assert config.api_key_hashes == frozenset({secret_hash})
-    text = get_metrics_text()
-    assert (
-        'ainrf_cleanup_compatibility_observations_total{item="config.openscience_api_key_hashes",'
-        'observation="config_alias_read"} 1.0' in text
-    )
-    assert secret_hash not in text
+    assert secret_hash not in get_metrics_text()

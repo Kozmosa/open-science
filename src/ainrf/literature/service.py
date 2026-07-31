@@ -274,22 +274,6 @@ class LiteratureService:
                 )
             conn.commit()
 
-    def convert_to_task(self, paper_id, task_id, subscription_id=None):
-        with self._connect() as conn:
-            if subscription_id:
-                conn.execute(
-                    "UPDATE literature_subscription_papers SET is_converted_to_task = 1, task_id = ? WHERE paper_id = ? AND subscription_id = ?",
-                    (task_id, paper_id, subscription_id),
-                )
-            else:
-                conn.execute(
-                    "UPDATE literature_subscription_papers SET is_converted_to_task = 1, task_id = ? WHERE paper_id = ?",
-                    (task_id, paper_id),
-                )
-            conn.commit()
-            row = self._fetch_paper_with_state(conn, paper_id, subscription_id)
-        return self._row_to_paper(row) if row else None
-
     def paper_exists(self, paper_id, subscription_id=None):
         with self._connect() as conn:
             if subscription_id:

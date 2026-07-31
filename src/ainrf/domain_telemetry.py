@@ -96,7 +96,6 @@ _OUTBOX_BACKLOG_STATES = (
 )
 _IDEMPOTENCY_OUTCOMES = ("accepted", "missing", "invalid", "conflict", "reused", "stored", "other")
 _LEGACY_WRITE_SOURCES = ("legacy_json", "other")
-_DEPRECATED_CONTRACT_KINDS = ("route", "request_field", "response_field", "other")
 _PERMISSION_RESOURCES = (
     "project",
     "workspace",
@@ -176,14 +175,6 @@ _OVERVIEW_EVENT_OUTCOMES = (
     "other",
 )
 _OVERVIEW_EVENT_TRIGGERS = ("manual", "scheduled", "catchup", "other")
-_DEPRECATED_ROUTE_GROUPS = (
-    "environments",
-    "literature",
-    "projects",
-    "tasks",
-    "workspaces",
-    "other",
-)
 _SENSITIVE_FIELD_PARTS = (
     "secret",
     "password",
@@ -233,11 +224,6 @@ _TELEMETRY_ANCHOR_FILENAME = "domain_telemetry_anchor.json"
 _TELEMETRY_DELIVERY_FAILURE_LATCH_FILENAME = "domain_telemetry_delivery_failure.json"
 _TELEMETRY_STORE_SCHEMA_VERSION = 2
 _DURABLE_COUNTER_LABEL_VALUES: dict[str, dict[str, tuple[str, ...]]] = {
-    "ainrf_deprecated_route_calls_total": {"route": _DEPRECATED_ROUTE_GROUPS},
-    "ainrf_deprecated_contract_calls_total": {
-        "route": _DEPRECATED_ROUTE_GROUPS,
-        "kind": _DEPRECATED_CONTRACT_KINDS,
-    },
     "ainrf_domain_idempotency_requests_total": {"outcome": _IDEMPOTENCY_OUTCOMES},
     "ainrf_domain_legacy_write_attempts_total": {"source": _LEGACY_WRITE_SOURCES},
     "ainrf_domain_literature_saga_events_total": {"outcome": _SAGA_EVENT_OUTCOMES},
@@ -968,47 +954,6 @@ def record_permission_denied(
         workspace_id=workspace_id,
         task_id=task_id,
         environment_id=environment_id,
-    )
-
-
-def _deprecated_route_group(route: str) -> str:
-    prefix = route.split(".", 1)[0]
-    return prefix if prefix in _DEPRECATED_ROUTE_GROUPS else "other"
-
-
-def _deprecated_contract_kind(route: str) -> str:
-    field = route.rsplit(".", 1)[-1]
-    if field == "idempotency_key":
-        return "request_field"
-    if "." in route:
-        return "route"
-    return "other"
-
-
-def record_deprecated_route(
-    *, route: str, replacement: str, state_root: Path | None = None
-) -> None:
-    """Record a compatibility route once, with release-gate-safe labels."""
-
-    route_group = _deprecated_route_group(route)
-    contract_kind = _deprecated_contract_kind(route)
-    _counter(
-        "ainrf_deprecated_route_calls_total",
-        {"route": route_group},
-        durable=True,
-        state_root=state_root,
-    )
-    _counter(
-        "ainrf_deprecated_contract_calls_total",
-        {"route": route_group, "kind": contract_kind},
-        durable=True,
-        state_root=state_root,
-    )
-    log_domain_event(
-        "domain_deprecated_route",
-        route=route_group,
-        kind=contract_kind,
-        replacement=replacement,
     )
 
 

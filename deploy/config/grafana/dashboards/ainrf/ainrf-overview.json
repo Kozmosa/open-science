@@ -462,29 +462,6 @@
       }
     },
     {
-      "title": "TEMPORARY — Architecture cleanup compatibility evidence",
-      "description": "Cleanup-only facts that HTTP route telemetry cannot express. Registry metadata defines owner and review deadline (2026-10-28); removal requires compatibility deletion plus one stable release. Legacy deprecated metrics are superseded and are not removal authority.",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": { "drawStyle": "line", "fillOpacity": 15 }
-        }
-      },
-      "targets": [
-        {
-          "expr": "sum by (item, observation) (increase(ainrf_cleanup_compatibility_observations_total[$__range]))",
-          "legendFormat": "{{observation}} · {{item}}",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
-      }
-    },
-    {
       "title": "HTTP Contract Errors",
       "description": "Long-lived 4xx/5xx contract outcomes split by surface and operation.",
       "type": "timeseries",

@@ -64,15 +64,20 @@ flowchart TD
 
 ## Fail-closed compatibility inventory
 
-用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。资源兼容入口以及 Session / Task compatibility projections 已在 caller、generated transport、Gate A/Gate B 和 immutable release staging 验收完成后删除。下表只保留具有审计价值的兼容面。
+用户已用“当前没有外部调用者”的人工判断覆盖原观察窗口门槛。资源兼容入口、Session / Task compatibility projections 与 Literature `/convert` 已在 caller、generated transport 和 immutable release staging 验收后删除。下表是当前长期支持或仍承担只读迁移/审计职责的完整清单。
 
-| Surface | Owner | Telemetry key | 删除条件 | P6 状态 |
-| --- | --- | --- | --- | --- |
-| read-only legacy migration/audit surfaces | Domain migration / release | migration audit evidence | 外部版本化审计证据完成保留决策，且 rollback/audit 不再依赖该 surface | 保留，read-only |
+| Surface | Owner | 保留理由 | 状态 |
+| --- | --- | --- | --- |
+| `openscience` CLI | Product CLI | 用户可见的正式产品入口 | 长期支持 |
+| `ainrf` CLI | Backend runtime | 稳定内部工程与运维入口 | 长期支持 |
+| `AINRF_*` backend config | Backend runtime | canonical 后端配置命名空间 | 长期支持 |
+| 对应的 `OPENSCIENCE_*` backend config aliases | Product / release | `PROJECT_BASIS.md` 明确规定的正式兼容别名 | 长期支持，不是 cleanup debt |
+| `/v1/models`、`/v1/messages` | External protocol adapter | Anthropic-compatible 外部协议入口 | 长期支持 |
+| `domain-migration` CLI 与 `/api/admin/domain/legacy-records` | Domain migration / release | committed-v2 之前状态的只读迁移、reconciliation 与审计证据；不得成为 product read fallback | 保留，migration/admin-only |
 
 后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。
 
-旧 `ainrf_deprecated_*` 指标仅在过渡 release 内并行保留用于新旧结果对照，已不再是 removal authority。新的 cleanup registry 为每个临时 item 固定 owner、replacement、2026-10-28 review deadline 与“双重门禁”；若 compatibility 尚未删除，到期必须显式复审，不能静默延期。
+临时 `ainrf_cleanup_*` registry、指标、持久化表、日志和 Dashboard，以及 superseded `ainrf_deprecated_*` 指标、旧统计 helper 与 Release E 告警已在架构清理最终收口中删除。Compatibility route 观察统一由长期、低基数的 `ainrf_http_contract_*` 指标和 durable aggregate 承担；正式长期 alias 不再产生 cleanup-only 遥测。
 
 ## 长期验证 owner
 

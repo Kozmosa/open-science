@@ -11,7 +11,6 @@ description: OpenScience Prometheus 指标参考 — 计数器、直方图、仪
 |------|------|------|
 | `ainrf_http_requests_total` | method, path, status | HTTP 请求总数 |
 | `ainrf_http_contract_requests_total` | surface, operation, method, status_class | 长期 HTTP contract 流量；准确区分 canonical、root、`/v1` 与 external-compatible |
-| `ainrf_cleanup_compatibility_observations_total` | item, observation | **临时** cleanup evidence，仅记录 request field、response emission 与 config alias 等请求级指标无法表达的事实 |
 | `ainrf_auth_login_success_total` | — | 登录成功次数 |
 | `ainrf_auth_login_failed_total` | reason | 按原因分类的登录失败次数 |
 | `ainrf_terminal_exec_total` | environment_id | 终端命令执行次数 |
@@ -55,18 +54,15 @@ sum by (status) (rate(ainrf_http_requests_total[5m]))
 # 长期 compatibility route 观察（removal authority）
 sum by (surface, operation) (increase(ainrf_http_contract_requests_total[30d]))
 
-# 临时字段/config compatibility evidence
-sum by (item, observation) (increase(ainrf_cleanup_compatibility_observations_total[30d]))
-
 # 登录成功率
 rate(ainrf_auth_login_success_total[5m])
 /
 (rate(ainrf_auth_login_success_total[5m]) + rate(ainrf_auth_login_failed_total[5m]))
 ```
 
-`ainrf_deprecated_route_calls_total` 与 `ainrf_deprecated_contract_calls_total` 在一个迁移 release 内继续输出，供新旧 probe 对照，但已被 supersede：它们会漏算、误算或压缩 prefix/operation，不得用于 compatibility 删除判断。
-
 HTTP contract durable evidence 按日期、surface、operation、method、status class 聚合写入 state root 下的 `runtime/compatibility_telemetry.sqlite3`，保留 180 天并跨 backend 重启连续。Prometheus process counter 可重置，但 release removal evidence 不依赖单进程值。
+
+架构清理期间使用的 `ainrf_cleanup_*` 与 superseded `ainrf_deprecated_*` 指标已删除。正式配置/CLI alias 不属于待删除债务；route compatibility 只使用上述长期、低基数 contract 指标，不再维护平行的临时统计。
 
 ## 相关文档
 
