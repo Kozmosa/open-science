@@ -292,6 +292,10 @@ async def test_api_routes_not_intercepted_by_spa(tmp_path: Path) -> None:
         assert resp.status_code == 401
         assert resp.headers.get("content-type", "").startswith("application/json")
 
+        retired = await client.get("/api/sessions?api_key=test-key")
+        assert retired.status_code == 404
+        assert retired.json() == {"detail": "Not Found"}
+
 
 # ---------------------------------------------------------------------------
 # Production mode

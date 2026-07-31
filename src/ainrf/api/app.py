@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TypeVar
 from anyio import to_thread
 from fastapi import APIRouter, FastAPI
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from ainrf.runtime.product_config import ApiConfig
 from ainrf.api.middleware import (
@@ -582,6 +582,8 @@ def create_app(
             """StaticFiles that returns index.html for non-file paths (SPA fallback)."""
 
             async def get_response(self, path: str, scope) -> Response:
+                if path == "api" or path.startswith("api/"):
+                    return JSONResponse({"detail": "Not Found"}, status_code=404)
                 try:
                     response = await super().get_response(path, scope)
                     if response.status_code == 404:
