@@ -361,6 +361,7 @@ def _ensure_login_identities(
     return (
         FrontendDevUsers(
             owner_user_id=users["owner"]["user_id"],
+            owner_username=users["owner"]["username"],
             editor_user_id=users["editor"]["user_id"],
             viewer_user_id=users["viewer"]["user_id"],
             admin_user_id=users["admin"]["user_id"],

@@ -776,6 +776,18 @@ def provision_tenant_user(username: str) -> None:
             fallback.mkdir(parents=True, exist_ok=True)
 
 
+def provision_tenant_owned_path(path: Path, username: str) -> None:
+    """Create a runtime path owned by the user's Linux tenant identity."""
+
+    if tenant_identity.is_container_environment():
+        provision_tenant_user(username)
+        linux_user = tenant_identity.tenant_linux_username(username)
+        _run_privileged(["mkdir", "-p", str(path)])
+        _chown_recursive(path, linux_user, tenant_identity.TENANT_GROUP)
+        return
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def _user_to_dict(user: User) -> dict:
     return {
         "id": user.id,
