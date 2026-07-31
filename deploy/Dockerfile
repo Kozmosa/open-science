@@ -197,7 +197,7 @@ RUN groupadd --gid 2000 ainrf_tenants && \
     chmod 0755 /home/ainrf_tenants && \
     groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
-    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
+    mkdir -p /opt/ainrf/state /opt/ainrf/state-workspaces /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
 # Generate SSH host keys + login keys for localhost self-test
 RUN mkdir -p /run/sshd /root/.ssh && \
