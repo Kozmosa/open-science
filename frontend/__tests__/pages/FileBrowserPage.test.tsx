@@ -21,7 +21,7 @@ describe('FileBrowserPage', () => {
   it('opens the requested workspace file from the route query', async () => {
     let openedPath: string | null = null;
     server.use(
-      http.get('/api/environments', () => HttpResponse.json({
+      http.get('/api/domain/environments', () => HttpResponse.json({
         items: [{
           id: 'env-localhost',
           alias: 'localhost',
@@ -48,18 +48,29 @@ describe('FileBrowserPage', () => {
           latest_detection: null,
         }],
       })),
-      http.get('/api/workspaces', () => HttpResponse.json({
+      http.get('/api/domain/workspaces', () => HttpResponse.json({
         items: [{
           workspace_id: 'workspace-default',
-          project_id: 'default',
           label: 'Default Workspace',
           description: '',
-          default_workdir: '/home/xuyang/.ainrf_workspaces/default',
-          workspace_prompt: '',
+          canonical_path: '/home/xuyang/.ainrf_workspaces/default',
+          workspace_context: '',
+          status: 'active',
+          owner_user_id: 'u1',
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-01T00:00:00Z',
+          recent_activity_at: '2026-01-01T00:00:00Z',
+          environment: { environment_id: 'env-localhost', alias: 'localhost', display_name: 'Localhost', status: 'active' },
+          project_links: [],
+          task_count: 0,
+          active_task_count: 0,
+          can_execute: true,
+          cannot_execute_reason: null,
+          can_manage_registry: true,
+          git_status: { state: 'not_collected', branch: null, is_dirty: null, observed_at: null },
         }],
       })),
+      http.get('/api/domain/projects/default/environment-refs', () => HttpResponse.json({ items: [] })),
       http.get('/api/files/list', () => HttpResponse.json({
         path: '',
         entries: [{ path: 'docs', name: 'docs', kind: 'directory', size: null, modified_at: null }],

@@ -221,7 +221,6 @@ describe('frontend mock architecture guard', () => {
       join(srcRoot, 'features/environments/api/endpoints.ts'),
       join(srcRoot, 'features/terminal/api/endpoints.ts'),
       join(srcRoot, 'features/workspaces/api.ts'),
-      join(srcRoot, 'features/projects/api.ts'),
       join(srcRoot, 'features/resources/api.ts'),
       join(srcRoot, 'features/sessions/api.ts'),
       join(srcRoot, 'features/literature/api.ts'),

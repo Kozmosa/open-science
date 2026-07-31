@@ -126,6 +126,48 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
+  "get_api_domain_environments": {
+    "method": "GET",
+    "path": "/api/domain/environments",
+    "clientPath": "/domain/environments",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_environments": {
+    "method": "POST",
+    "path": "/api/domain/environments",
+    "clientPath": "/domain/environments",
+    "canonical": true,
+    "deprecated": false
+  },
+  "delete_api_domain_environments_environment_id": {
+    "method": "DELETE",
+    "path": "/api/domain/environments/{environment_id}",
+    "clientPath": "/domain/environments/{environment_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "get_api_domain_environments_environment_id": {
+    "method": "GET",
+    "path": "/api/domain/environments/{environment_id}",
+    "clientPath": "/domain/environments/{environment_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "patch_api_domain_environments_environment_id": {
+    "method": "PATCH",
+    "path": "/api/domain/environments/{environment_id}",
+    "clientPath": "/domain/environments/{environment_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_environments_environment_id_detect": {
+    "method": "POST",
+    "path": "/api/domain/environments/{environment_id}/detect",
+    "clientPath": "/domain/environments/{environment_id}/detect",
+    "canonical": true,
+    "deprecated": false
+  },
   "get_api_domain_overview_refresh_job_id": {
     "method": "GET",
     "path": "/api/domain/overview/refresh/{job_id}",
@@ -165,6 +207,20 @@ export const transportOperations = {
     "method": "GET",
     "path": "/api/domain/projects/{project_id}",
     "clientPath": "/domain/projects/{project_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "patch_api_domain_projects_project_id": {
+    "method": "PATCH",
+    "path": "/api/domain/projects/{project_id}",
+    "clientPath": "/domain/projects/{project_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_projects_project_id_archive": {
+    "method": "POST",
+    "path": "/api/domain/projects/{project_id}/archive",
+    "clientPath": "/domain/projects/{project_id}/archive",
     "canonical": true,
     "deprecated": false
   },
@@ -252,10 +308,73 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
+  "get_api_domain_projects_project_id_environment_refs": {
+    "method": "GET",
+    "path": "/api/domain/projects/{project_id}/environment-refs",
+    "clientPath": "/domain/projects/{project_id}/environment-refs",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_projects_project_id_environment_refs": {
+    "method": "POST",
+    "path": "/api/domain/projects/{project_id}/environment-refs",
+    "clientPath": "/domain/projects/{project_id}/environment-refs",
+    "canonical": true,
+    "deprecated": false
+  },
+  "delete_api_domain_projects_project_id_environment_refs_environment_id": {
+    "method": "DELETE",
+    "path": "/api/domain/projects/{project_id}/environment-refs/{environment_id}",
+    "clientPath": "/domain/projects/{project_id}/environment-refs/{environment_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "patch_api_domain_projects_project_id_environment_refs_environment_id": {
+    "method": "PATCH",
+    "path": "/api/domain/projects/{project_id}/environment-refs/{environment_id}",
+    "clientPath": "/domain/projects/{project_id}/environment-refs/{environment_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "get_api_domain_projects_project_id_members": {
+    "method": "GET",
+    "path": "/api/domain/projects/{project_id}/members",
+    "clientPath": "/domain/projects/{project_id}/members",
+    "canonical": true,
+    "deprecated": false
+  },
+  "delete_api_domain_projects_project_id_members_member_user_id": {
+    "method": "DELETE",
+    "path": "/api/domain/projects/{project_id}/members/{member_user_id}",
+    "clientPath": "/domain/projects/{project_id}/members/{member_user_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "put_api_domain_projects_project_id_members_member_user_id": {
+    "method": "PUT",
+    "path": "/api/domain/projects/{project_id}/members/{member_user_id}",
+    "clientPath": "/domain/projects/{project_id}/members/{member_user_id}",
+    "canonical": true,
+    "deprecated": false
+  },
   "put_api_domain_projects_project_id_primary_workspace_workspace_id": {
     "method": "PUT",
     "path": "/api/domain/projects/{project_id}/primary-workspace/{workspace_id}",
     "clientPath": "/domain/projects/{project_id}/primary-workspace/{workspace_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_projects_project_id_unarchive": {
+    "method": "POST",
+    "path": "/api/domain/projects/{project_id}/unarchive",
+    "clientPath": "/domain/projects/{project_id}/unarchive",
+    "canonical": true,
+    "deprecated": false
+  },
+  "delete_api_domain_projects_project_id_workspaces_workspace_id": {
+    "method": "DELETE",
+    "path": "/api/domain/projects/{project_id}/workspaces/{workspace_id}",
+    "clientPath": "/domain/projects/{project_id}/workspaces/{workspace_id}",
     "canonical": true,
     "deprecated": false
   },
@@ -305,6 +424,20 @@ export const transportOperations = {
     "method": "GET",
     "path": "/api/domain/workspaces/{workspace_id}",
     "clientPath": "/domain/workspaces/{workspace_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "patch_api_domain_workspaces_workspace_id": {
+    "method": "PATCH",
+    "path": "/api/domain/workspaces/{workspace_id}",
+    "clientPath": "/domain/workspaces/{workspace_id}",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_domain_workspaces_workspace_id_unregister": {
+    "method": "POST",
+    "path": "/api/domain/workspaces/{workspace_id}/unregister",
+    "clientPath": "/domain/workspaces/{workspace_id}/unregister",
     "canonical": true,
     "deprecated": false
   },

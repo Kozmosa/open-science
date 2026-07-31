@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getProjects } from '@features/projects';
+import { getDomainProjects } from '@features/domain';
 import { getTasks } from '@features/tasks';
 import { PageShell, SectionStack } from '@design-system';
 import { GanttChart } from './timeline/GanttChart';
@@ -55,8 +55,8 @@ export default function TimelinePage() {
   }, [allTasks, fromDate, projectId, toDate]);
 
   const projectsQuery = useQuery({
-    queryKey: queryKeys.projects.all,
-    queryFn: () => getProjects(),
+    queryKey: queryKeys.domain.projects(false),
+    queryFn: () => getDomainProjects(false),
   });
 
   return (

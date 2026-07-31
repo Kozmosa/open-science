@@ -78,7 +78,7 @@ export const handlers = [
     return HttpResponse.json({ items: [] })
   }),
 
-  http.get('/api/projects/default/environment-refs', () => {
+  http.get('/api/domain/projects/default/environment-refs', () => {
     return HttpResponse.json({ items: [] })
   }),
 
@@ -105,12 +105,12 @@ export const handlers = [
   }),
 
   // Environments
-  http.get('/api/environments', () => {
+  http.get('/api/domain/environments', () => {
     return HttpResponse.json({ items: [] })
   }),
 
   // Workspaces
-  http.get('/api/workspaces', () => {
+  http.get('/api/domain/workspaces', () => {
     return HttpResponse.json({ items: [] })
   }),
 

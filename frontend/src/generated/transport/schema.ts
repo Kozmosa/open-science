@@ -3950,6 +3950,167 @@ export type GetApiDomainCapabilitiesResponses = {
 
 export type GetApiDomainCapabilitiesResponse = GetApiDomainCapabilitiesResponses[keyof GetApiDomainCapabilitiesResponses];
 
+export type GetApiDomainEnvironmentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/domain/environments';
+};
+
+export type GetApiDomainEnvironmentsResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnvironmentListResponse;
+};
+
+export type GetApiDomainEnvironmentsResponse = GetApiDomainEnvironmentsResponses[keyof GetApiDomainEnvironmentsResponses];
+
+export type PostApiDomainEnvironmentsData = {
+    body: EnvironmentCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/api/domain/environments';
+};
+
+export type PostApiDomainEnvironmentsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainEnvironmentsError = PostApiDomainEnvironmentsErrors[keyof PostApiDomainEnvironmentsErrors];
+
+export type PostApiDomainEnvironmentsResponses = {
+    /**
+     * Successful Response
+     */
+    201: EnvironmentResponse;
+};
+
+export type PostApiDomainEnvironmentsResponse = PostApiDomainEnvironmentsResponses[keyof PostApiDomainEnvironmentsResponses];
+
+export type DeleteApiDomainEnvironmentsEnvironmentIdData = {
+    body?: never;
+    path: {
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/environments/{environment_id}';
+};
+
+export type DeleteApiDomainEnvironmentsEnvironmentIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainEnvironmentsEnvironmentIdError = DeleteApiDomainEnvironmentsEnvironmentIdErrors[keyof DeleteApiDomainEnvironmentsEnvironmentIdErrors];
+
+export type DeleteApiDomainEnvironmentsEnvironmentIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainEnvironmentsEnvironmentIdResponse = DeleteApiDomainEnvironmentsEnvironmentIdResponses[keyof DeleteApiDomainEnvironmentsEnvironmentIdResponses];
+
+export type GetApiDomainEnvironmentsEnvironmentIdData = {
+    body?: never;
+    path: {
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/environments/{environment_id}';
+};
+
+export type GetApiDomainEnvironmentsEnvironmentIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainEnvironmentsEnvironmentIdError = GetApiDomainEnvironmentsEnvironmentIdErrors[keyof GetApiDomainEnvironmentsEnvironmentIdErrors];
+
+export type GetApiDomainEnvironmentsEnvironmentIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnvironmentResponse;
+};
+
+export type GetApiDomainEnvironmentsEnvironmentIdResponse = GetApiDomainEnvironmentsEnvironmentIdResponses[keyof GetApiDomainEnvironmentsEnvironmentIdResponses];
+
+export type PatchApiDomainEnvironmentsEnvironmentIdData = {
+    body: EnvironmentUpdateRequest;
+    path: {
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/environments/{environment_id}';
+};
+
+export type PatchApiDomainEnvironmentsEnvironmentIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchApiDomainEnvironmentsEnvironmentIdError = PatchApiDomainEnvironmentsEnvironmentIdErrors[keyof PatchApiDomainEnvironmentsEnvironmentIdErrors];
+
+export type PatchApiDomainEnvironmentsEnvironmentIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnvironmentResponse;
+};
+
+export type PatchApiDomainEnvironmentsEnvironmentIdResponse = PatchApiDomainEnvironmentsEnvironmentIdResponses[keyof PatchApiDomainEnvironmentsEnvironmentIdResponses];
+
+export type PostApiDomainEnvironmentsEnvironmentIdDetectData = {
+    body?: never;
+    path: {
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/environments/{environment_id}/detect';
+};
+
+export type PostApiDomainEnvironmentsEnvironmentIdDetectErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainEnvironmentsEnvironmentIdDetectError = PostApiDomainEnvironmentsEnvironmentIdDetectErrors[keyof PostApiDomainEnvironmentsEnvironmentIdDetectErrors];
+
+export type PostApiDomainEnvironmentsEnvironmentIdDetectResponses = {
+    /**
+     * Successful Response
+     */
+    200: EnvironmentResponse;
+};
+
+export type PostApiDomainEnvironmentsEnvironmentIdDetectResponse = PostApiDomainEnvironmentsEnvironmentIdDetectResponses[keyof PostApiDomainEnvironmentsEnvironmentIdDetectResponses];
+
 export type GetApiDomainOverviewRefreshJobIdData = {
     body?: never;
     path: {
@@ -4117,6 +4278,66 @@ export type GetApiDomainProjectsProjectIdResponses = {
 };
 
 export type GetApiDomainProjectsProjectIdResponse = GetApiDomainProjectsProjectIdResponses[keyof GetApiDomainProjectsProjectIdResponses];
+
+export type PatchApiDomainProjectsProjectIdData = {
+    body: ProjectUpdateRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}';
+};
+
+export type PatchApiDomainProjectsProjectIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchApiDomainProjectsProjectIdError = PatchApiDomainProjectsProjectIdErrors[keyof PatchApiDomainProjectsProjectIdErrors];
+
+export type PatchApiDomainProjectsProjectIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: DomainProjectSummaryResponse;
+};
+
+export type PatchApiDomainProjectsProjectIdResponse = PatchApiDomainProjectsProjectIdResponses[keyof PatchApiDomainProjectsProjectIdResponses];
+
+export type PostApiDomainProjectsProjectIdArchiveData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/archive';
+};
+
+export type PostApiDomainProjectsProjectIdArchiveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainProjectsProjectIdArchiveError = PostApiDomainProjectsProjectIdArchiveErrors[keyof PostApiDomainProjectsProjectIdArchiveErrors];
+
+export type PostApiDomainProjectsProjectIdArchiveResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type PostApiDomainProjectsProjectIdArchiveResponse = PostApiDomainProjectsProjectIdArchiveResponses[keyof PostApiDomainProjectsProjectIdArchiveResponses];
 
 export type GetApiDomainProjectsProjectIdContextData = {
     body?: never;
@@ -4547,6 +4768,232 @@ export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResp
 
 export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponse = GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponses[keyof GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponses];
 
+export type GetApiDomainProjectsProjectIdEnvironmentRefsData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/environment-refs';
+};
+
+export type GetApiDomainProjectsProjectIdEnvironmentRefsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdEnvironmentRefsError = GetApiDomainProjectsProjectIdEnvironmentRefsErrors[keyof GetApiDomainProjectsProjectIdEnvironmentRefsErrors];
+
+export type GetApiDomainProjectsProjectIdEnvironmentRefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectEnvironmentReferenceListResponse;
+};
+
+export type GetApiDomainProjectsProjectIdEnvironmentRefsResponse = GetApiDomainProjectsProjectIdEnvironmentRefsResponses[keyof GetApiDomainProjectsProjectIdEnvironmentRefsResponses];
+
+export type PostApiDomainProjectsProjectIdEnvironmentRefsData = {
+    body: ProjectEnvironmentReferenceCreateRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/environment-refs';
+};
+
+export type PostApiDomainProjectsProjectIdEnvironmentRefsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainProjectsProjectIdEnvironmentRefsError = PostApiDomainProjectsProjectIdEnvironmentRefsErrors[keyof PostApiDomainProjectsProjectIdEnvironmentRefsErrors];
+
+export type PostApiDomainProjectsProjectIdEnvironmentRefsResponses = {
+    /**
+     * Successful Response
+     */
+    201: ProjectEnvironmentReferenceResponse;
+};
+
+export type PostApiDomainProjectsProjectIdEnvironmentRefsResponse = PostApiDomainProjectsProjectIdEnvironmentRefsResponses[keyof PostApiDomainProjectsProjectIdEnvironmentRefsResponses];
+
+export type DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/environment-refs/{environment_id}';
+};
+
+export type DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdError = DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors[keyof DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors];
+
+export type DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponse = DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses[keyof DeleteApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses];
+
+export type PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdData = {
+    body: ProjectEnvironmentReferenceUpdateRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Environment Id
+         */
+        environment_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/environment-refs/{environment_id}';
+};
+
+export type PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdError = PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors[keyof PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdErrors];
+
+export type PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectEnvironmentReferenceResponse;
+};
+
+export type PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponse = PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses[keyof PatchApiDomainProjectsProjectIdEnvironmentRefsEnvironmentIdResponses];
+
+export type GetApiDomainProjectsProjectIdMembersData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/members';
+};
+
+export type GetApiDomainProjectsProjectIdMembersErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiDomainProjectsProjectIdMembersError = GetApiDomainProjectsProjectIdMembersErrors[keyof GetApiDomainProjectsProjectIdMembersErrors];
+
+export type GetApiDomainProjectsProjectIdMembersResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectMemberListResponse;
+};
+
+export type GetApiDomainProjectsProjectIdMembersResponse = GetApiDomainProjectsProjectIdMembersResponses[keyof GetApiDomainProjectsProjectIdMembersResponses];
+
+export type DeleteApiDomainProjectsProjectIdMembersMemberUserIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Member User Id
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/members/{member_user_id}';
+};
+
+export type DeleteApiDomainProjectsProjectIdMembersMemberUserIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainProjectsProjectIdMembersMemberUserIdError = DeleteApiDomainProjectsProjectIdMembersMemberUserIdErrors[keyof DeleteApiDomainProjectsProjectIdMembersMemberUserIdErrors];
+
+export type DeleteApiDomainProjectsProjectIdMembersMemberUserIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainProjectsProjectIdMembersMemberUserIdResponse = DeleteApiDomainProjectsProjectIdMembersMemberUserIdResponses[keyof DeleteApiDomainProjectsProjectIdMembersMemberUserIdResponses];
+
+export type PutApiDomainProjectsProjectIdMembersMemberUserIdData = {
+    body: ProjectMemberRequest;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Member User Id
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/members/{member_user_id}';
+};
+
+export type PutApiDomainProjectsProjectIdMembersMemberUserIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutApiDomainProjectsProjectIdMembersMemberUserIdError = PutApiDomainProjectsProjectIdMembersMemberUserIdErrors[keyof PutApiDomainProjectsProjectIdMembersMemberUserIdErrors];
+
+export type PutApiDomainProjectsProjectIdMembersMemberUserIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProjectMemberResponse;
+};
+
+export type PutApiDomainProjectsProjectIdMembersMemberUserIdResponse = PutApiDomainProjectsProjectIdMembersMemberUserIdResponses[keyof PutApiDomainProjectsProjectIdMembersMemberUserIdResponses];
+
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdData = {
     body?: never;
     path: {
@@ -4559,7 +5006,12 @@ export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdData = {
          */
         workspace_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Previous Workspace Id
+         */
+        previous_workspace_id?: string | null;
+    };
     url: '/api/domain/projects/{project_id}/primary-workspace/{workspace_id}';
 };
 
@@ -4584,6 +5036,75 @@ export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses = 
 };
 
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponse = PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses[keyof PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses];
+
+export type PostApiDomainProjectsProjectIdUnarchiveData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+    };
+    query?: never;
+    url: '/api/domain/projects/{project_id}/unarchive';
+};
+
+export type PostApiDomainProjectsProjectIdUnarchiveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainProjectsProjectIdUnarchiveError = PostApiDomainProjectsProjectIdUnarchiveErrors[keyof PostApiDomainProjectsProjectIdUnarchiveErrors];
+
+export type PostApiDomainProjectsProjectIdUnarchiveResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type PostApiDomainProjectsProjectIdUnarchiveResponse = PostApiDomainProjectsProjectIdUnarchiveResponses[keyof PostApiDomainProjectsProjectIdUnarchiveResponses];
+
+export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project Id
+         */
+        project_id: string;
+        /**
+         * Workspace Id
+         */
+        workspace_id: string;
+    };
+    query?: {
+        /**
+         * Allow No Primary
+         */
+        allow_no_primary?: boolean;
+    };
+    url: '/api/domain/projects/{project_id}/workspaces/{workspace_id}';
+};
+
+export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdError = DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdErrors[keyof DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdErrors];
+
+export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponse = DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses[keyof DeleteApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses];
 
 export type PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdData = {
     body?: never;
@@ -4818,6 +5339,66 @@ export type GetApiDomainWorkspacesWorkspaceIdResponses = {
 };
 
 export type GetApiDomainWorkspacesWorkspaceIdResponse = GetApiDomainWorkspacesWorkspaceIdResponses[keyof GetApiDomainWorkspacesWorkspaceIdResponses];
+
+export type PatchApiDomainWorkspacesWorkspaceIdData = {
+    body: WorkspaceUpdateRequest;
+    path: {
+        /**
+         * Workspace Id
+         */
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/api/domain/workspaces/{workspace_id}';
+};
+
+export type PatchApiDomainWorkspacesWorkspaceIdErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PatchApiDomainWorkspacesWorkspaceIdError = PatchApiDomainWorkspacesWorkspaceIdErrors[keyof PatchApiDomainWorkspacesWorkspaceIdErrors];
+
+export type PatchApiDomainWorkspacesWorkspaceIdResponses = {
+    /**
+     * Successful Response
+     */
+    200: DomainWorkspaceResponse;
+};
+
+export type PatchApiDomainWorkspacesWorkspaceIdResponse = PatchApiDomainWorkspacesWorkspaceIdResponses[keyof PatchApiDomainWorkspacesWorkspaceIdResponses];
+
+export type PostApiDomainWorkspacesWorkspaceIdUnregisterData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace Id
+         */
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/api/domain/workspaces/{workspace_id}/unregister';
+};
+
+export type PostApiDomainWorkspacesWorkspaceIdUnregisterErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiDomainWorkspacesWorkspaceIdUnregisterError = PostApiDomainWorkspacesWorkspaceIdUnregisterErrors[keyof PostApiDomainWorkspacesWorkspaceIdUnregisterErrors];
+
+export type PostApiDomainWorkspacesWorkspaceIdUnregisterResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type PostApiDomainWorkspacesWorkspaceIdUnregisterResponse = PostApiDomainWorkspacesWorkspaceIdUnregisterResponses[keyof PostApiDomainWorkspacesWorkspaceIdUnregisterResponses];
 
 export type GetApiEnvironmentsData = {
     body?: never;

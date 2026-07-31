@@ -269,6 +269,141 @@ async def test_v2_environment_delete_disables_the_durable_environment(
 
 
 @pytest.mark.anyio
+async def test_canonical_domain_project_mutations_cover_ui_contract(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "domain-project-owner", "role": "member"}
+    owner_headers = _headers(app, "domain-project-owner", "domain-project-owner", "member")
+    _headers(app, "domain-project-editor", "domain-project-editor", "member")
+    project_id, _ = _project_with_primary(app, state_root, owner)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        updated = await client.patch(
+            f"/api/domain/projects/{project_id}",
+            headers=_write_headers(owner_headers, "domain-project-update"),
+            json={"name": "Canonical Project", "description": "Domain UI"},
+        )
+        member = await client.put(
+            f"/api/domain/projects/{project_id}/members/domain-project-editor",
+            headers=_write_headers(owner_headers, "domain-project-member"),
+            json={"role": "editor", "can_publish": True},
+        )
+        members = await client.get(
+            f"/api/domain/projects/{project_id}/members", headers=owner_headers
+        )
+        archived = await client.post(
+            f"/api/domain/projects/{project_id}/archive",
+            headers=_write_headers(owner_headers, "domain-project-archive"),
+        )
+        unarchived = await client.post(
+            f"/api/domain/projects/{project_id}/unarchive",
+            headers=_write_headers(owner_headers, "domain-project-unarchive"),
+        )
+
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Canonical Project"
+    assert "Deprecation" not in updated.headers
+    assert member.status_code == 200
+    assert member.json()["role"] == "editor"
+    assert members.status_code == 200
+    assert [item["user_id"] for item in members.json()["items"]] == ["domain-project-editor"]
+    assert archived.status_code == 204
+    assert unarchived.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_canonical_domain_workspace_mutations_cover_ui_contract(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "domain-workspace-owner", "role": "member"}
+    headers = _headers(app, "domain-workspace-owner", "domain-workspace-owner", "member")
+    project_id, environment_id = _project_with_primary(app, state_root, owner)
+    path = state_root / "domain-workspace"
+    path.mkdir()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/api/domain/workspaces",
+            headers=_write_headers(headers, "domain-workspace-create"),
+            json={
+                "environment_id": environment_id,
+                "canonical_path": str(path),
+                "label": "Domain Workspace",
+            },
+        )
+        workspace_id = created.json()["workspace_id"]
+        updated = await client.patch(
+            f"/api/domain/workspaces/{workspace_id}",
+            headers=_write_headers(headers, "domain-workspace-update"),
+            json={"description": "Canonical update", "workspace_prompt": "Context"},
+        )
+        attached = await client.post(
+            f"/api/domain/projects/{project_id}/workspaces/{workspace_id}",
+            headers=_write_headers(headers, "domain-workspace-attach"),
+        )
+        detached = await client.delete(
+            f"/api/domain/projects/{project_id}/workspaces/{workspace_id}",
+            headers=_write_headers(headers, "domain-workspace-detach"),
+        )
+        unregistered = await client.post(
+            f"/api/domain/workspaces/{workspace_id}/unregister",
+            headers=_write_headers(headers, "domain-workspace-unregister"),
+        )
+
+    assert created.status_code == 200
+    assert updated.status_code == 200
+    assert updated.json()["description"] == "Canonical update"
+    assert updated.json()["workspace_context"] == "Context"
+    assert attached.status_code == 200
+    assert detached.status_code == 204
+    assert unregistered.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_canonical_domain_environment_mutations_cover_ui_contract(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    headers = _headers(app, "domain-environment-admin", "admin", "admin")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        created = await client.post(
+            "/api/domain/environments",
+            headers=_write_headers(headers, "domain-environment-create"),
+            json={"alias": "domain-host", "display_name": "Domain host", "host": "localhost"},
+        )
+        environment_id = created.json()["id"]
+        updated = await client.patch(
+            f"/api/domain/environments/{environment_id}",
+            headers=_write_headers(headers, "domain-environment-update"),
+            json={"description": "Canonical environment"},
+        )
+        listed = await client.get("/api/domain/environments", headers=headers)
+        disabled = await client.delete(
+            f"/api/domain/environments/{environment_id}",
+            headers=_write_headers(headers, "domain-environment-disable"),
+        )
+
+    assert created.status_code == 201
+    assert "Deprecation" not in created.headers
+    assert updated.status_code == 200
+    assert updated.json()["description"] == "Canonical environment"
+    assert environment_id in {item["id"] for item in listed.json()["items"]}
+    assert disabled.status_code == 204
+
+
+@pytest.mark.anyio
 async def test_compatibility_removals_preserve_idempotency_and_not_found_errors(
     state_root: Path,
     tmp_path: Path,

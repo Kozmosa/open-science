@@ -26,6 +26,11 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
         "${OPENSCIENCE_RELEASE_DOMAIN_ARTIFACT_SHA"
     )
     assert services["api"]["depends_on"]["init"]["condition"] == ("service_completed_successfully")
+    expected_workspace_mount = "release-staging-workspaces:/opt/ainrf/state-workspaces"
+    assert expected_workspace_mount in services["init"]["volumes"]
+    assert expected_workspace_mount in services["api"]["volumes"]
+    dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
+    assert "mkdir -p /opt/ainrf/state /opt/ainrf/state-workspaces" in dockerfile
     assert services["init"]["command"][:3] == [
         "openscience",
         "frontend-dev",
@@ -82,6 +87,8 @@ def test_web_image_uses_one_port_parameterized_nginx_template() -> None:
     assert "listen ${AINRF_WEB_PORT};" in template
     assert "127.0.0.1:${AINRF_BACKEND_PORT}" in template
     assert 'AINRF_WEB_PORT: "8192"' in production
+    assert "RUN chmod -R a+rX /usr/share/nginx/html" in dockerfile
+    assert "RUN chmod -R a+rX /opt/ainrf/frontend/dist" in dockerfile
 
 
 def test_development_and_mutable_staging_remain_separate_paths() -> None:

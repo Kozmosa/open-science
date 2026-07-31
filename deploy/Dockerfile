@@ -50,6 +50,7 @@ RUN npm run build
 # static assets.  They therefore need no bind mounts from a Git checkout.
 FROM docker.1ms.run/nginx:1.27-alpine AS web
 COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html
+RUN chmod -R a+rX /usr/share/nginx/html
 COPY deploy/config/nginx-release.conf.template /etc/nginx/templates/default.conf.template
 ENV NGINX_ENVSUBST_FILTER=^AINRF_
 
@@ -173,6 +174,7 @@ COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience
 
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
+RUN chmod -R a+rX /opt/ainrf/frontend/dist
 
 # ── Stage 3.5: ARIS skill registry ──────────────────────────────────
 # Download the ARIS repo as a zip archive via codeload.github.com
@@ -197,7 +199,7 @@ RUN groupadd --gid 2000 ainrf_tenants && \
     chmod 0755 /home/ainrf_tenants && \
     groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
-    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
+    mkdir -p /opt/ainrf/state /opt/ainrf/state-workspaces /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
 # Generate SSH host keys + login keys for localhost self-test
 RUN mkdir -p /run/sshd /root/.ssh && \

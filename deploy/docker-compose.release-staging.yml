@@ -21,7 +21,7 @@ services:
       - full
     volumes:
       - release-staging-state:/opt/ainrf/state
-      - release-staging-workspaces:/opt/ainrf/.ainrf_workspaces
+      - release-staging-workspaces:/opt/ainrf/state-workspaces
       - release-staging-tenants:/home/ainrf_tenants
 
   api:
@@ -50,7 +50,7 @@ services:
       CODEX_MODEL: ${STAGING_CODEX_MODEL:-gpt-5.5}
     volumes:
       - release-staging-state:/opt/ainrf/state
-      - release-staging-workspaces:/opt/ainrf/.ainrf_workspaces
+      - release-staging-workspaces:/opt/ainrf/state-workspaces
       - release-staging-tenants:/home/ainrf_tenants
     depends_on:
       init:

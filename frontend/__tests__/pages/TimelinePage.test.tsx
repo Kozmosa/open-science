@@ -3,13 +3,16 @@ import { screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test-support/render';
 import TimelinePage from '../../src/pages/TimelinePage';
 import * as taskApi from '@features/tasks/api';
-import * as projectApi from '@features/projects/api';
+import * as domainApi from '@features/domain';
 
 vi.mock('@features/tasks/api', () => ({ getTasks: vi.fn() }));
-vi.mock('@features/projects/api', () => ({ getProjects: vi.fn() }));
+vi.mock('@features/domain', async () => {
+  const actual = await vi.importActual<typeof import('@features/domain')>('@features/domain');
+  return { ...actual, getDomainProjects: vi.fn() };
+});
 
 const mockGetTasks = vi.mocked(taskApi.getTasks);
-const mockGetProjects = vi.mocked(projectApi.getProjects);
+const mockGetProjects = vi.mocked(domainApi.getDomainProjects);
 
 const mockTask = {
   task_id: 'task-1',
@@ -39,10 +42,22 @@ const mockProject = {
   project_id: 'p1',
   name: 'Test Project',
   description: null,
-  default_workspace_id: null,
-  default_environment_id: null,
+  status: 'active' as const,
+  is_default: false,
+  owner_user_id: 'user-1',
+  current_user_role: 'owner' as const,
   created_at: '',
   updated_at: '',
+  recent_activity_at: '',
+  workspace_count: 0,
+  executable_workspace_count: 0,
+  task_count: 1,
+  active_task_count: 0,
+  running_task_count: 0,
+  primary_workspace: null,
+  attention_required: false,
+  attention_reasons: [],
+  permissions: { can_edit: true, can_publish: true, can_manage_members: true, can_archive: true, can_unarchive: false, can_create_task: false },
 };
 
 beforeEach(() => {

@@ -4,15 +4,16 @@ import base64
 import json
 import shlex
 import shutil
+import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 from ainrf.environments.local import is_localhost_environment
 from ainrf.execution.models import CommandResult, ContainerConfig
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files.cache import FileTreeCache
 from ainrf.files.language_map import is_image_file, language_from_path, mime_type_from_path
-from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUploadResult
+from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileKind, FileUploadResult
 
 if TYPE_CHECKING:
     from ainrf.environments.models import EnvironmentRegistryEntry
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 _MAX_FILE_SIZE_BYTES = 50_000_000
 _MAX_DIRECTORY_ENTRIES = 1_000
 _BINARY_PROBE_BYTES = 8_192
+_STREAM_FILE_SIZE_BYTES = 100 * 1024 * 1024
 
 
 class WorkspaceReader(Protocol):
@@ -103,17 +105,22 @@ class FileBrowserService:
         self._resolver = _EnvironmentResolver(environment_service, workspace_service)
 
     async def list_directory(
-        self, environment_id: str, path: str, workspace_id: str | None = None
+        self,
+        environment_id: str,
+        path: str,
+        workspace_id: str | None = None,
+        *,
+        run_as_user: str | None = None,
     ) -> DirectoryListing:
         environment, workdir = self._resolver.resolve(environment_id, workspace_id)
         resolved_path = _resolve_path(workdir, path)
-        cache_key = f"{environment_id}:{workspace_id or ''}:{resolved_path}"
+        cache_key = f"{environment_id}:{workspace_id or ''}:{run_as_user or ''}:{resolved_path}"
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         if is_localhost_environment(environment):
-            listing = await self._list_local(resolved_path)
+            listing = await self._list_local(resolved_path, run_as_user=run_as_user)
         else:
             listing = await self._list_remote(environment, resolved_path)
 
@@ -121,14 +128,31 @@ class FileBrowserService:
         return listing
 
     async def read_file(
-        self, environment_id: str, path: str, workspace_id: str | None = None
+        self,
+        environment_id: str,
+        path: str,
+        workspace_id: str | None = None,
+        *,
+        run_as_user: str | None = None,
     ) -> FileContent:
         environment, workdir = self._resolver.resolve(environment_id, workspace_id)
         resolved_path = _resolve_path(workdir, path)
 
         if is_localhost_environment(environment):
-            return await self._read_local(resolved_path)
+            return await self._read_local(resolved_path, run_as_user=run_as_user)
         return await self._read_remote(environment, resolved_path)
+
+    async def read_stream_file(
+        self,
+        path: str,
+        *,
+        run_as_user: str | None = None,
+    ) -> bytes:
+        return await self._read_local_bytes(
+            path,
+            max_file_size_bytes=_STREAM_FILE_SIZE_BYTES,
+            run_as_user=run_as_user,
+        )
 
     async def resolve_stream_target(
         self, environment_id: str, path: str, workspace_id: str | None = None
@@ -151,15 +175,45 @@ class FileBrowserService:
         path: str,
         local_temp_path: Path,
         workspace_id: str | None = None,
+        *,
+        run_as_user: str | None = None,
     ) -> FileUploadResult:
         environment, workdir = self._resolver.resolve(environment_id, workspace_id)
         resolved_path = _resolve_path(workdir, path)
 
         if is_localhost_environment(environment):
-            target = Path(resolved_path)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(local_temp_path, target)
-            size = target.stat().st_size
+            if run_as_user is None:
+                target = Path(resolved_path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(local_temp_path, target)
+                size = target.stat().st_size
+            else:
+                mkdir_result = await self._run_local_command(
+                    run_as_user,
+                    "mkdir",
+                    "-p",
+                    str(Path(resolved_path).parent),
+                )
+                self._require_local_command(mkdir_result, "create upload directory")
+                copy_result = await self._run_local_command(
+                    run_as_user,
+                    "cp",
+                    str(local_temp_path),
+                    resolved_path,
+                )
+                self._require_local_command(copy_result, "copy uploaded file")
+                size_result = await self._run_local_command(
+                    run_as_user,
+                    "stat",
+                    "-c",
+                    "%s",
+                    resolved_path,
+                )
+                self._require_local_command(size_result, "read uploaded file size")
+                try:
+                    size = int(size_result.stdout.strip())
+                except ValueError as exc:
+                    raise FileBrowserError("Uploaded file size could not be read") from exc
         else:
             config = _build_container_config(environment)
             executor = SSHExecutor(config)
@@ -172,7 +226,14 @@ class FileBrowserService:
         self.invalidate_cache(environment_id)
         return FileUploadResult(path=resolved_path, size=size)
 
-    async def _list_local(self, path: str) -> DirectoryListing:
+    async def _list_local(
+        self,
+        path: str,
+        *,
+        run_as_user: str | None = None,
+    ) -> DirectoryListing:
+        if run_as_user is not None:
+            return await self._list_local_as_user(path, run_as_user)
         target = Path(path)
         if not target.exists():
             raise PathNotFoundError(f"Directory not found: {path}")
@@ -200,6 +261,53 @@ class FileBrowserService:
                 break
 
         entries.sort(key=lambda e: (0 if e.kind == "directory" else 1, e.name.lower()))
+        return DirectoryListing(path=path, entries=entries)
+
+    async def _list_local_as_user(self, path: str, run_as_user: str) -> DirectoryListing:
+        script = """
+import json
+import os
+import sys
+
+path = sys.argv[1]
+if not os.path.exists(path):
+    print("not-found", file=sys.stderr)
+    raise SystemExit(2)
+if not os.path.isdir(path):
+    print("not-directory", file=sys.stderr)
+    raise SystemExit(3)
+entries = []
+for name in os.listdir(path):
+    target = os.path.join(path, name)
+    if os.path.islink(target):
+        kind = "symlink"
+    elif os.path.isdir(target):
+        kind = "directory"
+    else:
+        kind = "file"
+    size = os.path.getsize(target) if kind == "file" else None
+    entries.append({"name": name, "kind": kind, "size": size})
+print(json.dumps(entries))
+"""
+        result = await self._run_local_command(run_as_user, "python3", "-c", script, path)
+        if result.exit_code in {2, 3}:
+            raise PathNotFoundError(f"Directory not found: {path}")
+        if result.exit_code != 0:
+            raise FileBrowserError(f"Failed to list directory: {result.stderr.strip()}")
+        try:
+            raw_entries = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise FileBrowserError(f"Invalid directory listing response: {exc}") from exc
+        entries = [
+            FileEntry(
+                name=str(item["name"]),
+                path=str(Path(path) / str(item["name"])),
+                kind=cast(FileKind, str(item["kind"])),
+                size=int(item["size"]) if item["size"] is not None else None,
+            )
+            for item in raw_entries[:_MAX_DIRECTORY_ENTRIES]
+        ]
+        entries.sort(key=lambda entry: (0 if entry.kind == "directory" else 1, entry.name.lower()))
         return DirectoryListing(path=path, entries=entries)
 
     async def _list_remote(
@@ -242,7 +350,65 @@ class FileBrowserService:
         entries.sort(key=lambda e: (0 if e.kind == "directory" else 1, e.name.lower()))
         return DirectoryListing(path=path, entries=entries)
 
-    async def _read_local(self, path: str) -> FileContent:
+    async def _read_local(
+        self,
+        path: str,
+        *,
+        run_as_user: str | None = None,
+    ) -> FileContent:
+        data = await self._read_local_bytes(
+            path,
+            max_file_size_bytes=self._max_file_size,
+            run_as_user=run_as_user,
+        )
+        return self._build_file_content(path, data)
+
+    async def _read_local_bytes(
+        self,
+        path: str,
+        *,
+        max_file_size_bytes: int,
+        run_as_user: str | None,
+    ) -> bytes:
+        if run_as_user is not None:
+            script = """
+import base64
+import os
+import sys
+
+path = sys.argv[1]
+limit = int(sys.argv[2])
+if not os.path.exists(path):
+    print("not-found", file=sys.stderr)
+    raise SystemExit(2)
+if os.path.isdir(path):
+    print("is-directory", file=sys.stderr)
+    raise SystemExit(3)
+if os.path.getsize(path) > limit:
+    print("too-large", file=sys.stderr)
+    raise SystemExit(4)
+with open(path, "rb") as handle:
+    sys.stdout.write(base64.b64encode(handle.read()).decode("ascii"))
+"""
+            result = await self._run_local_command(
+                run_as_user,
+                "python3",
+                "-c",
+                script,
+                path,
+                str(max_file_size_bytes),
+            )
+            if result.exit_code in {2, 3}:
+                raise PathNotFoundError(f"File not found: {path}")
+            if result.exit_code == 4:
+                raise FileTooLargeError(f"File exceeds {max_file_size_bytes // 1_048_576} MB limit")
+            if result.exit_code != 0:
+                raise FileBrowserError(f"Failed to read file: {result.stderr.strip()}")
+            try:
+                return base64.b64decode(result.stdout, validate=True)
+            except ValueError as exc:
+                raise FileBrowserError("Invalid local file response") from exc
+
         from anyio import to_thread
 
         target = Path(path)
@@ -255,13 +421,38 @@ class FileBrowserService:
             raise PathNotFoundError(f"File not found: {path}")
         if is_dir:
             raise PathNotFoundError(f"Path is a directory: {path}")
-
         stat = await to_thread.run_sync(target.stat)
-        if stat.st_size > self._max_file_size:
-            raise FileTooLargeError(f"File exceeds {self._max_file_size // 1_048_576} MB limit")
+        if stat.st_size > max_file_size_bytes:
+            raise FileTooLargeError(f"File exceeds {max_file_size_bytes // 1_048_576} MB limit")
+        return await to_thread.run_sync(target.read_bytes)
 
-        data = await to_thread.run_sync(target.read_bytes)
-        return self._build_file_content(path, data)
+    @staticmethod
+    async def _run_local_command(run_as_user: str, *command: str) -> CommandResult:
+        from anyio import to_thread
+
+        try:
+            process = await to_thread.run_sync(
+                lambda: subprocess.run(
+                    ("sudo", "-n", "-u", run_as_user, "--", *command),
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=30,
+                )
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise FileBrowserError(f"Tenant file command could not be started: {exc}") from exc
+        return CommandResult(
+            exit_code=process.returncode,
+            stdout=process.stdout,
+            stderr=process.stderr,
+        )
+
+    @staticmethod
+    def _require_local_command(result: CommandResult, action: str) -> None:
+        if result.exit_code != 0:
+            detail = result.stderr.strip() or f"exit code {result.exit_code}"
+            raise FileBrowserError(f"Failed to {action}: {detail}")
 
     async def _read_remote(self, environment: EnvironmentRegistryEntry, path: str) -> FileContent:
         quoted_path = shlex.quote(path)

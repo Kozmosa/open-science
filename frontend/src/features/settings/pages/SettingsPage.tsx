@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, FormField, NativeSelect, PageHeader, PageShell, SectionCard, SectionHeader, SectionStack } from '@design-system';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@features/environments';
 import { getEnvironments } from '@features/environments';
-import { getWorkspaces } from '@features/workspaces';
+import { getDomainWorkspaces } from '@features/domain';
 import { getSkills } from '../api';
 import { useSettings } from '../contexts/SettingsProvider';
 import { useT } from '@/shared/i18n';
@@ -34,8 +34,8 @@ function SettingsPage() {
     queryFn: getEnvironments,
   });
   const workspacesQuery = useQuery({
-    queryKey: queryKeys.workspaces.all,
-    queryFn: getWorkspaces,
+    queryKey: queryKeys.domain.workspaces(false),
+    queryFn: () => getDomainWorkspaces(false),
   });
   const skillsQuery = useQuery({
     queryKey: queryKeys.skills.all,

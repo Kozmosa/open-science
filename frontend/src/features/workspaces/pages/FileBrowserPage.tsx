@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
-import { buildFileStreamUrl, listFiles, readFile, getWorkspaces } from '../api';
+import { buildFileStreamUrl, listFiles, readFile } from '../api';
+import { getDomainWorkspaces } from '@features/domain';
 import { useEnvironmentSelection } from '@features/environments';
 import FileTree from '../components/file-browser/FileTree';
 import FileViewer from '../components/file-browser/FileViewer';
@@ -36,8 +37,8 @@ export default function FileBrowserPage() {
   const environmentId = selectedEnvironment?.id ?? null;
 
   const workspacesQuery = useQuery({
-    queryKey: queryKeys.workspaces.all,
-    queryFn: getWorkspaces,
+    queryKey: queryKeys.domain.workspaces(false),
+    queryFn: () => getDomainWorkspaces(false),
   });
   const workspaces = workspacesQuery.data?.items ?? [];
 
