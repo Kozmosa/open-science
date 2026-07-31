@@ -1358,7 +1358,17 @@ class TaskDispatcher:
                 )
             return
         result = subprocess.run(
-            ["sudo", "-n", "-u", tenant_user, "test", "-rwx", str(path)],
+            [
+                "sudo",
+                "-n",
+                "-u",
+                tenant_user,
+                "sh",
+                "-c",
+                'test -r "$1" && test -w "$1" && test -x "$1"',
+                "tenant-workspace-permissions",
+                str(path),
+            ],
             check=False,
             capture_output=True,
             text=True,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import sqlite3
+import subprocess
 from contextlib import closing
 from pathlib import Path
 
@@ -1160,6 +1161,41 @@ async def test_domain_worker_records_tenant_access_denial_before_runtime_start(
     finally:
         dispatcher.stop()
         reset_metrics()
+
+
+def test_domain_worker_checks_each_tenant_workspace_permission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("ainrf.domain.worker.subprocess.run", run)
+    TaskDispatcher._validate_workspace_permissions(
+        tmp_path,
+        "ainrf_frontend-owner",
+        owner_user_id="owner",
+        project_id="project",
+        workspace_id="workspace",
+        task_id="task",
+        environment_id="environment",
+    )
+
+    assert commands == [
+        [
+            "sudo",
+            "-n",
+            "-u",
+            "ainrf_frontend-owner",
+            "sh",
+            "-c",
+            'test -r "$1" && test -w "$1" && test -x "$1"',
+            "tenant-workspace-permissions",
+            str(tmp_path),
+        ]
+    ]
 
 
 @pytest.mark.anyio
