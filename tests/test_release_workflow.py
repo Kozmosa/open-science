@@ -52,6 +52,12 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     assert "docker.sock" not in mounted_sources
 
 
+def test_container_tenant_provisioning_uses_stable_auth_row_order() -> None:
+    root = Path(__file__).resolve().parents[1]
+    entrypoint = (root / "deploy/config/entrypoint.py").read_text(encoding="utf-8")
+    assert "SELECT username FROM users ORDER BY rowid" in entrypoint
+
+
 def test_release_manifest_binds_each_image_to_its_local_image_id() -> None:
     root = Path(__file__).resolve().parents[1]
     build = (root / "deploy/build-production.sh").read_text(encoding="utf-8")

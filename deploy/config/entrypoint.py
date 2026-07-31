@@ -199,7 +199,7 @@ def _provision_tenant_users(state_root: str) -> None:
     # 2. Read all usernames from auth DB and ensure Linux users exist
     try:
         conn = sqlite3.connect(str(auth_db))
-        rows = conn.execute("SELECT username FROM users").fetchall()
+        rows = conn.execute("SELECT username FROM users ORDER BY rowid").fetchall()
         conn.close()
     except Exception as exc:
         print(f"[entrypoint] Could not read auth DB for tenant provisioning: {exc}", flush=True)

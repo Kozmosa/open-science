@@ -12,7 +12,7 @@ from pathlib import Path
 import bcrypt
 
 from ainrf.runtime.product_config import hash_api_key
-from ainrf.auth.service import AuthService
+from ainrf.auth.service import AuthService, provision_tenant_user
 from ainrf.backup import BackupService
 from ainrf.db import connect
 from ainrf.db.connection import atomic_write_json
@@ -353,6 +353,9 @@ def _ensure_login_identities(
                 raise DomainCutoverError(
                     "frontend login identity state does not match credentials; reset the fixture"
                 )
+
+    for user in users.values():
+        provision_tenant_user(user["username"])
 
     public_users = {
         label: {key: value for key, value in user.items() if key != "password"}
