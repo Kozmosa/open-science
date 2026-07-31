@@ -29,6 +29,7 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     expected_workspace_mount = "release-staging-workspaces:/opt/ainrf/state-workspaces"
     assert expected_workspace_mount in services["init"]["volumes"]
     assert expected_workspace_mount in services["api"]["volumes"]
+    assert services["init"]["environment"]["AINRF_NO_SSHD"] == "1"
     dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
     assert "mkdir -p /opt/ainrf/state /opt/ainrf/state-workspaces" in dockerfile
     assert services["init"]["command"][:3] == [
@@ -49,6 +50,12 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
     assert "src/" not in mounted_sources
     assert "frontend/" not in mounted_sources
     assert "docker.sock" not in mounted_sources
+
+
+def test_container_tenant_provisioning_uses_stable_auth_row_order() -> None:
+    root = Path(__file__).resolve().parents[1]
+    entrypoint = (root / "deploy/config/entrypoint.py").read_text(encoding="utf-8")
+    assert "SELECT username FROM users ORDER BY rowid" in entrypoint
 
 
 def test_release_manifest_binds_each_image_to_its_local_image_id() -> None:

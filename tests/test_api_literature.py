@@ -81,13 +81,12 @@ async def test_research_task_routes_reject_malformed_json_without_server_error(
         )
         assert formal.status_code == 400
 
-        deprecated = await client.post(
+        removed = await client.post(
             "/api/literature/papers/arxiv:missing/convert",
             content="{",
             headers={"Content-Type": "application/json"},
         )
-    assert deprecated.status_code == 400
-    assert deprecated.headers["deprecation"] == "true"
+    assert removed.status_code == 404
 
 
 @pytest.mark.anyio
@@ -353,27 +352,14 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
 
 
 @pytest.mark.anyio
-async def test_v2_convert_proxy_rejects_external_task_id_and_marks_deprecation(
-    state_root: Path, tmp_path: Path
-) -> None:
+async def test_removed_convert_proxy_returns_404(state_root: Path, tmp_path: Path) -> None:
     app, project_id = _v2_literature_app(state_root, tmp_path)
     paper_id = "arxiv:2607.00001"
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        rejected = await client.post(
+        removed = await client.post(
             f"/api/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
             json={"project_id": project_id, "task_id": "arbitrary-task"},
         )
-        assert rejected.status_code == 400
-        assert rejected.headers["deprecation"] == "true"
-
-        converted = await client.post(
-            f"/api/literature/papers/{paper_id}/convert?api_key=literature-v2-key",
-            headers={"Idempotency-Key": "convert-proxy-key"},
-            json={"project_id": project_id},
-        )
-    assert converted.status_code == 201
-    assert converted.headers["deprecation"] == "true"
-    assert converted.headers["sunset"]
-    assert _body(converted)["status"] == "completed"
+    assert removed.status_code == 404

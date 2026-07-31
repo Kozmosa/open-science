@@ -444,39 +444,6 @@ class LiteratureTaskSagaService:
             ).fetchall()
         return [self._intent_dict(row) for row in rows]
 
-    def convert(
-        self,
-        user: Mapping[str, object],
-        *,
-        paper_id: str,
-        subscription_id: str,
-        project_id: str,
-        workspace_id: str | None,
-        idempotency_key: str | None = None,
-        task_preset: str = _DEFAULT_PRESET,
-        title: str | None = None,
-    ) -> dict[str, object]:
-        """Deprecated proxy retained for the former ``/convert`` route.
-
-        The old route formerly accepted a caller-chosen ``task_id``.  This
-        method has no such parameter and only delegates to the validated
-        intent contract.
-        """
-
-        key = idempotency_key or (
-            f"legacy-convert:{subscription_id}:{paper_id}:{project_id}:{workspace_id or ''}"
-        )
-        return self.create_research_task(
-            user,
-            paper_id=paper_id,
-            subscription_id=subscription_id,
-            project_id=project_id,
-            workspace_id=workspace_id,
-            task_preset=task_preset,
-            title=title,
-            idempotency_key=key,
-        )
-
     # ------------------------------------------------------------------
     # Durable recovery API for the domain worker / Literature work runner
     # ------------------------------------------------------------------

@@ -719,11 +719,6 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_control_plane(tmp_path)
-    domain_telemetry.record_deprecated_route(
-        route="tasks.prompt",
-        replacement="/api/tasks/{task_id}/retry",
-        state_root=tmp_path,
-    )
     expected = refresh_domain_metrics(tmp_path, runtime_mode="validate")
 
     # Simulate a separate API worker after the first process exited: its
@@ -748,20 +743,6 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 1.0" in text
     assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
-    assert 'ainrf_deprecated_route_calls_total{route="tasks"} 1.0' in text
-    assert 'ainrf_deprecated_contract_calls_total{kind="route",route="tasks"} 1.0' in text
-
-
-@pytest.mark.parametrize(
-    ("surface", "expected_kind"),
-    [
-        ("tasks.prompt", "route"),
-        ("tasks.create.idempotency_key", "request_field"),
-        ("unknown", "other"),
-    ],
-)
-def test_deprecated_contract_kind_is_bounded(surface: str, expected_kind: str) -> None:
-    assert domain_telemetry._deprecated_contract_kind(surface) == expected_kind
 
 
 def test_uncached_scrape_failure_exports_unknown_risk_not_zero(
@@ -1052,13 +1033,10 @@ def test_domain_alert_baseline_has_required_release_gates() -> None:
     assert "ainrf_domain_telemetry_delivery_failure_latched" in release_gate_expr
     assert "absent(" in release_gate_expr
     assert "up{" in release_gate_expr
-    assert rules["AINRFDomainTelemetryReleaseGateBlocked"]["labels"]["release_gate"] == "B,E"
+    assert rules["AINRFDomainTelemetryReleaseGateBlocked"]["labels"]["release_gate"] == "B"
     assert "increase(" not in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
     assert "sum(" in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
-    assert "increase(" not in str(rules["AINRFDeprecatedDomainRouteUse"]["expr"])
-    assert "sum(" in str(rules["AINRFDeprecatedDomainRouteUse"]["expr"])
-    assert rules["AINRFDomainTelemetryEventDeliveryFailure"]["labels"]["release_gate"] == "B,E"
-    assert rules["AINRFDeprecatedDomainRouteUse"]["labels"]["release_gate"] == "E"
+    assert rules["AINRFDomainTelemetryEventDeliveryFailure"]["labels"]["release_gate"] == "B"
     assert "ainrf_domain_overview_attention_required" in str(
         rules["AINRFOverviewAttentionRequired"]["expr"]
     )

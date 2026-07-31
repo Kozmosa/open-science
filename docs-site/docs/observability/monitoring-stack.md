@@ -80,7 +80,6 @@ Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.jso
 | HTTP contract traffic | 时序图 | `ainrf_http_contract_requests_total` | 按 canonical/root/`v1`/external-compatible 与 stable operation 展示长期流量 |
 | HTTP contract errors | 时序图 | `ainrf_http_contract_requests_total` | 按 surface/operation 展示 4xx/5xx |
 | Telemetry guard | Stat | unmatched + delivery latch | unknown 分类或 durable delivery failure 时保持 fail-closed |
-| TEMPORARY cleanup evidence | 时序图 | `ainrf_cleanup_compatibility_observations_total` | 与长期 health panel 明确分离，展示 registry item 与 observation |
 
 ## 配置文件结构
 
@@ -115,6 +114,8 @@ deploy/config/
 | `AINRFSensitiveFileAccess` | 敏感路径访问 > 0.5/s 持续 1min | high | 疑似越权访问 |
 | `AINRFHighRequestRate` | 总请求 > 100/s 持续 2min | warning | 流量异常 |
 | `AINRFHighErrorRate` | 5xx 占比 > 10% 持续 2min | critical | 后端异常 |
+
+架构清理使用的临时 Grafana cleanup panel、`ainrf_cleanup_*` / `ainrf_deprecated_*` 查询和 Release E 专用告警已经删除。当前 Dashboard 与规则只消费长期指标；正式长期配置/CLI alias 不建立 removal 告警。
 
 ### 启用告警通知
 

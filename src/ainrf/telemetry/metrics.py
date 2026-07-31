@@ -42,21 +42,6 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_task_completed_total", [], "Tasks completed"),
     ("ainrf_task_failed_total", [], "Tasks failed"),
     (
-        "ainrf_deprecated_route_calls_total",
-        ["route"],
-        "Deprecated compatibility route or field uses",
-    ),
-    (
-        "ainrf_deprecated_contract_calls_total",
-        ["route", "kind"],
-        "Deprecated compatibility calls split by route, request field, and response field",
-    ),
-    (
-        "ainrf_cleanup_compatibility_observations_total",
-        ["item", "observation"],
-        "Temporary architecture cleanup compatibility evidence",
-    ),
-    (
         "ainrf_domain_legacy_write_attempts_total",
         ["source"],
         "Blocked attempts to mutate sealed legacy domain state",

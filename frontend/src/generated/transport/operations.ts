@@ -553,13 +553,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "post_api_literature_papers_paper_id_convert": {
-    "method": "POST",
-    "path": "/api/literature/papers/{paper_id}/convert",
-    "clientPath": "/literature/papers/{paper_id}/convert",
-    "canonical": true,
-    "deprecated": false
-  },
   "post_api_literature_papers_paper_id_read": {
     "method": "POST",
     "path": "/api/literature/papers/{paper_id}/read",

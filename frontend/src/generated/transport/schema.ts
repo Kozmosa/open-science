@@ -5461,34 +5461,6 @@ export type GetApiLiteraturePapersPaperIdResponses = {
     200: unknown;
 };
 
-export type PostApiLiteraturePapersPaperIdConvertData = {
-    body?: never;
-    path: {
-        /**
-         * Paper Id
-         */
-        paper_id: string;
-    };
-    query?: never;
-    url: '/api/literature/papers/{paper_id}/convert';
-};
-
-export type PostApiLiteraturePapersPaperIdConvertErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiLiteraturePapersPaperIdConvertError = PostApiLiteraturePapersPaperIdConvertErrors[keyof PostApiLiteraturePapersPaperIdConvertErrors];
-
-export type PostApiLiteraturePapersPaperIdConvertResponses = {
-    /**
-     * Successful Response
-     */
-    202: unknown;
-};
-
 export type PostApiLiteraturePapersPaperIdReadData = {
     body?: never;
     path: {
