@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.transport_schema import build_transport_openapi
 from ainrf.auth.service import AuthService
 from ainrf.domain import ProjectContextService, ProjectModule
 from ainrf.literature.tracking import DiscoveredPaper
@@ -79,7 +80,7 @@ async def test_research_task_routes_reject_malformed_json_without_server_error(
             content="{",
             headers={"Content-Type": "application/json"},
         )
-        assert formal.status_code == 400
+        assert formal.status_code == 422
 
         removed = await client.post(
             "/api/literature/papers/arxiv:missing/convert",
@@ -329,13 +330,6 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
         assert isinstance(listed_items, list)
         assert len(listed_items) == 2
 
-        one = await client.get(
-            f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key"
-            "&idempotency_key=literature-route-a"
-        )
-        assert one.status_code == 200
-        assert _body(one)["task_id"] == first_payload["task_id"]
-
         mismatch = await client.post(
             f"/api/literature/papers/{paper_id}/research-task?api_key=literature-v2-key",
             headers={"Idempotency-Key": "header-key"},
@@ -348,7 +342,51 @@ async def test_v2_research_task_routes_are_idempotent_and_reject_environment_inp
             headers={"Idempotency-Key": "environment-key"},
             json={**body, "environment_id": "must-not-be-accepted"},
         )
-        assert environment.status_code == 400
+        assert environment.status_code == 422
+
+
+def test_literature_formal_openapi_interface_is_complete() -> None:
+    schema = build_transport_openapi()
+    formal = {
+        ("GET", "/api/literature/overview"),
+        ("GET", "/api/literature/topics"),
+        ("POST", "/api/literature/topics"),
+        ("GET", "/api/literature/topics/{topic_id}"),
+        ("PATCH", "/api/literature/topics/{topic_id}"),
+        ("DELETE", "/api/literature/topics/{topic_id}"),
+        ("POST", "/api/literature/topics/preview"),
+        ("POST", "/api/literature/checks"),
+        ("GET", "/api/literature/checks/current"),
+        ("GET", "/api/literature/checks"),
+        ("GET", "/api/literature/checks/{check_id}"),
+        ("GET", "/api/literature/papers"),
+        ("GET", "/api/literature/papers/{paper_id}"),
+        ("GET", "/api/literature/papers/{paper_id}/versions"),
+        ("PATCH", "/api/literature/papers/{paper_id}/state"),
+        ("GET", "/api/literature/papers/{paper_id}/summary"),
+        ("POST", "/api/literature/papers/{paper_id}/summary"),
+        ("POST", "/api/literature/papers/{paper_id}/research-task"),
+        ("GET", "/api/literature/papers/{paper_id}/research-tasks"),
+    }
+    assert len(formal) == 19
+    for method, path in formal:
+        operation = schema["paths"][path][method.lower()]
+        if method in {"POST", "PATCH"}:
+            assert (
+                operation.get("requestBody", {})
+                .get("content", {})
+                .get("application/json", {})
+                .get("schema")
+            )
+        if method != "DELETE":
+            success = next(
+                response
+                for status, response in operation["responses"].items()
+                if status.startswith("2")
+            )
+            assert success["content"]["application/json"]["schema"]
+
+    assert "get" not in schema["paths"]["/api/literature/papers/{paper_id}/research-task"]
 
 
 @pytest.mark.anyio

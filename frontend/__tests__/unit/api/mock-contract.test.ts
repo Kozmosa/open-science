@@ -8,7 +8,6 @@ import {
   getLiteratureCheck,
   getLiteraturePaper,
   getLiteraturePapers,
-  getLiteratureResearchTask,
   getLiteratureResearchTasks,
   getLiteratureSummary,
   requestLiteratureSummary,
@@ -142,8 +141,8 @@ describe('frontend v2 mock contract', () => {
       task_preset: 'standard',
       title: 'Research deterministic interfaces',
     }, 'literature.intent:contract');
-    const recovered = await getLiteratureResearchTask(paper.paper_id, 'literature.intent:contract');
     const intents = await getLiteratureResearchTasks(paper.paper_id);
+    const recovered = intents.items.find((item) => item.idempotency_key === 'literature.intent:contract');
 
     expect(paper).toMatchObject({
       current_version_id: 'paper-transformers-v2',

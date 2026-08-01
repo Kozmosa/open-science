@@ -110,7 +110,25 @@ def test_summary_is_version_keyed_and_deduplicated(tmp_path: Path) -> None:
     second = service.request_summary("u1", paper_id)
     assert first["summary_id"] == second["summary_id"]
     service.store_discovered_papers("check_update", [_paper("v2")])
-    assert service.get_summary("u1", paper_id)["status"] == "not_requested"
+    assert service.get_summary("u1", paper_id)["status"] == "stale"
+
+
+def test_paper_versions_do_not_expose_persistence_columns(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    service.create_topic(
+        user_id="u1", label="Agents", include_terms=[], exclude_terms=[], categories=["cs.AI"]
+    )
+    service.store_discovered_papers("check_seed", [_paper()])
+
+    version = service.get_paper("u1", "arxiv:2401.00001")["versions"][0]
+
+    assert set(version) == {
+        "version_id",
+        "provider_version",
+        "published_at",
+        "updated_at",
+        "first_seen_at",
+    }
 
 
 def test_rss_parser_keeps_announcement_version_and_type() -> None:

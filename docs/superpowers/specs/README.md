@@ -17,6 +17,5 @@
 | `2026-07-17-conversation-domain-standalone-migration-design.md` | proposed | 等待 schema 冻结的数据迁移设计 |
 | `2026-07-17-engine-runtime-and-credential-injection-design.md` | accepted / awaiting implementation | Engine runtime 与 credential 目标设计 |
 | `2026-08-01-conversation-domain-cutover-closure-design.md` | in-progress | 闭合 Task/Attempt 到 Task/Turn/Item/Submission/Execution/Binding 的产品切换 |
-| `2026-08-01-literature-transport-contract-design.md` | proposed | 以 Pydantic/OpenAPI 收口 Literature transport Interface、frontend Adapter 与 legacy retirement |
 
 已实现、被替代、退役或与当前 contract 冲突的设计位于 [`archived/`](archived/README.md)。

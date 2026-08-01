@@ -14,6 +14,7 @@
 - 2026-07-29 架构清理设计：P0–P6 已完成，当前架构 contract 已提升到 `docs-site/docs/architecture.md` 和 `PROJECT_BASIS.md`。
 - 2026-07-30 compatibility telemetry correctness：已实现长期 HTTP contract 指标、临时 cleanup registry、durable evidence、Grafana 与 staging 验收 contract；当前事实见 observability 文档。
 - 2026-07-31 Task / Session HTTP contract cutover：正式化 `/api/tasks` 与 Project relationship/usage Interface，迁移 WebUI、Mock 和 generated transport，并在双 Gate 与 immutable release staging 验收后删除 Session 投影和旧 Task/Project 兼容入口。
+- 2026-08-01 Literature transport contract：正式化 19 个 Pydantic/OpenAPI operations、generated frontend transport 与 feature Adapter；7 个 legacy operations 收敛为 compatibility Adapter 并在缺少删除批准时 fail-closed 保留。
 
 ## 2026-07-11 领域设计归档批次
 
