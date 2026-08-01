@@ -595,7 +595,7 @@ describe('TasksPage', () => {
 
     renderWithProviders(<TasksPage />, { route: '/tasks' });
 
-    expect(await screen.findByTestId('task-mobile-list')).toBeInTheDocument();
+    expect(await screen.findByTestId('task-mobile-list')).toHaveClass('w-full', 'flex-1');
     expect(screen.queryByRole('heading', { name: 'Train model' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('task-metadata-sidebar')).not.toBeInTheDocument();
     expect(screen.queryByRole('separator')).not.toBeInTheDocument();
@@ -604,7 +604,7 @@ describe('TasksPage', () => {
 
     const detailHeading = await screen.findByRole('heading', { name: 'Train model' });
     expect(detailHeading).toBeInTheDocument();
-    expect(detailHeading.closest('section')?.parentElement).toHaveClass('flex');
+    expect(detailHeading.closest('section')).toHaveClass('w-full', 'flex-1');
     expect(screen.getByRole('button', { name: 'Back to task list' })).toBeInTheDocument();
     expect(screen.queryByTestId('task-mobile-list')).not.toBeInTheDocument();
 

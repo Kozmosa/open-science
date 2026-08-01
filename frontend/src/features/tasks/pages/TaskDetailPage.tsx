@@ -52,7 +52,7 @@ export default function TaskDetailPage({
 
   if (detailError) {
     return (
-      <section className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <section className="flex min-h-0 w-full flex-1 items-center justify-center p-6">
         <p className="text-sm text-[var(--osci-color-danger)]">{detailError}</p>
       </section>
     );
@@ -60,7 +60,7 @@ export default function TaskDetailPage({
 
   if (!selectedTask) {
     return (
-      <section className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <section className="flex min-h-0 w-full flex-1 items-center justify-center p-6">
         <div className="max-w-sm text-center">
           <h2 className="text-base font-semibold text-[var(--osci-color-text)]">{t('pages.tasks.noTaskSelected')}</h2>
           <p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{t('pages.tasks.noTaskSelectedDescription')}</p>
@@ -80,7 +80,7 @@ export default function TaskDetailPage({
   const showInterrupt = canMutate && selectedTask.status === 'running' && interactiveEngines.has(engine);
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--osci-color-surface)]">
+    <section className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-[var(--osci-color-surface)]">
       <TaskHeaderBar
         task={selectedTask}
         showInterrupt={showInterrupt}

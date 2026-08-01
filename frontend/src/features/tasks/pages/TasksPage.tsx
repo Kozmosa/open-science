@@ -458,7 +458,7 @@ function TasksPage() {
               ) : null}
             />
           ) : (
-            <div className="flex h-full min-h-0 flex-col" data-testid="task-mobile-list">
+            <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col" data-testid="task-mobile-list">
               {taskSidebarContent}
             </div>
           )
