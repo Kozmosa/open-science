@@ -1,4 +1,5 @@
-import { Button, SectionCard, SectionHeader, StatusDot } from '@design-system';
+import { useEffect, useRef, useState } from 'react';
+import { Button, Dialog, SectionCard, SectionHeader, StatusDot, useToast } from '@design-system';
 import TerminalSessionConsole from './TerminalSessionConsole';
 import type { TerminalSessionStatus } from '@/shared/types';
 import { useT } from '@/shared/i18n';
@@ -51,6 +52,9 @@ function TerminalBenchCardView({
   onToggleConsole,
 }: Props) {
   const t = useT();
+  const { showToast } = useToast();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const previousDetailRef = useRef<string | null>(null);
   const statusLabel: Record<TerminalSessionStatus, string> = {
     idle: t('common.idle'),
     starting: t('common.starting'),
@@ -59,6 +63,13 @@ function TerminalBenchCardView({
     failed: t('common.failed'),
   };
   const hasRuntimeError = loadError !== null || detail !== null;
+
+  useEffect(() => {
+    if (detail !== null && detail !== previousDetailRef.current) {
+      showToast(`${t('components.terminalBench.detailUpdated')} ${detail}`, 'warning');
+    }
+    previousDetailRef.current = detail;
+  }, [detail, showToast, t]);
 
   const statusMap: Record<TerminalSessionStatus, 'success' | 'error' | 'warning' | 'idle'> = {
     idle: 'idle',
@@ -70,7 +81,7 @@ function TerminalBenchCardView({
 
   return (
     <SectionCard>
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)] md:items-start">
+      <div>
         <div className="space-y-4">
           <SectionHeader
             eyebrow={t('components.terminalBench.eyebrow')}
@@ -110,29 +121,9 @@ function TerminalBenchCardView({
               <StatusDot status={statusMap[status]} />
               {t('components.terminalBench.statusPrefix')} {statusLabel[status]}
             </div>
-          </div>
-        </div>
-
-        <div className="space-y-2 rounded-lg bg-[var(--bg-secondary)] p-3" data-testid="terminal-session-summary">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
-            <span className="font-medium text-[var(--text)]">
-              {t('components.terminalBench.sessionSource')}
-            </span>
-            <span>
-              {t('components.terminalBench.loading')} {isLoading ? t('common.yes') : t('common.no')}
-            </span>
-            <span>
-              {t('components.terminalBench.websocketUrl')} {terminalWsUrl ?? t('common.unavailable')}
-            </span>
-            <span>
-              {t('components.terminalBench.environment')} {selectedEnvironmentSummary ?? t('common.notSelected')}
-            </span>
-            <span>
-              {t('components.terminalBench.sessionName')} {sessionName ?? sessionId ?? t('common.unavailable')}
-            </span>
-            <span>
-              {t('components.terminalBench.attachment')} {attachmentId ?? t('common.unavailable')}
-            </span>
+            <Button size="sm" variant="ghost" onClick={() => setDetailsOpen(true)}>
+              {t('components.terminalBench.detailsAction')}
+            </Button>
           </div>
 
           {loadError ? (
@@ -143,11 +134,6 @@ function TerminalBenchCardView({
           {!selectedEnvironmentSummary ? (
             <p className="text-xs text-[#ff9500]">
               {t('components.terminalBench.selectEnvironmentBeforeAttach')}
-            </p>
-          ) : null}
-          {detail ? (
-            <p className="text-xs text-[var(--text-secondary)]">
-              {t('common.detailLabel')} {detail}
             </p>
           ) : null}
           {!hasRuntimeError && !isLoading && status === 'idle' ? (
@@ -162,6 +148,28 @@ function TerminalBenchCardView({
           ) : null}
         </div>
       </div>
+
+      <Dialog
+        isOpen={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        title={t('components.terminalBench.detailsTitle')}
+        size="md"
+      >
+        <dl className="grid gap-3 text-sm sm:grid-cols-[max-content_minmax(0,1fr)]">
+          <dt className="font-medium text-[var(--text)]">{t('components.terminalBench.loading')}</dt>
+          <dd className="break-words text-[var(--text-secondary)]">{isLoading ? t('common.yes') : t('common.no')}</dd>
+          <dt className="font-medium text-[var(--text)]">{t('components.terminalBench.environment')}</dt>
+          <dd className="break-words text-[var(--text-secondary)]">{selectedEnvironmentSummary ?? t('common.notSelected')}</dd>
+          <dt className="font-medium text-[var(--text)]">{t('components.terminalBench.sessionName')}</dt>
+          <dd className="break-all text-[var(--text-secondary)]">{sessionName ?? sessionId ?? t('common.unavailable')}</dd>
+          <dt className="font-medium text-[var(--text)]">{t('components.terminalBench.attachment')}</dt>
+          <dd className="break-all text-[var(--text-secondary)]">{attachmentId ?? t('common.unavailable')}</dd>
+          <dt className="font-medium text-[var(--text)]">{t('components.terminalBench.websocketUrl')}</dt>
+          <dd className="break-all text-[var(--text-secondary)]">{terminalWsUrl ?? t('common.unavailable')}</dd>
+          <dt className="font-medium text-[var(--text)]">{t('common.detailLabel')}</dt>
+          <dd className="break-words text-[var(--text-secondary)]">{detail ?? t('common.unavailable')}</dd>
+        </dl>
+      </Dialog>
 
       <SectionCard
         collapsible

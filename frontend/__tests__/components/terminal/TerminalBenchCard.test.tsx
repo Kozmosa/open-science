@@ -146,9 +146,29 @@ describe('TerminalBenchCard', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reset' })).toBeEnabled();
     expect(screen.getByTestId('terminal-session-controls')).toHaveTextContent('Status: Idle');
-    expect(screen.getByText('Session source').parentElement).toHaveClass('text-xs');
+    expect(screen.queryByText('Session source')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    const details = screen.getByRole('dialog', { name: 'Session details' });
+    expect(details).toHaveTextContent('Session name:');
+    expect(details).toHaveTextContent('p-1234567890');
+    expect(details).toHaveTextContent('WebSocket URL:');
     expect(screen.getByText('No personal terminal session has been created yet.')).toBeInTheDocument();
     expect(screen.getByTestId('terminal-console')).toBeInTheDocument();
+  });
+
+  it('shows changed backend detail in a toast and the details dialog', async () => {
+    mockGetTerminalSession.mockResolvedValue({
+      ...idleSession,
+      status: 'failed',
+      detail: 'ssh: Could not resolve hostname',
+    });
+
+    renderWithProviders(<TerminalBenchCard selectedEnvironment={selectedEnvironment} />);
+
+    expect(await screen.findByText('Terminal session details updated: ssh: Could not resolve hostname')).toBeInTheDocument();
+    expect(screen.queryByText('Detail: ssh: Could not resolve hostname')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByRole('dialog', { name: 'Session details' })).toHaveTextContent('ssh: Could not resolve hostname');
   });
 
   it('attaches a personal terminal session when the user clicks Attach', async () => {
@@ -179,7 +199,8 @@ describe('TerminalBenchCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     await waitFor(() => expect(mockCreateTerminalSession).toHaveBeenCalledWith('env-1'));
-    expect(await screen.findByText(/\/terminal\/attachments\/attach-1\/ws/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByRole('dialog', { name: 'Session details' })).toHaveTextContent('/terminal/attachments/attach-1/ws');
   });
 
   it('does not auto-reattach a detached personal session in StrictMode', async () => {
@@ -266,7 +287,8 @@ describe('TerminalBenchCard', () => {
     await waitFor(() =>
       expect(mockResetTerminalSession).toHaveBeenCalledWith('env-1', 'attach-1')
     );
-    expect(await screen.findByText(/\/terminal\/attachments\/attach-2\/ws/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(await screen.findByRole('dialog', { name: 'Session details' })).toHaveTextContent('/terminal/attachments/attach-2/ws');
   });
 
   it('surfaces backend load errors', async () => {
@@ -301,6 +323,7 @@ describe('TerminalBenchCard', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '打开' })).toBeEnabled());
     expect(screen.getByRole('button', { name: '关闭' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '重置' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '详情' })).toBeEnabled();
     expect(screen.getByText('尚未创建个人终端会话。')).toBeInTheDocument();
   });
 });
