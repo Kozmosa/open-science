@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from ainrf.cli import main
+import os
+import sys
+
+
+def main() -> None:
+    os.execvp("ainrf", ["ainrf", *sys.argv[1:]])
 
 
 if __name__ == "__main__":

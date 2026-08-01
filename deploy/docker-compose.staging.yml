@@ -113,7 +113,7 @@ services:
       - "sh"
       - "-c"
       - >-
-        python -m uvicorn ainrf.api:create_app --factory
+        python -m uvicorn ainrf.api.server:create_development_app --factory
         --host 127.0.0.1 --port 17000
         --reload --reload-dir /usr/local/lib/python3.13/site-packages/ainrf
     cap_add:

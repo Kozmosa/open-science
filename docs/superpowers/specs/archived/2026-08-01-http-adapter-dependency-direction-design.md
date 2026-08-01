@@ -1,16 +1,19 @@
 ---
-doc_state: current
-status: proposed
+doc_state: historical
+status: implemented
 last_reviewed: 2026-08-01
 review_by: 2026-08-31
 ---
 
 # HTTP Adapter 依赖方向闭合设计
 
-**Status:** Proposed corrective design
+> [!warning] Historical specification
+> 本设计已于 2026-08-01 完整实现并归档。当前 contract 以 PROJECT_BASIS.md、docs-site/docs/architecture.md、产品代码和正常 L0/L1 guard 为准。
+
+**Status:** Implemented and archived
 **Date:** 2026-08-01
-**Scope:** `ainrf.server`、通用 CLI、FastAPI application composition、uvicorn/daemon/reload 入口和永久 import-direction gate
-**Depends on:** [`2026-07-29-openscience-architecture-cleanup-refactor-design.md`](archived/2026-07-29-openscience-architecture-cleanup-refactor-design.md)
+**Scope:** `ainrf.command`、`ainrf.api.cli`、`ainrf.api.server`、FastAPI application composition、uvicorn/daemon/reload 入口和永久 import-direction gate
+**Depends on:** [`2026-07-29-openscience-architecture-cleanup-refactor-design.md`](2026-07-29-openscience-architecture-cleanup-refactor-design.md)
 
 ## 1. 问题与证据
 

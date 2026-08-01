@@ -15,7 +15,8 @@ from typer.testing import CliRunner
 
 from ainrf import __version__
 from ainrf.api.config import hash_api_key
-from ainrf.cli import _parse_ssh_command, app
+from ainrf.api.cli import app
+from ainrf.command import _parse_ssh_command
 from ainrf.domain import DispatchRunResult
 from ainrf.onboarding import (
     config_path_for,
@@ -141,8 +142,10 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
         def stop(self) -> None:
             calls.append("stop")
 
-    monkeypatch.setattr("ainrf.cli.TaskDispatcher", FakeDispatcher)
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: artifact_sha)
+    monkeypatch.setattr("ainrf.command.TaskDispatcher", FakeDispatcher)
+    monkeypatch.setattr(
+        "ainrf.command._domain_worker_artifact_sha", lambda _state_root: artifact_sha
+    )
 
     result = runner.invoke(app, ["domain-worker", "--once", "--state-root", str(tmp_path)])
 
@@ -159,9 +162,9 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
 def test_domain_worker_rejects_legacy_or_validate_state_before_constructing_dispatcher(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: None)
+    monkeypatch.setattr("ainrf.command._domain_worker_artifact_sha", lambda _state_root: None)
     monkeypatch.setattr(
-        "ainrf.cli.TaskDispatcher",
+        "ainrf.command.TaskDispatcher",
         lambda *_args, **_kwargs: pytest.fail("legacy state must not start a domain worker"),
     )
 
@@ -214,9 +217,9 @@ def test_domain_runtime_resolution_uses_committed_artifact_and_durable_actor(
                 "status": "stopped_runtime_unknown",
             }
 
-    monkeypatch.setattr("ainrf.cli.AuthService", FakeAuthService)
-    monkeypatch.setattr("ainrf.cli.TaskApplicationService", FakeTaskApplicationService)
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _root: "c" * 64)
+    monkeypatch.setattr("ainrf.command.AuthService", FakeAuthService)
+    monkeypatch.setattr("ainrf.command.TaskApplicationService", FakeTaskApplicationService)
+    monkeypatch.setattr("ainrf.command._domain_worker_artifact_sha", lambda _root: "c" * 64)
 
     result = runner.invoke(
         app,
@@ -257,9 +260,9 @@ def test_domain_runtime_resolution_uses_committed_artifact_and_durable_actor(
 def test_domain_runtime_resolution_rejects_legacy_before_constructing_writer(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _root: None)
+    monkeypatch.setattr("ainrf.command._domain_worker_artifact_sha", lambda _root: None)
     monkeypatch.setattr(
-        "ainrf.cli.TaskApplicationService",
+        "ainrf.command.TaskApplicationService",
         lambda *_args, **_kwargs: pytest.fail("legacy state must not construct a v2 writer"),
     )
 
@@ -319,8 +322,10 @@ def test_overview_snapshot_refresh_uses_the_planner_participant(
         def stop(self) -> None:
             calls.append("stop")
 
-    monkeypatch.setattr("ainrf.cli.OverviewSnapshotPlanner", FakePlanner)
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: artifact_sha)
+    monkeypatch.setattr("ainrf.command.OverviewSnapshotPlanner", FakePlanner)
+    monkeypatch.setattr(
+        "ainrf.command._domain_worker_artifact_sha", lambda _state_root: artifact_sha
+    )
 
     result = runner.invoke(
         app,
@@ -338,9 +343,9 @@ def test_overview_snapshot_refresh_uses_the_planner_participant(
 def test_overview_snapshot_refresh_rejects_legacy_or_validate_state(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr("ainrf.cli._domain_worker_artifact_sha", lambda _state_root: None)
+    monkeypatch.setattr("ainrf.command._domain_worker_artifact_sha", lambda _state_root: None)
     monkeypatch.setattr(
-        "ainrf.cli.OverviewSnapshotPlanner",
+        "ainrf.command.OverviewSnapshotPlanner",
         lambda *_args, **_kwargs: pytest.fail("legacy state must not write an overview job"),
     )
 
@@ -360,7 +365,7 @@ def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
         captured["pid_file"] = pid_file
         return True
 
-    monkeypatch.setattr("ainrf.cli.stop_server_daemon", fake_stop_server_daemon)
+    monkeypatch.setattr("ainrf.api.cli.stop_http_server_daemon", fake_stop_server_daemon)
 
     result = runner.invoke(app, ["stop", "--state-root", str(tmp_path)])
 
@@ -372,12 +377,21 @@ def test_stop_command_stops_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
+    def fake_run_server(
+        host: str,
+        port: int,
+        state_root: Path,
+        *,
+        workers: int = 1,
+        reload: bool = False,
+    ) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["state_root"] = state_root
+        captured["workers"] = workers
+        captured["reload"] = reload
 
-    monkeypatch.setattr("ainrf.cli.run_server", fake_run_server)
+    monkeypatch.setattr("ainrf.api.cli.run_http_server", fake_run_server)
     monkeypatch.setenv(
         "AINRF_API_KEY_HASHES",
         "2bb80d537b1da3e38bd30361aa855686bde0baef694f41fbabd9831f0a0ff5ff",
@@ -386,7 +400,13 @@ def test_serve_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
+    assert captured == {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "state_root": tmp_path,
+        "workers": 1,
+        "reload": False,
+    }
 
 
 def test_serve_accepts_openscience_api_key_hashes(
@@ -394,22 +414,37 @@ def test_serve_accepts_openscience_api_key_hashes(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
+    def fake_run_server(
+        host: str,
+        port: int,
+        state_root: Path,
+        *,
+        workers: int = 1,
+        reload: bool = False,
+    ) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["state_root"] = state_root
+        captured["workers"] = workers
+        captured["reload"] = reload
 
     monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
     monkeypatch.setenv(
         "OPENSCIENCE_API_KEY_HASHES",
         "2bb80d537b1da3e38bd30361aa855686bde0baef694f41fbabd9831f0a0ff5ff",
     )
-    monkeypatch.setattr("ainrf.cli.run_server", fake_run_server)
+    monkeypatch.setattr("ainrf.api.cli.run_http_server", fake_run_server)
 
     result = runner.invoke(app, ["serve", "--state-root", str(tmp_path)])
 
     assert result.exit_code == 0
-    assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
+    assert captured == {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "state_root": tmp_path,
+        "workers": 1,
+        "reload": False,
+    }
 
 
 def test_serve_daemon_runs_background_process(
@@ -432,7 +467,7 @@ def test_serve_daemon_runs_background_process(
         captured["log_file"] = log_file
         return 4321
 
-    monkeypatch.setattr("ainrf.cli.run_server_daemon", fake_run_server_daemon)
+    monkeypatch.setattr("ainrf.api.cli.run_http_server_daemon", fake_run_server_daemon)
     result = runner.invoke(
         app,
         [
@@ -465,14 +500,23 @@ def test_serve_auto_onboards_before_running_server(
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_server(host: str, port: int, state_root: Path, *, workers: int = 1) -> None:
+    def fake_run_server(
+        host: str,
+        port: int,
+        state_root: Path,
+        *,
+        workers: int = 1,
+        reload: bool = False,
+    ) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["state_root"] = state_root
+        captured["workers"] = workers
+        captured["reload"] = reload
 
     monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
     monkeypatch.setattr("ainrf.onboarding.click.get_text_stream", lambda name: FakeTTY(True))
-    monkeypatch.setattr("ainrf.cli.run_server", fake_run_server)
+    monkeypatch.setattr("ainrf.api.cli.run_http_server", fake_run_server)
 
     result = runner.invoke(
         app,
@@ -481,7 +525,13 @@ def test_serve_auto_onboards_before_running_server(
     )
 
     assert result.exit_code == 0
-    assert captured == {"host": "127.0.0.1", "port": 8000, "state_root": tmp_path}
+    assert captured == {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "state_root": tmp_path,
+        "workers": 1,
+        "reload": False,
+    }
     payload = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
     assert payload["api_key_hashes"] == [hash_api_key("bootstrap-secret")]
 

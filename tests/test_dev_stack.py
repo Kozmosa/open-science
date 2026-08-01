@@ -253,15 +253,14 @@ def test_stack_uses_reload_for_dev_and_stable_server_for_preview(
     dev_command = development._api_command()
     preview_command = preview._api_command()
 
-    assert dev_command[:5] == (
+    assert dev_command[:4] == (
         "uv",
         "run",
-        "uvicorn",
-        "ainrf.server:create_development_app",
-        "--factory",
+        "openscience",
+        "serve",
     )
     assert "--reload" in dev_command
-    assert str(instance.repo_root / "src" / "ainrf") in dev_command
+    assert str(development.state_root) in dev_command
     assert preview_command[:4] == ("uv", "run", "openscience", "serve")
     assert "--reload" not in preview_command
 
