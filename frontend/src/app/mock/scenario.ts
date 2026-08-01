@@ -21,7 +21,6 @@ import type {
   DomainProjectContext,
   DomainProjectMember,
   DomainProjectProjection,
-  DomainTaskAttempt,
   DomainWorkspaceProjection,
   OverviewDisplayCard,
   OverviewRefreshJob,
@@ -54,7 +53,6 @@ interface MockIntent {
 
 interface FrontendV2MockState {
   task_counter: number;
-  attempt_counter: number;
   project_counter: number;
   workspace_counter: number;
   context_version_counter: number;
@@ -63,7 +61,6 @@ interface FrontendV2MockState {
   projects: DomainProjectProjection[];
   workspaces: DomainWorkspaceProjection[];
   tasks: TaskRecord[];
-  attempts: Record<string, DomainTaskAttempt[]>;
   messages: Record<string, MessageItem[]>;
   task_edges: TaskEdge[];
   contexts: Record<string, DomainProjectContext>;
@@ -305,45 +302,6 @@ function makeTask(
   };
 }
 
-function makeAttempt(
-  taskId: string,
-  sequence: number,
-  trigger: string,
-  status: string,
-): DomainTaskAttempt {
-  const finished = status === 'succeeded';
-  return {
-    attempt_id: `attempt-${taskId}-${sequence}`,
-    task_id: taskId,
-    attempt_seq: sequence,
-    trigger,
-    status,
-    context_snapshot_id: `snapshot-${taskId}-${sequence}`,
-    context_version_id: null,
-    created_at: BASE_TIME,
-    started_at: status === 'queued' ? null : BASE_TIME,
-    finished_at: finished ? LATER_TIME : null,
-    duration_ms: finished ? 300000 : null,
-    token_usage_json: finished ? '{"input_tokens":120,"output_tokens":80}' : null,
-    cost_usd: finished ? 0.42 : null,
-    failure_reason: null,
-    stop_reason: null,
-    runtime_sessions: finished ? [{
-      runtime_session_id: `runtime-${taskId}-${sequence}`,
-      attempt_id: `attempt-${taskId}-${sequence}`,
-      status: 'completed',
-      engine_name: 'claude-code',
-      started_at: BASE_TIME,
-      finished_at: LATER_TIME,
-    }] : [],
-    dispatch: {
-      dispatch_id: `dispatch-${taskId}-${sequence}`,
-      status: finished ? 'completed' : 'queued',
-      launch_state: finished ? 'completed' : 'pending',
-    },
-  };
-}
-
 function makeContextVersion(projectId: string, sequence: number, content: string): DomainContextVersion {
   return {
     context_version_id: `context-${projectId}-v${sequence}`,
@@ -444,12 +402,9 @@ function createState(): FrontendV2MockState {
     'Review the deterministic frontend fixture and report the result.',
     'succeeded',
   );
-  const seedAttempt = makeAttempt('task-seed', 1, 'initial', 'succeeded');
-  seedAttempt.context_version_id = alphaContext.context_version_id;
   const displayCards = makeOverviewCards();
   return {
     task_counter: 1,
-    attempt_counter: 1,
     project_counter: 1,
     workspace_counter: 1,
     context_version_counter: 1,
@@ -464,7 +419,6 @@ function createState(): FrontendV2MockState {
       makeWorkspace('workspace-alpha', 'Alpha Workspace', 'project-alpha', 'Alpha Research'),
     ],
     tasks: [seedTask],
-    attempts: { 'task-seed': [seedAttempt] },
     messages: {
       'task-seed': [
         {
@@ -1073,8 +1027,6 @@ export const frontendV2MockHandlers = [
       payload.prompt ?? source.prompt,
     );
     state.tasks.unshift(task);
-    const attempt = makeAttempt(taskId, 1, 'initial', 'queued');
-    state.attempts[taskId] = [attempt];
     state.messages[taskId] = [{
       id: `message-${taskId}-1`,
       type: 'user',
@@ -1089,7 +1041,13 @@ export const frontendV2MockHandlers = [
       relationship_type: 'derived_from',
       created_at: LATER_TIME,
     });
-    return HttpResponse.json({ task, attempt, dispatch: attempt.dispatch }, { status: 201 });
+    return HttpResponse.json({
+      task,
+      submission: {
+        submission_id: `submission-${taskId}-1`, task_id: taskId,
+        reserved_turn_id: `turn-${taskId}-1`, status: 'queued', intent: 'create',
+      },
+    }, { status: 202 });
   }),
   http.patch('/api/tasks/:taskId', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');
@@ -1132,7 +1090,6 @@ export const frontendV2MockHandlers = [
     task.harness_engine = payload.harness_engine;
     task.project_context_version_id = state.contexts[payload.project_id]?.active_version?.context_version_id ?? null;
     state.tasks.unshift(task);
-    state.attempts[taskId] = [];
     state.messages[taskId] = [{
       id: `message-${taskId}-1`,
       type: 'user',

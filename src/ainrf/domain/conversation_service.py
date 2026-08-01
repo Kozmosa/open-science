@@ -1361,6 +1361,10 @@ class ConversationApplicationService:
         user: dict[str, object],
         *,
         target_engine_family: str,
+        target_project_id: str | None = None,
+        target_workspace_id: str | None = None,
+        target_harness_engine: str | None = None,
+        target_title: str | None = None,
         transfer_mode: ForkTransferMode,
         transfer_range: Mapping[str, object],
         metrics: Mapping[str, object],
@@ -1377,6 +1381,10 @@ class ConversationApplicationService:
         request = {
             "task_id": task_id,
             "target_engine_family": target_engine_family,
+            "target_project_id": target_project_id,
+            "target_workspace_id": target_workspace_id,
+            "target_harness_engine": target_harness_engine,
+            "target_title": target_title,
             "transfer_mode": transfer_mode,
             "transfer_range": dict(transfer_range),
             "metrics": dict(metrics),
@@ -1404,6 +1412,36 @@ class ConversationApplicationService:
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
                 self._require_v3(conversations, task_id)
+                source_task = conn.execute(
+                    "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+                ).fetchone()
+                if source_task is None:
+                    raise DomainNotFoundError(task_id)
+                resolved_project_id = target_project_id or str(source_task["project_id"])
+                resolved_workspace_id = target_workspace_id or str(source_task["workspace_id"])
+                resolved_harness_engine = target_harness_engine or (
+                    "codex-app-server" if target_engine_family == "codex" else "agent-sdk"
+                )
+                expected_family = _ENGINE_FAMILY_BY_HARNESS.get(
+                    HarnessEngineType(resolved_harness_engine)
+                )
+                if expected_family != target_engine_family:
+                    raise ConversationContractError(
+                        ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                        "Fork target driver does not match target engine family",
+                    )
+                authorization = DomainAuthorizationService(conn)
+                if resolved_project_id != str(source_task["project_id"]):
+                    authorization.require_project_editor(resolved_project_id, user)
+                if resolved_workspace_id != str(source_task["workspace_id"]):
+                    authorization.require_workspace_owner(resolved_workspace_id, user)
+                self._writable_workspace(
+                    conn,
+                    project_id=resolved_project_id,
+                    workspace_id=resolved_workspace_id,
+                    expected_environment_id=None,
+                )
+                resolved_title = target_title or f"Fork of {source_task['title']}"
                 turns = conversations.list_turns(task_id)
                 selected_turns = _fork_selection(
                     turns,
@@ -1470,6 +1508,10 @@ class ConversationApplicationService:
                     source_revision=source_revision,
                     source_engine_family=source_engine,
                     target_engine_family=target_engine_family,
+                    target_project_id=resolved_project_id,
+                    target_workspace_id=resolved_workspace_id,
+                    target_harness_engine=resolved_harness_engine,
+                    target_title=resolved_title,
                     transfer_mode=transfer_mode,
                     transfer_range_json=_canonical_json(transfer_range),
                     message_count=canonical_metrics["message_count"],
@@ -1502,6 +1544,10 @@ class ConversationApplicationService:
                     "source_revision": source_revision,
                     "source_engine_family": source_engine,
                     "target_engine_family": target_engine_family,
+                    "target_project_id": resolved_project_id,
+                    "target_workspace_id": resolved_workspace_id,
+                    "target_harness_engine": resolved_harness_engine,
+                    "target_title": resolved_title,
                     "transfer_mode": transfer_mode,
                     "truncated": bool(metrics.get("truncated", False)),
                     "expires_at": expires_at,
@@ -1588,6 +1634,117 @@ class ConversationApplicationService:
                         "Fork confirmation does not match a current preview",
                     )
                 transfer_id = uuid4().hex
+                source_task = conn.execute(
+                    "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+                ).fetchone()
+                if source_task is None:
+                    raise DomainNotFoundError(task_id)
+                target_project_id = str(preview["target_project_id"])
+                target_workspace_id = str(preview["target_workspace_id"])
+                target_harness_engine = str(preview["target_harness_engine"])
+                target_title = str(preview["target_title"])
+                authorization = DomainAuthorizationService(conn)
+                if target_project_id != str(source_task["project_id"]):
+                    authorization.require_project_editor(target_project_id, user)
+                if target_workspace_id != str(source_task["workspace_id"]):
+                    authorization.require_workspace_owner(target_workspace_id, user)
+                target_workspace = self._writable_workspace(
+                    conn,
+                    project_id=target_project_id,
+                    workspace_id=target_workspace_id,
+                    expected_environment_id=None,
+                )
+                transfer_range = json.loads(str(preview["transfer_range_json"]))
+                if not isinstance(transfer_range, dict):
+                    raise DomainConflictError("Fork transfer range is invalid")
+                selected_turns = _fork_selection(
+                    conversations.list_turns(task_id),
+                    transfer_mode=transfer_mode,
+                    transfer_range=transfer_range,
+                )
+                selected_turn_ids = {str(turn["turn_id"]) for turn in selected_turns}
+                selected_items = [
+                    dict(item)
+                    for item in conversations.list_task_items(task_id)
+                    if str(item["turn_id"]) in selected_turn_ids
+                ]
+                transfer_payload = {
+                    "source_task_id": task_id,
+                    "source_revision": source_revision,
+                    "transfer_mode": transfer_mode,
+                    "items": [
+                        {
+                            "item_type": item["item_type"],
+                            "actor": item["actor"],
+                            "payload": json.loads(str(item["payload_json"])),
+                        }
+                        for item in selected_items
+                    ],
+                }
+                transfer_prompt = (
+                    "Continue from this explicitly confirmed OpenScience Conversation Fork.\n"
+                    + _canonical_json(transfer_payload)
+                )
+                new_task_id = f"task-{uuid4().hex}"
+                snapshot_id, context_version_id = (
+                    self._context_service._create_active_snapshot_for_task_in_transaction(
+                        conn,
+                        project_id=target_project_id,
+                        workspace_id=target_workspace_id,
+                        task_id=new_task_id,
+                        task_prompt=transfer_prompt,
+                    )
+                )
+                conn.execute(
+                    """
+                    INSERT INTO tasks (
+                        task_id, project_id, workspace_id, environment_id, researcher_type,
+                        harness_engine, user_skills, user_mcp_servers, status, title, prompt,
+                        created_at, updated_at, owner_user_id, project_context_version_id,
+                        project_context_snapshot_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_task_id,
+                        target_project_id,
+                        target_workspace_id,
+                        str(target_workspace["environment_id"]),
+                        str(source_task["researcher_type"]),
+                        target_harness_engine,
+                        str(source_task["user_skills"] or "[]"),
+                        str(source_task["user_mcp_servers"] or "[]"),
+                        target_title,
+                        transfer_prompt,
+                        confirmed_at,
+                        confirmed_at,
+                        actor,
+                        context_version_id,
+                        snapshot_id,
+                    ),
+                )
+                conversations.insert_task_authority(task_id=new_task_id, created_at=confirmed_at)
+                conversations.insert_task_state(task_id=new_task_id, created_at=confirmed_at)
+                submission_id = uuid4().hex
+                reserved_turn_id = uuid4().hex
+                executions.insert_submission(
+                    submission_id=submission_id,
+                    task_id=new_task_id,
+                    reserved_turn_id=reserved_turn_id,
+                    actor_user_id=actor,
+                    idempotency_key=idempotency_key,
+                    request_hash=digest,
+                    input_json=_canonical_json({"text": transfer_prompt}),
+                    context_snapshot_ref=snapshot_id,
+                    created_at=confirmed_at,
+                    updated_at=confirmed_at,
+                )
+                executions.insert_submission_intent(
+                    submission_id=submission_id,
+                    task_id=new_task_id,
+                    kind="create",
+                    retry_of_turn_id=None,
+                    created_at=confirmed_at,
+                )
                 executions.insert_fork_transfer(
                     transfer_id=transfer_id,
                     preview_id=preview_id,
@@ -1603,11 +1760,53 @@ class ConversationApplicationService:
                     confirmed_at=confirmed_at,
                     updated_at=confirmed_at,
                 )
+                conn.execute(
+                    """
+                    INSERT INTO task_relationships (
+                        source_task_id, target_task_id, relationship_type, created_at,
+                        relationship_id, metadata_json
+                    ) VALUES (?, ?, 'derived_from', ?, ?, ?)
+                    """,
+                    (
+                        new_task_id,
+                        task_id,
+                        confirmed_at,
+                        f"relationship-{uuid4().hex}",
+                        _canonical_json(
+                            {
+                                "kind": "conversation_fork",
+                                "transfer_id": transfer_id,
+                                "preview_id": preview_id,
+                            }
+                        ),
+                    ),
+                )
+                if (
+                    executions.finish_fork_transfer(
+                        transfer_id=transfer_id,
+                        status="transferred",
+                        target_task_id=new_task_id,
+                        evidence_json=_canonical_json(
+                            {
+                                "submission_id": submission_id,
+                                "source_revision": source_revision,
+                            }
+                        ),
+                        failure_code=None,
+                        completed_at=confirmed_at,
+                        updated_at=confirmed_at,
+                    )
+                    != 1
+                ):
+                    raise DomainConflictError("Fork transfer could not reach transferred state")
                 result: dict[str, object] = {
                     "transfer_id": transfer_id,
                     "preview_id": preview_id,
                     "source_task_id": task_id,
-                    "status": "confirmed",
+                    "status": "transferred",
+                    "target_task_id": new_task_id,
+                    "submission_id": submission_id,
+                    "reserved_turn_id": reserved_turn_id,
                 }
                 self._store(
                     domain,

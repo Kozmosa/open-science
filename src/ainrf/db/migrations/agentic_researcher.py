@@ -3453,3 +3453,21 @@ def migration_031_conversation_application_state(conn: sqlite3.Connection) -> No
         BEGIN SELECT RAISE(ABORT, 'next-Turn submissions are append-only'); END;
         """
     )
+
+
+@registry.register(_DATABASE)
+def migration_032_conversation_fork_target_config(conn: sqlite3.Connection) -> None:
+    """Bind a reviewed Fork preview to the exact target Task configuration."""
+
+    columns = {
+        str(row[1]) for row in conn.execute("PRAGMA table_info(fork_preview_receipts)").fetchall()
+    }
+    additions = (
+        ("target_project_id", "TEXT"),
+        ("target_workspace_id", "TEXT"),
+        ("target_harness_engine", "TEXT"),
+        ("target_title", "TEXT"),
+    )
+    for name, sql_type in additions:
+        if name not in columns:
+            conn.execute(f"ALTER TABLE fork_preview_receipts ADD COLUMN {name} {sql_type}")

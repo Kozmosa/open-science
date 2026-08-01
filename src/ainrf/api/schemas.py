@@ -779,6 +779,10 @@ class ApprovalDecisionResponse(BaseModel):
 class ForkPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target_engine_family: Literal["codex", "claude"]
+    target_project_id: str | None = None
+    target_workspace_id: str | None = None
+    target_harness_engine: Literal["codex-app-server", "agent-sdk", "claude-code"] | None = None
+    target_title: str | None = Field(default=None, max_length=500)
     transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
     transfer_range: dict[str, Any] = Field(default_factory=dict)
     metrics: dict[str, Any] = Field(default_factory=dict)

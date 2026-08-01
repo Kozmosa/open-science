@@ -31,7 +31,7 @@ from ainrf.domain.conversation_execution import (
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
-from ainrf.domain.service import DomainConflictError, DomainNotFoundError
+from ainrf.domain.service import DomainConflictError, DomainPermissionError
 from ainrf.domain.task_projection import TaskProjectionService
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
@@ -47,6 +47,47 @@ def _db_path(state_root: Path) -> Path:
 
 def _insert_task(state_root: Path, task_id: str = "task-1") -> None:
     with closing(connect(_db_path(state_root))) as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO environments (
+                environment_id, alias, owner_user_id, display_name, connection_json,
+                connection_fingerprint, created_at, updated_at
+            ) VALUES ('environment-legacy', 'local', 'user-1', 'Local', '{}', 'fp', ?, ?)""",
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO workspaces (
+                workspace_id, label, owner_user_id, environment_id, canonical_path,
+                created_at, updated_at
+            ) VALUES ('workspace-legacy', 'legacy', 'user-1', 'environment-legacy',
+                '/tmp', ?, ?)""",
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO projects (
+                project_id, owner_user_id, name, status, created_at, updated_at
+            ) VALUES ('project-legacy', 'user-1', 'Legacy', 'active', ?, ?)""",
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO project_workspace_links (
+                project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+            ) VALUES ('project-legacy', 'workspace-legacy', 'active', 1, 'user-1', ?, ?)""",
+            (_NOW, _NOW),
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO project_context_versions (
+                context_version_id, project_id, content, fingerprint, is_active,
+                created_by_user_id, created_at, fragment_manifest_json
+            ) VALUES ('context-version-legacy', 'project-legacy', 'Project context',
+                'context-fingerprint', 1, 'user-1', ?, '[]')""",
+            (_NOW,),
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO project_context_version_provenance (
+                context_version_id, fragment_provenance_status, evidence_json, recorded_at
+            ) VALUES ('context-version-legacy', 'verified', '{}', ?)""",
+            (_NOW,),
+        )
         conn.execute(
             """
             INSERT INTO tasks (
@@ -420,7 +461,7 @@ def test_replay_requires_current_authorization(state_root: Path) -> None:
         conn.execute("UPDATE tasks SET owner_user_id = 'user-2' WHERE task_id = 'task-1'")
         conn.commit()
 
-    with pytest.raises(DomainNotFoundError):
+    with pytest.raises(DomainPermissionError):
         service.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
 
 
@@ -951,7 +992,27 @@ def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(
         full_transcript_confirmed=True,
         idempotency_key="confirm-1",
     )
-    assert confirmed["status"] == "confirmed"
+    assert confirmed["status"] == "transferred"
+    with closing(connect(_db_path(state_root))) as conn:
+        target = conn.execute(
+            "SELECT harness_engine, status FROM tasks WHERE task_id = ?",
+            (confirmed["target_task_id"],),
+        ).fetchone()
+        submission = conn.execute(
+            "SELECT task_id, status FROM turn_submissions WHERE submission_id = ?",
+            (confirmed["submission_id"],),
+        ).fetchone()
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = ?",
+                (confirmed["target_task_id"],),
+            ).fetchone()[0]
+            == 0
+        )
+    assert target["harness_engine"] == "agent-sdk"
+    assert target["status"] == "queued"
+    assert submission["task_id"] == confirmed["target_task_id"]
+    assert submission["status"] == "queued"
 
 
 def test_no_turn_fork_uses_persisted_harness_engine_not_caller_metrics(

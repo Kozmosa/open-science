@@ -49,7 +49,6 @@ from ainrf.api.schemas import (
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     DomainPermissionError,
-    AttemptProjectionService,
     EnvironmentModule,
     ProjectModule,
     ProjectContextService,
@@ -237,13 +236,6 @@ def _task_application_service(request: Request) -> TaskApplicationService:
     service = getattr(request.app.state, "task_application_service", None)
     if not isinstance(service, TaskApplicationService) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Task application service is not initialized")
-    return service
-
-
-def _attempt_projection_service(request: Request) -> AttemptProjectionService:
-    service = getattr(request.app.state, "attempt_projection_service", None)
-    if not isinstance(service, AttemptProjectionService):
-        raise HTTPException(status_code=503, detail="Task Attempt projection is unavailable")
     return service
 
 

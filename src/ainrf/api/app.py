@@ -58,7 +58,6 @@ from ainrf.domain_control import (
     DomainWriteParticipant,
 )
 from ainrf.domain import (
-    AttemptProjectionService,
     ConversationApplicationService,
     build_domain_modules,
     OverviewSnapshotService,
@@ -422,7 +421,6 @@ def create_app(
         app.state.persistent_environment_facade = None
         app.state.task_application_service = None
         app.state.conversation_application_service = None
-        app.state.attempt_projection_service = None
         app.state.task_projection_service = None
         app.state.project_task_projection_service = None
         app.state.session_projection_service = None
@@ -463,12 +461,7 @@ def create_app(
         app.state.conversation_application_service = ConversationApplicationService(
             api_config.state_root, artifact_sha=artifact_sha
         )
-        attempt_projection = AttemptProjectionService(api_config.state_root)
-        app.state.attempt_projection_service = attempt_projection
-        app.state.task_projection_service = TaskProjectionService(
-            api_config.state_root,
-            attempt_projection=attempt_projection,
-        )
+        app.state.task_projection_service = TaskProjectionService(api_config.state_root)
         app.state.overview_snapshot_service = OverviewSnapshotService(
             api_config.state_root,
             artifact_sha=artifact_sha,

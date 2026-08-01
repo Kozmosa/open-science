@@ -502,6 +502,10 @@ class SqliteConversationExecutionRepository:
         source_revision: str,
         source_engine_family: str,
         target_engine_family: str,
+        target_project_id: str = "project-1",
+        target_workspace_id: str = "workspace-1",
+        target_harness_engine: str = "agent-sdk",
+        target_title: str = "Forked Task",
         transfer_mode: str,
         transfer_range_json: str,
         message_count: int,
@@ -528,13 +532,14 @@ class SqliteConversationExecutionRepository:
             INSERT INTO fork_preview_receipts (
                 preview_id, preview_hash, source_task_id, source_revision,
                 source_engine_family, target_engine_family, transfer_mode,
+                target_project_id, target_workspace_id, target_harness_engine, target_title,
                 transfer_range_json, message_count, turn_count, item_count,
                 character_count, utf8_byte_count, estimated_token_count,
                 token_estimator, context_window_percent, tool_result_count,
                 reasoning_count, binary_count, image_reference_count,
                 cost_estimate_json, cost_unknown, truncated, disclosure_json,
                 created_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                       ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -545,6 +550,10 @@ class SqliteConversationExecutionRepository:
                 source_engine_family,
                 target_engine_family,
                 transfer_mode,
+                target_project_id,
+                target_workspace_id,
+                target_harness_engine,
+                target_title,
                 transfer_range_json,
                 message_count,
                 turn_count,

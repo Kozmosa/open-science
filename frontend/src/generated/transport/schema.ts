@@ -1088,6 +1088,22 @@ export type ForkPreviewRequest = {
      */
     target_engine_family: 'codex' | 'claude';
     /**
+     * Target Harness Engine
+     */
+    target_harness_engine?: 'codex-app-server' | 'agent-sdk' | 'claude-code' | null;
+    /**
+     * Target Project Id
+     */
+    target_project_id?: string | null;
+    /**
+     * Target Title
+     */
+    target_title?: string | null;
+    /**
+     * Target Workspace Id
+     */
+    target_workspace_id?: string | null;
+    /**
      * Transfer Mode
      */
     transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
