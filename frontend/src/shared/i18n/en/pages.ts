@@ -4,7 +4,6 @@ const pages = {
       today: {
         eyebrow: 'Today',
         title: 'Today overview',
-        description: 'A persisted, read-only view of attention, progress, literature, recent work and resource health.',
         refresh: 'Refresh',
         nextRefresh: 'Next scheduled refresh: {{time}}',
         refreshed: 'Snapshot cutoff: {{time}}',
@@ -37,7 +36,6 @@ const pages = {
       projects: {
         eyebrow: 'Projects',
         title: 'Project management',
-        description: 'Coordinate Tasks, Workspaces, durable Context and Project permissions from one projection-driven console.',
         sidebarEyebrow: 'Projects',
         sidebarTitle: 'Project Canvas',
         sidebarCount: '{{count}} projects',
@@ -48,6 +46,28 @@ const pages = {
         emptyCanvas: "Click 'New Task' to get started",
         noProjects: 'No projects yet. Create one to start.',
         moveToProject: 'Move to project',
+        attention: 'Attention',
+        noDescription: 'No description',
+        projectCounts: '{{running}} running · {{workspaces}} workspaces',
+        tabs: {
+          overview: 'Overview',
+          tasks: 'Tasks',
+          workspaces: 'Workspaces',
+          context: 'Context',
+          settings: 'Settings',
+        },
+        metrics: {
+          activeTasks: 'Active Tasks',
+          runningTasks: 'Running Tasks',
+          workspaces: 'Workspaces',
+          executable: 'Executable',
+        },
+        views: {
+          list: 'List',
+          graph: 'Relationship graph',
+        },
+        noActionRequired: 'No action required.',
+        noTasksInProject: 'No Tasks in this Project.',
         noOtherProjects: 'No other projects to move to.',
         createTitle: 'Create project',
         createNameLabel: 'Project name',
@@ -701,7 +721,6 @@ const pages = {
       resources: {
         eyebrow: 'RESOURCES',
         title: 'Resource Monitor',
-        description: 'Real-time system resource usage across all environments.',
         loading: 'Loading resources...',
         noData: 'No resource data available yet.',
         refresh: 'Refresh',

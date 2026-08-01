@@ -4,7 +4,6 @@ const pages = {
       today: {
         eyebrow: 'TODAY',
         title: '今日概览',
-        description: '只读呈现已持久化的异常、进度、文献、近期工作和资源状态。',
         refresh: '刷新',
         nextRefresh: '下次计划刷新：{{time}}',
         refreshed: '数据截止：{{time}}',
@@ -37,7 +36,6 @@ const pages = {
       projects: {
         eyebrow: 'PROJECTS',
         title: '项目管理',
-        description: '在统一的投影控制台中管理任务、工作区、持久上下文与项目权限。',
         sidebarEyebrow: '项目',
         sidebarTitle: '项目画布',
         sidebarCount: '{{count}} 个项目',
@@ -48,6 +46,28 @@ const pages = {
         emptyCanvas: "点击'新建任务'开始",
         noProjects: '暂无项目。创建一个项目开始。',
         moveToProject: '移动到项目',
+        attention: '需关注',
+        noDescription: '暂无描述',
+        projectCounts: '{{running}} 个运行中任务 · {{workspaces}} 个工作区',
+        tabs: {
+          overview: '概览',
+          tasks: '任务',
+          workspaces: '工作区',
+          context: '上下文',
+          settings: '设置',
+        },
+        metrics: {
+          activeTasks: '活动任务',
+          runningTasks: '运行中任务',
+          workspaces: '工作区',
+          executable: '可执行工作区',
+        },
+        views: {
+          list: '列表',
+          graph: '关系图',
+        },
+        noActionRequired: '当前无需处理。',
+        noTasksInProject: '此项目中暂无任务。',
         noOtherProjects: '没有其他可移动到的项目。',
         createTitle: '创建项目',
         createNameLabel: '项目名称',
@@ -689,7 +709,6 @@ const pages = {
       resources: {
         eyebrow: 'RESOURCES',
         title: '资源监控',
-        description: '所有环境的实时系统资源占用情况。',
         loading: '正在加载资源数据...',
         noData: '暂无资源数据。',
         refresh: '刷新',

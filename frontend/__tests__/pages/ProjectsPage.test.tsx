@@ -85,6 +85,20 @@ const environmentAlt = {
     expect(screen.getByTestId('project-list')).toHaveClass('order-2', 'lg:order-1')
   })
 
+  it('localizes project detail tabs and task views in Chinese', async () => {
+    renderWithProviders(<ProjectsPage />, { route: '/projects?tab=tasks', locale: 'zh' })
+
+    expect(await screen.findByRole('tab', { name: '任务' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '概览' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '工作区' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '上下文' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '设置' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '列表' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '关系图' })).toBeInTheDocument()
+    expect(screen.getByText('此项目中暂无任务。')).toBeInTheDocument()
+    expect(screen.queryByText('No Tasks in this Project.')).not.toBeInTheDocument()
+  })
+
   it('shows no projects message when no projects exist', async () => {
     server.use(
       http.get('/api/domain/projects', () => {
