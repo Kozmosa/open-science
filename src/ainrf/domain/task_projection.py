@@ -19,6 +19,10 @@ from typing import cast
 from ainrf.agentic_researcher.models import TaskOutputEvent
 from ainrf.db import connect, run_pending
 from ainrf.domain.attempt_projection import AttemptProjectionService
+from ainrf.domain.conversation_projection import (
+    ConversationProjectionService,
+    ConversationTaskProjection,
+)
 from ainrf.domain.output_redaction import redact_task_output_for_viewer
 from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
@@ -37,6 +41,7 @@ class TaskProjectionService:
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
         self._attempt_projection = attempt_projection or AttemptProjectionService(state_root)
+        self._conversation_projection = ConversationProjectionService()
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
@@ -74,15 +79,12 @@ class TaskProjectionService:
             if project_id:
                 DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
             rows = conn.execute(query, (*params, limit)).fetchall()
-            attempts_by_task = self._attempt_projection.attempts_for_tasks(
-                conn,
-                [str(row["task_id"]) for row in rows],
-                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
-            )
+            attempts_by_task, conversations_by_task = self._projection_inputs(conn, rows, user)
         return [
             self._task_dict(
                 row,
                 attempts_by_task[str(row["task_id"])],
+                conversation=conversations_by_task.get(str(row["task_id"])),
                 include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
             )
             for row in rows
@@ -127,17 +129,14 @@ class TaskProjectionService:
                 f"SELECT * FROM tasks WHERE {where} ORDER BY {order_by} LIMIT ?",
                 (*params, limit),
             ).fetchall()
-            attempts_by_task = self._attempt_projection.attempts_for_tasks(
-                conn,
-                [str(row["task_id"]) for row in rows],
-                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
-            )
+            attempts_by_task, conversations_by_task = self._projection_inputs(conn, rows, user)
         total = int(total_row["count"]) if total_row is not None else 0
         return {
             "items": [
                 self._task_dict(
                     row,
                     attempts_by_task[str(row["task_id"])],
+                    conversation=conversations_by_task.get(str(row["task_id"])),
                     include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
                 )
                 for row in rows
@@ -151,14 +150,12 @@ class TaskProjectionService:
             if row is None:
                 raise DomainNotFoundError(task_id)
             self._require_visible(conn, task_id, user)
-            attempts = self._attempt_projection.attempts_for_tasks(
-                conn,
-                [task_id],
-                include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
-            )[task_id]
+            attempts_by_task, conversations_by_task = self._projection_inputs(conn, [row], user)
+            attempts = attempts_by_task[task_id]
         return self._task_dict(
             row,
             attempts,
+            conversation=conversations_by_task.get(task_id),
             include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
         )
 
@@ -190,6 +187,16 @@ class TaskProjectionService:
             if task is None:
                 raise DomainNotFoundError(task_id)
             self._require_visible(conn, task_id, user)
+            conversation = self._conversation_projection.projections_for_tasks(conn, [task_id]).get(
+                task_id
+            )
+            if conversation is not None:
+                return {
+                    "task_id": task_id,
+                    "status": conversation.status,
+                    "engine_alive": conversation.execution_alive,
+                    "last_event_at": conversation.last_event_at,
+                }
             attempts = self._attempt_projection.attempts_for_tasks(
                 conn,
                 [task_id],
@@ -287,10 +294,63 @@ class TaskProjectionService:
     ) -> dict[str, object]:
         """Return v2 usage derived from Attempt rows, never the legacy Task cache."""
 
-        return self._attempt_projection.task_usage_summary(
-            user,
-            include_archived=include_archived,
+        clauses = ["1 = 1"]
+        params: list[object] = []
+        if user.get("role") != "admin":
+            visibility, visibility_params = self._global_visibility_clause(user)
+            if visibility is None:
+                return self._attempt_projection._empty_usage_summary()
+            clauses.append(visibility)
+            params.extend(visibility_params)
+        if not include_archived:
+            clauses.append("archived_at IS NULL")
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                f"SELECT * FROM tasks WHERE {' AND '.join(clauses)}", tuple(params)
+            ).fetchall()
+            attempts, conversations = self._projection_inputs(conn, rows, user)
+        combined = {
+            str(row["task_id"]): (
+                conversations[str(row["task_id"])].turns
+                if str(row["task_id"]) in conversations
+                else attempts[str(row["task_id"])]
+            )
+            for row in rows
+        }
+        return AttemptProjectionService._usage_summary_for_tasks(rows, combined)
+
+    def project_usage_summary(
+        self, project_id: str, user: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Aggregate Project usage through the authority-selecting projection Seam."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE project_id = ? ORDER BY task_id", (project_id,)
+            ).fetchall()
+            attempts, conversations = self._projection_inputs(conn, rows, user)
+        histories: dict[str, Sequence[Mapping[str, object]]] = {
+            str(row["task_id"]): (
+                conversations[str(row["task_id"])].turns
+                if str(row["task_id"]) in conversations
+                else attempts[str(row["task_id"])]
+            )
+            for row in rows
+        }
+        aggregate = AttemptProjectionService.aggregate(
+            [history for task_id in histories for history in histories[task_id]]
         )
+        return {
+            "project_id": project_id,
+            "task_count": len(rows),
+            # Retained transport name; the value is canonical Turn count for v3 Tasks.
+            "attempt_count": sum(len(history) for history in histories.values()),
+            "total_duration_ms": aggregate.duration_ms,
+            "total_cost_usd": aggregate.cost_usd,
+            "total_tokens": aggregate.tokens,
+            "by_model": aggregate.by_model,
+        }
 
     def outputs(
         self,
@@ -396,13 +456,18 @@ class TaskProjectionService:
         row: sqlite3.Row,
         attempts: Sequence[Mapping[str, object]],
         *,
+        conversation: ConversationTaskProjection | None = None,
         include_private_task_diagnostics: bool,
     ) -> dict[str, object]:
         # The legacy Task timestamps are compatibility caches and can be stale
         # after an Attempt is recovered or adopted by another dispatcher.  The
         # Timeline and every v2 Task response must therefore expose execution
         # bounds derived from the authoritative Attempt/Runtime projection.
-        started_at, completed_at = TaskProjectionService._attempt_time_bounds(attempts)
+        started_at, completed_at = (
+            (conversation.started_at, conversation.completed_at)
+            if conversation is not None
+            else TaskProjectionService._attempt_time_bounds(attempts)
+        )
         return {
             "task_id": str(row["task_id"]),
             "project_id": str(row["project_id"]),
@@ -410,7 +475,7 @@ class TaskProjectionService:
             "environment_id": str(row["environment_id"]),
             "researcher_type": str(row["researcher_type"]),
             "harness_engine": str(row["harness_engine"]),
-            "status": str(row["status"]),
+            "status": conversation.status if conversation is not None else str(row["status"]),
             "title": str(row["title"]),
             "prompt": str(row["prompt"]),
             "created_at": str(row["created_at"]),
@@ -423,21 +488,56 @@ class TaskProjectionService:
             "project_context_version_id": TaskProjectionService._optional_str(
                 row["project_context_version_id"]
             ),
-            "latest_output_seq": int(row["latest_output_seq"] or 0),
+            "latest_output_seq": (
+                conversation.latest_item_seq
+                if conversation is not None
+                else int(row["latest_output_seq"] or 0)
+            ),
             "exit_code": int(row["exit_code"]) if row["exit_code"] is not None else None,
             # Engine error summaries are durable operational diagnostics and
             # can contain a tenant-private path.  A shared Project viewer can
             # inspect status plus redacted output, but only the Task owner or
             # an admin troubleshooting surface gets this raw summary.
             "error_summary": (
-                TaskProjectionService._optional_str(row["error_summary"])
+                (
+                    conversation.error_summary
+                    if conversation is not None
+                    else TaskProjectionService._optional_str(row["error_summary"])
+                )
                 if include_private_task_diagnostics
                 else None
             ),
             "working_directory": None,
             "command": [],
-            "token_usage_json": AttemptProjectionService.usage_json(attempts),
+            "token_usage_json": (
+                ConversationProjectionService.usage_json(conversation)
+                if conversation is not None
+                else AttemptProjectionService.usage_json(attempts)
+            ),
         }
+
+    def _projection_inputs(
+        self,
+        conn: sqlite3.Connection,
+        rows: Sequence[sqlite3.Row],
+        user: Mapping[str, object],
+    ) -> tuple[
+        dict[str, list[dict[str, object]]],
+        dict[str, ConversationTaskProjection],
+    ]:
+        task_ids = [str(row["task_id"]) for row in rows]
+        conversations = self._conversation_projection.projections_for_tasks(conn, task_ids)
+        legacy_ids = [task_id for task_id in task_ids if task_id not in conversations]
+        attempts = {task_id: [] for task_id in task_ids}
+        if legacy_ids:
+            attempts.update(
+                self._attempt_projection.attempts_for_tasks(
+                    conn,
+                    legacy_ids,
+                    include_runtime_diagnostics=self._can_view_runtime_diagnostics(user),
+                )
+            )
+        return attempts, conversations
 
     @staticmethod
     def _optional_str(value: object) -> str | None:

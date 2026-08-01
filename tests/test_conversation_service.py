@@ -18,14 +18,21 @@ from ainrf.domain.conversation_contracts import (
     ConversationErrorCode,
     ForkTransferMode,
     TaskWorkStatus,
+    TurnItemActor,
+    TurnItemType,
     TurnStatus,
 )
 from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
 )
+from ainrf.domain.conversation_execution import (
+    ConversationExecutionService,
+    RuntimeExecutionClaim,
+)
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError
+from ainrf.domain.task_projection import TaskProjectionService
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
@@ -161,6 +168,78 @@ def _insert_runtime_and_approval(
             updated_at=_NOW,
         )
         conn.commit()
+
+
+def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+    with closing(connect(_db_path(state_root))) as conn:
+        turn = conn.execute(
+            "SELECT native_turn_kind, native_turn_ref FROM task_turns WHERE turn_id = ?",
+            (turn_id,),
+        ).fetchone()
+        assert turn is not None
+        execution = SqliteConversationExecutionRepository(conn)
+        execution.insert_runtime_execution(
+            runtime_execution_id="execution-projection",
+            task_id="task-1",
+            turn_id=turn_id,
+            execution_seq=1,
+            runtime_generation=1,
+            binding_id=None,
+            native_runtime_kind="process",
+            native_runtime_ref="runtime-projection",
+            native_turn_kind=str(turn["native_turn_kind"]),
+            native_turn_ref=str(turn["native_turn_ref"]),
+            evidence_json="{}",
+            created_at=_NOW,
+            started_at=_NOW,
+            updated_at=_NOW,
+        )
+        assert execution.transition_runtime_execution(
+            runtime_execution_id="execution-projection",
+            expected_status="starting",
+            status="running",
+            evidence_json="{}",
+            updated_at=_NOW,
+        ) == 1
+        conn.commit()
+    ConversationExecutionService(state_root).append_item(
+        RuntimeExecutionClaim(
+            runtime_execution_id="execution-projection",
+            task_id="task-1",
+            turn_id=turn_id,
+            runtime_generation=1,
+        ),
+        item_type=TurnItemType.SYSTEM_NOTICE,
+        actor=TurnItemActor.SYSTEM,
+        payload={
+            "usage": {
+                "model": "fixture-model",
+                "input_tokens": 7,
+                "output_tokens": 3,
+                "cost_usd": 0.25,
+            }
+        },
+        native_provenance={},
+    )
+
+    projection = TaskProjectionService(state_root)
+    task = projection.task("task-1", _USER)
+    health = projection.health("task-1", _USER)
+    usage = projection.token_usage_summary(_USER, include_archived=True)
+
+    assert task["status"] == "running"
+    assert task["latest_output_seq"] == 2
+    assert "fixture-model" in str(task["token_usage_json"])
+    assert health["engine_alive"] is True
+    assert usage["total_tokens"] == 10
+    with closing(connect(_db_path(state_root))) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = 'task-1'"
+        ).fetchone()[0] == 0
 
 
 def test_admission_is_durable_idempotent_and_not_canonical_history(

@@ -54,6 +54,7 @@ from ainrf.domain import (
     ProjectModule,
     ProjectContextService,
     TaskApplicationService,
+    TaskProjectionService,
     WorkspaceModule,
 )
 from ainrf.domain.overview_jobs import OverviewSnapshotService
@@ -370,7 +371,11 @@ async def get_project_usage_summary(
     try:
         user = get_current_user(request)
         _project_module(request).project(project_id, user)
-        summary = _attempt_projection_service(request).project_usage_summary(project_id, user)
+        projection = getattr(request.app.state, "task_projection_service", None)
+        if not isinstance(projection, TaskProjectionService):
+            projection = TaskProjectionService(request.app.state.api_config.state_root)
+            request.app.state.task_projection_service = projection
+        summary = projection.project_usage_summary(project_id, user)
         return ProjectUsageSummaryResponse.model_validate(summary)
     except Exception as exc:
         raise _translate(exc) from exc
