@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -222,12 +223,11 @@ export default function ProjectsPage() {
         <PageHeader
           eyebrow={t('pages.projects.eyebrow')}
           title={t('pages.projects.title')}
-          description={t('pages.projects.description')}
-          actions={<Button onClick={() => setCreateProjectOpen(true)}>{t('pages.projects.newProject')}</Button>}
+          actions={<Button className="gap-2" onClick={() => setCreateProjectOpen(true)}><Plus aria-hidden="true" size={15} />{t('pages.projects.newProject')}</Button>}
         />
         {operationError ? <Alert variant="error">{extractErrorMessage(operationError)}</Alert> : null}
         <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <Card><CardBody className="space-y-2 p-3">
+          <Card data-testid="project-list" className="order-2 lg:order-1"><CardBody className="space-y-2 p-3">
             {projects.map((project) => (
               <button key={project.project_id} type="button" onClick={() => setRouteState({ project: project.project_id, tab })} className={`w-full rounded-[var(--osci-radius-md)] border p-3 text-left ${selectedProject?.project_id === project.project_id ? 'border-[var(--osci-color-primary-border)] bg-[var(--osci-color-primary-soft)]' : 'border-[var(--osci-color-border-subtle)] hover:bg-[var(--osci-color-surface-subtle)]'}`}>
                 <span className="flex items-center justify-between gap-2"><span className="truncate font-semibold text-[var(--osci-color-text)]">{project.name}</span>{project.attention_required ? <StatusBadge tone="warning">Attention</StatusBadge> : null}</span>
@@ -239,7 +239,7 @@ export default function ProjectsPage() {
           </CardBody></Card>
 
           {selectedProject ? (
-            <div className="min-w-0 space-y-4">
+            <div data-testid="project-summary" className="order-1 min-w-0 space-y-4 lg:order-2">
               <Card><CardBody className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold text-[var(--osci-color-text)]">{selectedProject.name}</h2><Badge variant="outline">{selectedProject.status}</Badge><Badge variant="secondary">{selectedProject.current_user_role}</Badge></div><p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{selectedProject.description || 'No description'}</p></div>

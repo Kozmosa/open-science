@@ -78,6 +78,11 @@ const environmentAlt = {
   it('renders New Task button when a project exists', async () => {
     renderWithProviders(<ProjectsPage />, { route: '/projects' })
     expect(await screen.findByRole('button', { name: /new task/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Project management' })).toBeInTheDocument()
+    expect(screen.queryByText('Coordinate Tasks, Workspaces, durable Context and Project permissions from one projection-driven console.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /new project/i }).querySelector('.lucide-plus')).not.toBeNull()
+    expect(screen.getByTestId('project-summary')).toHaveClass('order-1', 'lg:order-2')
+    expect(screen.getByTestId('project-list')).toHaveClass('order-2', 'lg:order-1')
   })
 
   it('shows no projects message when no projects exist', async () => {

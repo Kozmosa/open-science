@@ -36,7 +36,7 @@ const pages = {
       },
       projects: {
         eyebrow: 'Projects',
-        title: 'Project workspace',
+        title: 'Project management',
         description: 'Coordinate Tasks, Workspaces, durable Context and Project permissions from one projection-driven console.',
         sidebarEyebrow: 'Projects',
         sidebarTitle: 'Project Canvas',
