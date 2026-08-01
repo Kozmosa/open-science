@@ -82,6 +82,20 @@ class SqliteConversationExecutionRepository:
             "SELECT * FROM turn_submissions WHERE submission_id = ?", (submission_id,)
         ).fetchone()
 
+    def next_ready_submission(self) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT submission.*
+            FROM turn_submissions AS submission
+            LEFT JOIN next_turn_submissions AS next_turn
+              ON next_turn.submission_id = submission.submission_id
+            WHERE submission.status = 'queued'
+              AND (next_turn.submission_id IS NULL OR next_turn.status = 'ready')
+            ORDER BY submission.created_at, submission.submission_id
+            LIMIT 1
+            """
+        ).fetchone()
+
     def submission_by_task_key(
         self, *, task_id: str, actor_user_id: str, idempotency_key: str
     ) -> sqlite3.Row | None:
@@ -216,6 +230,16 @@ class SqliteConversationExecutionRepository:
             """,
             (turn_id,),
         ).fetchone()
+
+    def requested_controls(self, runtime_execution_id: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            """
+            SELECT * FROM turn_control_requests
+            WHERE runtime_execution_id = ? AND status = 'requested'
+            ORDER BY created_at, control_request_id
+            """,
+            (runtime_execution_id,),
+        ).fetchall()
 
     def approval_by_id(self, approval_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
