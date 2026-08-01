@@ -1,13 +1,16 @@
 ---
-doc_state: current
-status: proposed
-last_reviewed: 2026-07-30
+doc_state: historical
+status: implemented
+last_reviewed: 2026-08-01
 review_by: 2026-08-29
 ---
 
 # Conversation Domain Standalone Migration 设计
 
-**Status:** Proposed execution design — 依赖新 conversation/runtime schema 冻结后实施
+> [!success] Implemented and archived
+> 本设计已于 2026-08-01 实现为显式 `inspect`、`dry-run`、`execute`、`verify`、`cutover` migration Interface，保留 immutable source manifest、shadow destination、reconciliation、credential 隔离和原子 pointer cutover 安全性。
+
+**Status:** Implemented and archived on 2026-08-01
 **Date:** 2026-07-17
 **Scope:** 将旧 Task/Attempt/RuntimeSession/output/session transcript/provider override 数据一次性迁移到 Task/Turn/Item/Binding/RuntimeExecution/ProviderProfile/CredentialStore
 **Depends on:** [`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)、[`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)

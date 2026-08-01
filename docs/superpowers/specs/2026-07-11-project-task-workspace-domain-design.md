@@ -7,6 +7,9 @@ review_by: 2026-08-29
 
 # Project、Task 与 Workspace 领域设计
 
+> [!important] Conversation authority overlay
+> 本文的 Project、Workspace、Environment、Context、权限、关系、移动与归档规则继续有效；其中旧 `TaskAttempt`、`RuntimeSession`、pause/resume/continue 和扁平 output 叙述仅保留为历史设计上下文。当前 Task 执行 authority 是 Conversation Domain 的 Task、Turn、Item、TurnSubmission、RuntimeExecution 与 EngineConversationBinding，Retry 创建带 `retry_of_turn_id` 的新 Turn，停止 active execution 使用 interrupt。当前事实以 `PROJECT_BASIS.md`、公开架构文档、代码和测试为准。
+
 **Status:** Accepted domain design — 核心定义、关系、Context 首期、人工沉淀、任务关系、权限、移动和归档语义已确认
 **Date:** 2026-07-11
 **Scope:** Project、Task、Workspace、Environment 的职责、关系、生命周期、上下文层级与页面信息架构
@@ -210,7 +213,7 @@ Task 创建时固定当前 Active Project Context Version。Task 后续 conversa
 ## 5. Task 与当前运行投影
 
 > [!note]
-> 本节原先冻结的 `Task → TaskAttempt → RuntimeSession` 长期 conversation 模型已由 [[2026-07-17-codex-aligned-conversation-domain-design]] 的 Task / Turn / Item / RuntimeExecution 目标语义取代。当前实现仍以 TaskAttempt 和 RuntimeSession 提供运行历史读投影，但不得将其重新提升为长期用户 Session 领域模型。
+> 本节原先冻结的 `Task → TaskAttempt → RuntimeSession` 长期 conversation 模型已由 [[archived/2026-07-17-codex-aligned-conversation-domain-design]] 的 Task / Turn / Item / RuntimeExecution 正式语义取代。当前实现的普通产品路径以 Conversation Domain 为 authority；旧 Attempt/RuntimeSession 仅用于 standalone migration、显式 legacy-authority compatibility Adapter 或管理取证。
 
 为避免与管理员侧运行会话混淆，产品术语保持：
 

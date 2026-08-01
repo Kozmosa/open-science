@@ -12,7 +12,7 @@ review_by: 2026-08-30
 **Status:** Implemented
 **Date:** 2026-07-31  
 **Scope:** Task 正式 HTTP Interface、Project 下的 Task relationship / usage 投影、WebUI 迁移、Session 兼容投影删除、Task 兼容字段和旧入口删除、遥测与文档收口  
-**Depends on:** [`2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的 Project / Workspace / Task 关系，以及 [`2026-07-17-codex-aligned-conversation-domain-design.md`](../2026-07-17-codex-aligned-conversation-domain-design.md) 对 Task / Turn / Item 的最终语义
+**Depends on:** [`2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的 Project / Workspace / Task 关系，以及 [`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md) 对 Task / Turn / Item 的最终语义
 **Related current contract:** [`docs-site/docs/architecture.md`](../../../../docs-site/docs/architecture.md)
 **Removal authority:** 用户已明确接受“当前没有外部调用者”的人工判断；本设计仍要求完成 caller 迁移、契约测试和 release staging 人工验收，但不要求操作 production
 
