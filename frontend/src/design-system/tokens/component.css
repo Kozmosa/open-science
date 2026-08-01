@@ -7,6 +7,32 @@
   --osci-sidebar-collapsed-width: 3.5rem;
 }
 
+.osci-scrollbar {
+  scrollbar-color: color-mix(in srgb, var(--osci-color-text-muted) 48%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.osci-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.osci-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.osci-scrollbar::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--osci-color-text-muted) 42%, transparent);
+  background-clip: padding-box;
+}
+
+.osci-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--osci-color-text-secondary) 58%, transparent);
+  background-clip: padding-box;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --osci-topbar-background-translucent: var(--osci-topbar-background);

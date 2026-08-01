@@ -23,7 +23,7 @@ export function Sidebar({ routes, collapsed, onCollapsedChange, user, onLogout }
         collapsed ? 'w-[var(--osci-sidebar-collapsed-width)]' : 'w-[var(--osci-sidebar-expanded-width)]',
       )}
     >
-      <div className="flex h-12 items-center gap-2 border-b border-[var(--osci-color-border)] px-2.5">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--osci-color-border)] px-2.5">
         <Button
           size="icon-sm"
           variant="ghost"
@@ -37,11 +37,11 @@ export function Sidebar({ routes, collapsed, onCollapsedChange, user, onLogout }
         {collapsed ? null : <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t('common.appName')}</span>}
       </div>
       <NavigationLinks routes={routes} collapsed={collapsed} />
-      <div className="border-t border-[var(--osci-color-border)] p-2">
+      <div className="shrink-0 border-t border-[var(--osci-color-border)] p-2">
         <AccountMenu user={user} onLogout={onLogout} showIdentity={!collapsed} align="start" />
       </div>
       {collapsed ? null : (
-        <p className="px-3 pb-3 text-[11px] leading-relaxed text-[var(--osci-color-text-muted)]">
+        <p className="shrink-0 px-3 pb-3 text-[11px] leading-relaxed text-[var(--osci-color-text-muted)]">
           {t('common.builtBy')}
         </p>
       )}

@@ -222,6 +222,12 @@ describe('App routes', () => {
     const sidebarToggle = screen.getByLabelText('Expand sidebar');
     expect(sidebarToggle).toBeInTheDocument();
     expect(sidebarToggle.querySelector('img[src="/openscience-mark.svg"]')).not.toBeNull();
+    expect(sidebarToggle.parentElement).toHaveClass('h-12', 'shrink-0');
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toHaveClass(
+      'osci-scrollbar',
+      'min-h-0',
+      'overflow-y-auto',
+    );
     expect(screen.queryByText(/Task \|/)).not.toBeInTheDocument();
     expect(mockGetTasks).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: 'Browse Files' })).not.toBeInTheDocument();

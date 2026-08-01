@@ -10,7 +10,7 @@ interface NavigationLinksProps {
 
 export function NavigationLinks({ routes, collapsed = false, onNavigate }: NavigationLinksProps) {
   return (
-    <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 px-2 py-3">
+    <nav aria-label="Primary" className="osci-scrollbar flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto px-2 py-3">
       {routes.map((route) => {
         const Icon = route.icon;
         return (
