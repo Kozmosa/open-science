@@ -28,6 +28,12 @@ body {
   outline-offset: 2px;
 }
 
+input[data-command-input]:focus,
+input[data-command-input]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--osci-color-primary) 20%, transparent);
 }
