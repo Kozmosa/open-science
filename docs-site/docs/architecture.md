@@ -30,6 +30,8 @@ flowchart TD
 ```
 
 - Backend product graph 不允许 cycle，也不允许 non-API product code 反向依赖 `ainrf.api`。
+- `ainrf.api.cli` 是完整 CLI 的 HTTP Adapter composition root；`ainrf.api.server` 拥有 FastAPI construction、HTTP process composition、uvicorn/reload 与 daemon lifecycle。通用命令位于 `ainrf.command`，不依赖 HTTP Adapter。
+- 正常 L0/L1 在 Python quality gate 开始时检查 product import cycle，以及 non-API Module 对 `ainrf.api` 的静态、惰性、动态和字符串入口依赖。
 - Project、Workspace、Environment、Task 等领域通过窄 application Interface 暴露能力；SQLite repository 与共享 write kernel 保持私有。
 - Release E 已完成 committed-v2 authority cutover。产品路径不得重新引入 legacy writer、legacy read fallback、双读或双写。
 - Frontend 依赖方向为 `app -> features -> shared/design-system`。`shared` 与 `design-system` 不依赖 feature，page 只负责 composition。

@@ -14,14 +14,10 @@ import typer
 from ainrf import __version__
 from ainrf.auth.service import AuthService
 from ainrf.onboarding import (
-    config_path_for,
-    ensure_interactive_onboarding_available,
     load_runtime_config,
-    onboard_state_root,
     run_onboarding,
     save_runtime_config,
 )
-from ainrf.server import run_server, run_server_daemon, stop_server_daemon
 from ainrf.runtime import normalize_runtime_config
 from ainrf.runtime.container_profile import (
     ParsedSSHCommand,
@@ -121,36 +117,6 @@ def onboard(
     ] = default_state_root(),
 ) -> None:
     run_onboarding(state_root)
-
-
-@app.command()
-def serve(
-    host: Annotated[str, typer.Option(help="Bind host for the API server.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Bind port for the API server.")] = 8000,
-    workers: Annotated[int, typer.Option(help="Number of uvicorn worker processes.")] = 1,
-    daemon: Annotated[bool, typer.Option(help="Run the API server in the background.")] = False,
-    state_root: Annotated[
-        Path,
-        typer.Option(help="State root for API configuration and daemon runtime files."),
-    ] = default_state_root(),
-    pid_file: Annotated[
-        Path | None,
-        typer.Option(help="Optional pid file path for daemon mode."),
-    ] = None,
-    log_file: Annotated[
-        Path | None,
-        typer.Option(help="Optional log file path for daemon mode."),
-    ] = None,
-) -> None:
-    _ensure_api_key_hashes_configured(state_root)
-    if daemon:
-        runtime_dir = state_root / "runtime"
-        resolved_pid_file = pid_file or runtime_dir / "ainrf-api.pid"
-        resolved_log_file = log_file or runtime_dir / "ainrf-api.log"
-        daemon_pid = run_server_daemon(host, port, state_root, resolved_pid_file, resolved_log_file)
-        typer.echo(f"OpenScience API daemon started (pid={daemon_pid}, port={port})")
-        return
-    run_server(host, port, state_root, workers=workers)
 
 
 @app.command("domain-worker")
@@ -285,25 +251,6 @@ def _domain_worker_artifact_sha(state_root: Path) -> str:
         raise DomainCutoverError("AINRF_DOMAIN_ARTIFACT_SHA is required for domain worker")
     controller.assert_v2_writable(artifact_sha=artifact_sha)
     return artifact_sha
-
-
-@app.command()
-def stop(
-    state_root: Annotated[
-        Path,
-        typer.Option(help="State root containing daemon runtime files."),
-    ] = default_state_root(),
-    pid_file: Annotated[
-        Path | None,
-        typer.Option(help="Optional pid file path for daemon mode."),
-    ] = None,
-) -> None:
-    runtime_dir = state_root / "runtime"
-    resolved_pid_file = pid_file or runtime_dir / "ainrf-api.pid"
-    if stop_server_daemon(resolved_pid_file):
-        typer.echo("OpenScience API daemon stopped.")
-        return
-    typer.echo("OpenScience API daemon is not running.")
 
 
 @container_app.command("add")
@@ -1313,40 +1260,8 @@ def overview_snapshot_refresh(
             planner.stop()
 
 
-def main() -> None:
-
-    app()
-
-
 def _parse_ssh_command(command: str) -> ParsedSSHCommand:
     try:
         return parse_ssh_command(command)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-
-
-def _ensure_api_key_hashes_configured(state_root: Path) -> None:
-    # Keep the command preflight aligned with ``ApiConfig.from_env`` while
-    # retaining the branded compatibility alias for existing launchers.
-    env_hashes = os.environ.get(
-        "AINRF_API_KEY_HASHES",
-        os.environ.get("OPENSCIENCE_API_KEY_HASHES", ""),
-    ).strip()
-    if env_hashes:
-        return
-    config_path = config_path_for(state_root)
-    if not config_path.exists():
-        try:
-            ensure_interactive_onboarding_available()
-        except typer.BadParameter:
-            typer.echo(
-                "OpenScience API key hashes are not configured. Run `openscience onboard` interactively."
-            )
-            raise typer.Exit(code=1) from None
-        onboard_state_root(state_root)
-        return
-    payload = load_runtime_config(config_path)
-    hashes = payload.get("api_key_hashes")
-    if isinstance(hashes, list) and any(isinstance(item, str) and item for item in hashes):
-        return
-    raise typer.BadParameter(f"Invalid runtime config at {config_path}: missing api_key_hashes")
