@@ -30,13 +30,14 @@ from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
-from ainrf.domain.repositories import SqliteDomainRepository
+from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.service import (
     DomainAuthorizationService,
     DomainConflictError,
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.harness_engine.base import HarnessEngineType
 
@@ -207,13 +208,21 @@ class ConversationApplicationService:
         self,
         state_root: Path,
         *,
+        artifact_sha: str | None = None,
         dispatch_notifier: Callable[[str], None] | None = None,
     ) -> None:
+        self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
+        self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
         self._dispatch_notifier = dispatch_notifier
+
+    def v2_ready(self) -> bool:
+        """Return whether committed-v2 state can host the Conversation Module."""
+
+        return self._write_fence.v2_ready()
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
@@ -260,7 +269,7 @@ class ConversationApplicationService:
 
     @staticmethod
     def _replay(
-        repository: SqliteDomainRepository,
+        repository: _SqliteDomainRepository,
         *,
         actor: str,
         scope: IdempotencyScope,
@@ -282,7 +291,7 @@ class ConversationApplicationService:
 
     @staticmethod
     def _store(
-        repository: SqliteDomainRepository,
+        repository: _SqliteDomainRepository,
         *,
         actor: str,
         scope: IdempotencyScope,
@@ -302,7 +311,7 @@ class ConversationApplicationService:
 
     @staticmethod
     def _audit(
-        repository: SqliteDomainRepository,
+        repository: _SqliteDomainRepository,
         *,
         actor: str,
         event_type: str,
@@ -334,7 +343,7 @@ class ConversationApplicationService:
                 conversations.insert_task_authority(task_id=task_id, created_at=created_at)
                 conversations.insert_task_state(task_id=task_id, created_at=created_at)
                 self._audit(
-                    SqliteDomainRepository(conn),
+                    _SqliteDomainRepository(conn),
                     actor=actor,
                     event_type="conversation.task.initialized",
                     subject_type="task",
@@ -415,7 +424,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -548,7 +557,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -674,7 +683,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -776,7 +785,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -889,7 +898,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -1048,7 +1057,7 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = SqliteDomainRepository(conn)
+                domain = _SqliteDomainRepository(conn)
                 digest, replay = self._replay(
                     domain,
                     actor=actor,
@@ -1411,3 +1420,83 @@ class ConversationApplicationService:
             "status": status,
             "promoted_submission_id": promoted_submission,
         }
+
+    def read_task(self, task_id: str, user: dict[str, object]) -> dict[str, object]:
+        """Read one canonical conversation aggregate through the application Interface."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_task_viewer(task_id, user)
+            conversations = SqliteConversationRepository(conn)
+            state = self._require_v3(conversations, task_id)
+            task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
+            if task is None:
+                raise DomainNotFoundError(task_id)
+            active_turn = conversations.active_turn(task_id)
+            binding = conversations.active_binding(task_id)
+            turn_count = conn.execute(
+                "SELECT COUNT(*) FROM task_turns WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            item_count = conn.execute(
+                "SELECT COUNT(*) FROM turn_items WHERE task_id = ?", (task_id,)
+            ).fetchone()
+        result = self._row_dict(task)
+        result.update(
+            {
+                "work_status": str(state["work_status"]),
+                "conversation_revision": int(state["revision"]),
+                "runtime_status": "active" if active_turn is not None else "idle",
+                "active_turn_id": (
+                    None if active_turn is None else str(active_turn["turn_id"])
+                ),
+                "turn_count": 0 if turn_count is None else int(turn_count[0]),
+                "item_count": 0 if item_count is None else int(item_count[0]),
+                "binding": None if binding is None else self._row_dict(binding),
+            }
+        )
+        return result
+
+    def list_turns(self, task_id: str, user: dict[str, object]) -> list[dict[str, object]]:
+        """Return ordered canonical Turns after Task visibility authorization."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_task_viewer(task_id, user)
+            conversations = SqliteConversationRepository(conn)
+            self._require_v3(conversations, task_id)
+            return [self._row_dict(row) for row in conversations.list_turns(task_id)]
+
+    def list_items(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        turn_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        """Return ordered canonical Items for a Task or one of its Turns."""
+
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_task_viewer(task_id, user)
+            conversations = SqliteConversationRepository(conn)
+            self._require_v3(conversations, task_id)
+            if turn_id is None:
+                rows = conversations.list_task_items(task_id)
+            else:
+                turn = conversations.turn_by_id(turn_id)
+                if turn is None or str(turn["task_id"]) != task_id:
+                    raise DomainNotFoundError(turn_id)
+                rows = conversations.list_turn_items(turn_id)
+            return [self._row_dict(row) for row in rows]
+
+    @staticmethod
+    def _row_dict(row: sqlite3.Row) -> dict[str, object]:
+        result: dict[str, object] = dict(row)
+        for key in tuple(result):
+            if not key.endswith("_json"):
+                continue
+            value = result[key]
+            if not isinstance(value, str):
+                continue
+            try:
+                result[key.removesuffix("_json")] = json.loads(value)
+            except json.JSONDecodeError:
+                result[key.removesuffix("_json")] = value
+        return result

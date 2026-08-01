@@ -14,6 +14,7 @@ _EXPORTS = {
     "EnvironmentModule": ("ainrf.domain.interfaces", "EnvironmentModule"),
     "ContextModule": ("ainrf.domain.interfaces", "ContextModule"),
     "TaskLifecycleModule": ("ainrf.domain.interfaces", "TaskLifecycleModule"),
+    "ConversationModule": ("ainrf.domain.interfaces", "ConversationModule"),
     "PersistentEnvironmentFacade": (
         "ainrf.domain.environment_facade",
         "PersistentEnvironmentFacade",
@@ -29,6 +30,10 @@ _EXPORTS = {
     "DispatchRunResult": ("ainrf.domain.worker", "DispatchRunResult"),
     "TaskDispatcher": ("ainrf.domain.worker", "TaskDispatcher"),
     "TaskApplicationService": ("ainrf.domain.tasks", "TaskApplicationService"),
+    "ConversationApplicationService": (
+        "ainrf.domain.conversation_service",
+        "ConversationApplicationService",
+    ),
     "TaskProjectionService": ("ainrf.domain.task_projection", "TaskProjectionService"),
     "OverviewSnapshotPlanner": ("ainrf.domain.overview", "OverviewSnapshotPlanner"),
     "OverviewSnapshotService": ("ainrf.domain.overview", "OverviewSnapshotService"),

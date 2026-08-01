@@ -194,6 +194,24 @@ def test_admission_is_durable_idempotent_and_not_canonical_history(
         service.create_turn("task-1", _USER, input={"text": "changed"}, idempotency_key="create-1")
 
 
+def test_application_interface_reads_canonical_task_turns_and_items(state_root: Path) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+
+    task = service.read_task("task-1", _USER)
+    turns = service.list_turns("task-1", _USER)
+    items = service.list_items("task-1", _USER, turn_id=turn_id)
+
+    assert task["work_status"] == "open"
+    assert task["runtime_status"] == "active"
+    assert task["active_turn_id"] == turn_id
+    assert task["turn_count"] == 1
+    assert task["item_count"] == 1
+    assert [turn["turn_id"] for turn in turns] == [turn_id]
+    assert items[0]["item_type"] == "user_message"
+    assert items[0]["payload"] == {"text": "hello"}
+
+
 def test_replay_requires_current_authorization(state_root: Path) -> None:
     service = _service(state_root)
     service.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
