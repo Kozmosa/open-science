@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from ainrf.cli import app
+from ainrf.api.cli import app
 from ainrf.db import connect
 from ainrf.development.frontend_fixture import prepare_frontend_dev_fixture
 from ainrf.development.frontend_worker import FrontendFixtureWorker

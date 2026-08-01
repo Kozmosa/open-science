@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 
 from ainrf.api.config import hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.cli import app
+from ainrf.api.cli import app
 from ainrf.db import connect
 from ainrf.domain import build_domain_modules
 from ainrf.domain_control import DomainCutoverController
