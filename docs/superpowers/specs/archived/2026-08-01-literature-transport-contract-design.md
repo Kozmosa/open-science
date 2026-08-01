@@ -1,16 +1,19 @@
 ---
 doc_state: current
-status: proposed
+status: implemented
 last_reviewed: 2026-08-01
 review_by: 2026-08-31
 ---
 
 # Literature Transport Contract 收口设计
 
-**Status:** Proposed corrective design
+**Status:** Implemented and archived on 2026-08-01
 **Date:** 2026-08-01
 **Scope:** `/api/literature` 的 Pydantic/OpenAPI schema、generated frontend transport、feature Adapter、MSW contract 和 legacy route retirement
-**Depends on:** [`2026-07-11-literature-tracking-service-redesign-design.md`](2026-07-11-literature-tracking-service-redesign-design.md)
+**Depends on:** [`2026-07-11-literature-tracking-service-redesign-design.md`](../2026-07-11-literature-tracking-service-redesign-design.md)
+
+> [!success] 实施结果
+> 19 个 accepted operations 已建立 Pydantic/OpenAPI Interface、generated frontend transport、feature Adapter 与 MSW contract；SQLite version row 已通过显式 presenter 白名单隔离。7 个 legacy operations 已收敛为正式 application Interface 上的 compatibility Adapter，但因没有独立删除批准而 fail-closed 保留。当前 inventory 已提升到 `docs/reference/literature-transport-contract.md` 与 `docs-site/docs/architecture.md`。
 
 ## 1. 问题与证据
 

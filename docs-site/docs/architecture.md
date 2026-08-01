@@ -74,8 +74,13 @@ flowchart TD
 | 对应的 `OPENSCIENCE_*` backend config aliases | Product / release | `PROJECT_BASIS.md` 明确规定的正式兼容别名 | 长期支持，不是 cleanup debt |
 | `/v1/models`、`/v1/messages` | External protocol adapter | Anthropic-compatible 外部协议入口 | 长期支持 |
 | `domain-migration` CLI 与 `/api/admin/domain/legacy-records` | Domain migration / release | committed-v2 之前状态的只读迁移、reconciliation 与审计证据；不得成为 product read fallback | 保留，migration/admin-only |
+| Literature subscriptions CRUD（4 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 topic application Interface 上的 payload Adapter，但尚未完成删除批准 | fail-closed 保留 |
+| Literature subscription fetch/status（2 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 durable check Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
+| Literature paper read（1 operation） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 paper state Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
 
 后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。
+
+Literature 的正式 HTTP Interface 当前固定为 19 个 operation：overview 1、topics 6、checks 4、papers/detail/versions/state 4、summary 2、research-task create/list 2。singular research-task 查询已在 WebUI caller 迁移后退役；上述 7 个 compatibility operation 未获得独立删除批准，因此没有删除，也没有为收集 telemetry 部署未完整验收的代码到 production。
 
 临时 `ainrf_cleanup_*` registry、指标、持久化表、日志和 Dashboard，以及 superseded `ainrf_deprecated_*` 指标、旧统计 helper 与 Release E 告警已在架构清理最终收口中删除。Compatibility route 观察统一由长期、低基数的 `ainrf_http_contract_*` 指标和 durable aggregate 承担；正式长期 alias 不再产生 cleanup-only 遥测。
 
