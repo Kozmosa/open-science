@@ -153,6 +153,12 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
     return () => media.removeEventListener('change', update);
   }, [state.settings.general.appearance.theme]);
 
+  useLayoutEffect(() => {
+    document.documentElement.dataset.osciMotion = state.settings.general.appearance.motionEnabled
+      ? 'full'
+      : 'reduced';
+  }, [state.settings.general.appearance.motionEnabled]);
+
   const commitSettings = useCallback((nextSettings: WebUiSettingsDocument): void => {
     const sanitized = sanitizeSettings(nextSettings);
     writeStoredSettings(sanitized, userId);

@@ -240,6 +240,22 @@ describe('App routes', () => {
     expect(window.localStorage.getItem('openscience:preference:test-user:sidebar-collapsed')).toBe('false');
   });
 
+  it('uses a menu control to close the mobile navigation drawer', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/today');
+    render(
+      <LocaleProvider initialLocale="en">
+        <App />
+      </LocaleProvider>
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Open navigation' }));
+    const closeNavigation = screen.getByRole('button', { name: 'Close navigation' });
+
+    expect(closeNavigation.querySelector('.lucide-menu')).not.toBeNull();
+    expect(screen.getByRole('dialog', { name: 'OpenScience Console' })).toHaveClass('osci-sheet');
+  });
+
   it('opens the command palette with English keywords and keeps workspace browser as a deep route', async () => {
     const user = userEvent.setup();
     render(

@@ -1,5 +1,5 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/shared/utils/cn';
 
@@ -10,9 +10,11 @@ interface SheetProps {
   children: ReactNode;
   side?: 'left' | 'right';
   className?: string;
+  closeIcon?: 'close' | 'menu';
+  closeLabel?: string;
 }
 
-export function Sheet({ open, onOpenChange, title, children, side = 'right', className }: SheetProps) {
+export function Sheet({ open, onOpenChange, title, children, side = 'right', className, closeIcon = 'close', closeLabel = 'Close' }: SheetProps) {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
 
@@ -28,7 +30,7 @@ export function Sheet({ open, onOpenChange, title, children, side = 'right', cla
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[var(--osci-color-overlay)]" />
+        <DialogPrimitive.Overlay className="osci-sheet-overlay fixed inset-0 z-50 bg-[var(--osci-color-overlay)]" />
         <DialogPrimitive.Content
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -36,7 +38,7 @@ export function Sheet({ open, onOpenChange, title, children, side = 'right', cla
             restoreFocusRef.current = null;
           }}
           className={cn(
-            'fixed inset-y-0 z-50 flex w-[min(24rem,calc(100%-1.5rem))] flex-col border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] shadow-[var(--osci-shadow-overlay)] outline-none',
+            'osci-sheet fixed inset-y-0 z-50 flex w-[min(24rem,calc(100%-1.5rem))] flex-col border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] shadow-[var(--osci-shadow-overlay)] outline-none',
             side === 'left' ? 'left-0 border-r' : 'right-0 border-l',
             className,
           )}
@@ -45,8 +47,8 @@ export function Sheet({ open, onOpenChange, title, children, side = 'right', cla
             <DialogPrimitive.Title className="truncate text-sm font-semibold text-[var(--osci-color-text)]">
               {title}
             </DialogPrimitive.Title>
-            <DialogPrimitive.Close aria-label="Close" className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--osci-radius-sm)] text-[var(--osci-color-text-muted)] hover:bg-[var(--osci-color-surface-subtle)]">
-              <X size={17} />
+            <DialogPrimitive.Close aria-label={closeLabel} className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--osci-radius-sm)] text-[var(--osci-color-text-muted)] hover:bg-[var(--osci-color-surface-subtle)]">
+              {closeIcon === 'menu' ? <Menu aria-hidden="true" size={18} /> : <X aria-hidden="true" size={17} />}
             </DialogPrimitive.Close>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>

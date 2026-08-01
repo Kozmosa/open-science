@@ -90,7 +90,14 @@ function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex w-full flex-1 flex-col overflow-hidden">{children}</main>
       </div>
 
-      <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen} title={t('common.appName')} side="left">
+      <Sheet
+        open={mobileNavigationOpen}
+        onOpenChange={setMobileNavigationOpen}
+        title={t('common.appName')}
+        side="left"
+        closeIcon="menu"
+        closeLabel={t('layout.closeNavigation')}
+      >
         <NavigationLinks routes={navigationRoutes} onNavigate={() => setMobileNavigationOpen(false)} />
       </Sheet>
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} routes={commandRoutes} />
