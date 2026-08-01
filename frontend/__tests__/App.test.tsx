@@ -250,6 +250,9 @@ describe('App routes', () => {
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Open command palette/ }));
+    const palette = screen.getByRole('dialog', { name: 'Open command palette' });
+    expect(within(palette).getByRole('heading', { name: 'Open command palette' })).toHaveClass('sr-only');
+    expect(within(palette).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
     const commandInput = screen.getByRole('combobox', { name: 'Open command palette' });
     await user.type(commandInput, 'browse files');
     await user.click(screen.getByText('Browse Files'));
