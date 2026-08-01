@@ -238,23 +238,14 @@ function TasksPage() {
   const retryMutation = useMutation({
     mutationFn: async (taskId: string) => {
       const key = retryKeyManager.keyFor(semanticMutationValue({ taskId }));
-      return { result: await retryTask(taskId, key), key };
+      return { result: await retryTask(taskId, key), key, taskId };
     },
-    onSuccess: ({ result, key }) => {
+    onSuccess: ({ key, taskId }) => {
       retryKeyManager.markSucceeded(key);
-      const retriedTask = result;
-      const affectedProjectIds = new Set([
-        selectedTask?.project_id,
-        retriedTask.project_id,
-      ].filter((projectId): projectId is string => Boolean(projectId)));
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(retriedTask.task_id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.domain.taskAttempts(retriedTask.task_id) });
-      for (const projectId of affectedProjectIds) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(projectId) });
-      }
-      selectTask(retriedTask.task_id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
+      selectTask(taskId);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
     onError: () => {

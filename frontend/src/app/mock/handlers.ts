@@ -193,13 +193,38 @@ export const legacyMockHandlers = [
   http.post('/api/tasks', resolveJson(async ({ request }) => {
     const body = await request.json() as TaskCreatePayload;
     const task = mockCreateTask(body);
-    return HttpResponse.json({ task, attempt: {}, dispatch: {} }, { status: 201 });
+    return HttpResponse.json({
+      task,
+      submission: {
+        submission_id: `submission-${task.task_id}`,
+        task_id: task.task_id,
+        reserved_turn_id: `turn-${task.task_id}`,
+        status: 'queued',
+        disposition: 'queued',
+      },
+    }, { status: 202 });
   })),
   http.post('/api/tasks/:taskId/archive', ({ params }) => mockJson(() => mockArchiveTask(textParam(params, 'taskId')))),
   http.post('/api/tasks/:taskId/cancel', ({ params }) => mockJson(() => mockCancelTask(textParam(params, 'taskId')))),
-  http.get('/api/tasks/:taskId/output', ({ params, request }) => {
-    const afterSeq = Number(new URL(request.url).searchParams.get('after_seq') ?? 0);
-    return mockJson(() => mockGetTaskOutput(textParam(params, 'taskId'), afterSeq));
+  http.get('/api/tasks/:taskId/turns', ({ params }) => {
+    const taskId = textParam(params, 'taskId');
+    return HttpResponse.json({ items: [{
+      turn_id: `turn-${taskId}`, task_id: taskId, turn_seq: 1, status: 'completed',
+      retry_of_turn_id: null, accepted_at: null, started_at: null, finished_at: null,
+      failure_code: null,
+    }] });
+  }),
+  http.get('/api/tasks/:taskId/turns/:turnId/items', ({ params }) => {
+    const taskId = textParam(params, 'taskId');
+    const output = mockGetTaskOutput(taskId, 0);
+    return HttpResponse.json({ items: output.items.map((item) => ({
+      item_id: `${taskId}-${item.seq}`, task_id: taskId, turn_id: textParam(params, 'turnId'),
+      task_item_seq: item.seq, turn_item_seq: item.seq,
+      item_type: item.kind === 'message' ? 'agent_message' : 'system_notice',
+      actor: item.kind === 'message' ? 'agent' : 'system', payload: { text: item.content },
+      native_provenance: { source: 'mock' }, occurred_at: item.created_at,
+      ingested_at: item.created_at, persisted_at: item.created_at,
+    })) });
   }),
 
   http.get('/api/domain/environments', () => HttpResponse.json(mockGetEnvironments())),

@@ -96,5 +96,5 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
             },
         )
 
-    assert response.status_code == 201
+    assert response.status_code == 202
     assert response.json()["task"]["project_id"] == project["project_id"]

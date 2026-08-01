@@ -854,31 +854,10 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_tasks_task_id_attempts": {
-    "method": "GET",
-    "path": "/api/tasks/{task_id}/attempts",
-    "clientPath": "/tasks/{task_id}/attempts",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_tasks_task_id_attempts_attempt_id_resolve_launch_unknown": {
-    "method": "POST",
-    "path": "/api/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown",
-    "clientPath": "/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown",
-    "canonical": true,
-    "deprecated": false
-  },
   "post_api_tasks_task_id_cancel": {
     "method": "POST",
     "path": "/api/tasks/{task_id}/cancel",
     "clientPath": "/tasks/{task_id}/cancel",
-    "canonical": true,
-    "deprecated": false
-  },
-  "post_api_tasks_task_id_continue": {
-    "method": "POST",
-    "path": "/api/tasks/{task_id}/continue",
-    "clientPath": "/tasks/{task_id}/continue",
     "canonical": true,
     "deprecated": false
   },
@@ -896,13 +875,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_tasks_task_id_messages": {
-    "method": "GET",
-    "path": "/api/tasks/{task_id}/messages",
-    "clientPath": "/tasks/{task_id}/messages",
-    "canonical": true,
-    "deprecated": false
-  },
   "post_api_tasks_task_id_move": {
     "method": "POST",
     "path": "/api/tasks/{task_id}/move",
@@ -910,38 +882,45 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_tasks_task_id_output": {
+  "get_api_tasks_task_id_turns": {
     "method": "GET",
-    "path": "/api/tasks/{task_id}/output",
-    "clientPath": "/tasks/{task_id}/output",
+    "path": "/api/tasks/{task_id}/turns",
+    "clientPath": "/tasks/{task_id}/turns",
     "canonical": true,
     "deprecated": false
   },
-  "post_api_tasks_task_id_pause": {
+  "post_api_tasks_task_id_turns": {
     "method": "POST",
-    "path": "/api/tasks/{task_id}/pause",
-    "clientPath": "/tasks/{task_id}/pause",
+    "path": "/api/tasks/{task_id}/turns",
+    "clientPath": "/tasks/{task_id}/turns",
     "canonical": true,
     "deprecated": false
   },
-  "post_api_tasks_task_id_resume": {
+  "post_api_tasks_task_id_turns_turn_id_interrupt": {
     "method": "POST",
-    "path": "/api/tasks/{task_id}/resume",
-    "clientPath": "/tasks/{task_id}/resume",
+    "path": "/api/tasks/{task_id}/turns/{turn_id}/interrupt",
+    "clientPath": "/tasks/{task_id}/turns/{turn_id}/interrupt",
     "canonical": true,
     "deprecated": false
   },
-  "post_api_tasks_task_id_retry": {
-    "method": "POST",
-    "path": "/api/tasks/{task_id}/retry",
-    "clientPath": "/tasks/{task_id}/retry",
-    "canonical": true,
-    "deprecated": false
-  },
-  "get_api_tasks_task_id_stream": {
+  "get_api_tasks_task_id_turns_turn_id_items": {
     "method": "GET",
-    "path": "/api/tasks/{task_id}/stream",
-    "clientPath": "/tasks/{task_id}/stream",
+    "path": "/api/tasks/{task_id}/turns/{turn_id}/items",
+    "clientPath": "/tasks/{task_id}/turns/{turn_id}/items",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_tasks_task_id_turns_turn_id_retry": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/turns/{turn_id}/retry",
+    "clientPath": "/tasks/{task_id}/turns/{turn_id}/retry",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_tasks_task_id_turns_turn_id_steer": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/turns/{turn_id}/steer",
+    "clientPath": "/tasks/{task_id}/turns/{turn_id}/steer",
     "canonical": true,
     "deprecated": false
   },

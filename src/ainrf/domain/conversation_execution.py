@@ -17,7 +17,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType
+from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType, TurnStatus
 from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
 )
@@ -267,6 +267,87 @@ class ConversationExecutionService:
         with closing(connect(self._db_path)) as conn:
             repository = SqliteConversationExecutionRepository(conn)
             return [
-                dict(row)
-                for row in repository.requested_controls(execution.runtime_execution_id)
+                dict(row) for row in repository.requested_controls(execution.runtime_execution_id)
             ]
+
+    def transition_control(
+        self,
+        control_request_id: str,
+        *,
+        expected_status: str,
+        status: str,
+        evidence: Mapping[str, object],
+        failure_code: str | None = None,
+    ) -> None:
+        updated_at = _now()
+        with closing(connect(self._db_path)) as conn:
+            try:
+                self._begin(conn)
+                repository = SqliteConversationExecutionRepository(conn)
+                if (
+                    repository.transition_control_request(
+                        control_request_id=control_request_id,
+                        expected_status=expected_status,
+                        status=status,
+                        evidence_json=_canonical_json(evidence),
+                        updated_at=updated_at,
+                        accepted_at=updated_at if status in {"accepted", "completed"} else None,
+                        completed_at=(
+                            updated_at
+                            if status in {"completed", "rejected", "delivery_unknown"}
+                            else None
+                        ),
+                        failure_code=failure_code,
+                    )
+                    != 1
+                ):
+                    raise DomainConflictError("Control transition lost its state race")
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+
+    def finish_execution(
+        self,
+        execution: RuntimeExecutionClaim,
+        *,
+        status: TurnStatus,
+        evidence: Mapping[str, object],
+        failure_code: str | None = None,
+    ) -> dict[str, object]:
+        execution_status = {
+            TurnStatus.COMPLETED: "completed",
+            TurnStatus.INTERRUPTED: "interrupted",
+            TurnStatus.FAILED: "failed",
+        }[status]
+
+        def finish_runtime(
+            repository: SqliteConversationExecutionRepository,
+            finished_at: str,
+        ) -> None:
+            row = repository.runtime_execution_by_id(execution.runtime_execution_id)
+            if row is None:
+                raise DomainNotFoundError(execution.runtime_execution_id)
+            if str(row["status"]) == execution_status:
+                return
+            if (
+                repository.transition_runtime_execution(
+                    runtime_execution_id=execution.runtime_execution_id,
+                    expected_status=str(row["status"]),
+                    status=execution_status,
+                    evidence_json=_canonical_json(evidence),
+                    updated_at=finished_at,
+                    finished_at=finished_at,
+                    failure_code=failure_code,
+                )
+                != 1
+            ):
+                raise DomainConflictError("Runtime terminal transition lost its state race")
+
+        return self._application.finish_turn(
+            execution.task_id,
+            execution.turn_id,
+            status=status,
+            failure_code=failure_code,
+            _terminal_side_effect=finish_runtime,
+        )

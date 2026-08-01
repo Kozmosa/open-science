@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 import ainrf.domain.conversation_service as conversation_service_module
+from ainrf.auth.service import AuthService
 from ainrf.db import connect
+from ainrf.domain import ProjectContextService, build_domain_modules
 from ainrf.domain.conversation_contracts import (
     ApprovalStatus,
     ConversationContractError,
@@ -210,6 +212,87 @@ def test_application_interface_reads_canonical_task_turns_and_items(state_root: 
     assert [turn["turn_id"] for turn in turns] == [turn_id]
     assert items[0]["item_type"] == "user_message"
     assert items[0]["payload"] == {"text": "hello"}
+
+
+def test_create_task_atomically_uses_conversation_authority_without_attempt(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    owner: dict[str, object] = {"id": "owner", "role": "member"}
+    admin: dict[str, object] = {"id": "admin", "role": "admin"}
+    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id=str(environment["environment_id"]),
+        user_id="owner",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation task test",
+    )
+    project = domain.projects.create_project(owner, name="Project")
+    workspace = domain.workspaces.create_workspace(
+        owner,
+        environment_id=str(environment["environment_id"]),
+        canonical_path="/tmp/conversation-task",
+        label="Task",
+    )
+    domain.projects.attach_workspace(
+        str(project["project_id"]),
+        str(workspace["workspace_id"]),
+        owner,
+        idempotency_key="link",
+    )
+    context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
+    context.save_draft(str(project["project_id"]), "context", owner)
+    context.publish(str(project["project_id"]), owner)
+    service = ConversationApplicationService(state_root, artifact_sha=committed_v2_state)
+
+    created = service.create_task(
+        owner,
+        project_id=str(project["project_id"]),
+        workspace_id=str(workspace["workspace_id"]),
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="create",
+    )
+    replay = service.create_task(
+        owner,
+        project_id=str(project["project_id"]),
+        workspace_id=str(workspace["workspace_id"]),
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="create",
+    )
+
+    assert replay == created
+    with closing(connect(_db_path(state_root))) as conn:
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM conversation_task_authorities WHERE task_id = ?",
+                (created["task_id"],),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM turn_submissions WHERE task_id = ?", (created["task_id"],)
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = ?", (created["task_id"],)
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_replay_requires_current_authorization(state_root: Path) -> None:
@@ -631,22 +714,17 @@ def test_controls_and_approvals_are_runtime_scoped_and_idempotent(
         "task-1",
         turn_id,
         _USER,
-        runtime_execution_id="execution-1",
-        runtime_generation=1,
         payload={"text": "focus", "secret_topic": "credential hygiene"},
         idempotency_key="steer-1",
     )
     assert steer["status"] == "requested"
-    with pytest.raises(ConversationContractError) as stale:
-        service.request_interrupt(
-            "task-1",
-            turn_id,
-            _USER,
-            runtime_execution_id="execution-1",
-            runtime_generation=2,
-            idempotency_key="interrupt-stale",
-        )
-    assert stale.value.code is ConversationErrorCode.RUNTIME_LOST
+    interrupt = service.request_interrupt(
+        "task-1",
+        turn_id,
+        _USER,
+        idempotency_key="interrupt-1",
+    )
+    assert interrupt["expected_turn_id"] == turn_id
 
     decision = service.resolve_approval(
         "task-1",

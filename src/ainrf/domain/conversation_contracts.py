@@ -174,6 +174,7 @@ class ConversationErrorCode(StrEnum):
 
 
 class IdempotencyScope(StrEnum):
+    CREATE_TASK = "create_task"
     CREATE_TURN = "create_turn"
     RETRY_TURN = "retry_turn"
     STEER_TURN = "steer_turn"

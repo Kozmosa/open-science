@@ -1,10 +1,8 @@
 from __future__ import annotations
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from starlette.responses import StreamingResponse
 from ainrf.agentic_researcher.models import (
     Task,
     TaskOutputEvent,
@@ -12,27 +10,26 @@ from ainrf.agentic_researcher.models import (
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     MessageItemResponse,
-    TaskAttemptListResponse,
+    ConversationTaskMutationResponse,
     TaskAttemptResponse,
     TaskCreateRequest,
     TaskForkRequest,
     TaskListResponse,
     TaskHealthResponse,
-    TaskMessagesResponse,
     TaskMoveRequest,
     TaskMutationResponse,
-    TaskOutputItemResponse,
-    TaskOutputResponse,
-    TaskPauseResponse,
-    TaskPromptRequest,
-    TaskPromptSendResponse,
-    TaskResumeResponse,
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
     TaskUpdateRequest,
+    TurnSubmissionResponse,
 )
 from ainrf.auth.permissions import get_current_user
-from ainrf.domain import DomainPermissionError, TaskApplicationService, TaskProjectionService
+from ainrf.domain import (
+    ConversationApplicationService,
+    DomainPermissionError,
+    TaskApplicationService,
+    TaskProjectionService,
+)
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -46,6 +43,15 @@ def _get_task_application_service(request: Request) -> TaskApplicationService:
         raise HTTPException(status_code=503, detail="Task domain v2 is not ready")
     if not isinstance(service, TaskApplicationService):
         raise HTTPException(status_code=500, detail="Task application service is invalid")
+    return service
+
+
+def _get_conversation_application_service(request: Request) -> ConversationApplicationService:
+    service = getattr(request.app.state, "conversation_application_service", None)
+    if service is None or not isinstance(service, ConversationApplicationService):
+        raise HTTPException(status_code=503, detail="Conversation Module is unavailable")
+    if not service.v2_ready():
+        raise HTTPException(status_code=503, detail="Conversation Module is not ready")
     return service
 
 
@@ -199,14 +205,16 @@ def _output_items_to_messages(
     return messages
 
 
-@router.post("", status_code=201)
-async def create_task(request: Request, payload: TaskCreateRequest) -> TaskMutationResponse:
+@router.post("", status_code=202)
+async def create_task(
+    request: Request, payload: TaskCreateRequest
+) -> ConversationTaskMutationResponse:
     user = get_current_user(request)
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     if not payload.project_id:
         raise HTTPException(status_code=409, detail="v2 Task creation requires an explicit Project")
     try:
-        created = task_application.create_task(
+        created = conversation.create_task(
             user,
             project_id=payload.project_id,
             workspace_id=payload.workspace_id,
@@ -219,9 +227,11 @@ async def create_task(request: Request, payload: TaskCreateRequest) -> TaskMutat
             user_mcp_servers=payload.mcp_servers,
             idempotency_key=_idempotency_key(request),
         )
-        projection = _get_task_projection_service(request)
-        result = _v2_task_mutation_response(projection, user, created)
-        return result
+        task = conversation.read_task(str(created["task_id"]), user)
+        return ConversationTaskMutationResponse(
+            task=task,
+            submission=TurnSubmissionResponse.model_validate(created),
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -268,55 +278,6 @@ async def get_task(request: Request, task_id: str) -> TaskSummaryResponse:
     projection = _get_task_projection_service(request)
     try:
         return _v2_task_summary(projection, task_id, get_current_user(request))
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-@router.get("/{task_id}/attempts", response_model=TaskAttemptListResponse)
-async def list_task_attempts(request: Request, task_id: str) -> TaskAttemptListResponse:
-    """Return the durable Attempt history for a Task in v2 mode."""
-    projection = _get_task_projection_service(request)
-    try:
-        return TaskAttemptListResponse.model_validate(
-            {"items": projection.attempts(task_id, get_current_user(request))}
-        )
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-@router.post(
-    "/{task_id}/attempts/{attempt_id}/resolve-launch-unknown", response_model=TaskAttemptResponse
-)
-async def resolve_launch_unknown_attempt(
-    request: Request, task_id: str, attempt_id: str
-) -> TaskAttemptResponse:
-    """Close a manually investigated unknown launch without re-launching it."""
-    task_application = _get_task_application_service(request)
-    try:
-        raw_payload = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise HTTPException(
-            status_code=422, detail="resolution request must be valid JSON"
-        ) from exc
-    if not isinstance(raw_payload, dict):
-        raise HTTPException(status_code=422, detail="resolution request must be an object")
-    reason = raw_payload.get("reason")
-    if not isinstance(reason, str) or not reason.strip():
-        raise HTTPException(status_code=422, detail="resolution reason is required")
-    try:
-        task_application.resolve_launch_unknown(
-            task_id,
-            attempt_id,
-            get_current_user(request),
-            reason=reason,
-            idempotency_key=_idempotency_key(request),
-        )
-        projection = _get_task_projection_service(request)
-        return TaskAttemptResponse.model_validate(
-            projection.attempt(attempt_id, get_current_user(request))
-        )
-    except HTTPException:
-        raise
     except Exception as exc:
         raise _translate_v2_error(exc) from exc
 
@@ -368,65 +329,6 @@ async def cancel_task(request: Request, task_id: str) -> None:
         raise
     except Exception as exc:
         raise _translate_v2_error(exc) from exc
-
-
-@router.post("/{task_id}/pause")
-async def pause_task(request: Request, task_id: str) -> TaskPauseResponse:
-    task_application = _get_task_application_service(request)
-    user = get_current_user(request)
-    try:
-        task_application.pause_task(task_id, user, idempotency_key=_idempotency_key(request))
-        projection = _get_task_projection_service(request)
-        task = _v2_task_summary(projection, task_id, user)
-        return TaskPauseResponse(task_id=task_id, status=task.status)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-@router.post("/{task_id}/resume")
-async def resume_task(request: Request, task_id: str) -> TaskResumeResponse:
-    task_application = _get_task_application_service(request)
-    user = get_current_user(request)
-    try:
-        task_application.resume_task(task_id, user, idempotency_key=_idempotency_key(request))
-        projection = _get_task_projection_service(request)
-        task = _v2_task_summary(projection, task_id, user)
-        return TaskResumeResponse(task_id=task_id, status=task.status)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-async def _continue_task(
-    request: Request, task_id: str, payload: TaskPromptRequest
-) -> TaskPromptSendResponse:
-    task_application = _get_task_application_service(request)
-    try:
-        result = task_application.continue_task(
-            task_id,
-            get_current_user(request),
-            prompt=payload.prompt,
-            idempotency_key=_idempotency_key(request),
-        )
-        sequence = result.get("message_sequence")
-        if not isinstance(sequence, int):
-            raise HTTPException(status_code=500, detail="Task continuation result is incomplete")
-        return TaskPromptSendResponse(task_id=task_id, sequence=sequence)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-@router.post("/{task_id}/continue")
-async def continue_task(
-    request: Request, task_id: str, payload: TaskPromptRequest
-) -> TaskPromptSendResponse:
-    """Append a Task input or create a durable continuation Attempt."""
-    return await _continue_task(request, task_id, payload)
 
 
 async def _archive_task(
@@ -539,128 +441,3 @@ async def fork_task(
         raise
     except Exception as exc:
         raise _translate_v2_error(exc) from exc
-
-
-@router.post("/{task_id}/retry", status_code=201)
-async def retry_task(request: Request, task_id: str) -> TaskMutationResponse:
-    """Retry through a new Attempt under the existing Task identity."""
-    if (await request.body()).strip():
-        raise HTTPException(status_code=422, detail="Task retry does not accept a request body")
-    user = get_current_user(request)
-    task_application = _get_task_application_service(request)
-    try:
-        projection = _get_task_projection_service(request)
-        retried = task_application.retry_task(
-            task_id, user, idempotency_key=_idempotency_key(request)
-        )
-        return _v2_task_mutation_response(projection, user, retried)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-
-@router.get("/{task_id}/output")
-async def get_task_output(
-    request: Request,
-    task_id: str,
-    after_seq: int = Query(0, ge=0),
-    limit: int = Query(0, ge=0, le=1000, description="Max items to return; 0 means unlimited"),
-) -> TaskOutputResponse:
-    user = get_current_user(request)
-    projection = _get_task_projection_service(request)
-    try:
-        fetch_limit = limit + 1 if limit > 0 else 1000
-        items = projection.outputs(task_id, user, after_seq=after_seq, limit=fetch_limit)
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-    if limit > 0:
-        has_more = len(items) > limit
-        visible = items[:limit]
-    else:
-        has_more = False
-        visible = items
-    next_seq = visible[-1].seq if visible else after_seq
-    return TaskOutputResponse(
-        items=[
-            TaskOutputItemResponse(
-                task_id=item.task_id,
-                kind=item.kind,
-                content=item.content,
-                seq=item.seq,
-                created_at=item.created_at.isoformat(),
-            )
-            for item in visible
-        ],
-        has_more=has_more,
-        next_seq=next_seq,
-    )
-
-
-@router.get("/{task_id}/messages")
-async def get_task_messages(
-    request: Request,
-    task_id: str,
-    after_seq: int = Query(0, ge=0),
-    limit: int = Query(200, ge=1, le=1000),
-) -> TaskMessagesResponse:
-    projection = _get_task_projection_service(request)
-    user = get_current_user(request)
-    try:
-        task = _v2_task_summary(projection, task_id, user)
-        items = projection.outputs(task_id, user, after_seq=after_seq, limit=limit + 1)
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-    visible_items = items[:limit]
-    return TaskMessagesResponse(
-        messages=_output_items_to_messages(visible_items, task),
-        has_more=len(items) > limit,
-        next_sequence=visible_items[-1].seq if len(items) > limit and visible_items else None,
-    )
-
-
-@router.get("/{task_id}/stream")
-async def stream_task_output(
-    request: Request, task_id: str, after_seq: int = Query(0, ge=0)
-) -> StreamingResponse:
-    projection = _get_task_projection_service(request)
-    user = get_current_user(request)
-    try:
-        projection.task(task_id, user)
-    except Exception as exc:
-        raise _translate_v2_error(exc) from exc
-
-    async def v2_event_stream():
-        cursor = after_seq
-        terminal_statuses = {
-            "succeeded",
-            "failed",
-            "cancelled",
-            "stopped",
-            "stopped_by_project_archive",
-            "stopped_permission_revoked",
-        }
-        while True:
-            if await request.is_disconnected():
-                break
-            try:
-                items = projection.outputs(task_id, user, after_seq=cursor, limit=1000)
-                task = _v2_task_summary(projection, task_id, user)
-            except (DomainNotFoundError, DomainPermissionError):
-                break
-            for item in items:
-                cursor = item.seq
-                event_payload = TaskOutputItemResponse(
-                    task_id=item.task_id,
-                    kind=item.kind,
-                    content=item.content,
-                    seq=item.seq,
-                    created_at=item.created_at.isoformat(),
-                ).model_dump()
-                yield f"event: output\ndata: {json.dumps(event_payload, ensure_ascii=True)}\n\n"
-            if not items and task.status in terminal_statuses:
-                yield f"event: done\ndata: {json.dumps({'task_id': task_id, 'status': task.status})}\n\n"
-                break
-            await asyncio.sleep(0.25)
-
-    return StreamingResponse(v2_event_stream(), media_type="text/event-stream")

@@ -32,7 +32,8 @@ async def test_codex_adapter_uses_native_expected_turn_guard() -> None:
         thread_id="thread-1",
         turn_id="turn-1",
     )
-    engine._rpc_request = AsyncMock(return_value={"accepted": True})  # type: ignore[method-assign]
+    rpc_request = AsyncMock(return_value={"accepted": True})
+    engine._rpc_request = rpc_request  # type: ignore[method-assign]
     adapter = ConversationRuntimeAdapter(engine)
 
     receipt = await adapter.steer_turn(
@@ -44,7 +45,7 @@ async def test_codex_adapter_uses_native_expected_turn_guard() -> None:
 
     assert receipt.support is CapabilitySupport.NATIVE
     assert receipt.accepted is True
-    engine._rpc_request.assert_awaited_once_with(
+    rpc_request.assert_awaited_once_with(
         engine._sessions["execution-1"],
         "turn/steer",
         {

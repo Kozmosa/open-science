@@ -76,19 +76,15 @@ export default function TaskDetailPage({
     interactiveEngines.has(engine) &&
     (selectedTask.status === 'running' ||
       selectedTask.status === 'succeeded' ||
-      selectedTask.status === 'paused' ||
       selectedTask.status === 'failed');
-  const showPause = canMutate && selectedTask.status === 'running' && interactiveEngines.has(engine);
-  const showResume = canMutate && selectedTask.status === 'paused' && interactiveEngines.has(engine);
+  const showInterrupt = canMutate && selectedTask.status === 'running' && interactiveEngines.has(engine);
 
   return (
     <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--osci-color-surface)]">
       <TaskHeaderBar
         task={selectedTask}
-        showPause={showPause}
-        showResume={showResume}
-        onPause={() => actions.pause()}
-        onResume={() => actions.resume()}
+        showInterrupt={showInterrupt}
+        onInterrupt={() => actions.interrupt()}
         taskSidebarCollapsed={taskSidebarCollapsed}
         metadataSidebarOpen={metadataSidebarOpen}
         onToggleTaskSidebar={onToggleTaskSidebar}

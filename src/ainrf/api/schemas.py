@@ -692,6 +692,77 @@ class TaskMutationResponse(BaseModel):
     dispatch: TaskDispatchResponse
 
 
+class TurnSubmissionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    submission_id: str
+    task_id: str
+    reserved_turn_id: str
+    status: str
+    intent: str
+
+
+class ConversationTaskMutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task: dict[str, Any]
+    submission: TurnSubmissionResponse
+
+
+class TurnCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1)
+    allow_next_turn: bool = False
+
+
+class TurnResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    turn_id: str
+    task_id: str
+    turn_seq: int
+    status: str
+
+
+class TurnListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[TurnResponse]
+
+
+class TurnItemResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    item_id: str
+    task_id: str
+    turn_id: str
+    task_item_seq: int
+    turn_item_seq: int
+    item_type: str
+    actor: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class TurnItemListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[TurnItemResponse]
+
+
+class TurnSteerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_turn_id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class TurnInterruptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_turn_id: str = Field(min_length=1)
+
+
+class TurnControlResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    control_request_id: str
+    task_id: str
+    expected_turn_id: str
+    kind: str
+    status: str
+
+
 class TaskRelationshipResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -183,6 +183,19 @@ export type ComponentHealth = {
 };
 
 /**
+ * ConversationTaskMutationResponse
+ */
+export type ConversationTaskMutationResponse = {
+    submission: TurnSubmissionResponse;
+    /**
+     * Task
+     */
+    task: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * CpuInfo
  */
 export type CpuInfo = {
@@ -1128,32 +1141,6 @@ export type MemoryInfo = {
 };
 
 /**
- * MessageItemResponse
- */
-export type MessageItemResponse = {
-    /**
-     * Content
-     */
-    content: string | {
-        [key: string]: unknown;
-    };
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Metadata
-     */
-    metadata: {
-        [key: string]: unknown;
-    };
-    /**
-     * Type
-     */
-    type: string;
-};
-
-/**
  * MonitoringServiceItem
  */
 export type MonitoringServiceItem = {
@@ -2040,16 +2027,6 @@ export type SkillRegistryUpdateResponse = {
 };
 
 /**
- * TaskAttemptListResponse
- */
-export type TaskAttemptListResponse = {
-    /**
-     * Items
-     */
-    items: Array<TaskAttemptResponse>;
-};
-
-/**
  * TaskAttemptResponse
  *
  * Authoritative v2 TaskAttempt projection.
@@ -2359,24 +2336,6 @@ export type TaskListResponse = {
 };
 
 /**
- * TaskMessagesResponse
- */
-export type TaskMessagesResponse = {
-    /**
-     * Has More
-     */
-    has_more: boolean;
-    /**
-     * Messages
-     */
-    messages: Array<MessageItemResponse>;
-    /**
-     * Next Sequence
-     */
-    next_sequence?: number | null;
-};
-
-/**
  * TaskMoveRequest
  *
  * Move a not-yet-started Task to a Project Context selected by the caller.
@@ -2399,88 +2358,6 @@ export type TaskMutationResponse = {
     attempt: TaskAttemptResponse;
     dispatch: TaskDispatchResponse;
     task: TaskSummaryResponse;
-};
-
-/**
- * TaskOutputItemResponse
- */
-export type TaskOutputItemResponse = {
-    /**
-     * Content
-     */
-    content: string;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Kind
-     */
-    kind: string;
-    /**
-     * Seq
-     */
-    seq: number;
-    /**
-     * Task Id
-     */
-    task_id: string;
-};
-
-/**
- * TaskOutputResponse
- */
-export type TaskOutputResponse = {
-    /**
-     * Has More
-     */
-    has_more?: boolean;
-    /**
-     * Items
-     */
-    items: Array<TaskOutputItemResponse>;
-    /**
-     * Next Seq
-     */
-    next_seq?: number;
-};
-
-/**
- * TaskPauseResponse
- */
-export type TaskPauseResponse = {
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-};
-
-/**
- * TaskPromptRequest
- */
-export type TaskPromptRequest = {
-    /**
-     * Prompt
-     */
-    prompt: string;
-};
-
-/**
- * TaskPromptSendResponse
- */
-export type TaskPromptSendResponse = {
-    /**
-     * Sequence
-     */
-    sequence: number;
-    /**
-     * Task Id
-     */
-    task_id: string;
 };
 
 /**
@@ -2535,20 +2412,6 @@ export type TaskRelationshipResponse = {
      * Target Task Id
      */
     target_task_id: string;
-};
-
-/**
- * TaskResumeResponse
- */
-export type TaskResumeResponse = {
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
 };
 
 /**
@@ -2925,6 +2788,181 @@ export type ToolStatusResponse = {
      * Version
      */
     version?: string | null;
+};
+
+/**
+ * TurnControlResponse
+ */
+export type TurnControlResponse = {
+    /**
+     * Control Request Id
+     */
+    control_request_id: string;
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnCreateRequest
+ */
+export type TurnCreateRequest = {
+    /**
+     * Allow Next Turn
+     */
+    allow_next_turn?: boolean;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * TurnInterruptRequest
+ */
+export type TurnInterruptRequest = {
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+};
+
+/**
+ * TurnItemListResponse
+ */
+export type TurnItemListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TurnItemResponse>;
+};
+
+/**
+ * TurnItemResponse
+ */
+export type TurnItemResponse = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Item Type
+     */
+    item_type: string;
+    /**
+     * Payload
+     */
+    payload?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Task Item Seq
+     */
+    task_item_seq: number;
+    /**
+     * Turn Id
+     */
+    turn_id: string;
+    /**
+     * Turn Item Seq
+     */
+    turn_item_seq: number;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnListResponse
+ */
+export type TurnListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TurnResponse>;
+};
+
+/**
+ * TurnResponse
+ */
+export type TurnResponse = {
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Turn Id
+     */
+    turn_id: string;
+    /**
+     * Turn Seq
+     */
+    turn_seq: number;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnSteerRequest
+ */
+export type TurnSteerRequest = {
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * TurnSubmissionResponse
+ */
+export type TurnSubmissionResponse = {
+    /**
+     * Intent
+     */
+    intent: string;
+    /**
+     * Reserved Turn Id
+     */
+    reserved_turn_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
 };
 
 /**
@@ -6413,7 +6451,7 @@ export type PostApiTasksResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: ConversationTaskMutationResponse;
 };
 
 export type PostApiTasksResponse = PostApiTasksResponses[keyof PostApiTasksResponses];
@@ -6538,70 +6576,6 @@ export type PostApiTasksTaskIdArchiveResponses = {
 
 export type PostApiTasksTaskIdArchiveResponse = PostApiTasksTaskIdArchiveResponses[keyof PostApiTasksTaskIdArchiveResponses];
 
-export type GetApiTasksTaskIdAttemptsData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/attempts';
-};
-
-export type GetApiTasksTaskIdAttemptsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdAttemptsError = GetApiTasksTaskIdAttemptsErrors[keyof GetApiTasksTaskIdAttemptsErrors];
-
-export type GetApiTasksTaskIdAttemptsResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskAttemptListResponse;
-};
-
-export type GetApiTasksTaskIdAttemptsResponse = GetApiTasksTaskIdAttemptsResponses[keyof GetApiTasksTaskIdAttemptsResponses];
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-        /**
-         * Attempt Id
-         */
-        attempt_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown';
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownError = PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors[keyof PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors];
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskAttemptResponse;
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponse = PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses[keyof PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses];
-
 export type PostApiTasksTaskIdCancelData = {
     body?: never;
     path: {
@@ -6631,36 +6605,6 @@ export type PostApiTasksTaskIdCancelResponses = {
 };
 
 export type PostApiTasksTaskIdCancelResponse = PostApiTasksTaskIdCancelResponses[keyof PostApiTasksTaskIdCancelResponses];
-
-export type PostApiTasksTaskIdContinueData = {
-    body: TaskPromptRequest;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/continue';
-};
-
-export type PostApiTasksTaskIdContinueErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiTasksTaskIdContinueError = PostApiTasksTaskIdContinueErrors[keyof PostApiTasksTaskIdContinueErrors];
-
-export type PostApiTasksTaskIdContinueResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskPromptSendResponse;
-};
-
-export type PostApiTasksTaskIdContinueResponse = PostApiTasksTaskIdContinueResponses[keyof PostApiTasksTaskIdContinueResponses];
 
 export type PostApiTasksTaskIdForkData = {
     body: TaskForkRequest;
@@ -6722,45 +6666,6 @@ export type GetApiTasksTaskIdHealthResponses = {
 
 export type GetApiTasksTaskIdHealthResponse = GetApiTasksTaskIdHealthResponses[keyof GetApiTasksTaskIdHealthResponses];
 
-export type GetApiTasksTaskIdMessagesData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: {
-        /**
-         * After Seq
-         */
-        after_seq?: number;
-        /**
-         * Limit
-         */
-        limit?: number;
-    };
-    url: '/api/tasks/{task_id}/messages';
-};
-
-export type GetApiTasksTaskIdMessagesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdMessagesError = GetApiTasksTaskIdMessagesErrors[keyof GetApiTasksTaskIdMessagesErrors];
-
-export type GetApiTasksTaskIdMessagesResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskMessagesResponse;
-};
-
-export type GetApiTasksTaskIdMessagesResponse = GetApiTasksTaskIdMessagesResponses[keyof GetApiTasksTaskIdMessagesResponses];
-
 export type PostApiTasksTaskIdMoveData = {
     body: TaskMoveRequest;
     path: {
@@ -6791,48 +6696,7 @@ export type PostApiTasksTaskIdMoveResponses = {
 
 export type PostApiTasksTaskIdMoveResponse = PostApiTasksTaskIdMoveResponses[keyof PostApiTasksTaskIdMoveResponses];
 
-export type GetApiTasksTaskIdOutputData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: {
-        /**
-         * After Seq
-         */
-        after_seq?: number;
-        /**
-         * Limit
-         *
-         * Max items to return; 0 means unlimited
-         */
-        limit?: number;
-    };
-    url: '/api/tasks/{task_id}/output';
-};
-
-export type GetApiTasksTaskIdOutputErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdOutputError = GetApiTasksTaskIdOutputErrors[keyof GetApiTasksTaskIdOutputErrors];
-
-export type GetApiTasksTaskIdOutputResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskOutputResponse;
-};
-
-export type GetApiTasksTaskIdOutputResponse = GetApiTasksTaskIdOutputResponses[keyof GetApiTasksTaskIdOutputResponses];
-
-export type PostApiTasksTaskIdPauseData = {
+export type GetApiTasksTaskIdTurnsData = {
     body?: never;
     path: {
         /**
@@ -6841,29 +6705,29 @@ export type PostApiTasksTaskIdPauseData = {
         task_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/pause';
+    url: '/api/tasks/{task_id}/turns';
 };
 
-export type PostApiTasksTaskIdPauseErrors = {
+export type GetApiTasksTaskIdTurnsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdPauseError = PostApiTasksTaskIdPauseErrors[keyof PostApiTasksTaskIdPauseErrors];
+export type GetApiTasksTaskIdTurnsError = GetApiTasksTaskIdTurnsErrors[keyof GetApiTasksTaskIdTurnsErrors];
 
-export type PostApiTasksTaskIdPauseResponses = {
+export type GetApiTasksTaskIdTurnsResponses = {
     /**
      * Successful Response
      */
-    200: TaskPauseResponse;
+    200: TurnListResponse;
 };
 
-export type PostApiTasksTaskIdPauseResponse = PostApiTasksTaskIdPauseResponses[keyof PostApiTasksTaskIdPauseResponses];
+export type GetApiTasksTaskIdTurnsResponse = GetApiTasksTaskIdTurnsResponses[keyof GetApiTasksTaskIdTurnsResponses];
 
-export type PostApiTasksTaskIdResumeData = {
-    body?: never;
+export type PostApiTasksTaskIdTurnsData = {
+    body: TurnCreateRequest;
     path: {
         /**
          * Task Id
@@ -6871,89 +6735,162 @@ export type PostApiTasksTaskIdResumeData = {
         task_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/resume';
+    url: '/api/tasks/{task_id}/turns';
 };
 
-export type PostApiTasksTaskIdResumeErrors = {
+export type PostApiTasksTaskIdTurnsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdResumeError = PostApiTasksTaskIdResumeErrors[keyof PostApiTasksTaskIdResumeErrors];
+export type PostApiTasksTaskIdTurnsError = PostApiTasksTaskIdTurnsErrors[keyof PostApiTasksTaskIdTurnsErrors];
 
-export type PostApiTasksTaskIdResumeResponses = {
+export type PostApiTasksTaskIdTurnsResponses = {
     /**
      * Successful Response
      */
-    200: TaskResumeResponse;
+    202: TurnSubmissionResponse;
 };
 
-export type PostApiTasksTaskIdResumeResponse = PostApiTasksTaskIdResumeResponses[keyof PostApiTasksTaskIdResumeResponses];
+export type PostApiTasksTaskIdTurnsResponse = PostApiTasksTaskIdTurnsResponses[keyof PostApiTasksTaskIdTurnsResponses];
 
-export type PostApiTasksTaskIdRetryData = {
-    body?: never;
+export type PostApiTasksTaskIdTurnsTurnIdInterruptData = {
+    body: TurnInterruptRequest;
     path: {
         /**
          * Task Id
          */
         task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/retry';
+    url: '/api/tasks/{task_id}/turns/{turn_id}/interrupt';
 };
 
-export type PostApiTasksTaskIdRetryErrors = {
+export type PostApiTasksTaskIdTurnsTurnIdInterruptErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdRetryError = PostApiTasksTaskIdRetryErrors[keyof PostApiTasksTaskIdRetryErrors];
+export type PostApiTasksTaskIdTurnsTurnIdInterruptError = PostApiTasksTaskIdTurnsTurnIdInterruptErrors[keyof PostApiTasksTaskIdTurnsTurnIdInterruptErrors];
 
-export type PostApiTasksTaskIdRetryResponses = {
+export type PostApiTasksTaskIdTurnsTurnIdInterruptResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: TurnControlResponse;
 };
 
-export type PostApiTasksTaskIdRetryResponse = PostApiTasksTaskIdRetryResponses[keyof PostApiTasksTaskIdRetryResponses];
+export type PostApiTasksTaskIdTurnsTurnIdInterruptResponse = PostApiTasksTaskIdTurnsTurnIdInterruptResponses[keyof PostApiTasksTaskIdTurnsTurnIdInterruptResponses];
 
-export type GetApiTasksTaskIdStreamData = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsData = {
     body?: never;
     path: {
         /**
          * Task Id
          */
         task_id: string;
-    };
-    query?: {
         /**
-         * After Seq
+         * Turn Id
          */
-        after_seq?: number;
+        turn_id: string;
     };
-    url: '/api/tasks/{task_id}/stream';
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/items';
 };
 
-export type GetApiTasksTaskIdStreamErrors = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type GetApiTasksTaskIdStreamError = GetApiTasksTaskIdStreamErrors[keyof GetApiTasksTaskIdStreamErrors];
+export type GetApiTasksTaskIdTurnsTurnIdItemsError = GetApiTasksTaskIdTurnsTurnIdItemsErrors[keyof GetApiTasksTaskIdTurnsTurnIdItemsErrors];
 
-export type GetApiTasksTaskIdStreamResponses = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: TurnItemListResponse;
 };
+
+export type GetApiTasksTaskIdTurnsTurnIdItemsResponse = GetApiTasksTaskIdTurnsTurnIdItemsResponses[keyof GetApiTasksTaskIdTurnsTurnIdItemsResponses];
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryData = {
+    body: TurnCreateRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/retry';
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryError = PostApiTasksTaskIdTurnsTurnIdRetryErrors[keyof PostApiTasksTaskIdTurnsTurnIdRetryErrors];
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryResponses = {
+    /**
+     * Successful Response
+     */
+    202: TurnSubmissionResponse;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryResponse = PostApiTasksTaskIdTurnsTurnIdRetryResponses[keyof PostApiTasksTaskIdTurnsTurnIdRetryResponses];
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerData = {
+    body: TurnSteerRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/steer';
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerError = PostApiTasksTaskIdTurnsTurnIdSteerErrors[keyof PostApiTasksTaskIdTurnsTurnIdSteerErrors];
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerResponses = {
+    /**
+     * Successful Response
+     */
+    202: TurnControlResponse;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerResponse = PostApiTasksTaskIdTurnsTurnIdSteerResponses[keyof PostApiTasksTaskIdTurnsTurnIdSteerResponses];
 
 export type PostApiTasksTaskIdUnarchiveData = {
     body?: never;

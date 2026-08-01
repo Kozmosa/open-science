@@ -125,10 +125,12 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
             *,
             artifact_sha: str,
             engine_factory: object,
+            conversation_only: bool,
         ) -> None:
             assert state_root == tmp_path
             assert artifact_sha == "a" * 64
             assert callable(engine_factory)
+            assert conversation_only is True
             calls.append("init")
 
         async def run_once(self) -> DispatchRunResult:

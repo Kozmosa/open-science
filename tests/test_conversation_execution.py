@@ -11,9 +11,9 @@ from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType
 from ainrf.domain.conversation_execution import ConversationExecutionService
 from ainrf.domain.conversation_service import ConversationApplicationService
 
-pytestmark = [pytest.mark.engine]
+pytestmark = [pytest.mark.engine, pytest.mark.concurrent]
 
-_USER = {"id": "user-1", "role": "user"}
+_USER: dict[str, object] = {"id": "user-1", "role": "user"}
 
 
 @pytest.fixture

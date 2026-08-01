@@ -11,6 +11,8 @@ from ainrf.domain.conversation_contracts import (
 )
 from ainrf.harness_engine.base import EngineEmit, ExecutionContext, HarnessEngine, HarnessEngineType
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine
+from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
+from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +72,26 @@ class ConversationRuntimeAdapter:
 
     async def start_turn(self, context: ExecutionContext, emit: EngineEmit) -> None:
         await self._engine.start(context, emit)
+
+    def native_turn_identity(
+        self,
+        *,
+        runtime_launch_key: str,
+        fallback_turn_id: str,
+    ) -> tuple[str, str]:
+        if isinstance(self._engine, CodexAppServerEngine):
+            session = self._engine._sessions.get(runtime_launch_key)
+            if session is not None and session.turn_id:
+                return "turn", session.turn_id
+        if isinstance(self._engine, AgentSdkEngine):
+            session = self._engine._sessions.get(runtime_launch_key)
+            if session is not None and session.session_id:
+                return "sdk_query", f"{session.session_id}:{fallback_turn_id}"
+        if isinstance(self._engine, ClaudeCodeEngine):
+            session_id = self._engine._session_ids.get(runtime_launch_key)
+            if session_id:
+                return "cli_process", f"{session_id}:{fallback_turn_id}"
+        return "driver_execution", fallback_turn_id
 
     async def steer_turn(
         self,

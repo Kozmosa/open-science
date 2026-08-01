@@ -161,26 +161,6 @@ class HarnessEngine(ABC):
         """Start executing the context and emit engine events until completion."""
         ...
 
-    async def pause(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
-        """Pause an active task when supported by the engine."""
-        _ = runtime_launch_key
-        raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support pause")
-
-    async def resume(self, context: ExecutionContext, emit: EngineEmit) -> None:
-        """Resume a paused task when supported by the engine."""
-        raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support resume")
-
-    async def send_input(
-        self,
-        task_id: str,
-        text: str,
-        *,
-        runtime_launch_key: str | None = None,
-    ) -> None:
-        """Send follow-up input to an active task when supported by the engine."""
-        _ = runtime_launch_key
-        raise HarnessEngineNotSupportedError(f"{self.engine_type} does not support send_input")
-
     @abstractmethod
     async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         """取消执行"""

@@ -3,8 +3,6 @@ import type {
   TaskEdge,
   TaskEdgeListResponse,
   TaskListResponse,
-  TaskMessagesResponse,
-  TaskOutputListResponse,
   TaskRecord,
   TaskSummary,
   TaskStatus,
@@ -12,18 +10,17 @@ import type {
 } from '@/shared/types';
 import type {
   TaskCreatePayload,
+  ConversationTaskMutationResponse,
   TaskMutationResponse,
-  TaskPauseResponse,
   TaskRelationshipCreateRequest,
   TaskRelationshipListResponse,
   TaskRelationshipResponse,
-  TaskResumeResponse,
+  TurnControlResponse,
+  TurnItemListResponse,
+  TurnItemResponse,
+  TurnListResponse,
+  TurnSubmissionResponse,
 } from '@/shared/api/transportTypes';
-
-const API_BASE = '/api';
-const API_KEY = import.meta.env.VITE_OPENSCIENCE_API_KEY?.trim()
-  || import.meta.env.VITE_AINRF_API_KEY?.trim()
-  || '';
 
 const TASK_STATUSES = new Set<TaskStatus>([
   'queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'paused',
@@ -72,10 +69,10 @@ export const createTask = async (
   payload: TaskCreatePayload,
   idempotencyKey: string,
 ): Promise<TaskSummary> => {
-  const response = await api.post<TaskMutationResponse>('/tasks', payload, {
+  const response = await api.post<ConversationTaskMutationResponse>('/tasks', payload, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
-  return mutationTask(response);
+  return response.task as unknown as TaskSummary;
 };
 
 function taskAction(taskId: string, action: string, idempotencyKey: string): Promise<TaskSummary> {
@@ -90,16 +87,61 @@ export const unarchiveTask = (taskId: string, key: string): Promise<TaskSummary>
   taskAction(taskId, 'unarchive', key);
 export const cancelTask = (taskId: string, key: string): Promise<void> =>
   api.post(`/tasks/${taskId}/cancel`, {}, { headers: { 'Idempotency-Key': key } });
-export const pauseTask = (taskId: string, key: string): Promise<TaskPauseResponse> =>
-  api.post(`/tasks/${taskId}/pause`, {}, { headers: { 'Idempotency-Key': key } });
-export const resumeTask = (taskId: string, key: string): Promise<TaskResumeResponse> =>
-  api.post(`/tasks/${taskId}/resume`, {}, { headers: { 'Idempotency-Key': key } });
+export const getTaskTurns = (taskId: string): Promise<TurnListResponse> =>
+  api.get(`/tasks/${taskId}/turns`);
 
-export const retryTask = async (taskId: string, key: string): Promise<TaskSummary> => {
-  const response = await api.post<TaskMutationResponse>(`/tasks/${taskId}/retry`, undefined, {
-    headers: { 'Idempotency-Key': key },
-  });
-  return mutationTask(response);
+export const getTurnItems = (taskId: string, turnId: string): Promise<TurnItemListResponse> =>
+  api.get(`/tasks/${taskId}/turns/${turnId}/items`);
+
+export const createTurn = (
+  taskId: string,
+  text: string,
+  key: string,
+  allowNextTurn = false,
+): Promise<TurnSubmissionResponse> => api.post(
+  `/tasks/${taskId}/turns`,
+  { text, allow_next_turn: allowNextTurn },
+  { headers: { 'Idempotency-Key': key } },
+);
+
+export const steerTurn = (
+  taskId: string,
+  turnId: string,
+  text: string,
+  key: string,
+): Promise<TurnControlResponse> => api.post(
+  `/tasks/${taskId}/turns/${turnId}/steer`,
+  { expected_turn_id: turnId, text },
+  { headers: { 'Idempotency-Key': key } },
+);
+
+export const interruptTurn = (
+  taskId: string,
+  turnId: string,
+  key: string,
+): Promise<TurnControlResponse> => api.post(
+  `/tasks/${taskId}/turns/${turnId}/interrupt`,
+  { expected_turn_id: turnId },
+  { headers: { 'Idempotency-Key': key } },
+);
+
+export const retryTask = async (taskId: string, key: string): Promise<TurnSubmissionResponse> => {
+  const turns = await getTaskTurns(taskId);
+  const terminal = [...turns.items]
+    .reverse()
+    .find((turn) => ['completed', 'failed', 'interrupted'].includes(turn.status));
+  if (!terminal) throw new Error('Task has no terminal Turn to retry');
+  const items = await getTurnItems(taskId, terminal.turn_id);
+  const userItem = items.items.find((item) => item.item_type === 'user_message');
+  const text = userItem?.payload?.text;
+  if (typeof text !== 'string' || !text.trim()) {
+    throw new Error('Terminal Turn has no retryable user input');
+  }
+  return api.post(
+    `/tasks/${taskId}/turns/${terminal.turn_id}/retry`,
+    { text, allow_next_turn: false },
+    { headers: { 'Idempotency-Key': key } },
+  );
 };
 
 export const moveTask = (
@@ -175,33 +217,20 @@ export const deleteTaskEdge = (
   { headers: { 'Idempotency-Key': key } },
 );
 
-export const getTaskOutput = (
-  taskId: string,
-  afterSeq = 0,
-  limit = 0,
-): Promise<TaskOutputListResponse> => api.get(
-  `/tasks/${taskId}/output?after_seq=${afterSeq}${limit > 0 ? `&limit=${limit}` : ''}`,
-);
-
-export const buildTaskStreamUrl = (taskId: string, afterSeq = 0): string => {
-  const search = new URLSearchParams({ after_seq: String(afterSeq) });
-  if (API_KEY) search.set('api_key', API_KEY);
-  return `${API_BASE}/tasks/${taskId}/stream?${search.toString()}`;
-};
-
-export const sendTaskPrompt = (
+export const sendTaskPrompt = async (
   taskId: string,
   prompt: string,
   key: string,
-): Promise<{ task_id: string; sequence: number }> => api.post(
-  `/tasks/${taskId}/continue`,
-  { prompt },
-  { headers: { 'Idempotency-Key': key } },
-);
+): Promise<TurnSubmissionResponse | TurnControlResponse> => {
+  const turns = await getTaskTurns(taskId);
+  const active = turns.items.find((turn) => turn.status === 'in_progress');
+  return active
+    ? await steerTurn(taskId, active.turn_id, prompt, key)
+    : await createTurn(taskId, prompt, key);
+};
 
-export const getTaskMessages = (
-  taskId: string,
-  afterSeq = 0,
-  limit = 100,
-): Promise<TaskMessagesResponse> =>
-  api.get(`/tasks/${taskId}/messages?after_seq=${afterSeq}&limit=${limit}`);
+export const listCanonicalTaskItems = async (taskId: string): Promise<TurnItemResponse[]> => {
+  const turns = await getTaskTurns(taskId);
+  const pages = await Promise.all(turns.items.map((turn) => getTurnItems(taskId, turn.turn_id)));
+  return pages.flatMap((page) => page.items).sort((a, b) => a.task_item_seq - b.task_item_seq);
+};

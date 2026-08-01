@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { pauseTask, resumeTask, sendTaskPrompt } from '../api';
+import { getTaskTurns, interruptTurn, sendTaskPrompt } from '../api';
 import { useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -16,39 +16,25 @@ export function useTaskActions(taskId: string | null) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const t = useT();
-  const pauseKeyManager = useRef(new IdempotencyKeyManager('task.pause')).current;
-  const resumeKeyManager = useRef(new IdempotencyKeyManager('task.resume')).current;
-  const promptKeyManager = useRef(new IdempotencyKeyManager('task.continue')).current;
+  const interruptKeyManager = useRef(new IdempotencyKeyManager('turn.interrupt')).current;
+  const promptKeyManager = useRef(new IdempotencyKeyManager('turn.submit')).current;
 
-  const pause = useMutation({
+  const interrupt = useMutation({
     mutationFn: async () => {
-      const key = pauseKeyManager.keyFor(semanticMutationValue({ taskId }));
-      return { result: await pauseTask(taskId!, key), key };
+      const turns = await getTaskTurns(taskId!);
+      const active = turns.items.find((turn) => turn.status === 'in_progress');
+      if (!active) throw new Error('Task has no active Turn');
+      const key = interruptKeyManager.keyFor(semanticMutationValue({ taskId, turnId: active.turn_id }));
+      return { result: await interruptTurn(taskId!, active.turn_id, key), key };
     },
     onSuccess: ({ key }) => {
-      pauseKeyManager.markSucceeded(key);
+      interruptKeyManager.markSucceeded(key);
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
     },
     onError: (error) => {
       showToast(t('pages.tasks.actions.pauseFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
-    },
-  });
-
-  const resume = useMutation({
-    mutationFn: async () => {
-      const key = resumeKeyManager.keyFor(semanticMutationValue({ taskId }));
-      return { result: await resumeTask(taskId!, key), key };
-    },
-    onSuccess: ({ key }) => {
-      resumeKeyManager.markSucceeded(key);
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
-    },
-    onError: (error) => {
-      showToast(t('pages.tasks.actions.resumeFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
     },
   });
 
@@ -69,12 +55,11 @@ export function useTaskActions(taskId: string | null) {
   });
 
   return {
-    pause: () => taskId && pause.mutate(),
-    resume: () => taskId && resume.mutate(),
+    interrupt: () => taskId && interrupt.mutate(),
     sendPrompt: (prompt: string) => {
       if (!taskId) return Promise.reject(new Error(t('pages.tasks.actions.noTaskSelected')));
       return sendPrompt.mutateAsync(prompt);
     },
-    isPending: pause.isPending || resume.isPending || sendPrompt.isPending,
+    isPending: interrupt.isPending || sendPrompt.isPending,
   };
 }

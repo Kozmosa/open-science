@@ -17,11 +17,10 @@ beforeEach(() => {
 describe('api endpoints', () => {
   it('routes legacy mock scenarios through the same HTTP client transport', async () => {
     const {
-      buildTaskStreamUrl,
       createTask,
       getTask,
-      getTaskOutput,
       getTasks,
+      listCanonicalTaskItems,
     } = await import('../../../src/features/tasks/api/endpoints');
     const { getTerminalSession } = await import('../../../src/features/terminal/api/endpoints');
     const { getDomainWorkspaces } = await import('../../../src/features/domain/api');
@@ -39,28 +38,17 @@ describe('api endpoints', () => {
     }, 'task.create:test');
     const tasks = await getTasks();
     const detail = await getTask(created.task_id);
-    const output = await getTaskOutput(created.task_id);
+    const items = await listCanonicalTaskItems(created.task_id);
 
     expect(session.status).toBe('idle');
     expect(workspaces.items[0]?.workspace_id).toBe('workspace-default');
     expect(created.status).toBe('queued');
     expect(tasks.items[0]?.task_id).toBe(created.task_id);
     expect(detail.binding?.resolved_workdir).toBeTruthy();
-    expect(output.items[0]?.kind).toBe('message');
-    expect(buildTaskStreamUrl(created.task_id, 3)).toContain(`/api/tasks/${created.task_id}/stream`);
+    expect(items[0]?.item_type).toBe('user_message');
   });
 
-  it('uses a query parameter for task stream API keys because EventSource cannot send custom headers', async () => {
-    vi.stubEnv('VITE_AINRF_API_KEY', 'stream-secret');
-
-    const { buildTaskStreamUrl } = await import('../../../src/features/tasks/api/endpoints');
-
-    expect(buildTaskStreamUrl('task-1', 7)).toBe(
-      '/api/tasks/task-1/stream?after_seq=7&api_key=stream-secret'
-    );
-  });
-
-  it('sends stable idempotency keys for Task pause, resume, and continuation', async () => {
+  it('sends stable idempotency keys through the Turn submission Interface', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
         status: 200,
@@ -69,19 +57,13 @@ describe('api endpoints', () => {
     ));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { pauseTask, resumeTask, sendTaskPrompt } = await import('../../../src/features/tasks/api/endpoints');
-    await pauseTask('task-1', 'task.pause:test');
-    await resumeTask('task-1', 'task.resume:test');
-    await sendTaskPrompt('task-1', 'Continue the analysis', 'task.continue:test');
+    const { createTurn } = await import('../../../src/features/tasks/api/endpoints');
+    await createTurn('task-1', 'Continue the analysis', 'turn.submit:test');
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      '/api/tasks/task-1/pause',
-      '/api/tasks/task-1/resume',
-      '/api/tasks/task-1/continue',
+      '/api/tasks/task-1/turns',
     ]);
-    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.pause:test');
-    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.resume:test');
-    expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.continue:test');
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('turn.submit:test');
   });
 
   it('uses the real api client when no MSW handler intercepts the request', async () => {

@@ -157,11 +157,7 @@ class CodexAppServerEngine(HarnessEngine):
         runtime_identity = runtime_launch_key or task_id
         async with self._lock:
             session = self._sessions.get(runtime_identity)
-            if (
-                session is None
-                or session.thread_id is None
-                or session.turn_id != expected_turn_id
-            ):
+            if session is None or session.thread_id is None or session.turn_id != expected_turn_id:
                 raise RuntimeError("Codex active Turn does not match expected_turn_id")
             result = await self._rpc_request(
                 session,

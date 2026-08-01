@@ -30,6 +30,7 @@ from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
+from ainrf.domain.context import ProjectContextService
 from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.service import (
     DomainAuthorizationService,
@@ -213,10 +214,12 @@ class ConversationApplicationService:
     ) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+        self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "agentic_researcher")
         self._write_fence = DomainWriteFence(state_root, artifact_sha=artifact_sha)
+        self._context_service = ProjectContextService(state_root, artifact_sha=artifact_sha)
         self._dispatch_notifier = dispatch_notifier
 
     def v2_ready(self) -> bool:
@@ -329,6 +332,43 @@ class ConversationApplicationService:
             created_at=created_at,
         )
 
+    @staticmethod
+    def _writable_workspace(
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        workspace_id: str,
+        expected_environment_id: str | None,
+    ) -> sqlite3.Row:
+        project = conn.execute(
+            "SELECT status FROM projects WHERE project_id = ?", (project_id,)
+        ).fetchone()
+        if project is None:
+            raise DomainNotFoundError(project_id)
+        if project["status"] != "active":
+            raise DomainConflictError("Project is archived")
+        row = conn.execute(
+            """
+            SELECT workspace.environment_id, workspace.status AS workspace_status,
+                   environment.status AS environment_status
+            FROM workspaces AS workspace
+            JOIN environments AS environment
+              ON environment.environment_id = workspace.environment_id
+            JOIN project_workspace_links AS link
+              ON link.project_id = ? AND link.workspace_id = workspace.workspace_id
+             AND link.status = 'active'
+            WHERE workspace.workspace_id = ?
+            """,
+            (project_id, workspace_id),
+        ).fetchone()
+        if row is None:
+            raise DomainConflictError("Task Workspace must be an active Project link")
+        if row["workspace_status"] != "active" or row["environment_status"] != "active":
+            raise DomainConflictError("Task Workspace and Environment must be active")
+        if expected_environment_id is not None and row["environment_id"] != expected_environment_id:
+            raise DomainConflictError("Task environment must be derived from the Workspace")
+        return row
+
     def initialize_task(self, task_id: str, user: dict[str, object]) -> dict[str, object]:
         """Establish explicit v3 authority for a newly-created Task."""
         actor = self._actor(user)
@@ -355,6 +395,156 @@ class ConversationApplicationService:
                 conn.rollback()
                 raise
         return {"task_id": task_id, "work_status": TaskWorkStatus.OPEN, "revision": 1}
+
+    def create_task(
+        self,
+        user: dict[str, object],
+        *,
+        project_id: str,
+        workspace_id: str,
+        title: str,
+        prompt: str,
+        researcher_type: str,
+        harness_engine: str,
+        idempotency_key: str,
+        environment_id: str | None = None,
+        user_skills: list[str] | None = None,
+        user_mcp_servers: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Create a Task and its initial TurnSubmission in one transaction."""
+
+        actor = self._actor(user)
+        request: dict[str, object] = {
+            "project_id": project_id,
+            "workspace_id": workspace_id,
+            "title": title,
+            "prompt": prompt,
+            "researcher_type": researcher_type,
+            "harness_engine": harness_engine,
+            "environment_id": environment_id,
+            "user_skills": list(user_skills or []),
+            "user_mcp_servers": list(user_mcp_servers or []),
+        }
+        created_at = _now()
+        with closing(self._connect()) as conn:
+            try:
+                self._begin(conn)
+                domain = _SqliteDomainRepository(conn)
+                digest, replay = self._replay(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.CREATE_TASK,
+                    key=idempotency_key,
+                    request=request,
+                )
+                if replay is not None:
+                    DomainAuthorizationService(conn).require_task_owner(
+                        str(replay["task_id"]), user
+                    )
+                    conn.commit()
+                    return replay
+                authorization = DomainAuthorizationService(conn)
+                authorization.require_project_editor(project_id, user)
+                authorization.require_workspace_owner(workspace_id, user)
+                workspace = self._writable_workspace(
+                    conn,
+                    project_id=project_id,
+                    workspace_id=workspace_id,
+                    expected_environment_id=environment_id,
+                )
+                task_id = f"task-{uuid4().hex}"
+                snapshot_id, context_version_id = (
+                    self._context_service._create_active_snapshot_for_task_in_transaction(
+                        conn,
+                        project_id=project_id,
+                        workspace_id=workspace_id,
+                        task_id=task_id,
+                        task_prompt=prompt,
+                    )
+                )
+                conn.execute(
+                    """
+                    INSERT INTO tasks (
+                        task_id, project_id, workspace_id, environment_id, researcher_type,
+                        harness_engine, user_skills, user_mcp_servers, status, title, prompt,
+                        created_at, updated_at, owner_user_id, project_context_version_id,
+                        project_context_snapshot_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        task_id,
+                        project_id,
+                        workspace_id,
+                        str(workspace["environment_id"]),
+                        researcher_type,
+                        harness_engine,
+                        _canonical_json(user_skills or []),
+                        _canonical_json(user_mcp_servers or []),
+                        title,
+                        prompt,
+                        created_at,
+                        created_at,
+                        actor,
+                        context_version_id,
+                        snapshot_id,
+                    ),
+                )
+                conversations = SqliteConversationRepository(conn)
+                conversations.insert_task_authority(task_id=task_id, created_at=created_at)
+                conversations.insert_task_state(task_id=task_id, created_at=created_at)
+                executions = SqliteConversationExecutionRepository(conn)
+                submission_id = uuid4().hex
+                reserved_turn_id = uuid4().hex
+                executions.insert_submission(
+                    submission_id=submission_id,
+                    task_id=task_id,
+                    reserved_turn_id=reserved_turn_id,
+                    actor_user_id=actor,
+                    idempotency_key=idempotency_key,
+                    request_hash=digest,
+                    input_json=_canonical_json({"text": prompt}),
+                    context_snapshot_ref=snapshot_id,
+                    created_at=created_at,
+                    updated_at=created_at,
+                )
+                executions.insert_submission_intent(
+                    submission_id=submission_id,
+                    task_id=task_id,
+                    kind="create",
+                    retry_of_turn_id=None,
+                    created_at=created_at,
+                )
+                result: dict[str, object] = {
+                    "task_id": task_id,
+                    "submission_id": submission_id,
+                    "reserved_turn_id": reserved_turn_id,
+                    "status": "queued",
+                    "intent": "create",
+                }
+                self._store(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.CREATE_TASK,
+                    key=idempotency_key,
+                    digest=digest,
+                    response=result,
+                    created_at=created_at,
+                )
+                self._audit(
+                    domain,
+                    actor=actor,
+                    event_type="conversation.task.created",
+                    subject_type="task",
+                    subject_id=task_id,
+                    created_at=created_at,
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        if self._dispatch_notifier is not None:
+            self._dispatch_notifier(submission_id)
+        return result
 
     def create_turn(
         self,
@@ -616,8 +806,6 @@ class ConversationApplicationService:
         turn_id: str,
         user: dict[str, object],
         *,
-        runtime_execution_id: str,
-        runtime_generation: int,
         payload: Mapping[str, object],
         idempotency_key: str,
     ) -> dict[str, object]:
@@ -625,8 +813,6 @@ class ConversationApplicationService:
             task_id,
             turn_id,
             user,
-            runtime_execution_id=runtime_execution_id,
-            runtime_generation=runtime_generation,
             kind=ControlKind.STEER,
             payload=payload,
             idempotency_key=idempotency_key,
@@ -638,16 +824,12 @@ class ConversationApplicationService:
         turn_id: str,
         user: dict[str, object],
         *,
-        runtime_execution_id: str,
-        runtime_generation: int,
         idempotency_key: str,
     ) -> dict[str, object]:
         return self._request_control(
             task_id,
             turn_id,
             user,
-            runtime_execution_id=runtime_execution_id,
-            runtime_generation=runtime_generation,
             kind=ControlKind.INTERRUPT,
             payload={},
             idempotency_key=idempotency_key,
@@ -659,8 +841,6 @@ class ConversationApplicationService:
         turn_id: str,
         user: dict[str, object],
         *,
-        runtime_execution_id: str,
-        runtime_generation: int,
         kind: ControlKind,
         payload: Mapping[str, object],
         idempotency_key: str,
@@ -671,13 +851,7 @@ class ConversationApplicationService:
             if kind is ControlKind.STEER
             else IdempotencyScope.INTERRUPT_TURN
         )
-        request = {
-            "task_id": task_id,
-            "turn_id": turn_id,
-            "runtime_execution_id": runtime_execution_id,
-            "runtime_generation": runtime_generation,
-            "payload": dict(payload),
-        }
+        request = {"task_id": task_id, "turn_id": turn_id, "payload": dict(payload)}
         created_at = _now()
         with closing(self._connect()) as conn:
             try:
@@ -705,15 +879,13 @@ class ConversationApplicationService:
                         ConversationErrorCode.TURN_NOT_ACTIVE, "Expected Turn is not active"
                     )
                 execution = executions.active_runtime_execution(turn_id)
-                if (
-                    execution is None
-                    or str(execution["runtime_execution_id"]) != runtime_execution_id
-                    or int(execution["runtime_generation"]) != runtime_generation
-                ):
+                if execution is None:
                     raise ConversationContractError(
                         ConversationErrorCode.RUNTIME_LOST,
-                        "Control request runtime scope is stale",
+                        "Active Turn has no controllable RuntimeExecution",
                     )
+                runtime_execution_id = str(execution["runtime_execution_id"])
+                runtime_generation = int(execution["runtime_generation"])
                 control_request_id = uuid4().hex
                 executions.insert_control_request(
                     control_request_id=control_request_id,
@@ -732,7 +904,7 @@ class ConversationApplicationService:
                 result: dict[str, object] = {
                     "control_request_id": control_request_id,
                     "task_id": task_id,
-                    "turn_id": turn_id,
+                    "expected_turn_id": turn_id,
                     "kind": kind,
                     "status": "requested",
                 }
@@ -1303,6 +1475,8 @@ class ConversationApplicationService:
         *,
         status: TurnStatus,
         failure_code: str | None = None,
+        _terminal_side_effect: Callable[[SqliteConversationExecutionRepository, str], None]
+        | None = None,
     ) -> dict[str, object]:
         """Apply trusted terminal runtime evidence and promote a deferred next Turn."""
         try:
@@ -1346,6 +1520,8 @@ class ConversationApplicationService:
                         None if turn["failure_code"] is None else str(turn["failure_code"])
                     )
                     if str(turn["status"]) == status and persisted_failure == failure_code:
+                        if _terminal_side_effect is not None:
+                            _terminal_side_effect(executions, finished_at)
                         conn.commit()
                         return {
                             "task_id": task_id,
@@ -1408,6 +1584,8 @@ class ConversationApplicationService:
                         ):
                             raise DomainConflictError("Next-Turn cancellation lost a state race")
                         promoted_submission = None
+                if _terminal_side_effect is not None:
+                    _terminal_side_effect(executions, finished_at)
                 conn.commit()
             except BaseException:
                 conn.rollback()
@@ -1445,9 +1623,7 @@ class ConversationApplicationService:
                 "work_status": str(state["work_status"]),
                 "conversation_revision": int(state["revision"]),
                 "runtime_status": "active" if active_turn is not None else "idle",
-                "active_turn_id": (
-                    None if active_turn is None else str(active_turn["turn_id"])
-                ),
+                "active_turn_id": (None if active_turn is None else str(active_turn["turn_id"])),
                 "turn_count": 0 if turn_count is None else int(turn_count[0]),
                 "item_count": 0 if item_count is None else int(item_count[0]),
                 "binding": None if binding is None else self._row_dict(binding),

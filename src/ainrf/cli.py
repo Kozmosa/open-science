@@ -179,6 +179,7 @@ def domain_worker(
     dispatcher = TaskDispatcher(
         state_root,
         artifact_sha=artifact_sha,
+        conversation_only=True,
         engine_factory=lambda engine_type: create_engine(engine_type, state_root=state_root),
     )
     try:

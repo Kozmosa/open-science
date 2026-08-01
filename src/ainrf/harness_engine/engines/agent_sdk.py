@@ -336,84 +336,11 @@ class AgentSdkEngine(HarnessEngine):
                         emit,
                         stderr_lines,
                     )
-                except Exception as exc:
-                    # If the CLI exited with an error and a session resume was
-                    # attempted, the most likely cause is that the session data
-                    # was lost (container restart, volume recreation, etc.).
-                    # Retry without --resume so the conversation continues from
-                    # a fresh Claude Code session.
-                    if session.session_id is not None and not session.abort_event.is_set():
-                        stderr_text = "\n".join(stderr_lines)
-                        logger.warning(
-                            "session_resume_failed_retrying_fresh "
-                            "task_id=%s session_id=%s error=%s stderr=%s",
-                            context.task_id,
-                            session.session_id,
-                            exc,
-                            stderr_text[:500],
-                        )
-                        await emit(
-                            EngineEvent(
-                                event_type="system",
-                                payload={
-                                    "subtype": "notification",
-                                    "message": (
-                                        f"Session {session.session_id[:8]}… not found, "
-                                        "starting fresh conversation."
-                                    ),
-                                },
-                            )
-                        )
-                        # Reset session state for a fresh start
-                        session.session_id = None
-                        session.terminal_emitted = False
-                        session.had_error = False
-                        session.stream_block_index = -1
-                        session.stream_block_type = None
-                        session.stream_block_accumulated = ""
-                        stderr_lines.clear()
-
-                        # Re-resolve prompt (pending_prompts already consumed)
-                        fresh_prompt = self._resolve_prompt_fresh(context, session)
-                        fresh_stream = self._wrap_prompt_stream(fresh_prompt)
-                        fresh_options = ClaudeAgentOptions(
-                            model=context.model or "claude-sonnet-4-5",
-                            system_prompt=context.system_prompt,
-                            permission_mode=permission_mode,
-                            cwd=context.working_directory,
-                            resume=None,
-                            session_id=self._runtime_session_id(context),
-                            max_turns=context.max_turns,
-                            max_budget_usd=context.max_budget_usd,
-                            mcp_servers=mcp_servers,
-                            skills=skills,
-                            allowed_tools=allowed_tools,
-                            hooks={
-                                "PostToolUse": [
-                                    HookMatcher(hooks=[self._post_tool_use_hook(emit)])
-                                ],
-                                "Notification": [
-                                    HookMatcher(hooks=[self._notification_hook(emit)])
-                                ],
-                            },
-                            include_partial_messages=True,
-                            can_use_tool=self._can_use_tool,
-                            sandbox=self._build_sandbox_settings(),
-                            stderr=_on_stderr,
-                            env=env,
-                            session_store=self._session_store,
-                            max_buffer_size=30 * 1024 * 1024,  # 30 MB
-                        )
-                        await self._run_query(
-                            context,
-                            session,
-                            fresh_stream,
-                            fresh_options,
-                            emit,
-                            stderr_lines,
-                        )
-                    else:
-                        raise
+                except Exception:
+                    # A failed native resume is a continuity failure.  Starting
+                    # a fresh provider conversation here would silently cross
+                    # the Conversation Interface and lose causal identity.
+                    raise
             finally:
                 # Clean up the per-task temp Claude config directory.
                 try:

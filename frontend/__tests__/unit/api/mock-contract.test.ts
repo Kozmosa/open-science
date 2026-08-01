@@ -13,7 +13,7 @@ import {
   getLiteratureSummary,
   requestLiteratureSummary,
 } from '@/features/literature';
-import { createTask, retryTask } from '@/features/tasks';
+import { createTask, getTaskTurns, listCanonicalTaskItems, retryTask } from '@/features/tasks';
 import { getAdminUsers, getSearchSettings } from '@/features/settings';
 import {
   acceptDomainContextCandidate,
@@ -23,7 +23,6 @@ import {
   getDomainProjectContextDiff,
   getDomainProjectContextVersions,
   getDomainProjects,
-  getDomainTaskAttempts,
   getDomainWorkspaces,
   getOverviewRefreshJob,
   getTodayOverview,
@@ -68,7 +67,7 @@ describe('frontend v2 mock contract', () => {
     });
   });
 
-  it('keeps a Task ID stable across create, Attempt projection, and retry', async () => {
+  it('keeps a Task ID stable across create, Turn projection, and retry', async () => {
     const task = await createTask({
       project_id: 'project-alpha',
       workspace_id: 'workspace-alpha',
@@ -79,9 +78,9 @@ describe('frontend v2 mock contract', () => {
       mcp_servers: [],
       title: 'Contract Task',
     }, 'task.create:contract');
-    const initialAttempts = await getDomainTaskAttempts(task.task_id);
+    const turns = await getTaskTurns(task.task_id);
+    const items = await listCanonicalTaskItems(task.task_id);
     const retried = await retryTask(task.task_id, 'task.retry:contract');
-    const attempts = await getDomainTaskAttempts(task.task_id);
 
     expect(task).toMatchObject({
       status: 'queued',
@@ -89,10 +88,10 @@ describe('frontend v2 mock contract', () => {
       workspace_id: 'workspace-alpha',
       project_context_version_id: 'context-project-alpha-v1',
     });
-    expect(initialAttempts.items).toHaveLength(1);
-    expect(initialAttempts.items[0]).toMatchObject({ trigger: 'initial', status: 'queued' });
+    expect(turns.items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ item_type: 'user_message' });
     expect(retried.task_id).toBe(task.task_id);
-    expect(attempts.items.map((attempt) => attempt.trigger)).toEqual(['initial', 'retry']);
+    expect(retried.status).toBe('queued');
   });
 
   it('supports Context draft, candidate, publish, history, and diff', async () => {

@@ -81,38 +81,21 @@ describe('TaskHeaderBar', () => {
     });
   });
 
-  it('shows pause button when showPause is true', () => {
+  it('shows interrupt button for an active Turn', () => {
     renderWithProviders(
-      <TaskHeaderBar task={makeTask()} showPause onPause={vi.fn()} />
+      <TaskHeaderBar task={makeTask()} showInterrupt onInterrupt={vi.fn()} />
     );
-    expect(screen.getByRole('button', { name: /pause/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /interrupt/i })).toBeInTheDocument();
   });
 
-  it('shows resume button when showResume is true', () => {
+  it('calls onInterrupt when interrupt is clicked', () => {
+    const onInterrupt = vi.fn();
     renderWithProviders(
-      <TaskHeaderBar task={makeTask()} showResume onResume={vi.fn()} />
-    );
-    expect(screen.getByRole('button', { name: /resume/i })).toBeInTheDocument();
-  });
-
-  it('calls onPause when pause button is clicked', () => {
-    const onPause = vi.fn();
-    renderWithProviders(
-      <TaskHeaderBar task={makeTask()} showPause onPause={onPause} />
+      <TaskHeaderBar task={makeTask()} showInterrupt onInterrupt={onInterrupt} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /pause/i }));
-    expect(onPause).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onResume when resume button is clicked', () => {
-    const onResume = vi.fn();
-    renderWithProviders(
-      <TaskHeaderBar task={makeTask()} showResume onResume={onResume} />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /resume/i }));
-    expect(onResume).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /interrupt/i }));
+    expect(onInterrupt).toHaveBeenCalledTimes(1);
   });
 
   it('renders toggle sidebar button when onToggleTaskSidebar is provided', () => {
