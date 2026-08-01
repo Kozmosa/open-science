@@ -11,7 +11,6 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
-from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import seed_user
 
@@ -24,7 +23,6 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("runtime-access-key")}),
             state_root=state_root,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )
@@ -45,7 +43,7 @@ def _environment_with_owner_grant(
     workdir = state_root / "runtime-environment"
     workdir.mkdir()
     (workdir / "visible.txt").write_text("visible")
-    environment = app.state.domain_service.create_environment(
+    environment = app.state.environment_module.create_environment(
         {"id": "runtime-admin", "role": "admin"},
         alias="runtime-access-host",
         display_name="Runtime access host",
@@ -76,16 +74,16 @@ async def test_v2_runtime_facades_hide_ungranted_environments(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         owner_files = await client.get(
-            f"/files/list?environment_id={environment_id}", headers=owner_headers
+            f"/api/files/list?environment_id={environment_id}", headers=owner_headers
         )
         outsider_terminal = await client.get(
-            f"/terminal/session?environment_id={environment_id}", headers=outsider_headers
+            f"/api/terminal/session?environment_id={environment_id}", headers=outsider_headers
         )
         outsider_session_pairs = await client.get(
-            f"/terminal/session-pairs?environment_id={environment_id}", headers=outsider_headers
+            f"/api/terminal/session-pairs?environment_id={environment_id}", headers=outsider_headers
         )
         outsider_files = await client.get(
-            f"/files/list?environment_id={environment_id}", headers=outsider_headers
+            f"/api/files/list?environment_id={environment_id}", headers=outsider_headers
         )
 
     assert owner_files.status_code == 200
@@ -109,7 +107,7 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
     environment_id = _environment_with_owner_grant(app, state_root, "runtime-owner")
     workspace_path = state_root / "runtime-workspace"
     workspace_path.mkdir()
-    workspace = app.state.domain_service.create_workspace(
+    workspace = app.state.workspace_module.create_workspace(
         {"id": "runtime-owner", "role": "member"},
         environment_id=environment_id,
         canonical_path=str(workspace_path),
@@ -122,11 +120,11 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         ) as client:
             file_read = await client.get(
-                f"/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
+                f"/api/files/list?environment_id={environment_id}&workspace_id={workspace_id}",
                 headers=admin_headers,
             )
             terminal_exec = await client.post(
-                "/terminal/session/exec",
+                "/api/terminal/session/exec",
                 headers=admin_headers,
                 json={
                     "environment_id": environment_id,

@@ -28,7 +28,7 @@
 | 去重 | 全局按 **arXiv paper_id** 去重 |
 | 摘要缓存 | 任何 LLM 调用后“基本不变的结果”都做缓存；同一 paper_id 只摘要一次 |
 | 调度 | 每个 subscription 拥有独立的 APScheduler job，真正按频率执行 |
-| 功能范围 | 补齐 `docs/superpowers/specs/2026-05-21-literature-tracking-design.md` 中声明的能力 |
+| 功能范围 | 参考已归档的 `docs/superpowers/specs/archived/2026-05-21-literature-tracking-design.md`，最终范围以当前文献服务重设计为准 |
 
 ---
 

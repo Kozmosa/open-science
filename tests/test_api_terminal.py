@@ -4,12 +4,12 @@ from pathlib import Path
 import threading
 import time
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import anyio
 import httpx
 import pytest
-from fastapi import Request
+from fastapi import FastAPI, Request
 
 from ainrf.api.routes.terminal import (
     create_terminal_session,
@@ -24,9 +24,9 @@ from ainrf.api.schemas import (
 )
 from ainrf.domain_control import (
     DomainMaintenanceService,
-    DomainModelMode,
     MaintenanceModeError,
 )
+from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.tmux import TmuxCommandError
 from tests.testutil import get_jwt_headers, make_terminal_app, make_terminal_manager
@@ -37,12 +37,30 @@ APP_USER_ID = "browser-user"
 # API_HEADERS constant replaced - use jwt_headers from get_jwt_headers(app)
 
 
+def _create_environment(
+    app: FastAPI,
+    *,
+    alias: str,
+    display_name: str,
+    host: str,
+    default_workdir: str | None = None,
+) -> EnvironmentRegistryEntry:
+    state = app.state
+    created = state.environment_module.create_environment(
+        {"id": APP_USER_ID, "role": "admin"},
+        alias=alias,
+        display_name=display_name,
+        connection={"host": host, "user": "root", "default_workdir": default_workdir},
+    )
+    return state.environment_service.get_environment(str(created["environment_id"]))
+
+
 def _maintenance_terminal_request(
     *,
     state_root: Path,
     maintenance: DomainMaintenanceService,
     manager: object,
-    environment_service: object,
+    environment_service: Any,
     broker: TerminalAttachmentBroker,
 ) -> Request:
     """Build the smallest request surface needed by terminal route fences.
@@ -53,6 +71,14 @@ def _maintenance_terminal_request(
     the same 503 mapping from that middleware.
     """
 
+    domain_reader = SimpleNamespace(
+        v2_ready=lambda: True,
+        environment=lambda environment_id, _user, include_disabled=False: {
+            "environment_id": environment_service.get_environment(environment_id).id,
+            "status": "active",
+        },
+        workspace=lambda _workspace_id, _user: {},
+    )
     return cast(
         Request,
         SimpleNamespace(
@@ -60,9 +86,9 @@ def _maintenance_terminal_request(
                 state=SimpleNamespace(
                     api_config=SimpleNamespace(
                         state_root=state_root,
-                        domain_model_mode=DomainModelMode.LEGACY,
                     ),
                     domain_api_participant_id=None,
+                    environment_module=domain_reader,
                     domain_maintenance_service=maintenance,
                     environment_service=environment_service,
                     terminal_attachment_broker=broker,
@@ -81,7 +107,8 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -92,7 +119,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            f"/terminal/session?environment_id={environment.id}",
+            f"/api/terminal/session?environment_id={environment.id}",
             headers=jwt_headers,
         )
 
@@ -103,7 +130,7 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         "target_kind": "environment-ssh",
         "environment_id": environment.id,
         "environment_alias": "gpu-lab",
-        "working_directory": str(tmp_path),
+        "working_directory": None,
         "status": "idle",
         "created_at": None,
         "started_at": None,
@@ -125,16 +152,12 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="localhost-2",
         display_name="Localhost 2",
         host="127.0.0.1",
         default_workdir="/workspace/default",
-    )
-    app.state.environment_service.create_project_reference(
-        project_id="default",
-        environment_id=environment.id,
-        override_workdir="/workspace/override",
     )
     monkeypatch.setattr(
         app.state.terminal_session_manager._tmux_adapter,
@@ -147,7 +170,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
         base_url="http://testserver",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -157,7 +180,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     assert payload["provider"] == "tmux"
     assert payload["target_kind"] == "environment-local"
     assert payload["environment_id"] == environment.id
-    assert payload["working_directory"] == "/workspace/override"
+    assert payload["working_directory"] == "/workspace/default"
     assert payload["status"] == "running"
     assert payload["binding_id"] is not None
     assert payload["session_name"] == app.state.terminal_session_manager.session_name_for(
@@ -178,7 +201,8 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="localhost-2",
         display_name="Localhost 2",
         host="127.0.0.1",
@@ -195,7 +219,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
         base_url="http://lab.internal:5173",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -213,7 +237,8 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -234,12 +259,12 @@ async def test_terminal_session_post_reuses_same_personal_session_for_same_envir
         base_url="http://testserver",
     ) as client:
         first = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         second = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -259,7 +284,8 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -275,7 +301,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
         base_url="http://testserver",
     ) as client:
         seeded = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
@@ -311,7 +337,7 @@ async def test_terminal_session_post_serializes_concurrent_attach_requests(
         async def attach(index: int) -> None:
             await start_event.wait()
             responses[index] = await client.post(
-                "/terminal/session",
+                "/api/terminal/session",
                 headers=jwt_headers,
                 json={"environment_id": environment.id},
             )
@@ -339,12 +365,14 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    first_environment = app.state.environment_service.create_environment(
+    first_environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
     )
-    second_environment = app.state.environment_service.create_environment(
+    second_environment = _create_environment(
+        app,
         alias="cpu-lab",
         display_name="CPU Lab",
         host="cpu.example.com",
@@ -365,17 +393,17 @@ async def test_terminal_session_switching_environment_keeps_distinct_personal_se
         base_url="http://testserver",
     ) as client:
         first = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": first_environment.id},
         )
         second = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": second_environment.id},
         )
         first_summary = await client.get(
-            f"/terminal/session?environment_id={first_environment.id}",
+            f"/api/terminal/session?environment_id={first_environment.id}",
             headers=jwt_headers,
         )
 
@@ -393,7 +421,8 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -414,12 +443,12 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
         base_url="http://testserver",
     ) as client:
         created = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         detached = await client.delete(
-            f"/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
+            f"/api/terminal/session?environment_id={environment.id}&attachment_id={created.json()['attachment_id']}",
             headers=jwt_headers,
         )
 
@@ -436,7 +465,8 @@ async def test_terminal_session_reset_returns_new_attachment(
 ) -> None:
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -463,12 +493,12 @@ async def test_terminal_session_reset_returns_new_attachment(
         base_url="http://testserver",
     ) as client:
         created = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": environment.id},
         )
         reset = await client.post(
-            "/terminal/session/reset",
+            "/api/terminal/session/reset",
             headers=jwt_headers,
             json={
                 "environment_id": environment.id,
@@ -547,7 +577,8 @@ async def test_terminal_session_create_returns_503_when_epoch_changes(
 
     app = make_terminal_app(tmp_path)
     jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -577,7 +608,7 @@ async def test_terminal_session_create_returns_503_when_epoch_changes(
             base_url="http://testserver",
         ) as client:
             response = await client.post(
-                "/terminal/session",
+                "/api/terminal/session",
                 headers=jwt_headers,
                 json={"environment_id": environment.id},
             )
@@ -749,7 +780,7 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
         base_url="http://testserver",
     ) as client:
         response = await client.post(
-            "/terminal/session",
+            "/api/terminal/session",
             headers=jwt_headers,
             json={"environment_id": "missing"},
         )
@@ -761,7 +792,8 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
 @pytest.mark.anyio
 async def test_terminal_session_routes_require_auth(tmp_path: Path) -> None:
     app = make_terminal_app(tmp_path)
-    environment = app.state.environment_service.create_environment(
+    environment = _create_environment(
+        app,
         alias="gpu-lab",
         display_name="GPU Lab",
         host="gpu.example.com",
@@ -772,7 +804,7 @@ async def test_terminal_session_routes_require_auth(tmp_path: Path) -> None:
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            f"/terminal/session?environment_id={environment.id}",
+            f"/api/terminal/session?environment_id={environment.id}",
             # No JWT headers — should be rejected by middleware
         )
 

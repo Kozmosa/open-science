@@ -1,14 +1,13 @@
-from ainrf.projects.models import ProjectRecord, TaskEdgeRecord
-from ainrf.projects.service import (
+from ainrf.projects.models import (
     ProjectNotFoundError,
-    ProjectRegistryService,
+    ProjectRecord,
     TaskEdgeNotFoundError,
+    TaskEdgeRecord,
 )
 
 __all__ = [
     "ProjectRecord",
     "TaskEdgeRecord",
-    "ProjectRegistryService",
     "ProjectNotFoundError",
     "TaskEdgeNotFoundError",
 ]

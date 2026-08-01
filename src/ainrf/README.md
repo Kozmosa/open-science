@@ -131,7 +131,7 @@ profile，供后续容器连接配置复用。
 生成哈希示例：
 
 ```bash
-UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from ainrf.api.config import hash_api_key; print(hash_api_key('your-api-key'))"
+UV_CACHE_DIR=/tmp/uv-cache uv run python -c "from ainrf.runtime.product_config import hash_api_key; print(hash_api_key('your-api-key'))"
 ```
 
 设置环境变量：
@@ -188,70 +188,42 @@ code-server --version
 当前 runtime API 目前暴露以下产品表面：
 
 - 公共健康检查路径：
-  - `GET /health`
-  - `GET /v1/health`
+  - `GET /api/health`
   - 容器健康摘要当前只暴露 SSH、Claude CLI、project dir、GPU/CUDA/disk 等探测结果；不再返回 `anthropic_api_key_ok`，也不由 OpenScience 预检查 Claude 鉴权配置。
 - environment 控制面路径（均受 API key 中间件保护）：
-  - `GET /environments`
-  - `POST /environments`
-  - `GET /environments/{id}`
-  - `PATCH /environments/{id}`
-  - `DELETE /environments/{id}`
-  - `POST /environments/{id}/detect`
-  - `GET /v1/environments`
-  - `POST /v1/environments`
-  - `GET /v1/environments/{id}`
-  - `PATCH /v1/environments/{id}`
-  - `DELETE /v1/environments/{id}`
-  - `POST /v1/environments/{id}/detect`
+  - `GET /api/environments`
+  - `POST /api/environments`
+  - `GET /api/environments/{id}`
+  - `PATCH /api/environments/{id}`
+  - `DELETE /api/environments/{id}`
+  - `POST /api/environments/{id}/detect`
 - project environment refs 路径（均受 API key 中间件保护）：
-  - `GET /projects/{project_id}/environment-refs`
-  - `POST /projects/{project_id}/environment-refs`
-  - `PATCH /projects/{project_id}/environment-refs/{environment_id}`
-  - `DELETE /projects/{project_id}/environment-refs/{environment_id}`
-  - `GET /v1/projects/{project_id}/environment-refs`
-  - `POST /v1/projects/{project_id}/environment-refs`
-  - `PATCH /v1/projects/{project_id}/environment-refs/{environment_id}`
-  - `DELETE /v1/projects/{project_id}/environment-refs/{environment_id}`
+  - `GET /api/projects/{project_id}/environment-refs`
+  - `POST /api/projects/{project_id}/environment-refs`
+  - `PATCH /api/projects/{project_id}/environment-refs/{environment_id}`
+  - `DELETE /api/projects/{project_id}/environment-refs/{environment_id}`
 - Terminal / task surface 路径（均受 API key 中间件保护）：
-  - `GET /terminal/session?environment_id=...`
-  - `GET /terminal/session-pairs?environment_id=...`
-  - `POST /terminal/session`
-  - `DELETE /terminal/session`
-  - `POST /terminal/session/reset`
-  - `GET /tasks?environment_id=...`
-  - `POST /tasks`
-  - `GET /tasks/{task_id}`
-  - `POST /tasks/{task_id}/cancel`
-  - `GET /tasks/{task_id}/terminal`
-  - `POST /tasks/{task_id}/terminal/open`
-  - `POST /tasks/{task_id}/terminal/takeover`
-  - `POST /tasks/{task_id}/terminal/release`
-  - `GET /v1/terminal/session?environment_id=...`
-  - `GET /v1/terminal/session-pairs?environment_id=...`
-  - `POST /v1/terminal/session`
-  - `DELETE /v1/terminal/session`
-  - `POST /v1/terminal/session/reset`
-  - `GET /v1/tasks?environment_id=...`
-  - `POST /v1/tasks`
-  - `GET /v1/tasks/{task_id}`
-  - `POST /v1/tasks/{task_id}/cancel`
-  - `GET /v1/tasks/{task_id}/terminal`
-  - `POST /v1/tasks/{task_id}/terminal/open`
-  - `POST /v1/tasks/{task_id}/terminal/takeover`
-  - `POST /v1/tasks/{task_id}/terminal/release`
+  - `GET /api/terminal/session?environment_id=...`
+  - `GET /api/terminal/session-pairs?environment_id=...`
+  - `POST /api/terminal/session`
+  - `DELETE /api/terminal/session`
+  - `POST /api/terminal/session/reset`
+  - `GET /api/tasks?environment_id=...`
+  - `POST /api/tasks`
+  - `GET /api/tasks/{task_id}`
+  - `POST /api/tasks/{task_id}/cancel`
+  - `GET /api/tasks/{task_id}/terminal`
+  - `POST /api/tasks/{task_id}/terminal/open`
+  - `POST /api/tasks/{task_id}/terminal/takeover`
+  - `POST /api/tasks/{task_id}/terminal/release`
 - code-server 状态路径（均受 API key 中间件保护）：
-  - `GET /code/status?environment_id=...`
-  - `GET /v1/code/status?environment_id=...`
+  - `GET /api/code/status?environment_id=...`
 - code-server session 控制路径（均受 API key 中间件保护）：
-  - `POST /code/session`
-  - `DELETE /code/session`
-  - `POST /v1/code/session`
-  - `DELETE /v1/code/session`
+  - `POST /api/code/session`
+  - `DELETE /api/code/session`
 - managed code-server browser 路径（均受 API key 中间件保护）：
-  - `GET /code/`
-  - `GET /v1/code/`
-  - `GET /code/...` 与 `GET /v1/code/...` 下的嵌套静态资源 / 子路径，均由 API 反向代理到受管 `code-server`
+  - `GET /api/code/`
+  - `GET /api/code/...` 下的嵌套静态资源 / 子路径，均由 API 反向代理到受管 `code-server`
 
 其中 terminal / task API 现在控制两类 tmux-backed attach surface：
 
@@ -262,43 +234,42 @@ terminal 与 task 路由除 API key 外，还要求 `X-OpenScience-User-Id`；�
 
 personal terminal session 语义如下：
 
-- `GET /terminal/session?environment_id=...`：读取当前用户在所选 environment 下的 personal session 摘要；若还未 ensure，则返回 `idle`
-- `GET /terminal/session-pairs?environment_id=...`：读取当前 app user 在所选 environment 下的 personal / agent session 摘要
-- `POST /terminal/session`：按 `environment_id` 执行 idempotent ensure，并返回当前浏览器的短期 attachment 信息（`attachment_id`、`attachment_expires_at`、`terminal_ws_url`）
-- `DELETE /terminal/session?environment_id=...&attachment_id=...`：只 detach 当前 attachment，不销毁底层 personal tmux session
-- `POST /terminal/session/reset`：显式 kill 并重建 personal tmux session，然后返回新的 attachment
-- `GET /terminal/attachments/{attachment_id}/ws?token=...`：terminal attachment 数据通道
+- `GET /api/terminal/session?environment_id=...`：读取当前用户在所选 environment 下的 personal session 摘要；若还未 ensure，则返回 `idle`
+- `GET /api/terminal/session-pairs?environment_id=...`：读取当前 app user 在所选 environment 下的 personal / agent session 摘要
+- `POST /api/terminal/session`：按 `environment_id` 执行 idempotent ensure，并返回当前浏览器的短期 attachment 信息（`attachment_id`、`attachment_expires_at`、`terminal_ws_url`）
+- `DELETE /api/terminal/session?environment_id=...&attachment_id=...`：只 detach 当前 attachment，不销毁底层 personal tmux session
+- `POST /api/terminal/session/reset`：显式 kill 并重建 personal tmux session，然后返回新的 attachment
+- `GET /api/terminal/attachments/{attachment_id}/ws?token=...`：terminal attachment 数据通道
 
 managed task terminal 语义如下：
 
-- `GET /tasks?environment_id=...`：列出所选 environment 下的 managed task 与 terminal binding 摘要
-- `POST /tasks`：创建一个新的 tmux-backed task window
+- `GET /api/tasks?environment_id=...`：列出所选 environment 下的 managed task 与 terminal binding 摘要
+- `POST /api/tasks`：创建一个新的 tmux-backed task window
 - task harness 在启动 task 时不再提前检查 `ANTHROPIC_API_KEY` 或 Claude 本地配置，而是直接执行 `claude` 命令并回放其真实 stdout/stderr。
-- `GET /tasks/{task_id}`：读取 task 详情与当前 terminal binding
-- `POST /tasks/{task_id}/cancel`：向 runtime 发中断并等待任务退出或进入取消中的过渡态
-- `GET /tasks/{task_id}/terminal`：读取当前 terminal binding 摘要，包括 `binding_status`、`ownership_user_id`、`agent_write_state`
-- `POST /tasks/{task_id}/terminal/open`：获取 observe attachment；若当前 user 正处于 grace reclaim 窗口，则直接恢复 write attachment
-- `POST /tasks/{task_id}/terminal/takeover`：为当前 user 请求 write attachment；若已被其他 user takeover，则返回 `409`
-- `POST /tasks/{task_id}/terminal/release`：显式 release 当前 user's takeover，并恢复 observe-only 运行态
+- `GET /api/tasks/{task_id}`：读取 task 详情与当前 terminal binding
+- `POST /api/tasks/{task_id}/cancel`：向 runtime 发中断并等待任务退出或进入取消中的过渡态
+- `GET /api/tasks/{task_id}/terminal`：读取当前 terminal binding 摘要，包括 `binding_status`、`ownership_user_id`、`agent_write_state`
+- `POST /api/tasks/{task_id}/terminal/open`：获取 observe attachment；若当前 user 正处于 grace reclaim 窗口，则直接恢复 write attachment
+- `POST /api/tasks/{task_id}/terminal/takeover`：为当前 user 请求 write attachment；若已被其他 user takeover，则返回 `409`
+- `POST /api/tasks/{task_id}/terminal/release`：显式 release 当前 user's takeover，并恢复 observe-only 运行态
 - archived task 的 `open` / `takeover` 固定返回 `409`
 
-`/v1/terminal/session`、`/v1/terminal/session-pairs`、`/v1/tasks` 及对应子路径提供相同语义的版本化镜像路径。
+产品 API 只注册在 `/api`；root 与产品 `/v1` 镜像路径已删除。Anthropic-compatible 的 `/v1/models`、`/v1/messages` 是独立外部协议，不属于产品镜像路径。
 
 `auth_kind=password` 的 environment 只支持 terminal 内交互式输入密码；不会通过 API 注入 secret。
 
 code-server 相关路径只暴露当前 daemon 受管的单实例 workspace browser：
 
-- `GET /code/status?environment_id=...`：读取当前所选 environment 对应的 workspace 状态
-- `POST /code/session`：按 `environment_id` 执行 idempotent ensure
-- `DELETE /code/session`：关闭当前受管 workspace session
-- `GET /code/`：通过 API 代理访问 browser 入口
-- `/v1/code/status` 与 `/v1/code/` 提供相同语义的版本化镜像路径
+- `GET /api/code/status?environment_id=...`：读取当前所选 environment 对应的 workspace 状态
+- `POST /api/code/session`：按 `environment_id` 执行 idempotent ensure
+- `DELETE /api/code/session`：关闭当前受管 workspace session
+- `GET /api/code/`：通过 API 代理访问 browser 入口
 
-`auth_kind=password` 的 environment 对 `/code/session` 固定返回 `409`，因为受管 workspace 不支持非交互 password-auth。
+`auth_kind=password` 的 environment 对 `/api/code/session` 固定返回 `409`，因为受管 workspace 不支持非交互 password-auth。
 
-如果本机未安装 `code-server`，或受管 session 尚未 ensure，API 仍会正常启动；此时 `/code/status` 会返回 `unavailable`，`/code/` 会返回不可用错误，而不会阻断主服务启动。
+如果本机未安装 `code-server`，或受管 session 尚未 ensure，API 仍会正常启动；此时 `/api/code/status` 会返回 `unavailable`，`/api/code/` 会返回不可用错误，而不会阻断主服务启动。
 
-早期 orchestrator 风格的 task / gate / artifact / event runtime surface 不再由当前应用注册；当前 `/tasks` 路径只承载上述 tmux-backed managed task control plane，而不是旧版研究任务引擎语义。
+早期 orchestrator 风格的 task / gate / artifact / event runtime surface 不再由当前应用注册；当前 `/api/tasks` 路径只承载上述 tmux-backed managed task control plane，而不是旧版研究任务引擎语义。
 
 ## 5. 状态目录结构
 

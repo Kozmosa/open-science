@@ -1,6 +1,6 @@
 """Health check endpoint with component-level probes.
 
-Exposes ``GET /health`` returning:
+Exposes canonical ``GET /api/health`` returning:
   - Overall status (``ok`` / ``degraded``)
   - Per-component health (database, Litefuse, filesystem, runtime)
   - Process uptime

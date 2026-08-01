@@ -94,7 +94,7 @@ async def test_http_domain_mutations_are_rejected_during_maintenance(state_root:
     app = FastAPI()
     app.middleware("http")(build_domain_maintenance_middleware(service))
 
-    @app.post("/tasks")
+    @app.post("/api/tasks")
     async def create_task() -> dict[str, bool]:
         await asyncio.sleep(0)
         return {"created": True}
@@ -103,7 +103,7 @@ async def test_http_domain_mutations_are_rejected_during_maintenance(state_root:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.post("/tasks")
+        response = await client.post("/api/tasks")
 
     assert response.status_code == 503
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
@@ -115,7 +115,7 @@ async def test_http_terminal_mutations_are_rejected_during_maintenance(state_roo
     app = FastAPI()
     app.middleware("http")(build_domain_maintenance_middleware(service))
 
-    @app.post("/terminal/session")
+    @app.post("/api/terminal/session")
     async def create_terminal_session() -> dict[str, bool]:
         return {"created": True}
 
@@ -123,7 +123,7 @@ async def test_http_terminal_mutations_are_rejected_during_maintenance(state_roo
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.post("/terminal/session")
+        response = await client.post("/api/terminal/session")
 
     assert response.status_code == 503
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
@@ -137,7 +137,7 @@ async def test_http_mutation_reports_maintenance_when_its_epoch_changes_mid_hand
     app = FastAPI()
     app.middleware("http")(build_domain_maintenance_middleware(service))
 
-    @app.post("/tasks")
+    @app.post("/api/tasks")
     async def create_task() -> dict[str, bool]:
         service.enter(actor_id="operator-1", reason="cutover")
         return {"created": True}
@@ -145,7 +145,7 @@ async def test_http_mutation_reports_maintenance_when_its_epoch_changes_mid_hand
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.post("/tasks")
+        response = await client.post("/api/tasks")
 
     assert response.status_code == 503
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
@@ -163,7 +163,7 @@ async def test_http_mutation_releases_lease_when_maintenance_starts_before_handl
     app.middleware("http")(build_domain_maintenance_middleware(service))
     handler_calls: list[bool] = []
 
-    @app.post("/tasks")
+    @app.post("/api/tasks")
     async def create_task() -> dict[str, bool]:
         handler_calls.append(True)
         return {"created": True}
@@ -181,7 +181,7 @@ async def test_http_mutation_releases_lease_when_maintenance_starts_before_handl
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.post("/tasks")
+        response = await client.post("/api/tasks")
 
     assert response.status_code == 503
     assert response.json()["error_code"] == "DOMAIN_MAINTENANCE_ACTIVE"
@@ -195,16 +195,16 @@ async def test_http_mutation_releases_lease_when_maintenance_starts_before_handl
     ("method", "path"),
     [
         ("PUT", "/api/admin/environments/environment-1/access"),
-        ("DELETE", "/admin/environments/environment-1/access/user-1"),
-        ("PATCH", "/admin/users/user-1"),
-        ("PUT", "/admin/users/user-1/password"),
-        ("POST", "/files/upload"),
-        ("POST", "/auth/register"),
-        ("POST", "/auth/change-password"),
-        ("PATCH", "/settings/search"),
-        ("POST", "/skill-registries"),
-        ("GET", "/terminal/session"),
-        ("GET", "/terminal/session-pairs"),
+        ("DELETE", "/api/admin/environments/environment-1/access/user-1"),
+        ("PATCH", "/api/admin/users/user-1"),
+        ("PUT", "/api/admin/users/user-1/password"),
+        ("POST", "/api/files/upload"),
+        ("POST", "/api/auth/register"),
+        ("POST", "/api/auth/change-password"),
+        ("PATCH", "/api/settings/search"),
+        ("POST", "/api/skill-registries"),
+        ("GET", "/api/terminal/session"),
+        ("GET", "/api/terminal/session-pairs"),
     ],
 )
 async def test_http_authorization_and_workspace_writes_are_rejected_during_maintenance(

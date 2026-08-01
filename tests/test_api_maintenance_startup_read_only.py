@@ -70,22 +70,22 @@ async def test_maintenance_startup_exposes_only_evidence_without_initializing_se
             transport=httpx.ASGITransport(app=app),
             base_url="http://testserver",
         ) as client:
-            health = await client.get("/health")
+            health = await client.get("/api/health")
             capabilities = await client.get(
-                "/domain/capabilities",
+                "/api/domain/capabilities",
                 headers={"Authorization": f"Bearer {bearer}"},
             )
             blocked_reads = [
-                await client.get("/tasks?api_key=maintenance-startup-key"),
-                await client.get("/v1/sessions?api_key=maintenance-startup-key"),
+                await client.get("/api/tasks?api_key=maintenance-startup-key"),
+                await client.get("/v1/tasks?api_key=maintenance-startup-key"),
                 await client.get("/token-usage?api_key=maintenance-startup-key"),
                 await client.get(
-                    "/projects",
+                    "/api/domain/projects",
                     headers={"Authorization": f"Bearer {bearer}"},
                 ),
             ]
             blocked_write = await client.post(
-                "/auth/login",
+                "/api/auth/login",
                 json={"username": "maintenance-user", "password": "not-used"},
             )
 
@@ -152,8 +152,8 @@ async def test_maintenance_startup_gate_does_not_change_an_initialized_app_read_
             "http_version": "1.1",
             "method": "GET",
             "scheme": "http",
-            "path": "/tasks",
-            "raw_path": b"/tasks",
+            "path": "/api/tasks",
+            "raw_path": b"/api/tasks",
             "query_string": b"",
             "headers": [],
             "client": ("127.0.0.1", 8000),

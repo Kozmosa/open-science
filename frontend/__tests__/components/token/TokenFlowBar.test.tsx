@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { TokenFlowBar } from '../../../src/components/token/TokenFlowBar';
+import { TokenFlowBar } from '@features/tasks';
 
 const agentSdkJson = JSON.stringify({
   total: {
@@ -47,6 +47,13 @@ describe('TokenFlowBar', () => {
     // Should not show dollar amount
     const costElements = screen.queryByText(/\$/);
     expect(costElements).toBeNull();
+  });
+
+  it('normalizes the flat token usage shape returned by Task attempts', () => {
+    render(<TokenFlowBar tokenUsageJson={JSON.stringify({ input_tokens: 100, output_tokens: 50 })} />);
+    expect(screen.getByText(/Total:\s*150/)).toBeInTheDocument();
+    expect(screen.getByText(/Input 100/)).toBeInTheDocument();
+    expect(screen.getByText(/Output 50/)).toBeInTheDocument();
   });
 
   it('returns null for null input', () => {

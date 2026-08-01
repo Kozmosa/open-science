@@ -57,41 +57,11 @@ class TaskAgentWriteState(StrEnum):
     RESUME_REQUESTED = "resume_requested"
 
 
-class ProjectResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str
-    name: str
-    description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class ProjectListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[ProjectResponse]
-
-
-class ProjectCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(min_length=1)
-    description: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
 class ProjectUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
     description: str | None = None
-    default_workspace_id: str | None = None
-    default_environment_id: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ComponentHealth(BaseModel):
@@ -301,7 +271,6 @@ class EnvironmentCreateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class EnvironmentUpdateRequest(BaseModel):
@@ -324,7 +293,6 @@ class EnvironmentUpdateRequest(BaseModel):
     preferred_env_manager: str | None = None
     preferred_runtime_notes: str | None = None
     task_harness_profile: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectEnvironmentReferenceCreateRequest(BaseModel):
@@ -418,7 +386,6 @@ class ProjectContextDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateCreateRequest(BaseModel):
@@ -434,7 +401,6 @@ class ProjectContextCandidateCreateRequest(BaseModel):
     source_message_end_seq: int | None = Field(default=None, ge=0)
     source_output_start_seq: int | None = Field(default=None, ge=0)
     source_output_end_seq: int | None = Field(default=None, ge=0)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextCandidateRejectRequest(BaseModel):
@@ -443,7 +409,6 @@ class ProjectContextCandidateRejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectContextFragmentCreateRequest(BaseModel):
@@ -457,7 +422,6 @@ class ProjectContextFragmentCreateRequest(BaseModel):
     source_version: str | None = None
     sort_order: int = 0
     byte_budget: int | None = Field(default=None, ge=0)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskContextConfirmRequest(BaseModel):
@@ -466,41 +430,25 @@ class TaskContextConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     preview_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    project_id: str = ""
-    workspace_id: str
-    # ``environment_id`` is retained during the v2 compatibility window.  The
-    # authoritative v2 service derives it from the Workspace and rejects a
-    # mismatching compatibility value.
-    environment_id: str | None = None
+    project_id: str = Field(min_length=1)
+    workspace_id: str = Field(min_length=1)
     researcher_type: Literal["vanilla", "aris-researcher"]
     harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
     prompt: str = Field(min_length=1)
     skills: list[str] = []
     mcp_servers: list[str] = []
     title: str | None = None
-    research_agent_profile: ResearchAgentProfileSnapshotRequest | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
-class TaskUpdateProjectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    project_id: str = Field(min_length=1)
-    context_version_id: str | None = Field(default=None, min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskMoveRequest(BaseModel):
@@ -510,7 +458,6 @@ class TaskMoveRequest(BaseModel):
 
     project_id: str = Field(min_length=1)
     context_version_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskForkRequest(BaseModel):
@@ -522,27 +469,6 @@ class TaskForkRequest(BaseModel):
     project_id: str | None = Field(default=None, min_length=1)
     prompt: str | None = Field(default=None, min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
-class WorkspaceResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    workspace_id: str
-    project_id: str
-    label: str
-    description: str | None = None
-    default_workdir: str | None = None
-    workspace_prompt: str
-    created_at: datetime
-    updated_at: datetime
-    owner_user_id: str | None = None
-
-
-class WorkspaceListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[WorkspaceResponse]
 
 
 class SkillItemResponse(BaseModel):
@@ -759,18 +685,17 @@ class TaskAttemptListResponse(BaseModel):
     items: list[TaskAttemptResponse]
 
 
-class TaskMutationResponse(TaskSummaryResponse):
-    """v2 Task write result with legacy flat Task fields kept for old clients."""
-
+class TaskMutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     task: TaskSummaryResponse
     attempt: TaskAttemptResponse
     dispatch: TaskDispatchResponse
 
 
-class TaskEdgeResponse(BaseModel):
+class TaskRelationshipResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    edge_id: str
+    relationship_id: str
     project_id: str
     source_task_id: str
     target_task_id: str
@@ -778,39 +703,29 @@ class TaskEdgeResponse(BaseModel):
     created_at: str
 
 
-class TaskEdgeListResponse(BaseModel):
+class TaskRelationshipListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    items: list[TaskEdgeResponse]
+    items: list[TaskRelationshipResponse]
 
 
-class TaskEdgeCreateRequest(BaseModel):
+class TaskRelationshipCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str = Field(min_length=1)
     target_task_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
-class TaskRetryRequest(BaseModel):
+class ProjectUsageSummaryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    task_input: str | None = None
-    environment_id: str | None = None
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
-class TaskRetryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    new_task: TaskSummaryResponse
-    archived_task_id: str | None
-    edge_id: str
-    # v2 preserves the legacy ``new_task`` field, but it is the same Task.
-    # The durable Attempt and dispatcher summary are the authoritative result.
-    task: TaskSummaryResponse | None = None
-    attempt: TaskAttemptResponse | None = None
-    dispatch: TaskDispatchResponse | None = None
+    project_id: str
+    task_count: int
+    attempt_count: int
+    total_duration_ms: int
+    total_cost_usd: float
+    total_tokens: int
+    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
 
 
 class ResearchAgentProfileSnapshotResponse(BaseModel):
@@ -1010,7 +925,6 @@ class TaskResumeResponse(BaseModel):
 class TaskPromptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     prompt: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class TaskPromptSendResponse(BaseModel):
@@ -1133,77 +1047,6 @@ class SkillRegistryUpdateResponse(BaseModel):
     removed: list[str] = Field(default_factory=list)
 
 
-# ── Session schemas ──────────────────────────────────────────────
-
-
-class SessionCreateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: str = Field(min_length=1)
-    title: str = Field(min_length=1, max_length=500)
-
-
-class SessionUpdateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    title: str | None = Field(default=None, min_length=1, max_length=500)
-    status: str | None = None  # "active" | "completed" | "archived"
-
-
-class AttemptResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    session_id: str
-    task_id: str | None = None
-    parent_attempt_id: str | None = None
-    attempt_seq: int
-    intervention_reason: str | None = None
-    status: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_ms: int | None = None
-    token_usage_json: str | None = None
-    created_at: str
-
-
-class SessionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    project_id: str
-    title: str
-    status: str
-    task_count: int
-    total_duration_ms: int
-    total_cost_usd: float
-    created_at: str
-    updated_at: str
-    owner_user_id: str | None = None
-
-
-class SessionDetailResponse(SessionResponse):
-    attempts: list["AttemptResponse"] = Field(default_factory=list)
-
-
-class SessionListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["SessionResponse"]
-    total: int | None = None
-    has_more: bool = False
-    next_cursor: str | None = None
-
-
-class AttemptListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list["AttemptResponse"]
-
-
-class ProjectCostSummaryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    project_id: str
-    total_cost_usd: float
-    total_tokens: int
-    session_count: int
-    by_model: dict[str, dict[str, object]] = Field(default_factory=dict)
-
-
 # ── Auth schemas ──────────────────────────────────────────
 
 
@@ -1285,28 +1128,6 @@ class AdminUserListResponse(BaseModel):
 # ── Collaborator schemas ──────────────────────────────────
 
 
-class CollaboratorRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    role: str = "member"
-    can_publish: bool = False
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
-
-
-class CollaboratorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    user_id: str
-    username: str
-    display_name: str
-    role: str
-    can_publish: bool = False
-
-
-class CollaboratorListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    items: list[CollaboratorResponse]
-
-
 class ProjectMemberRequest(BaseModel):
     """Authoritative v2 Project membership and publishing capability."""
 
@@ -1314,7 +1135,6 @@ class ProjectMemberRequest(BaseModel):
 
     role: Literal["viewer", "editor"]
     can_publish: bool = False
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 class ProjectMemberResponse(BaseModel):
@@ -1331,13 +1151,6 @@ class ProjectMemberListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ProjectMemberResponse]
-
-
-class ProjectOwnerTransferRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    new_owner_user_id: str = Field(min_length=1)
-    idempotency_key: str | None = Field(default=None, min_length=1, max_length=256)
 
 
 # ── Environment Access schemas ────────────────────────────
@@ -1369,3 +1182,69 @@ class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     old_password: str = Field(min_length=1)
     new_password: str = Field(min_length=4)
+
+
+class WorkspaceUpdateRequest(BaseModel):
+    project_id: str | None = Field(default=None, min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    default_workdir: str | None = None
+    workspace_prompt: str | None = Field(default=None, min_length=1)
+
+
+class CodexDefaultsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    codex_config_toml: str | None = None
+    codex_auth_json: str | None = None
+
+
+class DeploymentVersionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    short_commit: str | None = None
+    committed_at: str | None = None
+
+
+class SearchBackendItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    display_name: str
+    description: str
+    requires_mcp: bool
+
+
+class SearchSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active_backend: str
+    available_backends: list[SearchBackendItem]
+    auto_start_mcp_servers: list[str]
+
+
+class SearchSettingsUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    active_backend: str | None = None
+    auto_start_mcp_servers: list[str] | None = None
+
+
+class McpServerSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    description: str
+
+
+class McpServersResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    servers: list[McpServerSummary]
+
+
+class MonitoringServiceItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    display_name: str
+    description: str
+    url: str | None = None
+    icon: str
+
+
+class MonitoringSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    services: list[MonitoringServiceItem]

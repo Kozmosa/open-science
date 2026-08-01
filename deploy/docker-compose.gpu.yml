@@ -47,8 +47,7 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -84,7 +83,7 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -109,14 +108,13 @@ services:
         RUNTIME_BASE_IMAGE: ${AINRF_GPU_RUNTIME_BASE_IMAGE:-docker.1ms.run/nvidia/cuda:12.5.1-runtime-ubuntu24.04}
         PYTHON_VERSION: "3.13"
     restart: unless-stopped
-    container_name: openscience-domain-worker
+    container_name: ainrf-domain-worker
     runtime: nvidia
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
@@ -204,7 +202,7 @@ services:
       grafana:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

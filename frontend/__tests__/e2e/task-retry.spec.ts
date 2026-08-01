@@ -87,9 +87,21 @@ const NEW_TASK_SUMMARY = {
 }
 
 const RETRY_RESPONSE = {
-  new_task: NEW_TASK_SUMMARY,
-  archived_task_id: 'task-failed-001',
-  edge_id: 'edge-001',
+  task: NEW_TASK_SUMMARY,
+  attempt: {
+    attempt_id: 'attempt-002',
+    task_id: 'task-new-001',
+    attempt_seq: 2,
+    trigger: 'retry',
+    status: 'queued',
+  },
+  dispatch: {
+    dispatch_id: 'dispatch-002',
+    task_id: 'task-new-001',
+    attempt_id: 'attempt-002',
+    status: 'pending',
+    launch_state: 'pending',
+  },
 }
 
 const MOCK_USER = {

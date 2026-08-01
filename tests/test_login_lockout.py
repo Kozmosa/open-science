@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 
@@ -110,21 +110,21 @@ class TestLoginLockoutViaApi:
         try:
             # First bad login
             resp = await client.post(
-                "/auth/login", json={"username": "locktest", "password": "wrong"}
+                "/api/auth/login", json={"username": "locktest", "password": "wrong"}
             )
             assert resp.status_code == 401
             assert "locked" not in resp.json()["detail"].lower()
 
             # Second bad login
             resp = await client.post(
-                "/auth/login", json={"username": "locktest", "password": "wrong"}
+                "/api/auth/login", json={"username": "locktest", "password": "wrong"}
             )
             assert resp.status_code == 401
             assert "locked" not in resp.json()["detail"].lower()
 
             # Third attempt — should be locked (2 failures recorded, check raises before login)
             resp = await client.post(
-                "/auth/login", json={"username": "locktest", "password": "pw123"}
+                "/api/auth/login", json={"username": "locktest", "password": "pw123"}
             )
             assert resp.status_code == 401
             assert "locked" in resp.json()["detail"].lower()

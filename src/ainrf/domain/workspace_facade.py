@@ -1,9 +1,7 @@
-"""Read-only Workspace registry facade backed by the v2 control plane.
+"""Read-only Workspace runtime Adapter backed by the control plane.
 
-The legacy registry persists ``workspaces.json`` and creates a seed workspace
-when initialized.  A v2 process must be able to serve terminal and file
-lookups without performing either of those writes, so this deliberately small
-adapter exposes just the read shape used by those consumers.
+This deliberately small Adapter exposes the read shape used by terminal and
+file Modules without owning Workspace persistence or creating seed records.
 """
 
 from __future__ import annotations
@@ -15,8 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ainrf.db import connect, run_pending
-from ainrf.workspaces.models import WorkspaceRecord
-from ainrf.workspaces.service import WorkspaceNotFoundError
+from ainrf.workspaces.models import WorkspaceNotFoundError, WorkspaceRecord
 
 
 def _datetime(value: object) -> datetime:
@@ -42,7 +39,7 @@ def _workspace_prompt(value: object) -> str:
 
 
 class PersistentWorkspaceFacade:
-    """Adapt durable Workspace rows to legacy read-only consumers.
+    """Adapt durable Workspace rows to runtime read-only consumers.
 
     ``WorkspaceRecord.project_id`` is a legacy compatibility field.  It is
     populated only from the imported immutable ``legacy_project_id`` and is
@@ -56,7 +53,7 @@ class PersistentWorkspaceFacade:
             run_pending(conn, "agentic_researcher")
 
     def initialize(self) -> None:
-        """Retain the legacy registry lifecycle interface without side effects."""
+        """Retain the runtime lifecycle Interface without side effects."""
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)

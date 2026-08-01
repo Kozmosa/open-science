@@ -10,19 +10,16 @@ from pathlib import Path
 import sqlite3
 from typing import Iterator
 
-import httpx
 import pytest
 import structlog
 import yaml
 
 import ainrf.domain_telemetry as domain_telemetry
-from ainrf.api.app import create_app
-from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
+from ainrf.telemetry.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect, run_pending
-from ainrf.domain.service import DomainConflictError, DomainService
+from ainrf.domain import build_domain_modules
+from ainrf.domain.service import DomainConflictError
 from ainrf.domain_telemetry import record_idempotency_event, refresh_domain_metrics
-from tests.testutil import get_jwt_headers
 
 
 pytestmark = [pytest.mark.unit]
@@ -183,14 +180,6 @@ def _seed_control_plane(state_root: Path) -> None:
             (_timestamp(minutes_ago=18), _timestamp(minutes_ago=18)),
         )
         conn.commit()
-
-
-def _metrics_config(state_root: Path) -> ApiConfig:
-    return ApiConfig(
-        api_key_hashes=frozenset({hash_api_key("test")}),
-        state_root=state_root,
-        metrics_enabled=True,
-    )
 
 
 def test_refresh_reads_migrated_durable_control_plane_state(tmp_path: Path) -> None:
@@ -703,7 +692,7 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         state_root=tmp_path,
     )
     domain_telemetry.record_legacy_write_attempt(
-        source="legacy_session",
+        source="legacy_json",
         state_root=tmp_path,
     )
     domain_telemetry.record_sqlite_error(
@@ -719,7 +708,7 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         'ainrf_domain_overview_refresh_events_total{outcome="succeeded",trigger="scheduled"} 1.0'
         in text
     )
-    assert 'ainrf_domain_legacy_write_attempts_total{source="legacy_session"} 1.0' in text
+    assert 'ainrf_domain_legacy_write_attempts_total{source="legacy_json"} 1.0' in text
     assert (
         'ainrf_domain_sqlite_errors_total{error_type="OperationalError",kind="busy_or_locked",operation="connection_execute"} 1.0'
         in text
@@ -730,11 +719,6 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_control_plane(tmp_path)
-    domain_telemetry.record_deprecated_route(
-        route="tasks.retry.new_task",
-        replacement="/tasks/{task_id}/retry",
-        state_root=tmp_path,
-    )
     expected = refresh_domain_metrics(tmp_path, runtime_mode="validate")
 
     # Simulate a separate API worker after the first process exited: its
@@ -759,7 +743,6 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 1.0" in text
     assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
-    assert 'ainrf_deprecated_route_calls_total{route="tasks"} 1.0' in text
 
 
 def test_uncached_scrape_failure_exports_unknown_risk_not_zero(
@@ -974,60 +957,23 @@ def test_read_only_connection_is_closed_after_active_user_lookup(
     assert connection.closed is True
 
 
-def test_domain_service_durable_idempotency_reuse_and_conflict_are_observed(tmp_path: Path) -> None:
-    db_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
-    db_path.parent.mkdir()
-    request: dict[str, object] = {
-        "project_id": "project-telemetry",
-        "workspace_id": "workspace-telemetry",
-        "task_id": "task-telemetry",
-        "attempt_id": "attempt-telemetry",
-        "runtime_session_id": "runtime-telemetry",
-        "run_id": "run-telemetry",
-    }
-    with closing(connect(db_path)) as conn:
-        run_pending(conn, "agentic_researcher")
-        conn.execute(
-            """
-            INSERT INTO domain_idempotency_requests (
-                actor_user_id, scope, idempotency_key, request_hash, response_json, created_at
-            ) VALUES ('telemetry-user', 'task.create', 'durable-key', ?, ?, ?)
-            """,
-            (
-                DomainService._request_hash(request),
-                '{"task_id":"task-telemetry","attempt_id":"attempt-telemetry"}',
-                _timestamp(),
-            ),
-        )
-        conn.commit()
+def test_project_module_durable_idempotency_reuse_and_conflict_are_observed(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    projects = build_domain_modules(state_root, artifact_sha=committed_v2_state).projects
+    actor: dict[str, object] = {"id": "telemetry-user", "role": "member"}
 
-        with structlog.testing.capture_logs() as logs:
-            result = DomainService._idempotent_result(
-                conn,
-                "telemetry-user",
-                "task.create",
-                "durable-key",
-                request,
-            )
-        assert result is not None
-        assert logs[0]["user_id"] == "telemetry-user"
-        assert logs[0]["project_id"] == "project-telemetry"
-        assert logs[0]["workspace_id"] == "workspace-telemetry"
-        assert logs[0]["task_id"] == "task-telemetry"
-        assert logs[0]["attempt_id"] == "attempt-telemetry"
-        assert logs[0]["runtime_session_id"] == "runtime-telemetry"
-        assert logs[0]["run_id"] == "run-telemetry"
-        assert "idempotency_key_fingerprint" in logs[0]
-        assert "durable-key" not in logs[0].values()
+    with structlog.testing.capture_logs() as logs:
+        first = projects.create_project(actor, name="Telemetry", idempotency_key="durable-key")
+        replay = projects.create_project(actor, name="Telemetry", idempotency_key="durable-key")
+    assert replay == first
+    reused = next(item for item in logs if item.get("outcome") == "reused")
+    assert reused["user_id"] == "telemetry-user"
+    assert "idempotency_key_fingerprint" in reused
+    assert "durable-key" not in reused.values()
 
-        with pytest.raises(DomainConflictError, match="different request"):
-            DomainService._idempotent_result(
-                conn,
-                "telemetry-user",
-                "task.create",
-                "durable-key",
-                {**request, "task_id": "other-task"},
-            )
+    with pytest.raises(DomainConflictError, match="different request"):
+        projects.create_project(actor, name="Other", idempotency_key="durable-key")
 
     text = get_metrics_text()
     assert 'ainrf_domain_idempotency_requests_total{outcome="reused"} 1.0' in text
@@ -1043,92 +989,6 @@ def test_shared_connection_records_sqlite_execution_errors(tmp_path: Path) -> No
     assert "ainrf_domain_sqlite_errors_total" in text
     assert 'operation="connection_execute"' in text
     assert 'error_type="OperationalError"' in text
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_refreshes_durable_domain_gauges(tmp_path: Path) -> None:
-    _seed_control_plane(tmp_path)
-    app = create_app(_metrics_config(tmp_path))
-    app.state.maintenance_startup_read_only = False
-    headers = get_jwt_headers(app)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in response.text
-    assert "ainrf_domain_idempotency_records 1.0" in response.text
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_uses_read_only_telemetry_for_maintenance_app(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _seed_control_plane(tmp_path)
-    app = create_app(_metrics_config(tmp_path))
-    app.state.maintenance_startup_read_only = True
-    headers = get_jwt_headers(app)
-    original_refresh = domain_telemetry.refresh_domain_metrics
-    observed_read_only: list[bool] = []
-
-    def _unexpected_persist(
-        _state_root: Path,
-        _collected: domain_telemetry._CollectedDomainMetrics,
-        *,
-        collected_at: float,
-    ) -> None:
-        _ = collected_at
-        raise AssertionError("maintenance metrics must not persist a snapshot")
-
-    def _refresh(
-        state_root: Path,
-        *,
-        runtime_mode: str | None = None,
-        read_only: bool = False,
-    ) -> domain_telemetry.DomainTelemetrySnapshot:
-        observed_read_only.append(read_only)
-        return original_refresh(state_root, runtime_mode=runtime_mode, read_only=read_only)
-
-    monkeypatch.setattr(domain_telemetry, "refresh_domain_metrics", _refresh)
-    monkeypatch.setattr(domain_telemetry, "_persist_collected_snapshot", _unexpected_persist)
-
-    def _unexpected_status() -> None:
-        raise AssertionError("metrics must not initialize or query maintenance service status")
-
-    monkeypatch.setattr(app.state.domain_maintenance_service, "status", _unexpected_status)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert observed_read_only == [True]
-
-
-@pytest.mark.anyio
-async def test_metrics_endpoint_hydrates_no_port_worker_counter(tmp_path: Path) -> None:
-    _seed_control_plane(tmp_path)
-    # This call represents a domain-worker/CLI process: no FastAPI app has
-    # been constructed yet, so only the shared telemetry sidecar can carry
-    # the event into the later API /metrics scrape.
-    domain_telemetry.record_literature_saga_event(
-        "completed",
-        intent_id="telemetry-intent",
-        state_root=tmp_path,
-    )
-    app = create_app(_metrics_config(tmp_path))
-    headers = get_jwt_headers(app)
-
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.get("/metrics", headers=headers)
-
-    assert response.status_code == 200
-    assert 'ainrf_domain_literature_saga_events_total{outcome="completed"} 1.0' in response.text
 
 
 def test_domain_alert_baseline_has_required_release_gates() -> None:
@@ -1173,13 +1033,10 @@ def test_domain_alert_baseline_has_required_release_gates() -> None:
     assert "ainrf_domain_telemetry_delivery_failure_latched" in release_gate_expr
     assert "absent(" in release_gate_expr
     assert "up{" in release_gate_expr
-    assert rules["AINRFDomainTelemetryReleaseGateBlocked"]["labels"]["release_gate"] == "B,E"
+    assert rules["AINRFDomainTelemetryReleaseGateBlocked"]["labels"]["release_gate"] == "B"
     assert "increase(" not in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
     assert "sum(" in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
-    assert "increase(" not in str(rules["AINRFDeprecatedDomainRouteUse"]["expr"])
-    assert "sum(" in str(rules["AINRFDeprecatedDomainRouteUse"]["expr"])
-    assert rules["AINRFDomainTelemetryEventDeliveryFailure"]["labels"]["release_gate"] == "B,E"
-    assert rules["AINRFDeprecatedDomainRouteUse"]["labels"]["release_gate"] == "E"
+    assert rules["AINRFDomainTelemetryEventDeliveryFailure"]["labels"]["release_gate"] == "B"
     assert "ainrf_domain_overview_attention_required" in str(
         rules["AINRFOverviewAttentionRequired"]["expr"]
     )

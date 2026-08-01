@@ -14,11 +14,10 @@ from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
-from ainrf.auth.service import _is_container_environment, _linux_user_exists, tenant_linux_username
 from ainrf.db import connect
 from ainrf.domain.attempts import (
     AttemptControlRequest,
-    AttemptService,
+    AttemptWorkerModule,
     DispatchClaim,
     DispatchClaimError,
 )
@@ -33,18 +32,18 @@ from ainrf.domain_control import (
     MaintenanceLease,
     MaintenanceModeError,
 )
-from ainrf.harness_engine import (
+from ainrf.harness_engine.base import (
     EngineEvent,
     ExecutionContext,
     HarnessEngine,
     HarnessEngineNotSupportedError,
     HarnessEngineType,
     RuntimeProbeStatus,
-    get_engine,
 )
-from ainrf.harness_engine.db_session_store import DbSessionStore
-from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
+from ainrf.literature.planner import run_planner_cycle
+from ainrf.literature.tracking import LiteratureTrackingService
+from ainrf.runtime import tenant_identity
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,7 +162,7 @@ class TaskDispatcher:
             participant_id=self.dispatcher_id,
             details={"component": "domain-worker"},
         )
-        self._engine_factory = engine_factory or self._default_engine_factory
+        self._engine_factory = engine_factory or self._missing_engine_factory
         # Construction only stores a Path.  ``notify()`` is called after an
         # outbox commit, so retaining this lightweight helper before the
         # maintenance probe cannot create the wakeup file or its directory.
@@ -176,8 +175,9 @@ class TaskDispatcher:
         # attributes precise for the dispatch paths, which are reachable only
         # after ``start`` has confirmed that writable services were assembled.
         self._cutover = cast(DomainCutoverController, None)
-        self._attempts = cast(AttemptService, None)
+        self._attempts = cast(AttemptWorkerModule, None)
         self._overview_planner = cast(OverviewSnapshotPlanner, None)
+        self._literature_tracking = cast(LiteratureTrackingService, None)
         self._writable_services_initialized = False
         self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
         if not self._maintenance_startup_read_only:
@@ -202,13 +202,15 @@ class TaskDispatcher:
             self._maintenance.check_lease(lease)
             self._cutover = DomainCutoverController(self._state_root)
             self._maintenance.check_lease(lease)
-            self._attempts = AttemptService(self._state_root, artifact_sha=self._artifact_sha)
+            self._attempts = AttemptWorkerModule(self._state_root, artifact_sha=self._artifact_sha)
             self._maintenance.check_lease(lease)
             self._overview_planner = OverviewSnapshotPlanner(
                 self._state_root,
                 planner_id=f"{self.dispatcher_id}:overview",
                 artifact_sha=self._artifact_sha,
             )
+            self._maintenance.check_lease(lease)
+            self._literature_tracking = LiteratureTrackingService(self._state_root)
             self._maintenance.check_lease(lease)
             self._writable_services_initialized = True
         except MaintenanceModeError:
@@ -250,7 +252,7 @@ class TaskDispatcher:
             return self._start_as_drained_maintenance_participant()
         # Registering a participant is itself a durable control-plane write.
         # Do not let a direct Python caller create a shadow dispatcher in
-        # legacy/validate mode merely by bypassing the CLI entry point.
+        # an unauthorized runtime merely by bypassing the CLI entry point.
         self._assert_domain_runtime_fuse()
         participant_status = self._participant.start()
         self._started = True
@@ -296,6 +298,10 @@ class TaskDispatcher:
             return DispatchRunResult(outcome="maintenance_drained")
         try:
             try:
+                run_planner_cycle(
+                    self._literature_tracking,
+                    check_lease=lambda: self._participant.check_lease(lease),
+                )
                 self._recover_v2_literature_intents(lease)
             except MaintenanceModeError:
                 self._participant.drain()
@@ -1270,7 +1276,7 @@ class TaskDispatcher:
         task_id: str,
         environment_id: str,
     ) -> str | None:
-        if not _is_container_environment():
+        if not tenant_identity.is_container_environment():
             return None
         if not self._auth_db_path.is_file():
             raise DispatchAuthorizationError(
@@ -1311,8 +1317,8 @@ class TaskDispatcher:
                 task_id=task_id,
                 environment_id=environment_id,
             )
-        tenant_user = tenant_linux_username(row[0])
-        if not _linux_user_exists(tenant_user):
+        tenant_user = tenant_identity.tenant_linux_username(row[0])
+        if not tenant_identity.linux_user_exists(tenant_user):
             raise DispatchAuthorizationError(
                 "Task owner Linux tenant is not provisioned",
                 resource="workspace",
@@ -1352,7 +1358,17 @@ class TaskDispatcher:
                 )
             return
         result = subprocess.run(
-            ["sudo", "-n", "-u", tenant_user, "test", "-rwx", str(path)],
+            [
+                "sudo",
+                "-n",
+                "-u",
+                tenant_user,
+                "sh",
+                "-c",
+                'test -r "$1" && test -w "$1" && test -x "$1"',
+                "tenant-workspace-permissions",
+                str(path),
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -1373,14 +1389,12 @@ class TaskDispatcher:
         engine = self._engines.get(engine_type)
         if engine is None:
             engine = self._engine_factory(engine_type)
-            if engine_type is HarnessEngineType.AGENT_SDK and isinstance(engine, AgentSdkEngine):
-                engine._session_store = DbSessionStore(str(self._db_path))
             self._engines[engine_type] = engine
         return engine
 
     @staticmethod
-    def _default_engine_factory(engine_type: HarnessEngineType) -> HarnessEngine:
-        return get_engine(engine_type.value)
+    def _missing_engine_factory(engine_type: HarnessEngineType) -> HarnessEngine:
+        raise RuntimeError(f"no engine factory configured for {engine_type.value}")
 
     @staticmethod
     def _json_string_list(value: object) -> list[str]:

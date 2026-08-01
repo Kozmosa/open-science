@@ -7,9 +7,9 @@ from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 
-from ainrf.auth.service import AuthService
+from ainrf.auth.service import AuthService, provision_tenant_owned_path
 from ainrf.db import connect
-from ainrf.domain import DomainService
+from ainrf.domain import build_domain_modules
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
@@ -38,6 +38,7 @@ class FrontendDevSeedResult:
 @dataclass(frozen=True, slots=True)
 class FrontendDevUsers:
     owner_user_id: str
+    owner_username: str
     editor_user_id: str
     viewer_user_id: str
     admin_user_id: str
@@ -62,7 +63,7 @@ def seed_frontend_dev_profile(
     profile: FrontendDevProfile,
     users: FrontendDevUsers,
 ) -> FrontendDevSeedResult:
-    DomainService(state_root, artifact_sha=artifact_sha)
+    build_domain_modules(state_root, artifact_sha=artifact_sha)
     LiteratureTrackingService(state_root).initialize()
     if profile is FrontendDevProfile.EMPTY:
         _remove_cutover_default_project(state_root)
@@ -107,7 +108,7 @@ def _seed_core_profile(state_root: Path, *, users: FrontendDevUsers) -> Frontend
     workspace_root = state_root.parent / f"{state_root.name}-workspaces"
     primary_path = workspace_root / "primary"
     blocked_path = workspace_root / "blocked"
-    primary_path.mkdir(parents=True, exist_ok=True)
+    provision_tenant_owned_path(primary_path, users.owner_username)
     blocked_path.mkdir(parents=True, exist_ok=True)
     context_content = "Synthetic Project Context for the frontend development profiles."
     context_fingerprint = sha256(context_content.encode("utf-8")).hexdigest()
@@ -730,7 +731,7 @@ def _overview_card_data(card_id: str, *, failed: bool) -> dict[str, object]:
 def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> FrontendDevSeedResult:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     workspace_root = state_root.parent / f"{state_root.name}-large-workspaces"
-    workspace_root.mkdir(parents=True, exist_ok=True)
+    provision_tenant_owned_path(workspace_root, users.owner_username)
     with closing(connect(db_path)) as conn:
         conn.execute("DELETE FROM projects WHERE project_id = 'project-frontend-dev'")
         conn.execute(

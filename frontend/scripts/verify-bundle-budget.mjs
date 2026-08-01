@@ -102,14 +102,16 @@ async function main() {
 
   const entryKey = entryKeys[0];
   const fileBrowserKey = 'src/pages/FileBrowserPage.tsx';
-  const monacoKey = 'src/components/file-browser/MonacoTextViewer.tsx';
+  const monacoKey = 'src/features/workspaces/components/file-browser/MonacoTextViewer.tsx';
   const fileBrowserChunk = manifest[fileBrowserKey];
   const monacoChunk = manifest[monacoKey];
 
   if (!fileBrowserChunk?.isDynamicEntry || !monacoChunk?.isDynamicEntry) {
     throw new Error('FileBrowserPage and MonacoTextViewer must remain dynamic entries');
   }
-  if (!(fileBrowserChunk.dynamicImports ?? []).includes(monacoKey)) {
+  const fileBrowserLoadsMonaco = [...collectStaticClosure(manifest, fileBrowserKey)]
+    .some((key) => (manifest[key]?.dynamicImports ?? []).includes(monacoKey));
+  if (!fileBrowserLoadsMonaco) {
     failures.push('FileBrowserPage must load MonacoTextViewer through a dynamic import');
   }
 

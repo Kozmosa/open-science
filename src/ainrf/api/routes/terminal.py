@@ -16,7 +16,7 @@ from starlette.websockets import WebSocketState
 from ainrf.api.domain_access import (
     require_v2_active_environment,
     require_v2_workspace_execution_owner,
-    v2_domain_service,
+    v2_environment_module,
 )
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
@@ -60,8 +60,8 @@ from ainrf.terminal.pty import (
 )
 from ainrf.terminal.exec import exec_command
 from ainrf.terminal.sessions import SessionManager, TerminalSessionOperationError
-from ainrf.api.middleware import _client_ip
-from ainrf.api.routes.metrics import dec_gauge, inc_gauge
+from ainrf.api.request_identity import client_ip
+from ainrf.telemetry.metrics import dec_gauge, inc_gauge
 from ainrf.security.audit import audit_event
 
 logger = logging.getLogger(__name__)
@@ -276,8 +276,6 @@ def _require_v2_attachment_environment_access(
 ) -> None:
     """Revalidate the attachment owner's durable grant before starting a PTY."""
 
-    if v2_domain_service(websocket) is None:
-        return
     auth_service = getattr(websocket.app.state, "auth_service", None)
     if auth_service is None:
         raise HTTPException(status_code=503, detail="authentication service not initialized")
@@ -359,7 +357,7 @@ async def read_terminal_session_pairs(
     app_user_id = user["id"]
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
-    domain = v2_domain_service(request)
+    domain = v2_environment_module(request)
     if environment_id is not None:
         try:
             require_v2_active_environment(request, user, environment_id)
@@ -367,15 +365,12 @@ async def read_terminal_session_pairs(
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
-    environment_visible: Callable[[str], bool] | None = None
-    if domain is not None:
-
-        def environment_visible(candidate_environment_id: str) -> bool:
-            try:
-                domain.environment(candidate_environment_id, user, include_disabled=False)
-            except DomainNotFoundError:
-                return False
-            return True
+    def environment_visible(candidate_environment_id: str) -> bool:
+        try:
+            domain.environment(candidate_environment_id, user, include_disabled=False)
+        except DomainNotFoundError:
+            return False
+        return True
 
     items = await to_thread.run_sync(
         manager.list_session_pairs,
@@ -462,7 +457,7 @@ async def create_terminal_session(
         session_id=attached_session.session_id,
         environment_id=payload.environment_id,
         user_id=app_user_id,
-        client_ip=_client_ip(request),
+        client_ip=client_ip(request),
     )
     return TerminalSessionResponse.model_validate(_serialize_session(attached_session))
 
@@ -580,7 +575,7 @@ async def reset_terminal_session(
         session_id=attached_session.session_id,
         environment_id=payload.environment_id,
         user_id=app_user_id,
-        client_ip=_client_ip(request),
+        client_ip=client_ip(request),
     )
     return TerminalSessionResponse.model_validate(_serialize_session(attached_session))
 
@@ -607,22 +602,10 @@ async def terminal_session_exec(
     assert environment is not None
 
     if payload.workspace_id is not None:
-        v2_workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
-        if v2_workspace is not None:
-            canonical_path = v2_workspace.get("canonical_path")
-            if isinstance(canonical_path, str) and canonical_path:
-                working_directory = canonical_path
-        else:
-            workspace_service = getattr(request.app.state, "workspace_service", None)
-            if workspace_service is None:
-                workspace = None
-            else:
-                try:
-                    workspace = workspace_service.get_workspace(payload.workspace_id)
-                except Exception as exc:
-                    raise _translate_environment_error(exc) from exc
-            if workspace is not None:
-                working_directory = workspace.default_workdir or working_directory or "/"
+        workspace = require_v2_workspace_execution_owner(request, user, payload.workspace_id)
+        canonical_path = workspace.get("canonical_path")
+        if isinstance(canonical_path, str) and canonical_path:
+            working_directory = canonical_path
 
     try:
         # Validate command against allowlist for security
@@ -715,14 +698,14 @@ async def terminal_attachment_ws(attachment_id: str, token: str, websocket: WebS
         await websocket.close(code=_close_code_for_attachment_error(exc))
         return
     await websocket.accept()
-    client_ip = _client_ip(cast(Request, websocket))
+    remote_ip = client_ip(cast(Request, websocket))
     audit_event(
         "terminal.websocket.opened",
         severity="info",
         session_id=attachment.session_id,
         environment_id=attachment.environment_id,
         user_id=attachment.user_id,
-        client_ip=client_ip,
+        client_ip=remote_ip,
         attachment_id=attachment_id,
     )
     inc_gauge("ainrf_terminal_ws_active")

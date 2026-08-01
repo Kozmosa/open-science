@@ -7,6 +7,14 @@ from enum import StrEnum
 from ainrf.harness_engine.base import HarnessEngineType
 
 
+class TaskNotFoundError(LookupError):
+    pass
+
+
+class TaskOperationError(RuntimeError):
+    pass
+
+
 class AgenticResearcherType(StrEnum):
     VANILLA = "vanilla"
     ARIS = "aris-researcher"

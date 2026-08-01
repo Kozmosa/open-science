@@ -1,17 +1,40 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import ProjectCanvas from '../../../src/components/project/ProjectCanvas';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ProjectCanvas } from '@features/projects';
+import { createTaskEdge, deleteTaskEdge } from '@features/tasks';
 import type { TaskSummary, TaskEdge } from '@/shared/types';
 
 const mockFitView = vi.fn();
 const mockGetNodes = vi.fn(() => []);
 
 // Mock React Flow sub-components that depend on browser APIs not available in jsdom
+vi.mock('@features/tasks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@features/tasks')>();
+  return {
+    ...actual,
+    createTaskEdge: vi.fn(),
+    deleteTaskEdge: vi.fn(),
+  };
+});
+
 vi.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, nodes, edges }: { children?: React.ReactNode; nodes?: unknown[]; edges?: unknown[] }) => (
+  ReactFlow: ({ children, nodes, edges, onConnect, onEdgesDelete }: {
+    children?: React.ReactNode;
+    nodes?: unknown[];
+    edges?: Array<{ id: string; source: string; target: string }>;
+    onConnect?: (connection: { source: string; target: string }) => void;
+    onEdgesDelete?: (edges: Array<{ id: string; source: string; target: string }>) => void;
+  }) => (
     <div data-testid="react-flow">
       {nodes ? <div data-testid="node-count">{nodes.length}</div> : null}
       {edges ? <div data-testid="edge-count">{edges.length}</div> : null}
+      <button type="button" onClick={() => onConnect?.({ source: 't1', target: 't2' })}>
+        Connect tasks
+      </button>
+      <button type="button" onClick={() => edges?.[0] && onEdgesDelete?.([edges[0]])}>
+        Delete first edge
+      </button>
       {children}
     </div>
   ),
@@ -23,6 +46,7 @@ vi.mock('@xyflow/react', () => ({
     getNodes: mockGetNodes,
     fitView: mockFitView,
   }),
+  addEdge: (edge: unknown, edges: unknown[]) => [...edges, edge],
   applyNodeChanges: (_changes: unknown[], nodes: unknown[]) => nodes,
   applyEdgeChanges: (_changes: unknown[], edges: unknown[]) => edges,
 }));
@@ -94,6 +118,8 @@ const multiMockTasks: TaskSummary[] = [
 ];
 
 const mockEdges: TaskEdge[] = [];
+const mockCreateTaskEdge = vi.mocked(createTaskEdge);
+const mockDeleteTaskEdge = vi.mocked(deleteTaskEdge);
 
 describe('ProjectCanvas', () => {
   it('renders empty canvas placeholder when no tasks', () => {
@@ -206,5 +232,50 @@ describe('ProjectCanvas', () => {
     );
 
     expect(screen.getByTestId('edge-count')).toHaveTextContent('1');
+  });
+
+  it('replaces a temporary relationship ID and deletes through the canonical interface', async () => {
+    const user = userEvent.setup();
+    const explicitTasks = multiMockTasks.slice(0, 2);
+    mockCreateTaskEdge.mockResolvedValue({
+      edge_id: 'relationship-1',
+      project_id: 'p1',
+      source_task_id: 't1',
+      target_task_id: 't2',
+      relationship_type: 'related_to',
+      created_at: '2026-05-08T10:00:00Z',
+    });
+    mockDeleteTaskEdge.mockResolvedValue();
+
+    render(
+      <ProjectCanvas
+        projectId="p1"
+        tasks={explicitTasks}
+        edges={[]}
+        projects={[]}
+        onNodeClick={vi.fn()}
+        onNewTask={vi.fn()}
+        onResetLayout={vi.fn()}
+        onMoveTaskToProject={vi.fn()}
+        canCreateTask
+        canEditRelationships
+        canMoveTask={() => true}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Connect tasks' }));
+    await waitFor(() => expect(screen.getByTestId('edge-count')).toHaveTextContent('1'));
+    await waitFor(() => expect(mockCreateTaskEdge).toHaveBeenCalledWith(
+      'p1',
+      { source_task_id: 't1', target_task_id: 't2' },
+      expect.stringMatching(/^task\.relationship/),
+    ));
+
+    await user.click(screen.getByRole('button', { name: 'Delete first edge' }));
+    await waitFor(() => expect(mockDeleteTaskEdge).toHaveBeenCalledWith(
+      'p1',
+      'relationship-1',
+      expect.stringMatching(/^task\.relationship\.delete/),
+    ));
   });
 });

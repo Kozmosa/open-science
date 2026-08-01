@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import sqlite3
+import subprocess
 from contextlib import closing
 from pathlib import Path
 
@@ -14,13 +15,16 @@ from ainrf.auth.service import AuthService
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import (
-    AttemptService,
-    DomainService,
     OverviewSnapshotService,
     ProjectContextService,
     TaskApplicationService,
+    build_domain_modules,
 )
-from ainrf.domain.attempts import DispatchClaim, DispatchClaimError
+from ainrf.domain.attempts import (
+    AttemptWorkerModule as AttemptService,
+    DispatchClaim,
+    DispatchClaimError,
+)
 from ainrf.domain.worker import (
     DispatchRunResult,
     TaskDispatcher,
@@ -56,8 +60,10 @@ def _queued_task(
     auth.initialize()
     seed_user(auth, username="worker-owner", role="member", user_id="owner")
     seed_user(auth, username="worker-admin", role="admin", user_id="admin")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
     environment_id = str(environment["environment_id"])
     auth.grant_environment(
         env_id=environment_id,
@@ -66,10 +72,10 @@ def _queued_task(
         granted_by="admin",
         reason="domain worker test",
     )
-    project = domain.create_project(owner, name="Project")
+    project = domain.projects.create_project(owner, name="Project")
     workspace_path = tmp_path / "workspace"
     workspace_path.mkdir()
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(workspace_path),
@@ -77,7 +83,7 @@ def _queued_task(
     )
     project_id = str(project["project_id"])
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
+    domain.projects.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
     context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
     context.save_draft(project_id, "Project context", owner)
     context.publish(project_id, owner)
@@ -362,7 +368,7 @@ async def test_active_maintenance_worker_never_constructs_writable_services(
         pytest.fail("active-maintenance worker must not construct a writable service")
 
     monkeypatch.setattr("ainrf.domain.worker.DomainCutoverController", unexpected_constructor)
-    monkeypatch.setattr("ainrf.domain.worker.AttemptService", unexpected_constructor)
+    monkeypatch.setattr("ainrf.domain.worker.AttemptWorkerModule", unexpected_constructor)
     monkeypatch.setattr("ainrf.domain.worker.OverviewSnapshotPlanner", unexpected_constructor)
 
     dispatcher = TaskDispatcher(
@@ -1107,8 +1113,8 @@ async def test_tenant_agent_sdk_is_rejected_before_any_backend_user_launch(
     state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path, harness_engine="agent-sdk")
-    monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
-    monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.linux_user_exists", lambda _user: True)
     engine = FakeEngine()
     dispatcher = TaskDispatcher(
         state_root,
@@ -1132,8 +1138,8 @@ async def test_domain_worker_records_tenant_access_denial_before_runtime_start(
 ) -> None:
     task, _, _ = _queued_task(state_root, tmp_path)
     reset_metrics()
-    monkeypatch.setattr("ainrf.domain.worker._is_container_environment", lambda: True)
-    monkeypatch.setattr("ainrf.domain.worker._linux_user_exists", lambda _user: False)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: True)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.linux_user_exists", lambda _user: False)
     engine = FakeEngine()
     dispatcher = TaskDispatcher(
         state_root,
@@ -1155,6 +1161,41 @@ async def test_domain_worker_records_tenant_access_denial_before_runtime_start(
     finally:
         dispatcher.stop()
         reset_metrics()
+
+
+def test_domain_worker_checks_each_tenant_workspace_permission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("ainrf.domain.worker.subprocess.run", run)
+    TaskDispatcher._validate_workspace_permissions(
+        tmp_path,
+        "ainrf_frontend-owner",
+        owner_user_id="owner",
+        project_id="project",
+        workspace_id="workspace",
+        task_id="task",
+        environment_id="environment",
+    )
+
+    assert commands == [
+        [
+            "sudo",
+            "-n",
+            "-u",
+            "ainrf_frontend-owner",
+            "sh",
+            "-c",
+            'test -r "$1" && test -w "$1" && test -x "$1"',
+            "tenant-workspace-permissions",
+            str(tmp_path),
+        ]
+    ]
 
 
 @pytest.mark.anyio

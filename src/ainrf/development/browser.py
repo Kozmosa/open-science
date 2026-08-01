@@ -8,10 +8,11 @@ import signal
 import socket
 import subprocess
 import time
+import tomllib
 from dataclasses import asdict, dataclass
 from http.client import HTTPException
 from pathlib import Path
-from typing import Mapping
+from typing import BinaryIO, Literal, Mapping, Protocol
 from urllib.error import URLError
 from urllib.request import urlopen
 from uuid import uuid4
@@ -42,11 +43,24 @@ class DevelopmentDoctorResult:
     instance_id: str
     checks: tuple[DevelopmentDoctorCheck, ...]
     browser_probe: BrowserCdpProbe | None
-    session_restart_required: bool
-    session_tool_visibility: str
+    session_restart_required: bool | None
+    session_tool_visibility: Literal["not_checked", "unknown"]
+    session_verification: str | None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+class BrowserProcess(Protocol):
+    pid: int
+
+    def poll(self) -> int | None: ...
+
+    def wait(self, timeout: float | None = None) -> int: ...
+
+    def terminate(self) -> None: ...
+
+    def kill(self) -> None: ...
 
 
 def discover_chrome(
@@ -66,12 +80,7 @@ def discover_chrome(
         found = shutil.which(command, path=path_value)
         if found:
             candidates.append(Path(found))
-    candidates.extend(
-        sorted(
-            resolved_home.glob(".cache/puppeteer/chrome/linux-*/chrome-linux64/chrome"),
-            reverse=True,
-        )
-    )
+    candidates.extend(_puppeteer_chrome_candidates(resolved_home))
     seen: set[Path] = set()
     for candidate in candidates:
         expanded = candidate.expanduser()
@@ -105,26 +114,42 @@ def discover_chrome_devtools_mcp(
     return None, ["neither chrome-devtools-mcp nor npx is available"]
 
 
-def chrome_devtools_config_locations(home: Path | None = None) -> list[Path]:
+def chrome_devtools_config_locations(
+    home: Path | None = None,
+    *,
+    repo_root: Path | None = None,
+) -> list[Path]:
     resolved_home = (home or Path.home()).expanduser().resolve()
-    return [
+    locations = [
+        resolved_home / ".codex" / "config.toml",
         resolved_home / ".claude" / "settings.json",
         resolved_home / ".omp" / "agent" / "mcp.json",
     ]
+    if repo_root is not None:
+        project_config = repo_root.expanduser().resolve() / ".codex" / "config.toml"
+        if project_config not in locations:
+            locations.append(project_config)
+    return locations
 
 
-def configured_chrome_devtools_servers(home: Path | None = None) -> list[str]:
+def configured_chrome_devtools_servers(
+    home: Path | None = None,
+    *,
+    repo_root: Path | None = None,
+) -> list[str]:
     configured: list[str] = []
-    for path in chrome_devtools_config_locations(home):
+    for path in chrome_devtools_config_locations(home, repo_root=repo_root):
         if not path.is_file():
             continue
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            payload = _load_mcp_config(path)
+        except (json.JSONDecodeError, OSError, tomllib.TOMLDecodeError):
             continue
         if not isinstance(payload, dict):
             continue
-        servers = payload.get("mcpServers")
+        servers = (
+            payload.get("mcp_servers") if path.suffix == ".toml" else payload.get("mcpServers")
+        )
         if not isinstance(servers, dict):
             continue
         if any("chrome-devtools" in str(name) for name in servers):
@@ -157,17 +182,10 @@ def probe_chrome_cdp(
         *extra_args,
         "about:blank",
     ]
-    process: subprocess.Popen[bytes] | None = None
+    process: BrowserProcess | None = None
     try:
         with log_path.open("wb") as handle:
-            process = subprocess.Popen(
-                command,
-                env=environment,
-                stdin=subprocess.DEVNULL,
-                stdout=handle,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+            process = _launch_browser_process(command, environment, handle)
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             payload = _read_cdp_version(port)
@@ -203,14 +221,7 @@ def probe_chrome_cdp(
         )
     finally:
         if process is not None and process.poll() is None:
-            try:
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                process.wait(timeout=5)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                try:
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+            _stop_browser_process(process)
         shutil.rmtree(user_data_dir, ignore_errors=True)
 
 
@@ -273,7 +284,10 @@ def run_development_doctor(
                 detail=(mcp_command if mcp_command else "; ".join(mcp_notes)),
             )
         )
-        configured = configured_chrome_devtools_servers(home)
+        configured = configured_chrome_devtools_servers(
+            home,
+            repo_root=instance.repo_root,
+        )
         checks.append(
             DevelopmentDoctorCheck(
                 name="browser:mcp-config",
@@ -312,12 +326,85 @@ def run_development_doctor(
         instance_id=instance.instance_id,
         checks=tuple(checks),
         browser_probe=browser_probe,
-        session_restart_required=include_browser,
-        session_tool_visibility=(
-            "MCP configuration is loaded at session start; this process cannot prove that the "
-            "current Codex session exposes browser tools"
+        session_restart_required=None,
+        session_tool_visibility="unknown" if include_browser else "not_checked",
+        session_verification=(
+            "Invoke chrome-devtools list_pages from the current Codex task; restart only if the "
+            "host checks pass and that tool is unavailable"
+            if include_browser
+            else None
         ),
     )
+
+
+def _puppeteer_chrome_candidates(home: Path) -> list[Path]:
+    cache_root = home / ".cache" / "puppeteer" / "chrome"
+    relative_patterns = (
+        "linux-*/chrome-linux*/chrome",
+        "mac-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "win*-*/chrome-win*/chrome.exe",
+    )
+    candidates = [
+        candidate for pattern in relative_patterns for candidate in cache_root.glob(pattern)
+    ]
+    return sorted(candidates, key=lambda path: str(path), reverse=True)
+
+
+def _load_mcp_config(path: Path) -> dict[str, object]:
+    if path.suffix == ".toml":
+        with path.open("rb") as handle:
+            payload = tomllib.load(handle)
+    else:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    return {str(key): value for key, value in payload.items()}
+
+
+def _launch_browser_process(
+    command: list[str],
+    environment: Mapping[str, str],
+    output: BinaryIO,
+) -> subprocess.Popen[bytes]:
+    if os.name == "posix":
+        return subprocess.Popen(
+            command,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    creation_flag = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    return subprocess.Popen(
+        command,
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=output,
+        stderr=subprocess.STDOUT,
+        creationflags=creation_flag,
+    )
+
+
+def _stop_browser_process(process: BrowserProcess) -> None:
+    if os.name == "posix":
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            process.wait(timeout=5)
+            return
+        except ProcessLookupError:
+            return
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                return
+            process.wait(timeout=5)
+            return
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
 
 
 def _is_snap_chromium(path: Path) -> bool:

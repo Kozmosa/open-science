@@ -33,7 +33,7 @@ const navigation = {
         label: 'Resources',
         description: 'System resource monitoring and usage',
       },
-      sessions: {
+      runs: {
         label: 'Task Runs',
         description: 'Task run history from real agent tasks',
       },

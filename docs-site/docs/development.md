@@ -231,7 +231,13 @@ bash scripts/dev.sh doctor --profile full --browser
 
 系统 snap Chromium 会被拒绝。preflight 不修改用户配置、不自动升级 MCP，也不会自动加
 `--no-sandbox`。Chrome/CDP 成功证明 headless 主机具备真实浏览器能力；是否在当前 agent
-会话暴露 browser tool 仍取决于启动时加载的 MCP 配置，配置变化后必须重启 session。
+会话暴露 browser tool 仍取决于 Codex task 实际加载的 MCP 配置。shell 侧 doctor 无法读取
+当前 task 的工具注册表，因此会把 `session_tool_visibility` 和
+`session_restart_required` 报告为未知，并提示从当前 task 调用
+`chrome-devtools list_pages`。只有主机检查通过而该工具确实不可用时，才需要重启 session。
+配置发现覆盖 Codex 全局与项目级 `.codex/config.toml`，并兼容 Claude/OMP 的 JSON 配置。
+Chrome 发现优先使用显式 `PUPPETEER_EXECUTABLE_PATH` 和 `PATH`，再检查 Puppeteer 在
+Linux、macOS 与 Windows 上的标准缓存布局，不依赖某台开发机的绝对安装路径。
 
 DevTools 手工检查、HTTP smoke、L0/L1、L2 和 release acceptance 是不同证据层，不能互相
 替代。F1–F10 的 DOM、computed style、Network、focus 和响应式验收继续记录在客户端延期

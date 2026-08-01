@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: proposed
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Conversation Domain Standalone Migration 设计
 
 **Status:** Proposed execution design — 依赖新 conversation/runtime schema 冻结后实施

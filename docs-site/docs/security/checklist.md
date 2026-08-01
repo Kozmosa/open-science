@@ -16,6 +16,15 @@ description: OpenScience 生产部署安全检查项与安全事件响应流程�
 - [ ] 启用指标采集：`AINRF_METRICS_ENABLED=true`
 - [ ] 配置 `<state_root>/logs/` 的日志轮转
 
+## 维护窗口发布检查
+
+- [ ] L1 已通过，release manifest 记录当前 Git SHA 和四个镜像的 image ID。
+- [ ] Release staging 使用同一 manifest、独立凭据和独立数据，smoke 通过。
+- [ ] 人工完成本次改动涉及的核心页面和业务流程验收。
+- [ ] 发布前完成完整备份，并实际验证备份能够恢复。
+- [ ] API、Web、worker 和监控镜像来自同一 release manifest，production 使用 `--no-build`。
+- [ ] 记录发布结果；失败时恢复上一份 manifest 和发布前备份。
+
 ## 日志位置
 
 | 类型 | 路径 |

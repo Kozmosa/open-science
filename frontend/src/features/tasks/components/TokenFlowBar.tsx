@@ -1,0 +1,100 @@
+import type { TokenUsage } from '@/shared/types';
+import { useT } from '@/shared/i18n';
+
+interface Props {
+  tokenUsageJson: string | null;
+}
+
+function parseTokenUsage(json: string | null): TokenUsage | null {
+  if (!json) return null;
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
+    const totalValue = record.total && typeof record.total === 'object'
+      ? record.total as Record<string, unknown>
+      : record;
+    const numberValue = (key: string): number => (
+      typeof totalValue[key] === 'number' ? totalValue[key] : 0
+    );
+    return {
+      total: {
+        input_tokens: numberValue('input_tokens'),
+        output_tokens: numberValue('output_tokens'),
+        cache_creation_input_tokens: numberValue('cache_creation_input_tokens'),
+        cache_read_input_tokens: numberValue('cache_read_input_tokens'),
+        cost_usd: typeof totalValue.cost_usd === 'number' ? totalValue.cost_usd : undefined,
+      },
+      by_model: record.by_model && typeof record.by_model === 'object'
+        ? record.by_model as TokenUsage['by_model']
+        : undefined,
+      source: record.source === 'claude-session-meta' ? 'claude-session-meta' : 'agent-sdk',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
+
+const SEGMENTS = [
+  { key: 'input_tokens', tKey: 'components.token.input' as const, label: 'Input', color: 'bg-blue-300' },
+  { key: 'cache_creation_input_tokens', tKey: 'components.token.cache' as const, label: 'Cache', color: 'bg-green-300' },
+  { key: 'output_tokens', tKey: 'components.token.output' as const, label: 'Output', color: 'bg-yellow-300' },
+  { key: 'cache_read_input_tokens', tKey: 'components.token.think' as const, label: 'Think', color: 'bg-gray-300' },
+] as const;
+
+export function TokenFlowBar({ tokenUsageJson }: Props) {
+  const t = useT();
+  const usage = parseTokenUsage(tokenUsageJson);
+  if (!usage) return null;
+
+  const total = usage.total;
+  const totalTokens =
+    (total.input_tokens || 0) +
+    (total.output_tokens || 0) +
+    (total.cache_creation_input_tokens || 0) +
+    (total.cache_read_input_tokens || 0);
+  if (totalTokens === 0) return null;
+
+  return (
+    <div className="mt-2">
+      <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+        <span>{t('components.token.tokens')}</span>
+        <span className="font-medium text-gray-700">
+          {t('components.token.total')} {formatTokens(totalTokens)}
+          {total.cost_usd != null ? ` · $${total.cost_usd.toFixed(2)}` : ''}
+        </span>
+      </div>
+      <div className="flex h-[10px] rounded-sm overflow-hidden gap-px">
+        {SEGMENTS.map(({ key, color }) => {
+          const val = (usage.total as Record<string, number | undefined>)[key] || 0;
+          if (val === 0) return null;
+          return (
+            <div
+              key={key}
+              className={color}
+              style={{ width: `${(val / totalTokens) * 100}%` }}
+              title={`${key}: ${formatTokens(val)}`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex gap-3 mt-1 text-[9px] text-gray-400">
+        {SEGMENTS.map(({ key, tKey, color }) => {
+          const val = (usage.total as Record<string, number | undefined>)[key] || 0;
+          if (val === 0) return null;
+          return (
+            <span key={key} className="flex items-center gap-1">
+              <span className={`inline-block w-[6px] h-[6px] rounded-sm ${color}`} />
+              {t(tKey)} {formatTokens(val)}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

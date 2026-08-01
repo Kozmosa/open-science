@@ -10,11 +10,12 @@ containers unless the user explicitly asks you to.
 
 ## Production Deployment Architecture (CPU-only)
 
-The current production environment uses **CPU-only Docker Compose** with host networking:
+The production environment uses **CPU-only Docker Compose** with host networking and
+an immutable release manifest:
 
 ```bash
 # Deploy command (from repo root)
-docker compose -f deploy/docker-compose.cpu.yml up -d --build
+bash deploy/release-production.sh
 ```
 
 **Architecture overview:**
@@ -28,7 +29,9 @@ docker compose -f deploy/docker-compose.cpu.yml up -d --build
 
 - All services use `network_mode: host` (no Docker NAT).
 - External access: `http://<host>:8192` → nginx → backend on 18000.
-- Frontend static files are served from `frontend/dist/production` (host-mounted, read-only).
+- WebUI assets and nginx configuration are baked into the release web image.
+- API, domain worker, and literature worker use the same API image reference.
+- Production services have no source, configuration, or host `dist` bind mounts.
 - Backend runs as `ainrf` user (uid=1000) after privilege drop by entrypoint.
 - Config: `deploy/config/nginx-host.conf` for nginx, `deploy/docker-compose.cpu.yml` for service layout.
 
@@ -91,28 +94,52 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 
 ## Rebuild & Redeploy
 
-```bash
-# Backend-only changes — use the wrapper so the host git commit is stamped
-# into the image (otherwise the backend reports "Unavailable" for its version).
-bash deploy/redeploy-backend.sh
+OpenScience 的默认 production 场景是实验室内部部署。发布可以安排约 2–3 小时的维护窗口，
+不要求零停机、任意阶段中断后的自动接管或高保证供应链审计。生产发布应保持流程简单、
+可理解且可人工恢复：
 
-# Frontend-only changes — rebuilds the target-specific host bundle, then restarts nginx.
-bash deploy/redeploy-frontend.sh
+1. 在停止 writer 前完成 preflight，并准备上一份 release manifest。
+2. 停止 API 和 worker，避免迁移期间继续写入。
+3. 对 state、workspace 与 tenant 数据做完整备份，并在隔离位置验证可以恢复。
+4. 部署同一 manifest 绑定的 Web、API、worker 和监控镜像，执行必要迁移。
+5. 启动服务并执行只读 health、capability 与核心读取 smoke。
+6. 若失败，停止新服务，按 runbook 人工恢复备份并启动上一份 manifest。
+
+独立 release staging、镜像 digest promotion 或额外证据留存可以按部署方需要增加，但不是
+默认强制门禁。自动化不需要处理任意中断后的无人值守恢复；失败时应保持状态清楚并给出
+人工恢复步骤。
+
+当前 `deploy/release-production.sh` 只负责构建同版本镜像、写入 manifest、启动服务和健康检查，
+尚未自动执行上述数据备份、隔离恢复验证或数据 rollback。在这些步骤实现前，操作员必须在
+运行发布入口前按受控 runbook 手工完成备份和恢复验证，不能把脚本成功等同于完整 L4 验收。
+
+```bash
+# Build every artifact, write a release manifest, then deploy the matching set.
+bash deploy/release-production.sh
+
+# Build only; useful before pushing the tagged images to a registry.
+OPENSCIENCE_RELEASE_MANIFEST=/secure/releases/<sha>.env \
+  bash deploy/build-production.sh
 
 # Staging is managed only through its isolated lifecycle preflight:
 OPENSCIENCE_STAGING_ENV_FILE=/secure/path/staging.env bash scripts/staging.sh up
 
-# Bare fallback (no commit stamping; backend version shows "Unavailable"):
-# docker compose -f deploy/docker-compose.cpu.yml up -d --build ainrf
+# Deploy prebuilt/pulled images by exporting the four image references from a
+# reviewed release manifest, then running Compose with --no-build.
 ```
 
-**Version provenance is split**: the backend bakes its OWN commit into
-`/opt/ainrf/backend-build-info.json` (via `redeploy-backend.sh` build-args),
-and the frontend ships its OWN target-specific `build-info.json` (built on the
-host). Because the two build at different times, they may differ — the
-Settings page shows both and flags a mismatch.
+`build-production.sh` derives one release ID from the committed Git SHA, rejects
+dirty builds by default, builds the API, web, Prometheus, and Grafana targets,
+and records their exact image references in a mode-0600 manifest. Build all
+artifacts before changing running services. Keep the previous manifest as the
+code rollback unit; it does not replace the required pre-release data backup.
+Production containers require only images, runtime configuration, secrets, and
+named data volumes after deployment; deleting a checkout or worktree cannot break
+their code, frontend, or service configuration.
 
-**Why host build is required**: nginx serves frontend from a **host-mounted** target directory, not from the container's built-in `/opt/ainrf/frontend/dist`. Production uses `frontend/dist/production`, staging uses `frontend/dist/staging`, and GPU deployment uses `frontend/dist/gpu`; rebuilding one environment therefore cannot replace another environment's assets. Verify the `index-*.js` hash in the target directory matches what the browser requests.
+The legacy `redeploy-backend.sh` and `redeploy-frontend.sh` production targets
+delegate to the same atomic release entrypoint. GPU remains a mutable laboratory
+target and staging remains development-oriented.
 
 Direct staging calls through the production redeploy wrappers are rejected.
 `staging.sh up` rebuilds the current staging bundle and force-recreates its nginx
@@ -124,6 +151,27 @@ Deployment wrappers explicitly clear `VITE_OPENSCIENCE_API_KEY` and
 `VITE_AINRF_API_KEY` while building. Local WebUI credentials belong only to
 the Vite proxy process and must never be embedded into a deployed browser
 bundle through a lingering `.env.local` file.
+
+## Simple release staging and production acceptance
+
+The repository has three deliberately separate environments:
+
+- `scripts/dev.sh`: fast local development without Docker;
+- `scripts/staging.sh`: mutable, hot-reload staging for integration and telemetry work;
+- `deploy/release-staging.sh`: immutable API/Web images from the exact production release manifest, using isolated disposable data and offset ports.
+
+Release staging is a human acceptance surface, not an automated production
+controller. It performs a small health smoke and then leaves feature acceptance
+to the operator. Production continues through `deploy/release-production.sh`
+during a maintenance window. Before deployment, the same manifest is verified
+against the local Docker image IDs; production then starts the matching image
+set with `--no-build`.
+
+The required production record is intentionally small: Git SHA, release
+manifest, backup/restore result, human acceptance, deployment result, and
+rollback notes. Do not add a multi-stage release ledger, automatic cutover
+recovery state machine, or per-file supply-chain evidence without a new
+deployment requirement reviewed in `PROJECT_BASIS.md`.
 
 ## First-Time Admin Password
 

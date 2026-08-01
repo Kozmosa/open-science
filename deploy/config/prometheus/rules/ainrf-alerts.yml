@@ -181,18 +181,18 @@ groups:
           or ainrf_domain_metrics_scrape_success != 1
           or ainrf_domain_metrics_risk_state_known != 1
           or ainrf_domain_telemetry_delivery_failure_latched != 0
+          or ainrf_http_contract_telemetry_delivery_failure_latched != 0
         for: 1m
         labels:
           severity: critical
           component: domain-observability
-          release_gate: "B,E"
+          release_gate: "B"
         annotations:
           summary: "Domain telemetry cannot satisfy a release gate"
           description: >
-            Release B cutover and Release E compatibility cleanup require a
-            current successful durable scrape and a known risk state. A
-            cached snapshot remains observable during a transient source
-            failure, but it is not release evidence.
+            Release B cutover requires a current successful durable scrape
+            and a known risk state. A cached snapshot remains observable
+            during a transient source failure, but it is not release evidence.
 
       - alert: AINRFDomainTelemetryEventDeliveryFailure
         expr: ainrf_domain_telemetry_delivery_failure_latched != 0
@@ -200,7 +200,7 @@ groups:
         labels:
           severity: critical
           component: domain-observability
-          release_gate: "B,E"
+          release_gate: "B"
         annotations:
           summary: "A durable domain telemetry event could not be recorded"
           description: >
@@ -307,23 +307,6 @@ groups:
             A domain SQLite connection or telemetry read failed. Inspect the
             structured error type and safe operation label before attempting
             recovery.
-
-      - alert: AINRFDeprecatedDomainRouteUse
-        # Until the Release-E controller binds a formal observation watermark,
-        # this cumulative durable total fails closed. A first non-zero sample
-        # must not disappear merely because it arrived before Prometheus had a
-        # previous sample for `increase()`.
-        expr: sum(ainrf_deprecated_route_calls_total) > 0
-        labels:
-          severity: warning
-          component: compatibility
-          release_gate: "E"
-        annotations:
-          summary: "Deprecated domain compatibility route was used"
-          description: >
-            Deprecated domain traffic is non-zero. Release E cleanup remains
-            blocked until a future release controller binds a fresh formal
-            observation watermark and proves its complete period is zero.
 
   - name: ainrf.sla
     rules:

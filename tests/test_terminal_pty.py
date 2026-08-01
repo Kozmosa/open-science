@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app, seed_user
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.terminal import _open_terminal_attachment_runtime, _terminal_mutation
 from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
@@ -72,6 +72,13 @@ def make_client(tmp_path: Path) -> tuple[TestClient, FastAPI]:
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
         )
+    )
+    seed_user(app.state.auth_service, "daemon", "terminal-password", user_id="daemon")
+    seed_user(
+        app.state.auth_service,
+        "browser-user",
+        "terminal-password",
+        user_id="browser-user",
     )
     return TestClient(app), app
 
@@ -221,7 +228,7 @@ def test_terminal_attachment_websocket_bridge(
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -231,7 +238,7 @@ def test_terminal_attachment_websocket_bridge(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"hello from bridge\n")
         assert ws.receive_json() == {"type": "output", "data": "hello from bridge\n"}
@@ -408,7 +415,7 @@ def test_terminal_attachment_websocket_preserves_split_utf8_output(
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -418,7 +425,7 @@ def test_terminal_attachment_websocket_preserves_split_utf8_output(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, "中文\n".encode("utf-8"))
         os.close(write_fd)
@@ -462,7 +469,7 @@ def test_terminal_attachment_websocket_flushes_decoder_on_eof(
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -472,7 +479,7 @@ def test_terminal_attachment_websocket_flushes_decoder_on_eof(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"A\xe4\xb8")
         os.close(write_fd)
@@ -511,7 +518,7 @@ def test_terminal_attachment_websocket_drains_output_before_exit_status(
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -521,7 +528,7 @@ def test_terminal_attachment_websocket_drains_output_before_exit_status(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"hello before exit\n")
         process.returncode = 0
@@ -582,7 +589,7 @@ def test_terminal_attachment_websocket_soft_backpressure_pauses_and_resumes_read
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -592,7 +599,7 @@ def test_terminal_attachment_websocket_soft_backpressure_pauses_and_resumes_read
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         os.write(write_fd, b"abcdefghijkl")
         os.close(write_fd)
@@ -623,7 +630,7 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
             session_id="p-deadbeef10",
             session_name="p-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -634,7 +641,7 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
 
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect(
-            f"/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
+            f"/api/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
         ) as ws:
             ws.receive_text()
 
@@ -669,7 +676,7 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
             session_id="a-deadbeef10",
             session_name="a-deadbeef10",
             user_id="daemon",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -680,7 +687,7 @@ def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ) as ws:
         ws.send_text(json.dumps({"type": "input", "data": "ls\n"}))
         with pytest.raises(WebSocketDisconnect):
@@ -719,7 +726,7 @@ def test_task_attachment_websocket_close_tolerates_missing_task_manager(
             session_id="@1",
             session_name="a-abcdef1234",
             user_id="browser-user",
-            environment_id="env-1",
+            environment_id="env-localhost",
             environment_alias="gpu-lab",
             target_kind=TERMINAL_LOCAL_TARGET_KIND,
             working_directory="/workspace/project",
@@ -736,7 +743,7 @@ def test_task_attachment_websocket_close_tolerates_missing_task_manager(
     )
 
     with client.websocket_connect(
-        f"/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
     ):
         pass
 

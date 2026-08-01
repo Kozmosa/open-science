@@ -99,7 +99,7 @@
 ### CLI / API / WebUI
 
 - `openscience` CLI 作为本地 runtime 入口。
-- FastAPI backend 提供 `/v1` API surface。
+- FastAPI backend 以 `/api` 作为 canonical API prefix；root 与 `/v1` 仅作为受监控的兼容 alias 保留。
 - React + Vite + Tailwind WebUI 提供统一控制台。
 - `scripts/webui.sh` 串联前后端本地开发体验。
 
@@ -116,12 +116,12 @@
             │ HTTP / WebSocket / SSE
 ┌───────────▼──────────┐
 │     FastAPI Backend   │
-│  routes + services    │
+│ routes + application  │
 └───────────┬──────────┘
             │
 ┌───────────▼──────────────────────────────────────────────┐
-│                    OpenScience Runtime                          │
-│  environments │ tasks │ terminal │ workspace │ artifacts  │
+│                    OpenScience Runtime                    │
+│ domain Modules │ harness engine │ terminal │ artifacts   │
 └───────────┬───────────────────────────────┬──────────────┘
             │                               │
 ┌───────────▼──────────┐        ┌───────────▼──────────┐
@@ -147,14 +147,13 @@ UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve
 scripts/webui.sh
 ```
 
-兼容性说明：本阶段 Python 包名、部分状态目录和旧 CLI `ainrf` 仍保留，便于现有部署平滑迁移；新增对外入口优先使用 `openscience` 与 `OPENSCIENCE_*`。
+兼容性说明：本阶段 Python 包名、部分状态目录、旧 CLI `ainrf`、root/`/v1` route aliases 和已记录的 Task 字段仍保留，便于现有部署平滑迁移；新增对外入口优先使用 `openscience`、`OPENSCIENCE_*` 和 `/api`。删除这些 surface 必须有完整发布观察窗口的零调用 telemetry，详见[架构与兼容契约](docs-site/docs/architecture.md)。
 
 前端单独开发：
 
 ```bash
-cd frontend
-npm run test:run
-npm run build
+npm --prefix frontend run test:run
+npm --prefix frontend run build
 ```
 
 文档站点构建：
@@ -169,7 +168,7 @@ cd docs-site && npm run build
 
 ```text
 .
-├── src/ainrf/        # Python package: CLI, API, runtime services（兼容性内部包名）
+├── src/ainrf/        # 稳定内部 Python package：CLI、API 与 runtime services
 ├── frontend/         # React + Vite WebUI
 ├── tests/            # Python test suite
 ├── scripts/          # 本地开发、WebUI、docs 构建辅助脚本
@@ -189,7 +188,7 @@ cd docs-site && npm run build
 | Backend API | FastAPI, Uvicorn, WebSocket, SSE |
 | Remote Control | asyncssh, tmux-oriented terminal sessions |
 | Frontend | React 19, Vite 8, TypeScript, Tailwind CSS, TanStack Query |
-| Docs | MkDocs, Material for MkDocs, Mermaid |
+| Docs | VitePress, Mermaid |
 | Quality | pytest, ruff, ty, Vitest, Testing Library |
 
 ---
@@ -222,7 +221,7 @@ pytest 与 Vitest 默认不再根据整机 CPU 自动扩张。可用 `OPENSCIENC
 Docs build:
 
 ```bash
-cd docs-site && npm run build
+npm --prefix docs-site run build
 ```
 
 ---
@@ -230,6 +229,7 @@ cd docs-site && npm run build
 ## 📚 Documentation
 
 - [OpenScience 产品文档](https://kozmosa.github.io/open-science/)（VitePress）
+- [架构与兼容契约](docs-site/docs/architecture.md)
 - [项目长期工程约束](PROJECT_BASIS.md)
 - [框架设计与 RFC](docs/framework/)
 - [参考项目调研](docs/projects/)

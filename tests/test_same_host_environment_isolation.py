@@ -23,7 +23,7 @@ def _load_compose(repo_root: Path, name: str) -> dict[str, object]:
     return _mapping(payload)
 
 
-def test_production_and_staging_use_separate_compose_projects_and_frontends() -> None:
+def test_production_is_immutable_while_staging_keeps_development_mounts() -> None:
     repo_root = Path(__file__).resolve().parent.parent
     production = _load_compose(repo_root, "docker-compose.cpu.yml")
     staging = _load_compose(repo_root, "docker-compose.staging.yml")
@@ -36,12 +36,30 @@ def test_production_and_staging_use_separate_compose_projects_and_frontends() ->
 
     production_nginx = _mapping(production_services["nginx"])
     staging_nginx = _mapping(staging_services["nginx-staging"])
-    production_volumes = production_nginx["volumes"]
     staging_volumes = staging_nginx["volumes"]
-    assert isinstance(production_volumes, list)
     assert isinstance(staging_volumes, list)
-    assert "../frontend/dist/production:/usr/share/nginx/html:ro" in production_volumes
+    assert "volumes" not in production_nginx
+    assert "OPENSCIENCE_WEB_IMAGE" in str(production_nginx["image"])
     assert "../frontend/dist/staging:/usr/share/nginx/html:ro" in staging_volumes
+
+    api_image = production_services["ainrf"]
+    domain_image = production_services["domain-worker"]
+    literature_image = production_services["literature-worker"]
+    assert _mapping(api_image)["image"] == _mapping(domain_image)["image"]
+    assert _mapping(api_image)["image"] == _mapping(literature_image)["image"]
+
+
+def test_production_compose_has_no_repository_bind_mounts_or_builds() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    production = _load_compose(repo_root, "docker-compose.cpu.yml")
+    services = _mapping(production["services"])
+
+    for service in services.values():
+        definition = _mapping(service)
+        assert "build" not in definition
+        volumes = definition.get("volumes", [])
+        assert isinstance(volumes, list)
+        assert all(not str(volume).startswith(("./", "../")) for volume in volumes)
 
 
 def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
@@ -58,19 +76,18 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     nginx_health_command = nginx_healthcheck["test"]
 
     assert limits["cpus"] == "8.0"
-    assert environment["OPENSCIENCE_PRODUCTION"] == "1"
-    assert environment["OPENSCIENCE_AUTH_COOKIE_NAMESPACE"] == "staging"
-    assert "STAGING_OPENSCIENCE_NO_SSHD" in str(environment["OPENSCIENCE_NO_SSHD"])
+    assert environment["AINRF_PRODUCTION"] == "1"
+    assert environment["AINRF_AUTH_COOKIE_NAMESPACE"] == "staging"
+    assert "STAGING_OPENSCIENCE_NO_SSHD" in str(environment["AINRF_NO_SSHD"])
     assert "STAGING_OPENSCIENCE_INTERACTIVE_AUTH_ENABLED" in str(
-        environment["OPENSCIENCE_INTERACTIVE_AUTH_ENABLED"]
+        environment["AINRF_INTERACTIVE_AUTH_ENABLED"]
     )
     assert "STAGING_PUBLIC_REGISTRATION:-false" in str(
         environment["AINRF_PUBLIC_REGISTRATION_ENABLED"]
     )
-    assert "STAGING_OPENSCIENCE_STATE_ROOT" in str(environment["OPENSCIENCE_STATE_ROOT"])
-    assert environment["OPENSCIENCE_STATE_ROOT"] == environment["AINRF_STATE_ROOT"]
+    assert "STAGING_OPENSCIENCE_STATE_ROOT" in str(environment["AINRF_STATE_ROOT"])
     assert "STAGING_OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED" in str(
-        environment["OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED"]
+        environment["AINRF_RUNTIME_RECONCILIATION_ENABLED"]
     )
     assert isinstance(nginx_health_command, list)
     assert "http://127.0.0.1:7192/api/health" in nginx_health_command
@@ -79,12 +96,11 @@ def test_staging_uses_separate_cookie_and_observability_configuration() -> None:
     assert "STAGING_AINRF_OBSERVABILITY_ENABLED" in observability_enabled
 
 
-def test_every_deployment_mounts_the_authoritative_prometheus_alert_rules() -> None:
+def test_mutable_development_deployments_mount_prometheus_alert_rules() -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
     for compose_name in (
         "docker-compose.yml",
-        "docker-compose.cpu.yml",
         "docker-compose.gpu.yml",
         "docker-compose.staging.yml",
     ):
@@ -247,4 +263,26 @@ def test_deploy_scripts_reuse_runtime_env_and_publish_readable_assets() -> None:
     for script_name in ("redeploy-backend.sh", "redeploy-frontend.sh"):
         script = (repo_root / "deploy" / script_name).read_text(encoding="utf-8")
         assert 'load_runtime_env_from_container "${RUNTIME_CONTAINER}"' in script
-        assert 'chmod -R a+rX "${REPO_ROOT}/frontend/${FRONTEND_OUT_DIR}"' in script
+        assert 'exec "${REPO_ROOT}/deploy/release-production.sh"' in script
+
+
+def test_production_release_builds_all_artifacts_before_compose_up() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    build = (repo_root / "deploy" / "build-production.sh").read_text(encoding="utf-8")
+    release = (repo_root / "deploy" / "release-production.sh").read_text(encoding="utf-8")
+    dockerfile = (repo_root / "deploy" / "Dockerfile").read_text(encoding="utf-8")
+
+    for target in ("runtime", "web", "prometheus", "grafana"):
+        assert f"build_target {target}" in build
+    assert 'chmod 600 "${MANIFEST_PATH}"' in build
+    assert '"${REPO_ROOT}/deploy/build-production.sh"' in release
+    assert 'docker compose -f "${COMPOSE_FILE}" up -d --no-build' in release
+    assert release.index('"${REPO_ROOT}/deploy/build-production.sh"') < release.index(
+        'docker compose -f "${COMPOSE_FILE}" up -d --no-build'
+    )
+    assert "COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html" in dockerfile
+    assert (
+        "COPY deploy/config/nginx-release.conf.template "
+        "/etc/nginx/templates/default.conf.template" in dockerfile
+    )
+    assert "ENV NGINX_ENVSUBST_FILTER=^AINRF_" in dockerfile

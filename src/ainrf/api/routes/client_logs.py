@@ -13,7 +13,8 @@ import logging
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
-from ainrf.api.routes.metrics import inc_counter
+from ainrf.telemetry.metrics import inc_counter
+from ainrf.telemetry.sla import rate_limited
 
 router = APIRouter(prefix="/client-logs", tags=["client-logs"])
 
@@ -45,8 +46,6 @@ async def ingest_client_logs(request: Request) -> Response:
     client_ip = request.client.host if request.client else "unknown"
 
     if _is_rate_limited(client_ip):
-        from ainrf.api.routes.sla_metrics import rate_limited
-
         rate_limited("ip_quota", "/client-logs")
         return PlainTextResponse("rate limited", status_code=429)
 

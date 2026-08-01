@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Engine Runtime 与 Credential Injection 设计
 
 **Status:** Accepted direction — runtime topology、driver 分层、compatible API 与 credential 边界已确认，等待实现
@@ -12,7 +19,7 @@
 
 1. 产品级 engine family 只有 `codex` 与 `claude`；`codex-app-server`、`agent-sdk`、`claude-cli` 是 driver/surface，不再作为彼此平级的业务 engine。
 2. Codex 规范 driver 是长驻 Codex App Server；Claude 规范 driver 是 `ClaudeSDKClient` 双向模式；Claude CLI 是降级 fallback。
-3. OSci 是开源 compatible-API 平台，不使用 OpenAI/Anthropic 官方 API、官方 OAuth、ChatGPT login、Claude subscription/keychain 或其他账号态作为运行契约。
+3. OpenScience 是开源 compatible-API 平台，不使用 OpenAI/Anthropic 官方 API、官方 OAuth、ChatGPT login、Claude subscription/keychain 或其他账号态作为运行契约。
 4. 首期 provider protocol 只定义：
    - `openai_responses`；
    - `anthropic_messages`；
@@ -256,12 +263,14 @@ model_provider = "osci-provider-default"
 name = "<display name>"
 base_url = "<base_url>"
 wire_api = "responses"
-env_key = "OPENSCIENCE_PROVIDER_KEY_<stable-suffix>"
+env_key = "AINRF_PROVIDER_KEY_<stable-suffix>"
 requires_openai_auth = false
 supports_websockets = false
 ```
 
 启动时只向 app-server process 注入对应 env key。Thread start/resume/fork 显式传入 `modelProvider` 和 model。
+
+`AINRF_PROVIDER_KEY_*` 是后端 credential 注入的 canonical 环境变量命名。迁移期间如需读取既有 `OPENSCIENCE_PROVIDER_KEY_*`，只能将其作为兼容 alias，并优先解析对应的 `AINRF_*` 变量。
 
 硬规则：
 

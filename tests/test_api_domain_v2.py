@@ -9,7 +9,7 @@ from pathlib import Path
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.domain_control import DomainCutoverError, DomainModelMode
+from ainrf.domain_control import DomainCutoverError
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.api]
@@ -22,7 +22,6 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
-        domain_model_mode=DomainModelMode.V2,
         domain_artifact_sha=V2_ARTIFACT_SHA,
     )
     with pytest.raises(DomainCutoverError, match="fuse is not committed and ready"):
@@ -35,7 +34,7 @@ async def test_domain_adapter_requires_v2_mode_and_cutover_fuse(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/domain/projects?api_key=domain-key",
+            "/api/domain/projects?api_key=domain-key",
             headers={"Idempotency-Key": "v2-project-create"},
             json={"name": "V2"},
         )
@@ -51,13 +50,12 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
     config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("domain-key")}),
         state_root=state_root,
-        domain_model_mode=DomainModelMode.V2,
         domain_artifact_sha=V2_ARTIFACT_SHA,
     )
     app = create_app(config)
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     user: dict[str, object] = {"id": "api-key-user", "role": "user"}
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(admin, alias="host", display_name="Host", connection={})
     auth = AuthService(state_root=state_root)
     auth.initialize()
@@ -86,12 +84,11 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/tasks?api_key=domain-key",
+            "/api/tasks?api_key=domain-key",
             headers={"Idempotency-Key": "create"},
             json={
                 "project_id": project["project_id"],
                 "workspace_id": workspace["workspace_id"],
-                "environment_id": environment["environment_id"],
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Prompt",
@@ -100,4 +97,4 @@ async def test_v2_task_adapter_uses_standard_task_create(state_root: Path, tmp_p
         )
 
     assert response.status_code == 201
-    assert response.json()["project_id"] == project["project_id"]
+    assert response.json()["task"]["project_id"] == project["project_id"]

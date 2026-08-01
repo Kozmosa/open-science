@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnvironmentsPage from '../../src/pages/EnvironmentsPage';
 import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import {
   createDefaultWebUiSettings,
   settingsStorageKey,
@@ -15,9 +15,9 @@ import {
   getEnvironments,
   getProjectEnvironmentReferences,
   updateProjectEnvironmentReference,
-} from '@/shared/api';
+} from '@features/environments/api';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+vi.mock('@features/environments/api', () => ({
   createProjectEnvironmentReference: vi.fn(),
   createEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),

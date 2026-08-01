@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import signal
 import stat
 from pathlib import Path
@@ -26,6 +27,8 @@ class FakeChromeProcess:
     def __init__(self, pid: int = 4321) -> None:
         self.pid = pid
         self.returncode: int | None = None
+        self.terminated = False
+        self.killed = False
 
     def poll(self) -> int | None:
         return self.returncode
@@ -34,6 +37,12 @@ class FakeChromeProcess:
         del timeout
         self.returncode = 0
         return 0
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def kill(self) -> None:
+        self.killed = True
 
 
 def _write_executable(path: Path) -> None:
@@ -92,11 +101,41 @@ def test_chrome_discovery_prefers_explicit_binary_and_rejects_snap(
     assert any("broken snap Chromium" in note for note in rejected)
 
 
-def test_chrome_devtools_config_discovery_reads_claude_and_omp(tmp_path: Path) -> None:
+def test_chrome_discovery_supports_platform_specific_puppeteer_cache_layouts(
+    tmp_path: Path,
+) -> None:
+    candidates = (
+        tmp_path / ".cache/puppeteer/chrome/linux-149/chrome-linux64/chrome",
+        tmp_path
+        / ".cache/puppeteer/chrome/mac-149/chrome-mac-arm64"
+        / "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        tmp_path / ".cache/puppeteer/chrome/win64-149/chrome-win64/chrome.exe",
+    )
+    for candidate in candidates:
+        _write_executable(candidate)
+
+    selected, rejected = discover_chrome(env={"PATH": ""}, home=tmp_path)
+
+    assert selected == candidates[2]
+    assert rejected == []
+
+
+def test_chrome_devtools_config_discovery_reads_codex_claude_omp_and_project(
+    tmp_path: Path,
+) -> None:
+    codex = tmp_path / ".codex" / "config.toml"
     claude = tmp_path / ".claude" / "settings.json"
     omp = tmp_path / ".omp" / "agent" / "mcp.json"
+    repo_root = tmp_path / "repo"
+    project_codex = repo_root / ".codex" / "config.toml"
+    codex.parent.mkdir(parents=True)
     claude.parent.mkdir(parents=True)
     omp.parent.mkdir(parents=True)
+    project_codex.parent.mkdir(parents=True)
+    codex.write_text(
+        '[mcp_servers.chrome-devtools]\ncommand = "chrome-devtools-mcp"\n',
+        encoding="utf-8",
+    )
     claude.write_text(
         json.dumps({"mcpServers": {"chrome-devtools": {"command": "chrome-devtools-mcp"}}}),
         encoding="utf-8",
@@ -105,8 +144,17 @@ def test_chrome_devtools_config_discovery_reads_claude_and_omp(tmp_path: Path) -
         json.dumps({"mcpServers": {"chrome-devtools-local": {"command": "npx"}}}),
         encoding="utf-8",
     )
+    project_codex.write_text(
+        '[mcp_servers.chrome-devtools-project]\ncommand = "chrome-devtools-mcp"\n',
+        encoding="utf-8",
+    )
 
-    assert configured_chrome_devtools_servers(tmp_path) == [str(claude), str(omp)]
+    assert configured_chrome_devtools_servers(tmp_path, repo_root=repo_root) == [
+        str(codex),
+        str(claude),
+        str(omp),
+        str(project_codex),
+    ]
 
 
 def test_cdp_probe_launches_isolated_profile_and_cleans_up(
@@ -187,6 +235,38 @@ def test_cdp_probe_timeout_is_non_destructive_and_cleans_up(
     assert not any((tmp_path / "runtime").glob("chrome-preflight-*"))
 
 
+def test_browser_process_cleanup_has_non_posix_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = FakeChromeProcess()
+    captured: dict[str, object] = {}
+
+    def fake_popen(command: list[str], **kwargs: object) -> FakeChromeProcess:
+        captured["command"] = command
+        captured.update(kwargs)
+        return process
+
+    monkeypatch.setattr(browser_module.os, "name", "nt")
+    monkeypatch.setattr(
+        browser_module.subprocess,
+        "CREATE_NEW_PROCESS_GROUP",
+        512,
+        raising=False,
+    )
+    monkeypatch.setattr(browser_module.subprocess, "Popen", fake_popen)
+
+    launched = browser_module._launch_browser_process(
+        ["chrome", "about:blank"],
+        {},
+        io.BytesIO(),
+    )
+    browser_module._stop_browser_process(launched)
+
+    assert captured["creationflags"] == 512
+    assert process.terminated is True
+    assert process.killed is False
+
+
 def test_development_doctor_reports_browser_and_session_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -233,5 +313,31 @@ def test_development_doctor_reports_browser_and_session_boundary(
 
     assert result.ok is True
     assert result.browser_probe is not None and result.browser_probe.ok is True
-    assert result.session_restart_required is True
-    assert "cannot prove" in result.session_tool_visibility
+    assert result.session_restart_required is None
+    assert result.session_tool_visibility == "unknown"
+    assert result.session_verification is not None
+    assert "list_pages" in result.session_verification
+
+
+def test_development_doctor_does_not_claim_session_state_without_browser_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instance = _instance(tmp_path, monkeypatch)
+    command_paths = {name: f"/usr/bin/{name}" for name in ("uv", "node", "npm", "curl")}
+    monkeypatch.setattr(
+        browser_module.shutil,
+        "which",
+        lambda command, path=None: command_paths.get(command),
+    )
+
+    result = run_development_doctor(
+        instance,
+        include_browser=False,
+        env={"PATH": "/usr/bin"},
+        home=tmp_path,
+    )
+
+    assert result.ok is True
+    assert result.session_restart_required is None
+    assert result.session_tool_visibility == "not_checked"
+    assert result.session_verification is None

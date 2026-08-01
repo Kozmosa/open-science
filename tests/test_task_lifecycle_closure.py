@@ -15,11 +15,12 @@ from ainrf.auth.service import AuthService
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
 from ainrf.db import connect
 from ainrf.domain import (
-    AttemptService,
-    DomainService,
+    DomainModules,
     ProjectContextService,
     TaskApplicationService,
+    build_domain_modules,
 )
+from ainrf.domain.attempts import AttemptWorkerModule as AttemptService
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
 from ainrf.domain_control import (
     DomainCutoverController,
@@ -49,8 +50,8 @@ def _ensure_v2_cutover(state_root: Path, tmp_path: Path) -> None:
         prepare_committed_v2_cutover(state_root, tmp_path)
 
 
-def _domain(state_root: Path) -> DomainService:
-    return DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+def _domain(state_root: Path) -> DomainModules:
+    return build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
 
 
 def _context(state_root: Path) -> ProjectContextService:
@@ -63,12 +64,12 @@ def _tasks(state_root: Path) -> TaskApplicationService:
 
 def _project_with_context(
     state_root: Path,
-    domain: DomainService,
+    domain: DomainModules,
     owner: dict[str, object],
     *,
     label: str,
 ) -> tuple[str, str]:
-    project = domain.create_project(owner, name=f"{label} Project")
+    project = domain.projects.create_project(owner, name=f"{label} Project")
     project_id = str(project["project_id"])
     context = _context(state_root)
     context.save_draft(project_id, f"{label} context", owner)
@@ -87,7 +88,7 @@ def _task_scope(
     owner = _member(owner_id)
     admin: dict[str, object] = {"id": "admin", "role": "admin"}
     domain = _domain(state_root)
-    environment = domain.create_environment(
+    environment = domain.environments.create_environment(
         admin,
         alias=f"host-{label}",
         display_name=f"Host {label}",
@@ -106,14 +107,16 @@ def _task_scope(
     project_id, context_version_id = _project_with_context(state_root, domain, owner, label=label)
     workspace_path = tmp_path / f"workspace-{label}"
     workspace_path.mkdir()
-    workspace = domain.create_workspace(
+    workspace = domain.workspaces.create_workspace(
         owner,
         environment_id=environment_id,
         canonical_path=str(workspace_path),
         label=f"{label} Workspace",
     )
     workspace_id = str(workspace["workspace_id"])
-    domain.attach_workspace(project_id, workspace_id, owner, idempotency_key=f"attach-{label}")
+    domain.projects.attach_workspace(
+        project_id, workspace_id, owner, idempotency_key=f"attach-{label}"
+    )
     return _TaskScope(
         owner=owner,
         environment_id=environment_id,
@@ -608,17 +611,18 @@ def test_project_unarchive_is_idempotent_and_never_requeues_stopped_work(
     assert dispatch["status"] == "cancelled"
 
 
-def test_domain_service_project_archive_uses_lifecycle_transaction(
+def test_task_application_project_archive_uses_lifecycle_transaction(
     state_root: Path, tmp_path: Path
 ) -> None:
     scope = _task_scope(state_root, tmp_path)
     tasks = _tasks(state_root)
     created = _create_task(tasks, scope, idempotency_key="create-before-domain-project-archive")
 
-    _domain(state_root).archive_project(
+    tasks.archive_project(
         scope.project_id,
         scope.owner,
         reason="compatibility facade archive",
+        idempotency_key="task-application-project-archive",
     )
 
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
@@ -1090,7 +1094,7 @@ def test_retry_and_move_require_current_workspace_ownership(
     target_project_id, target_context_version_id = _project_with_context(
         state_root, domain, source.owner, label="ownership-target"
     )
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         target_project_id,
         source.workspace_id,
         source.owner,
@@ -1133,7 +1137,7 @@ def test_move_preserves_workspace_and_fork_changes_workspace_with_derived_from(
     target_project_id, target_context_version_id = _project_with_context(
         state_root, domain, source.owner, label="target"
     )
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         target_project_id,
         source.workspace_id,
         source.owner,
@@ -1141,14 +1145,14 @@ def test_move_preserves_workspace_and_fork_changes_workspace_with_derived_from(
     )
     second_workspace_path = tmp_path / "workspace-fork"
     second_workspace_path.mkdir()
-    second_workspace = domain.create_workspace(
+    second_workspace = domain.workspaces.create_workspace(
         source.owner,
         environment_id=source.environment_id,
         canonical_path=str(second_workspace_path),
         label="Fork Workspace",
     )
     second_workspace_id = str(second_workspace["workspace_id"])
-    domain.attach_workspace(
+    domain.projects.attach_workspace(
         target_project_id,
         second_workspace_id,
         source.owner,
@@ -1227,14 +1231,7 @@ def test_context_preview_and_confirm_are_owned_by_task_application_service(
     )
 
     preview = tasks.preview_task_context_update(created["task_id"], scope.project_id, scope.owner)
-    with pytest.raises(DomainConflictError, match="Task Context mutations must be submitted"):
-        context.confirm_task_context_update(
-            created["task_id"],
-            scope.project_id,
-            str(preview["preview_id"]),
-            scope.owner,
-            idempotency_key="direct-context-confirm-must-fail",
-        )
+    assert not hasattr(context, "confirm_task_context_update")
     confirmed = tasks.confirm_task_context_update(
         created["task_id"],
         scope.project_id,
@@ -1265,22 +1262,23 @@ def test_context_preview_and_confirm_are_owned_by_task_application_service(
     assert queued_attempt["context_snapshot_id"] == confirmed["context_snapshot_id"]
 
 
-def test_v2_project_archive_facade_keeps_the_committed_artifact_sha(
+def test_v2_project_lifecycle_keeps_the_committed_artifact_sha(
     state_root: Path, tmp_path: Path
 ) -> None:
     prepare_committed_v2_cutover(state_root, tmp_path)
     owner = _member("archive-owner")
-    domain = DomainService(state_root, artifact_sha=V2_ARTIFACT_SHA)
-    project = domain.create_project(owner, name="V2 archive Project")
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    project = domain.projects.create_project(owner, name="V2 archive Project")
     project_id = str(project["project_id"])
 
-    domain.archive_project(
+    tasks = TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    tasks.archive_project(
         project_id,
         owner,
         reason="verify committed-v2 lifecycle fence",
         idempotency_key="v2-archive-project",
     )
-    domain.unarchive_project(
+    tasks.unarchive_project(
         project_id,
         owner,
         idempotency_key="v2-unarchive-project",

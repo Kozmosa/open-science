@@ -15,14 +15,14 @@ import structlog
 from starlette.requests import Request
 from starlette.responses import Response
 
-from ainrf.api.routes.metrics import route_template_for_request
+from ainrf.api.http_telemetry import route_template_for_request
 
 if TYPE_CHECKING:
-    from ainrf.api.config import ApiConfig
+    from ainrf.runtime.product_config import ApiConfig
 
 # Paths that generate high traffic but have low debugging value.
 _SKIP_PATHS: frozenset[str] = frozenset(
-    {"/health", "/metrics", "/api/metrics", "/v1/metrics", "/favicon.ico"}
+    {"/api/health", "/metrics", "/api/metrics", "/v1/metrics", "/favicon.ico"}
 )
 
 

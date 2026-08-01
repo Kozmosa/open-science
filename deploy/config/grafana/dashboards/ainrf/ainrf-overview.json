@@ -437,6 +437,77 @@
         }
       ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "title": "HTTP Contract Traffic by Surface / Operation",
+      "description": "Long-lived removal authority. Separates canonical, root compatibility, /v1 compatibility, and external-compatible protocol traffic by frozen operation.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 35 }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (surface, operation) (increase(ainrf_http_contract_requests_total[$__range]))",
+          "legendFormat": "{{surface}} · {{operation}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      }
+    },
+    {
+      "title": "HTTP Contract Errors",
+      "description": "Long-lived 4xx/5xx contract outcomes split by surface and operation.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [
+        {
+          "expr": "sum by (surface, operation, status_class) (increase(ainrf_http_contract_requests_total{status_class=~\"4xx|5xx\"}[$__range]))",
+          "legendFormat": "{{status_class}} · {{surface}} · {{operation}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
+      }
+    },
+    {
+      "title": "Telemetry Classification / Delivery Guard",
+      "description": "Unknown operations and a latched durable-delivery failure keep compatibility removal fail-closed.",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "red" }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(ainrf_http_contract_requests_total{operation=\"unmatched\"}[$__range]))",
+          "legendFormat": "unmatched requests",
+          "refId": "A"
+        },
+        {
+          "expr": "ainrf_http_contract_telemetry_delivery_failure_latched",
+          "legendFormat": "delivery failure latch",
+          "refId": "B"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     }
   ],
   "refresh": "30s",

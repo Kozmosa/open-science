@@ -1,0 +1,139 @@
+# ── OpenScience Nginx config for host-network Docker Compose ────────────
+#
+# All services share the host network namespace.
+# Backend listens on localhost:18000, Grafana on localhost:3000.
+# Nginx binds the external port (8192) and reverse-proxies everything.
+# ────────────────────────────────────────────────────────────────
+
+server {
+    listen ${AINRF_WEB_PORT};
+    server_name _;
+
+    add_header X-Frame-Options       DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-XSS-Protection      "1; mode=block" always;
+    add_header Referrer-Policy        strict-origin-when-cross-origin always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' https://fonts.gstatic.com; frame-src 'self' blob:" always;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Block documentation endpoints at proxy level (defense in depth)
+    location ~ ^/(docs|redoc|openapi.json) {
+        return 404;
+    }
+
+    # Prometheus metrics endpoint (no auth — machine-to-machine)
+    location = /metrics {
+        proxy_pass http://127.0.0.1:${AINRF_BACKEND_PORT}/metrics;
+        proxy_set_header Host $http_host;
+    }
+
+    # Proxy /api/ routes to backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:${AINRF_BACKEND_PORT}/api/;
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # File stream endpoint must be embeddable in the workspace-browser iframe.
+    location /api/files/stream {
+        proxy_pass http://127.0.0.1:${AINRF_BACKEND_PORT}/api/files/stream;
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header X-Frame-Options SAMEORIGIN always;
+    }
+
+    # Anthropic-compatible endpoints are an external protocol, not product aliases.
+    location ~ ^/v1/(models|messages)$ {
+        proxy_pass http://127.0.0.1:${AINRF_BACKEND_PORT};
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (terminal PTY, task SSE)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # Internal auth-check endpoint for nginx auth_request
+    location = /auth/check {
+        proxy_pass http://127.0.0.1:${AINRF_BACKEND_PORT}/api/auth/check;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+    }
+
+    # Auth-gated Grafana dashboard
+    location /grafana {
+        auth_request /auth/check;
+        auth_request_set $ainrf_user $upstream_http_x_remote_user;
+        auth_request_set $ainrf_user_role $upstream_http_x_remote_user_role;
+
+        proxy_pass http://127.0.0.1:${AINRF_GRAFANA_PORT};
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-WEBAUTH-USER    $ainrf_user;
+
+        # WebSocket for Grafana live
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Auth-gated Prometheus web UI (host network: Prometheus listens on 127.0.0.1:${AINRF_PROMETHEUS_PORT})
+    # Prometheus is launched with --web.external-url=/prometheus --web.route-prefix=/prometheus
+    location /prometheus {
+        auth_request /auth/check;
+        auth_request_set $ainrf_user $upstream_http_x_remote_user;
+
+        proxy_pass http://127.0.0.1:${AINRF_PROMETHEUS_PORT};
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Auth-gated Litefuse LLM observability dashboard
+    # (observability overlay publishes Litefuse web on host port 13000)
+    location = /litefuse {
+        return 301 /litefuse/;
+    }
+    location /litefuse/ {
+        auth_request /auth/check;
+        auth_request_set $ainrf_user $upstream_http_x_remote_user;
+
+        rewrite ^/litefuse/?(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:${AINRF_LITEFUSE_PORT};
+        proxy_set_header Host              $http_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Litefuse is a Next.js app — pass WebSocket for live updates
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    client_max_body_size 100m;
+}

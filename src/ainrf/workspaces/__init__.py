@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from ainrf.workspaces.models import WorkspaceRecord
-from ainrf.workspaces.service import (
+from ainrf.workspaces.models import (
     WorkspaceDeletionError,
     WorkspaceDirectoryError,
     WorkspaceNotFoundError,
-    WorkspaceRegistryService,
+    WorkspaceRecord,
 )
 
 __all__ = [
@@ -13,5 +12,4 @@ __all__ = [
     "WorkspaceDirectoryError",
     "WorkspaceNotFoundError",
     "WorkspaceRecord",
-    "WorkspaceRegistryService",
 ]

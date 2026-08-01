@@ -24,7 +24,7 @@ export type AppRouteId =
   | 'workspace-browser'
   | 'environments'
   | 'resources'
-  | 'sessions'
+  | 'runs'
   | 'timeline'
   | 'literature'
   | 'settings';
@@ -54,7 +54,7 @@ export const ROUTE_REGISTRY: readonly AppRouteDefinition[] = [
   { id: 'workspace-browser', path: '/workspace-browser', titleKey: 'navigation.workspaceBrowser.label', descriptionKey: 'navigation.workspaceBrowser.description', icon: FolderOpen, navigation: false, keywords: ['browse files', 'workspace browser', 'files'] },
   { id: 'environments', path: '/environments', titleKey: 'navigation.environments.label', descriptionKey: 'navigation.environments.description', icon: Boxes, navigation: true, keywords: ['containers', 'environments', 'runtime'] },
   { id: 'resources', path: '/resources', titleKey: 'navigation.resources.label', descriptionKey: 'navigation.resources.description', icon: Activity, navigation: true, keywords: ['resources', 'cpu', 'gpu', 'memory'] },
-  { id: 'sessions', path: '/sessions', titleKey: 'navigation.sessions.label', descriptionKey: 'navigation.sessions.description', icon: History, navigation: true, adminOnly: true, keywords: ['task runs', 'sessions', 'history'] },
+  { id: 'runs', path: '/runs', titleKey: 'navigation.runs.label', descriptionKey: 'navigation.runs.description', icon: History, navigation: true, adminOnly: true, keywords: ['task runs', 'history'] },
   { id: 'timeline', path: '/timeline', titleKey: 'navigation.timeline.label', descriptionKey: 'navigation.timeline.description', icon: Clock, navigation: true, adminOnly: true, keywords: ['timeline', 'gantt', 'schedule'] },
   { id: 'literature', path: '/literature', titleKey: 'nav.literature', descriptionKey: 'nav.literature', icon: BookOpen, navigation: true, keywords: ['literature', 'papers', 'arxiv', 'reading'] },
   { id: 'settings', path: '/settings', titleKey: 'navigation.settings.label', descriptionKey: 'navigation.settings.description', icon: Settings, navigation: true, keywords: ['settings', 'preferences', 'configuration'] },

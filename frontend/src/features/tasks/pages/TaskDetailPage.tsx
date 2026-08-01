@@ -1,8 +1,8 @@
 import { useT } from '@/shared/i18n';
 import { useTaskActions } from '../hooks/useTaskActions';
 import { useTaskMessages } from '../hooks/useTaskMessages';
-import { groupMessages, ChatInputBar, ChatMessageList } from '@/components/chat';
-import TaskHeaderBar from '@/components/messages/TaskHeaderBar';
+import { groupMessages, ChatInputBar, ChatMessageList } from '../components/chat';
+import TaskHeaderBar from '../components/messages/TaskHeaderBar';
 import type { ReactNode } from 'react';
 import type { TaskOutputEvent, TaskRecord } from '@/shared/types';
 

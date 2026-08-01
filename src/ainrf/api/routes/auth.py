@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from ainrf.api.routes.metrics import inc_counter
-from ainrf.api.config import ApiConfig
+from ainrf.runtime.product_config import ApiConfig
 from ainrf.api.schemas import (
     ChangePasswordRequest,
     AccessTokenResponse,
@@ -17,7 +16,7 @@ from ainrf.api.schemas import (
     UserInfoResponse,
 )
 from ainrf.auth import AuthService
-from ainrf.domain_control import DomainModelMode
+from ainrf.telemetry.metrics import inc_counter
 
 _LOG = logging.getLogger(__name__)
 
@@ -55,44 +54,20 @@ async def register(payload: RegisterRequest, request: Request) -> dict[str, str]
     # If the domain database is temporarily unavailable, the durable intent is
     # retried during the next v2 lifespan rather than claiming a distributed
     # transaction succeeded.
-    if api_config.domain_model_mode is DomainModelMode.V2:
-        domain = getattr(request.app.state, "domain_service", None)
-        provision = getattr(domain, "provision_default_project", None)
-        if not callable(provision):  # pragma: no cover - create_app invariant
-            error = RuntimeError("v2 DomainService is unavailable for user provisioning")
-            _LOG.error("v2_registration_domain_service_missing", exc_info=error)
-            service.record_domain_default_project_provisioning_failure(user.id, error)
-            return {
-                "message": "Registration submitted. Default Project provisioning is queued for retry."
-            }
-        try:
-            provision(user_id=user.id, username=payload.username)
-            service.mark_domain_default_project_provisioned(user.id)
-        except Exception as exc:  # pragma: no cover - exercised by lifespan retry integration
-            _LOG.exception("v2_registration_default_project_provisioning_failed")
-            service.record_domain_default_project_provisioning_failure(user.id, exc)
-            return {
-                "message": "Registration submitted. Default Project provisioning is queued for retry."
-            }
-        return {"message": "Registration submitted. Awaiting admin approval."}
-
-    # Create a tenant-scoped workspace entry for the new user in legacy mode.
-    workspace_service = getattr(request.app.state, "workspace_service", None)
-    if workspace_service is not None:
-        from ainrf.workspaces import WorkspaceRegistryService
-
-        assert isinstance(workspace_service, WorkspaceRegistryService)
-        workspace_service.ensure_tenant_workspace(username=payload.username)
-
-    # Provision the per-user default project alongside the tenant workspace.
-    project_service = getattr(request.app.state, "project_service", None)
-    if project_service is not None:
-        from ainrf.projects import ProjectRegistryService
-
-        assert isinstance(project_service, ProjectRegistryService)
-        project_service.get_or_create_user_default(username=payload.username, owner_user_id=user.id)
-
-    _ = user  # user created; admin approval is still required for login
+    project_module = getattr(request.app.state, "project_module", None)
+    provision = getattr(project_module, "provision_default_project", None)
+    if not callable(provision):  # pragma: no cover - create_app invariant
+        error = RuntimeError("Project Module is unavailable for user provisioning")
+        _LOG.error("registration_project_module_missing", exc_info=error)
+        service.record_domain_default_project_provisioning_failure(user.id, error)
+        return {"message": "Registration submitted. Default Project provisioning is queued."}
+    try:
+        provision(user_id=user.id, username=payload.username)
+        service.mark_domain_default_project_provisioned(user.id)
+    except Exception as exc:  # pragma: no cover - exercised by lifespan retry integration
+        _LOG.exception("registration_default_project_provisioning_failed")
+        service.record_domain_default_project_provisioning_failure(user.id, exc)
+        return {"message": "Registration submitted. Default Project provisioning is queued."}
     return {"message": "Registration submitted. Awaiting admin approval."}
 
 

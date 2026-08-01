@@ -16,8 +16,8 @@ _ACCESS_TTL_SEC = 15 * 60  # 15 minutes
 
 def _ensure_secret() -> str:
     env_secret = os.environ.get(
-        "OPENSCIENCE_JWT_SECRET",
-        os.environ.get("AINRF_JWT_SECRET"),
+        "AINRF_JWT_SECRET",
+        os.environ.get("OPENSCIENCE_JWT_SECRET"),
     )
     if env_secret:
         return env_secret

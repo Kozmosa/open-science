@@ -25,10 +25,10 @@ import httpx, os, sys, json
 BASE = os.environ.get("AINRF_PERF_BASE_URL", "http://127.0.0.1:8000")
 
 def get_token():
-    r = httpx.post(f"{BASE}/auth/login", json={"username": "perf-admin", "password": "perf-test-pass"})
+    r = httpx.post(f"{BASE}/api/auth/login", json={"username": "perf-admin", "password": "perf-test-pass"})
     if r.status_code != 200:
-        r = httpx.post(f"{BASE}/auth/register", json={"username": "perf-admin", "display_name": "Perf Admin", "password": "perf-test-pass"})
-        r = httpx.post(f"{BASE}/auth/login", json={"username": "perf-admin", "password": "perf-test-pass"})
+        r = httpx.post(f"{BASE}/api/auth/register", json={"username": "perf-admin", "display_name": "Perf Admin", "password": "perf-test-pass"})
+        r = httpx.post(f"{BASE}/api/auth/login", json={"username": "perf-admin", "password": "perf-test-pass"})
         if r.status_code != 200:
             print(f"Cannot authenticate: {r.status_code} {r.text}", file=sys.stderr)
             sys.exit(1)
@@ -38,9 +38,9 @@ token = get_token()
 h = {"Authorization": f"Bearer {token}"}
 
 for i in range(10):
-    httpx.get(f"{BASE}/projects/default/tasks", headers=h)
-    httpx.get(f"{BASE}/files/list?environment_id=env-localhost&path=/", headers=h)
-    httpx.post(f"{BASE}/tasks", json={
+    httpx.get(f"{BASE}/api/tasks?project_id=default", headers=h)
+    httpx.get(f"{BASE}/api/files/list?environment_id=env-localhost&path=/", headers=h)
+    httpx.post(f"{BASE}/api/tasks", json={
         "project_id": "default", "workspace_id": "workspace-default",
         "environment_id": "env-localhost", "task_profile": "claude-code",
         "task_input": "perf profile", "title": f"perf-profile-{i}",

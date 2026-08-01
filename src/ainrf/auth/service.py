@@ -24,6 +24,7 @@ from ainrf.auth.models import (
     UserRole,
     UserStatus,
 )
+from ainrf.runtime import tenant_identity
 
 _LOG = logging.getLogger(__name__)
 
@@ -32,12 +33,8 @@ _LOG = logging.getLogger(__name__)
 # automatically, so the final Linux username will be ``ainrf_<username>``.
 _USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
 
+
 # Fixed GID for the ``ainrf_tenants`` group created in the Dockerfile.
-_TENANT_GID = 2000
-_TENANT_GROUP = "ainrf_tenants"
-_TENANT_HOME_ROOT = Path("/home/ainrf_tenants")
-
-
 def _is_root() -> bool:
     """Return True if the current process is running as root."""
     return os.geteuid() == 0
@@ -56,16 +53,6 @@ def _run_privileged(cmd: list[str]) -> None:
     if result.returncode != 0:
         stderr = result.stderr.strip() if result.stderr else ""
         raise AuthError(f"Privileged command failed: {' '.join(cmd)}: {stderr}")
-
-
-def tenant_linux_username(ainrf_username: str) -> str:
-    """Return the Linux username for an OpenScience user, e.g. ``aaa`` → ``ainrf_aaa``."""
-    return f"ainrf_{ainrf_username}"
-
-
-def tenant_home_dir(ainrf_username: str) -> Path:
-    """Return the home directory for an OpenScience tenant user."""
-    return _TENANT_HOME_ROOT / ainrf_username
 
 
 def _now_iso() -> str:
@@ -704,16 +691,23 @@ class AuthService:
 def _ensure_tenant_group() -> None:
     """Create the ``ainrf_tenants`` group (GID 2000) if it does not exist."""
     result = subprocess.run(
-        ["getent", "group", _TENANT_GROUP],
+        ["getent", "group", tenant_identity.TENANT_GROUP],
         capture_output=True,
     )
     if result.returncode != 0:
-        _LOG.info("_ensure_tenant_group: creating group %s (gid %d)", _TENANT_GROUP, _TENANT_GID)
-        _run_privileged(["groupadd", "--gid", str(_TENANT_GID), _TENANT_GROUP])
-
-
-def _linux_user_exists(username: str) -> bool:
-    return subprocess.run(["id", username], capture_output=True).returncode == 0
+        _LOG.info(
+            "_ensure_tenant_group: creating group %s (gid %d)",
+            tenant_identity.TENANT_GROUP,
+            tenant_identity.TENANT_GID,
+        )
+        _run_privileged(
+            [
+                "groupadd",
+                "--gid",
+                str(tenant_identity.TENANT_GID),
+                tenant_identity.TENANT_GROUP,
+            ]
+        )
 
 
 def _chown_recursive(path: Path, user: str, group: str) -> None:
@@ -737,11 +731,6 @@ def _row_to_user(row: sqlite3.Row) -> User:
     )
 
 
-def _is_container_environment() -> bool:
-    """Return True if running inside a container with the ainrf_tenants group."""
-    return Path("/opt/ainrf/state").is_dir() or Path("/.dockerenv").exists()
-
-
 def provision_tenant_user(username: str) -> None:
     """Create the Linux user ``ainrf_<username>`` with home directory and
     default workspace tree.  Idempotent — safe to call for existing users.
@@ -750,19 +739,19 @@ def provision_tenant_user(username: str) -> None:
     under a temp-root instead of ``/home/ainrf_tenants/`` so the caller does
     not need root privileges.
     """
-    linux_user = tenant_linux_username(username)
-    home = tenant_home_dir(username)
+    linux_user = tenant_identity.tenant_linux_username(username)
+    home = tenant_identity.tenant_home_dir(username)
     workspace_dir = home / "workspaces" / "default"
 
-    if _is_container_environment():
+    if tenant_identity.is_container_environment():
         _ensure_tenant_group()
-        if not _linux_user_exists(linux_user):
+        if not tenant_identity.linux_user_exists(linux_user):
             _LOG.info("provision_tenant_user: creating Linux user %s", linux_user)
             _run_privileged(
                 [
                     "useradd",
                     "--gid",
-                    str(_TENANT_GID),
+                    str(tenant_identity.TENANT_GID),
                     "--home-dir",
                     str(home),
                     "--create-home",
@@ -773,7 +762,7 @@ def provision_tenant_user(username: str) -> None:
             )
         # Create/ensure the home tree as root, then hand ownership to the tenant.
         _run_privileged(["mkdir", "-p", str(home), str(workspace_dir)])
-        _chown_recursive(home, linux_user, _TENANT_GROUP)
+        _chown_recursive(home, linux_user, tenant_identity.TENANT_GROUP)
     else:
         # Local dev / tests: just ensure the workspace dir is creatable.
         try:
@@ -785,6 +774,18 @@ def provision_tenant_user(username: str) -> None:
             )
             fallback = Path("/tmp/ainrf_tenants") / username / "workspaces" / "default"
             fallback.mkdir(parents=True, exist_ok=True)
+
+
+def provision_tenant_owned_path(path: Path, username: str) -> None:
+    """Create a runtime path owned by the user's Linux tenant identity."""
+
+    if tenant_identity.is_container_environment():
+        provision_tenant_user(username)
+        linux_user = tenant_identity.tenant_linux_username(username)
+        _run_privileged(["mkdir", "-p", str(path)])
+        _chown_recursive(path, linux_user, tenant_identity.TENANT_GROUP)
+        return
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def _user_to_dict(user: User) -> dict:

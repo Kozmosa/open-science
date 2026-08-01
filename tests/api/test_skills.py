@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.skills import SkillsDiscoveryService
 from tests.testutil import get_jwt_headers
@@ -70,7 +70,7 @@ async def test_get_skill_detail_success(tmp_path: Path) -> None:
     _create_skill_dir(skills_root, skill_id, skill_json, skill_md)
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
-        response = await client.get(f"/skills/{skill_id}")
+        response = await client.get(f"/api/skills/{skill_id}")
 
     assert response.status_code == 200
     payload = response.json()
@@ -106,7 +106,7 @@ async def test_get_skill_detail_with_package(tmp_path: Path) -> None:
     _create_skill_dir(skills_root, skill_id, skill_json, skill_md)
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
-        response = await client.get(f"/skills/{skill_id}")
+        response = await client.get(f"/api/skills/{skill_id}")
 
     assert response.status_code == 200
     payload = response.json()
@@ -116,7 +116,7 @@ async def test_get_skill_detail_with_package(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_get_skill_detail_not_found(tmp_path: Path) -> None:
     async with make_client(tmp_path, scan_roots=[]) as client:
-        response = await client.get("/skills/nonexistent")
+        response = await client.get("/api/skills/nonexistent")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Skill not found"
@@ -134,7 +134,7 @@ async def test_preview_skill_settings_success(tmp_path: Path) -> None:
     _create_skill_dir(skills_root, skill_id, skill_json, "# Preview\n")
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
-        response = await client.get(f"/skills/{skill_id}/preview")
+        response = await client.get(f"/api/skills/{skill_id}/preview")
 
     assert response.status_code == 200
     payload = response.json()
@@ -152,7 +152,7 @@ async def test_preview_skill_settings_success(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_preview_skill_settings_not_found(tmp_path: Path) -> None:
     async with make_client(tmp_path, scan_roots=[]) as client:
-        response = await client.get("/skills/nonexistent/preview")
+        response = await client.get("/api/skills/nonexistent/preview")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Skill not found"
@@ -175,7 +175,7 @@ async def test_import_skill_local_success(tmp_path: Path) -> None:
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
-            "/skills/import",
+            "/api/skills/import",
             json={"source": "local", "local_path": str(source_dir / skill_id)},
         )
 
@@ -194,7 +194,7 @@ async def test_import_skill_local_not_found(tmp_path: Path) -> None:
     missing_path = tmp_path / "missing-skill"
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
-            "/skills/import",
+            "/api/skills/import",
             json={"source": "local", "local_path": str(missing_path)},
         )
 
@@ -211,7 +211,7 @@ async def test_import_skill_local_missing_manifest(tmp_path: Path) -> None:
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
-            "/skills/import",
+            "/api/skills/import",
             json={"source": "local", "local_path": str(bad_dir)},
         )
 
@@ -235,7 +235,7 @@ async def test_import_skill_with_override(tmp_path: Path) -> None:
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
-            "/skills/import",
+            "/api/skills/import",
             json={
                 "source": "local",
                 "local_path": str(source_dir / original_id),
@@ -317,7 +317,7 @@ async def test_import_skill_git_success(
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.post(
-            "/skills/import",
+            "/api/skills/import",
             json={"source": "git", "url": "https://github.com/example/git-skill.git"},
         )
 

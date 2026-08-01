@@ -6,9 +6,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.domain_control import DomainModelMode
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 from tests.testutil import get_jwt_headers
 
@@ -31,7 +30,7 @@ def make_client(tmp_path: Path) -> httpx.AsyncClient:
 @pytest.mark.anyio
 async def test_health_is_public(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/health")
+        response = await client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
@@ -50,7 +49,7 @@ async def test_non_api_route_is_not_auth_gated(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_terminal_session_requires_api_key(tmp_path: Path) -> None:
     async with make_client(tmp_path) as client:
-        response = await client.get("/terminal/session")
+        response = await client.get("/api/terminal/session")
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Unauthorized"}
@@ -95,8 +94,8 @@ def test_api_config_reads_onboard_minimal_config(
 def test_api_config_reads_runtime_reconciliation_flag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", hash_api_key("bootstrap-secret"))
-    monkeypatch.setenv("OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED", "false")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", hash_api_key("bootstrap-secret"))
+    monkeypatch.setenv("AINRF_RUNTIME_RECONCILIATION_ENABLED", "false")
 
     config = ApiConfig.from_env(tmp_path)
 
@@ -119,14 +118,14 @@ async def test_interactive_auth_can_be_disabled_without_disabling_api_key_auth(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         login_response = await client.post(
-            "/auth/login",
+            "/api/auth/login",
             json={"username": "admin", "password": "not-used"},
         )
         refresh_response = await client.post(
-            "/auth/refresh",
+            "/api/auth/refresh",
             json={"refresh_token": "not-used"},
         )
-        health_response = await client.get("/health", headers={"X-API-Key": "clone-review-key"})
+        health_response = await client.get("/api/health", headers={"X-API-Key": "clone-review-key"})
 
     assert login_response.status_code == 403
     assert refresh_response.status_code == 403
@@ -189,39 +188,39 @@ def test_api_config_seeds_localhost_container_profile_when_config_is_minimal(
     assert config.container_config.ssh_key_path == "/opt/ainrf/.ssh/ainrf_local"
 
 
-def test_api_config_prefers_openscience_env(
+def test_api_config_prefers_ainrf_backend_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("OPENSCIENCE_STATE_ROOT", str(tmp_path / "open"))
-    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
+    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "ainrf"))
     monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
     monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
 
     config = ApiConfig.from_env()
 
-    assert config.state_root == tmp_path / "open"
-    assert config.api_key_hashes == frozenset({"a" * 64})
+    assert config.state_root == tmp_path / "ainrf"
+    assert config.api_key_hashes == frozenset({"b" * 64})
 
 
-def test_api_config_falls_back_to_ainrf_env(
+def test_api_config_accepts_openscience_compatibility_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.delenv("OPENSCIENCE_STATE_ROOT", raising=False)
-    monkeypatch.delenv("OPENSCIENCE_API_KEY_HASHES", raising=False)
-    monkeypatch.setenv("AINRF_STATE_ROOT", str(tmp_path / "legacy"))
-    monkeypatch.setenv("AINRF_API_KEY_HASHES", "b" * 64)
+    monkeypatch.delenv("AINRF_STATE_ROOT", raising=False)
+    monkeypatch.delenv("AINRF_API_KEY_HASHES", raising=False)
+    monkeypatch.setenv("OPENSCIENCE_STATE_ROOT", str(tmp_path / "compatibility"))
+    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
 
     config = ApiConfig.from_env()
 
-    assert config.state_root == tmp_path / "legacy"
-    assert config.api_key_hashes == frozenset({"b" * 64})
+    assert config.state_root == tmp_path / "compatibility"
+    assert config.api_key_hashes == frozenset({"a" * 64})
 
 
 def test_api_config_builds_namespaced_auth_cookie_names(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
-    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "staging")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("AINRF_AUTH_COOKIE_NAMESPACE", "staging")
 
     config = ApiConfig.from_env(tmp_path)
 
@@ -234,8 +233,8 @@ def test_api_config_builds_namespaced_auth_cookie_names(
 def test_api_config_rejects_invalid_auth_cookie_namespace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("OPENSCIENCE_API_KEY_HASHES", "a" * 64)
-    monkeypatch.setenv("OPENSCIENCE_AUTH_COOKIE_NAMESPACE", "Staging Unsafe")
+    monkeypatch.setenv("AINRF_API_KEY_HASHES", "a" * 64)
+    monkeypatch.setenv("AINRF_AUTH_COOKIE_NAMESPACE", "Staging Unsafe")
 
     with pytest.raises(ValueError, match="cookie namespace"):
         ApiConfig.from_env(tmp_path)
@@ -247,7 +246,7 @@ def test_api_config_uses_login_shell_by_default(
     class PwRecord:
         pw_shell = "/bin/zsh"
 
-    monkeypatch.setattr("ainrf.api.config.pwd.getpwuid", lambda uid: PwRecord())
+    monkeypatch.setattr("ainrf.runtime.product_config.pwd.getpwuid", lambda uid: PwRecord())
     monkeypatch.setenv("SHELL", "/bin/fish")
 
     config = ApiConfig(
@@ -259,33 +258,6 @@ def test_api_config_uses_login_shell_by_default(
 
 
 @pytest.mark.anyio
-async def test_registration_creates_per_user_default_project(tmp_path: Path) -> None:
-    app = create_app(
-        ApiConfig(
-            api_key_hashes=frozenset({hash_api_key("secret-key")}),
-            state_root=tmp_path,
-            public_registration_enabled=True,
-        )
-    )
-    app.state.auth_service.initialize()
-    # ensure_tenant_workspace creates dirs under /home/ainrf_tenants (container-only);
-    # it is not under test here, so stub it out to reach the project-provisioning hook.
-    app.state.workspace_service.ensure_tenant_workspace = lambda **_kwargs: None
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
-        response = await client.post(
-            "/auth/register",
-            json={"username": "alice", "display_name": "Alice", "password": "secret123"},
-        )
-        assert response.status_code == 201, response.text
-        default_project = app.state.project_service.get_project("alice_default")
-        assert default_project.name == "alice's Project"
-        assert default_project.owner_user_id is not None
-
-
-@pytest.mark.anyio
 async def test_v2_registration_uses_durable_default_project_provisioning(
     tmp_path: Path,
 ) -> None:
@@ -294,7 +266,6 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
             public_registration_enabled=True,
         )
@@ -305,7 +276,7 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         response = await client.post(
-            "/auth/register",
+            "/api/auth/register",
             json={"username": "v2alice", "display_name": "V2 Alice", "password": "secret123"},
         )
 
@@ -313,9 +284,9 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
     users = [user for user in app.state.auth_service.list_users() if user.username == "v2alice"]
     assert len(users) == 1
     user = users[0]
-    projects = app.state.domain_service.list_projects({"id": user.id, "role": "member"})
+    projects = app.state.project_module.list_projects({"id": user.id, "role": "member"})
     defaults = [project for project in projects if bool(project["is_default"])]
     assert len(defaults) == 1
     assert defaults[0]["name"] == "v2alice's Project"
     assert app.state.auth_service.pending_domain_default_project_provisioning() == []
-    assert app.state.project_service is None
+    assert not hasattr(app.state, "project_service")

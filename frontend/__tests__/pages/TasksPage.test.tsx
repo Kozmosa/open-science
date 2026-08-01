@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
-import { createTestQueryClient, renderWithProviders } from '@/shared/test/render';
+import { createTestQueryClient, renderWithProviders } from '@/test-support/render';
 import type {
   EnvironmentRecord,
   TaskOutputEvent,
@@ -15,18 +15,15 @@ import type {
 import {
   buildTaskStreamUrl,
   createTask,
-  getCodexDefaults,
-  getEnvironments,
-  getProjectEnvironmentReferences,
-  getProjects,
-  getSkills,
+  forkTask,
   getTask,
   getTaskMessages,
   getTaskOutput,
   getTasks,
-  getWorkspaces,
   retryTask,
-} from '@/shared/api';
+} from '@features/tasks/api';
+import { getCodexDefaults, getSkills } from '@features/settings/api';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
 import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -58,16 +55,6 @@ function stubTaskViewport(narrow: boolean): void {
     dispatchEvent: vi.fn(),
   })) as unknown as typeof window.matchMedia);
 }
-
-const project = {
-  project_id: 'default',
-  name: 'Default Project',
-  description: '',
-  default_workspace_id: 'workspace-default',
-  default_environment_id: 'env-1',
-  created_at: '2026-04-23T08:00:00Z',
-  updated_at: '2026-04-23T08:00:00Z',
-};
 
 const workspace: WorkspaceRecord = {
   workspace_id: 'workspace-default',
@@ -251,20 +238,23 @@ function createOutputPage(
   };
 }
 
-vi.mock('@/shared/api', () => ({
+vi.mock('@features/tasks/api', () => ({
   buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
-  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getEnvironments: vi.fn(),
-  getProjectEnvironmentReferences: vi.fn(),
-  getProjects: vi.fn(),
-  getSkills: vi.fn(),
+  forkTask: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
-  getWorkspaces: vi.fn(),
   retryTask: vi.fn(),
+}));
+vi.mock('@features/settings/api', () => ({
+  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
+  getSkills: vi.fn(),
+}));
+vi.mock('@features/environments/api', () => ({
+  getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(),
 }));
 
 vi.mock('@features/domain', async (importOriginal) => {
@@ -383,16 +373,15 @@ vi.mock('@features/auth', async (importOriginal) => {
 
 const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
+const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
-const mockGetProjects = vi.mocked(getProjects);
 const mockGetTask = vi.mocked(getTask);
 const mockGetTaskOutput = vi.mocked(getTaskOutput);
 const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
-const mockGetWorkspaces = vi.mocked(getWorkspaces);
 const mockRetryTask = vi.mocked(retryTask);
 const mockGetDomainProjects = vi.mocked(getDomainProjects);
 
@@ -409,16 +398,15 @@ beforeEach(() => {
 
   mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
+  mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
-  mockGetProjects.mockReset();
   mockGetTask.mockReset();
   mockGetTaskOutput.mockReset();
   mockGetSkills.mockReset();
   mockGetTasks.mockReset();
   mockGetTaskMessages.mockReset();
-  mockGetWorkspaces.mockReset();
   mockRetryTask.mockReset();
 
   mockBuildTaskStreamUrl.mockImplementation(
@@ -428,10 +416,8 @@ beforeEach(() => {
     codex_config_toml: null,
     codex_auth_json: null,
   });
-  mockGetWorkspaces.mockResolvedValue({ items: [workspace] });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetSkills.mockResolvedValue({ items: availableSkills });
-  mockGetProjects.mockResolvedValue({ items: [project] });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
   mockGetTaskMessages.mockResolvedValue({ messages: [], has_more: false, next_sequence: null });
@@ -445,26 +431,7 @@ beforeEach(() => {
       }),
     ])
   );
-  mockRetryTask.mockResolvedValue({
-    new_task: taskSummary,
-    archived_task_id: null,
-    edge_id: 'retry:task-1:2',
-    task: taskSummary,
-    attempt: {
-      attempt_id: 'attempt-2',
-      task_id: 'task-1',
-      attempt_seq: 2,
-      trigger: 'retry',
-      status: 'queued',
-    },
-    dispatch: {
-      dispatch_id: 'dispatch-2',
-      task_id: 'task-1',
-      attempt_id: 'attempt-2',
-      status: 'pending',
-      launch_state: 'pending',
-    },
-  });
+  mockRetryTask.mockResolvedValue(taskSummary);
 });
 
 describe('task output helpers', () => {
@@ -556,6 +523,34 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('keeps a newly forked Task selected after the Task list refreshes', async () => {
+    const user = userEvent.setup();
+    const forkedTask = {
+      ...taskSummary,
+      task_id: 'task-forked',
+      title: 'Forked task',
+      status: 'queued' as const,
+    };
+    const forkedRecord = { ...taskRecord, ...forkedTask };
+    mockGetTasks
+      .mockResolvedValueOnce({ items: [taskSummary] })
+      .mockResolvedValue({ items: [forkedTask, taskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => (
+      taskId === forkedTask.task_id ? forkedRecord : taskRecord
+    ));
+    mockForkTask.mockResolvedValue(forkedTask);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Fork Task' }));
+
+    expect(await screen.findByRole('heading', { name: 'Forked task' })).toBeInTheDocument();
+    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-forked'));
+  });
+
   it('refreshes the same Task Attempt and actual Project caches after retry', async () => {
     const user = userEvent.setup();
     const failedTask = { ...taskSummary, status: 'failed' as const, project_id: 'project-retry' };
@@ -576,18 +571,7 @@ describe('TasksPage', () => {
         },
       }],
     });
-    mockRetryTask.mockResolvedValue({
-      new_task: failedTask,
-      task: failedTask,
-      archived_task_id: null,
-      edge_id: 'retry:task-1:2',
-      attempt: {
-        attempt_id: 'attempt-2', task_id: 'task-1', attempt_seq: 2, trigger: 'retry', status: 'queued',
-      },
-      dispatch: {
-        dispatch_id: 'dispatch-2', task_id: 'task-1', attempt_id: 'attempt-2', status: 'pending', launch_state: 'pending',
-      },
-    });
+    mockRetryTask.mockResolvedValue(failedTask);
     const client = createTestQueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
 

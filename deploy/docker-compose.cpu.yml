@@ -15,8 +15,8 @@ name: deploy
 #
 #   2. 编辑本文件，把 <CHANGE_ME> 替换为上面生成的值
 #
-#   3. 构建并启动
-#      docker compose -f docker-compose.cpu.yml up -d --build
+#   3. 构建并启动同一个 release
+#      bash deploy/release-production.sh
 #
 #   4. 查看日志
 #      docker compose -f docker-compose.cpu.yml logs -f ainrf
@@ -31,14 +31,7 @@ name: deploy
 
 services:
   ainrf:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-      args:
-        # Host git commit captured by deploy/redeploy-backend.sh (falls back to
-        # empty -> backend reports "Unavailable" when built without the wrapper).
-        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
-        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf
     network_mode: host
@@ -46,10 +39,8 @@ services:
       AINRF_PRODUCTION: "1"
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "18000"
-      # Release A stays legacy/validate by default.  The release controller
-      # explicitly sets v2 plus the immutable artifact SHA after commit.
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      # The committed cutover fuse requires the immutable artifact SHA.
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?在 .env 中设置 AINRF_API_KEY_HASHES}
@@ -93,7 +84,7 @@ services:
         limits:
           memory: 8G
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:18000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:18000/api/health')"]
       interval: 30s
       retries: 3
       start_period: 15s
@@ -110,22 +101,18 @@ services:
   # entrypoint must not bind the same port.
   domain-worker:
     profiles: ["domain-v2"]
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-      args:
-        AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
-        AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
-    container_name: openscience-domain-worker
+    container_name: ainrf-domain-worker
     network_mode: host
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
-      OPENSCIENCE_NO_SSHD: "1"
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_NO_SSHD: "1"
+      AINRF_LITERATURE_REDIS_URL: redis://:${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
+      AINRF_LITERATURE_REDIS_NAMESPACE: ainrf:production:literature
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
@@ -146,6 +133,8 @@ services:
     depends_on:
       ainrf:
         condition: service_healthy
+      literature-redis:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -155,10 +144,10 @@ services:
   literature-redis:
     image: docker.1ms.run/redis:7-alpine
     restart: unless-stopped
-    container_name: openscience-literature-redis
+    container_name: ainrf-literature-redis
     network_mode: host
     environment:
-      OPENSCIENCE_LITERATURE_REDIS_PASSWORD: ${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+      AINRF_LITERATURE_REDIS_PASSWORD: ${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}
     command:
       - redis-server
       - --bind
@@ -172,11 +161,11 @@ services:
       - --maxmemory-policy
       - noeviction
       - --requirepass
-      - ${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}
+      - ${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}
     volumes:
       - literature-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$OPENSCIENCE_LITERATURE_REDIS_PASSWORD\" ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -186,19 +175,17 @@ services:
           memory: 512M
 
   literature-worker:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ${OPENSCIENCE_API_IMAGE:?Set OPENSCIENCE_API_IMAGE to an immutable release image}
     restart: unless-stopped
-    container_name: openscience-literature-worker
+    container_name: ainrf-literature-worker
     network_mode: host
     environment:
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
-      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:production:literature
-      OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
-      OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET: "24"
-      OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET: "8"
+      AINRF_LITERATURE_REDIS_URL: redis://:${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
+      AINRF_LITERATURE_REDIS_NAMESPACE: ainrf:production:literature
+      AINRF_LITERATURE_REQUEST_INTERVAL_SECONDS: "3"
+      AINRF_LITERATURE_DAILY_SOURCE_BUDGET: "24"
+      AINRF_LITERATURE_DAILY_SEARCH_BUDGET: "8"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
@@ -211,34 +198,12 @@ services:
       literature-redis:
         condition: service_healthy
 
-  literature-planner:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    restart: unless-stopped
-    container_name: openscience-literature-planner
-    network_mode: host
-    environment:
-      AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_LITERATURE_REDIS_URL: redis://:${OPENSCIENCE_LITERATURE_REDIS_PASSWORD:?Set OPENSCIENCE_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
-      OPENSCIENCE_LITERATURE_REDIS_NAMESPACE: openscience:production:literature
-    volumes:
-      - ainrf-state:/opt/ainrf/state
-    command: ["python", "-m", "ainrf.literature.planner"]
-    depends_on:
-      ainrf:
-        condition: service_healthy
-      literature-redis:
-        condition: service_healthy
-
   prometheus:
-    image: docker.1ms.run/prom/prometheus:v3.3.1
+    image: ${OPENSCIENCE_PROMETHEUS_IMAGE:?Set OPENSCIENCE_PROMETHEUS_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-prometheus
     network_mode: host
     volumes:
-      - ./config/prometheus-host.yml:/etc/prometheus/prometheus.yml:ro
-      - ./config/prometheus/rules/ainrf-alerts.yml:/etc/prometheus/rules/ainrf.yml:ro
       - prometheus-data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -257,7 +222,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: docker.1ms.run/grafana/grafana:11.6.1
+    image: ${OPENSCIENCE_GRAFANA_IMAGE:?Set OPENSCIENCE_GRAFANA_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-grafana
     network_mode: host
@@ -273,8 +238,6 @@ services:
       GF_AUTH_PROXY_HEADER: "X-WEBAUTH-USER"
       GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
     volumes:
-      - ./config/grafana/provisioning-host:/etc/grafana/provisioning:ro
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -285,18 +248,21 @@ services:
         max-file: "3"
 
   nginx:
-    image: docker.1ms.run/nginx:1.27-alpine
+    image: ${OPENSCIENCE_WEB_IMAGE:?Set OPENSCIENCE_WEB_IMAGE to an immutable release image}
     restart: unless-stopped
     container_name: ainrf-nginx
     network_mode: host
-    volumes:
-      - ./config/nginx-host.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../frontend/dist/production:/usr/share/nginx/html:ro
+    environment:
+      AINRF_WEB_PORT: "8192"
+      AINRF_BACKEND_PORT: "18000"
+      AINRF_GRAFANA_PORT: "3000"
+      AINRF_PROMETHEUS_PORT: "9091"
+      AINRF_LITEFUSE_PORT: "13000"
     depends_on:
       ainrf:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3

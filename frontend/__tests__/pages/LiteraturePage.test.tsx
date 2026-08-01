@@ -2,16 +2,16 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import LiteraturePage from '../../src/pages/LiteraturePage';
-import { renderWithProviders } from '@/shared/test/render';
+import { renderWithProviders } from '@/test-support/render';
 import {
   createLiteratureCheck,
   getLiteraturePaper,
   getLiteratureResearchTasks,
   getLiteratureSummary,
   updateLiteraturePaperState,
-} from '@/shared/api';
+} from '@features/literature/api';
 
-vi.mock('@/shared/api', () => ({
+vi.mock('@features/literature/api', () => ({
   createLiteratureCheck: vi.fn(() => Promise.resolve({ check_id: 'check-1', status: 'planned' })),
   createLiteratureTopic: vi.fn(),
   deleteLiteratureTopic: vi.fn(),

@@ -1,22 +1,28 @@
-from __future__ import annotations
+"""Lazy file browser exports."""
 
-from ainrf.files.cache import FileTreeCache
-from ainrf.files.models import DirectoryListing, FileContent, FileEntry, FileUploadResult
-from ainrf.files.service import (
-    FileBrowserError,
-    FileBrowserService,
-    FileTooLargeError,
-    PathNotFoundError,
+from typing import Any
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {"FileTreeCache": ("ainrf.files.cache", "FileTreeCache")}
+_EXPORTS.update(
+    {
+        name: ("ainrf.files.models", name)
+        for name in ("DirectoryListing", "FileContent", "FileEntry", "FileUploadResult")
+    }
 )
+_EXPORTS.update(
+    {
+        name: ("ainrf.files.service", name)
+        for name in (
+            "FileBrowserError",
+            "FileBrowserService",
+            "FileTooLargeError",
+            "PathNotFoundError",
+        )
+    }
+)
+__all__ = list(_EXPORTS)
 
-__all__ = [
-    "DirectoryListing",
-    "FileBrowserError",
-    "FileBrowserService",
-    "FileContent",
-    "FileEntry",
-    "FileTooLargeError",
-    "FileTreeCache",
-    "FileUploadResult",
-    "PathNotFoundError",
-]
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

@@ -39,10 +39,8 @@ services:
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
-      # Release A stays legacy/validate by default.  A release controller must
-      # explicitly provide both v2 mode and the exact committed artifact SHA.
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
+      # The committed cutover fuse requires the exact immutable artifact SHA.
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?Set AINRF_JWT_SECRET in .env}
       AINRF_API_KEY_HASHES: ${AINRF_API_KEY_HASHES:?Set AINRF_API_KEY_HASHES in .env}
       AINRF_ALLOWED_CIDRS: "0.0.0.0/0"
@@ -82,7 +80,7 @@ services:
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -97,8 +95,8 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # No-port durable Task/Overview/Literature-saga worker.  The profile keeps
-  # legacy and validate deployments free of v2 consumers by default.
+  # No-port durable Task/Overview/Literature-saga worker.  Its profile keeps
+  # API-only deployments free of background consumers by default.
   domain-worker:
     profiles: ["domain-v2"]
     build:
@@ -108,14 +106,13 @@ services:
         AINRF_BUILD_COMMIT: ${AINRF_BUILD_COMMIT:-}
         AINRF_BUILD_COMMITTED_AT: ${AINRF_BUILD_COMMITTED_AT:-}
     restart: unless-stopped
-    container_name: openscience-domain-worker
+    container_name: ainrf-domain-worker
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
       AINRF_STATE_ROOT: /opt/ainrf/state
-      OPENSCIENCE_DOMAIN_MODEL_MODE: ${OPENSCIENCE_DOMAIN_MODEL_MODE:-legacy}
-      OPENSCIENCE_DOMAIN_ARTIFACT_SHA: ${OPENSCIENCE_DOMAIN_ARTIFACT_SHA:-}
-      OPENSCIENCE_NO_SSHD: "1"
+      AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
+      AINRF_NO_SSHD: "1"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}

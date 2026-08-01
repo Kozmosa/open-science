@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # OpenScience 五层混合 CI 设计
 
 **Goal:** 在开发与生产共用同一台服务器的约束下，建立低延迟、可复现、不会误伤生产的五层混合 CI；本轮先完整落地 L0 开发内循环与 L1 确定性门禁，并为后续本机容器集成、深度验证和发布验收定义稳定边界。
@@ -14,7 +21,7 @@
 2. **同一入口**：agent、本地开发者和 GitHub Actions 调用同一组仓库脚本，避免本地与远端行为漂移。
 3. **资源有界**：后端并行度固定为安全默认值，不根据宿主机 112 个线程自动扩张；重型层级必须进入本机队列。
 4. **失败可定位**：每个 lane 独立退出并保留原始日志；禁止全局 rerun 掩盖首次失败。
-5. **产物一致**：后续发布层级必须验收精确 SHA 的不可变镜像和前端 artifact，而不是可变 `latest` 或共享 `dist`。
+5. **产物一致**：后续发布层级使用同一简单 release manifest 绑定的版本一致镜像和前端 artifact，而不是可变 `latest` 或共享 `dist`；默认不要求高保证供应链证明。
 6. **生产优先**：公开 PR 不得在生产同机的 Docker daemon 上执行；本机 CI 只接受可信维护者授权的 SHA。
 
 ## 2. 五层模型
@@ -25,7 +32,7 @@
 | L1 | Deterministic gate | GitHub-hosted + 本机 | PR、push、pre-push/显式命令 | 完整静态检查、后端测试、前端 lint/build/Vitest、文档构建 | 实现 |
 | L2 | Container integration | 本机隔离 CI cell | 可信待合并 SHA | 最小 backend + nginx + fake dependencies + browser/API contract | 设计 |
 | L3 | Deep system verification | 本机串行 | 手动或夜间 | race、backup/restore、tenant UID/GID、SSH/tmux、完整 runtime、性能 | 设计 |
-| L4 | Release acceptance | 固定 release staging + production | 候选发布、人工批准 | 同一 artifact 的 staging 验收、部署、只读 post-smoke 与回滚 | 设计 |
+| L4 | Release acceptance | production 维护窗口；可选 release staging | 候选发布、人工批准 | 备份/恢复验证、同版本部署、只读 post-smoke 与人工回滚 | 设计 |
 
 L0/L1 不启动 Docker，不访问外部 LLM、搜索服务或生产端口。L2–L4 由后续计划实现，并使用独立的运行身份、队列和资源限制。
 
@@ -189,9 +196,11 @@ Playwright 不进入首轮 L1。它将在 L2 进入隔离 browser contract lane�
 
 ### L4 release acceptance
 
-- staging 使用 production mode、不可变候选 artifact，不 bind mount 源码。
-- 验证 frontend/backend SHA 一致。
-- 生产发布需要人工批准、全局部署锁、只读 post-smoke 和自动回滚 artifact。
+- 默认采用实验室内部的计划维护窗口，允许约 2–3 小时停机，不要求零停机或任意中断后的自动恢复。
+- 发布前对 state、workspace 与 tenant 数据执行完整备份，并在隔离位置验证恢复；停止 writer 后再执行迁移和部署。
+- Web、API、domain worker、literature worker 与监控使用同一简单 release manifest 绑定的版本一致制品，不依赖源码或共享 `dist`。
+- 启动后执行只读 post-smoke；失败时由运维人员按明确 runbook 恢复数据并启动上一份 manifest。
+- 独立 release staging 可以作为部署方选择的额外验证，但不是默认强制路径；不建设复杂 release ledger、逐文件供应链绑定或自动接管恢复。
 
 ## 9. 验收标准
 

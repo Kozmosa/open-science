@@ -1,8 +1,8 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { renderWithProviders } from '../../../src/shared/test/render';
-import ChatUserMessage from '../../../src/components/chat/ChatUserMessage';
-import type { ChatUserMessage as ChatUserMessageType } from '../../../src/components/chat';
+import { renderWithProviders } from '@/test-support/render';
+import ChatUserMessage from '@features/tasks/components/chat/ChatUserMessage';
+import type { ChatUserMessage as ChatUserMessageType } from '@features/tasks/components/chat';
 
 function userMessage(content: string): ChatUserMessageType {
   return {

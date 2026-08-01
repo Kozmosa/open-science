@@ -22,14 +22,26 @@ class ArxivRequestLimiter:
 
     def __init__(self) -> None:
         self._namespace = os.getenv(
-            "OPENSCIENCE_LITERATURE_REDIS_NAMESPACE", "openscience:literature"
+            "AINRF_LITERATURE_REDIS_NAMESPACE",
+            os.getenv("OPENSCIENCE_LITERATURE_REDIS_NAMESPACE", "ainrf:literature"),
         )
         self._interval_seconds = int(
-            os.getenv("OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS", "3")
+            os.getenv(
+                "AINRF_LITERATURE_REQUEST_INTERVAL_SECONDS",
+                os.getenv("OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS", "3"),
+            )
         )
-        self._daily_budget = int(os.getenv("OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET", "24"))
+        self._daily_budget = int(
+            os.getenv(
+                "AINRF_LITERATURE_DAILY_SOURCE_BUDGET",
+                os.getenv("OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET", "24"),
+            )
+        )
         self._client = Redis.from_url(
-            os.getenv("OPENSCIENCE_LITERATURE_REDIS_URL", "redis://127.0.0.1:16379/0")
+            os.getenv(
+                "AINRF_LITERATURE_REDIS_URL",
+                os.getenv("OPENSCIENCE_LITERATURE_REDIS_URL", "redis://127.0.0.1:16379/0"),
+            )
         )
 
     def acquire(self) -> None:

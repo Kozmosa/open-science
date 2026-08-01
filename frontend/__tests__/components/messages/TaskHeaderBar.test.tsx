@@ -1,17 +1,11 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import TaskHeaderBar from '../../../src/components/messages/TaskHeaderBar';
-import { renderWithProviders } from '@/shared/test/render';
+import TaskHeaderBar from '@features/tasks/components/messages/TaskHeaderBar';
+import { renderWithProviders } from '@/test-support/render';
 import type { TaskRecord } from '@/shared/types';
-import { updateTask } from '@/shared/api';
+import { updateTask } from '@features/tasks/api';
 
-vi.mock('@/shared/api', async () => {
-  const actual = await vi.importActual('@/shared/api');
-  return {
-    ...actual,
-    updateTask: vi.fn().mockResolvedValue({}),
-  };
-});
+vi.mock('@features/tasks/api', () => ({ updateTask: vi.fn().mockResolvedValue({}) }));
 
 function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
   return {

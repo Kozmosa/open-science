@@ -1,4 +1,4 @@
-"""B7 v2 Task route, Attempt projection, and compatibility contracts."""
+"""Canonical Task route and retired compatibility contract tests."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain import AttemptService
+from ainrf.domain.attempts import AttemptWorkerModule as AttemptService
 from ainrf.domain.worker import TaskDispatcher
-from ainrf.domain_control import DomainMaintenanceService, DomainModelMode
+from ainrf.domain_control import DomainMaintenanceService
 from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
 
 pytestmark = [pytest.mark.api]
@@ -32,7 +32,6 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
-            domain_model_mode=DomainModelMode.V2,
             domain_artifact_sha=V2_ARTIFACT_SHA,
         )
     )
@@ -40,7 +39,7 @@ def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
 
 
 def _prepare_task_scope(app: FastAPI, state_root: Path) -> tuple[str, str, str]:
-    domain = app.state.domain_service
+    domain = app.state.project_module
     environment = domain.create_environment(
         _ADMIN,
         alias="task-v2-host",
@@ -91,23 +90,48 @@ def _string_list(value: object) -> list[str]:
 
 
 @pytest.mark.anyio
-async def test_v2_fuse_failure_never_falls_back_to_an_uninitialized_legacy_service(
+async def test_task_module_fuse_failure_never_falls_back_to_a_legacy_writer(
     state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    domain = app.state.domain_service
-    monkeypatch.setattr(domain, "v2_ready", lambda: False)
+    task_module = app.state.task_application_service
+    monkeypatch.setattr(task_module, "v2_ready", lambda: False)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        tasks = await client.get(f"/tasks?api_key={_API_KEY}")
-        sessions = await client.get(f"/sessions?api_key={_API_KEY}")
+        tasks = await client.get(f"/api/tasks?api_key={_API_KEY}")
+        sessions = await client.get(f"/api/sessions?api_key={_API_KEY}")
 
     assert tasks.status_code == 503
-    assert sessions.status_code == 503
+    assert sessions.status_code == 404
     assert _body(tasks)["detail"] == "Task domain v2 is not ready"
-    assert _body(sessions)["detail"] == "Session domain v2 is not ready"
+
+
+@pytest.mark.anyio
+async def test_retired_task_and_session_contracts_are_unroutable(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    retired = [
+        ("GET", "/api/sessions"),
+        ("GET", "/api/sessions/session-id"),
+        ("GET", "/api/sessions/session-id/attempts"),
+        ("GET", "/api/projects/project-id/tasks"),
+        ("GET", "/api/projects/project-id/task-edges"),
+        ("POST", "/api/projects/project-id/task-edges"),
+        ("DELETE", "/api/task-edges/edge-id"),
+        ("GET", "/api/projects/project-id/cost-summary"),
+        ("PATCH", "/api/tasks/task-id/project"),
+        ("DELETE", "/api/tasks/task-id/permanent"),
+    ]
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        for method, path in retired:
+            response = await client.request(method, f"{path}?api_key={_API_KEY}")
+            assert response.status_code == 404, (method, path, response.text)
 
 
 @pytest.mark.anyio
@@ -115,18 +139,17 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            f"/tasks?api_key={_API_KEY}",
+            f"/api/tasks?api_key={_API_KEY}",
             headers={"Idempotency-Key": "task-v2-create"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Inspect the durable Task contract",
@@ -134,13 +157,12 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
             },
         )
         assert created.status_code == 201
-        assert created.headers["deprecation"] == "true"
+        assert "deprecation" not in created.headers
         created_payload = _body(created)
         task = cast(dict[str, object], created_payload["task"])
         attempt = cast(dict[str, object], created_payload["attempt"])
         dispatch = cast(dict[str, object], created_payload["dispatch"])
         task_id = str(task["task_id"])
-        assert created_payload["task_id"] == task_id
         assert task["archived_at"] is None
         assert task["archive_reason"] is None
         assert isinstance(task["project_context_version_id"], str)
@@ -152,7 +174,7 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         # In v2 the health endpoint is a durable Attempt/RuntimeSession read;
         # it must not require the legacy in-process task/engine service.
         app.state.agentic_researcher_service = None
-        health = await client.get(f"/tasks/{task_id}/health?api_key={_API_KEY}")
+        health = await client.get(f"/api/tasks/{task_id}/health?api_key={_API_KEY}")
         assert health.status_code == 200
         health_payload = _body(health)
         assert health_payload == {
@@ -163,7 +185,7 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
             "inactive_seconds": None,
         }
 
-        attempts = await client.get(f"/tasks/{task_id}/attempts?api_key={_API_KEY}")
+        attempts = await client.get(f"/api/tasks/{task_id}/attempts?api_key={_API_KEY}")
         assert attempts.status_code == 200
         attempt_items = cast(list[dict[str, object]], _body(attempts)["items"])
         assert [item["attempt_id"] for item in attempt_items] == [attempt["attempt_id"]]
@@ -174,14 +196,12 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         )
 
         retried = await client.post(
-            f"/tasks/{task_id}/retry?api_key={_API_KEY}",
+            f"/api/tasks/{task_id}/retry?api_key={_API_KEY}",
             headers={"Idempotency-Key": "task-v2-retry"},
-            json={},
         )
         assert retried.status_code == 201
-        assert retried.headers["deprecation"] == "true"
+        assert "deprecation" not in retried.headers
         retried_payload = _body(retried)
-        assert cast(dict[str, object], retried_payload["new_task"])["task_id"] == task_id
         assert cast(dict[str, object], retried_payload["task"])["task_id"] == task_id
         retried_attempt = cast(dict[str, object], retried_payload["attempt"])
         assert retried_attempt["attempt_seq"] == 2
@@ -192,7 +212,7 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
         )
 
         forked = await client.post(
-            f"/tasks/{task_id}/fork?api_key={_API_KEY}",
+            f"/api/tasks/{task_id}/fork?api_key={_API_KEY}",
             headers={"Idempotency-Key": "task-v2-fork"},
             json={
                 "workspace_id": workspace_id,
@@ -201,12 +221,20 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
             },
         )
         assert forked.status_code == 201
+        assert "deprecation" not in forked.headers
+        assert "sunset" not in forked.headers
+        assert "link" not in forked.headers
         forked_task_id = str(_mapping(_body(forked)["task"])["task_id"])
         assert forked_task_id != task_id
 
-        relationships = await client.get(f"/projects/{project_id}/task-edges?api_key={_API_KEY}")
+        relationships = await client.get(
+            f"/api/domain/projects/{project_id}/task-relationships?api_key={_API_KEY}"
+        )
         assert relationships.status_code == 200
         relationship_items = cast(list[dict[str, object]], _body(relationships)["items"])
+        assert all(
+            "relationship_id" in item and "edge_id" not in item for item in relationship_items
+        )
         assert any(
             item["source_task_id"] == forked_task_id
             and item["target_task_id"] == task_id
@@ -214,8 +242,36 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
             for item in relationship_items
         )
 
+        related = await client.post(
+            f"/api/domain/projects/{project_id}/task-relationships?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-related"},
+            json={"source_task_id": task_id, "target_task_id": forked_task_id},
+        )
+        assert related.status_code == 201
+        related_payload = _body(related)
+        relationship_id = str(related_payload["relationship_id"])
+        assert "edge_id" not in related_payload
+
+        usage = await client.get(
+            f"/api/domain/projects/{project_id}/usage-summary?api_key={_API_KEY}"
+        )
+        assert usage.status_code == 200
+        usage_payload = _body(usage)
+        assert usage_payload["project_id"] == project_id
+        assert usage_payload["task_count"] == 2
+        assert usage_payload["attempt_count"] == 3
+        assert usage_payload["total_duration_ms"] == 0
+        assert "session_count" not in usage_payload
+
+        deleted_relationship = await client.delete(
+            f"/api/domain/projects/{project_id}/task-relationships/{relationship_id}"
+            f"?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-v2-related-delete"},
+        )
+        assert deleted_relationship.status_code == 204
+
         archived = await client.post(
-            f"/tasks/{forked_task_id}/archive?api_key={_API_KEY}",
+            f"/api/tasks/{forked_task_id}/archive?api_key={_API_KEY}",
             headers={"Idempotency-Key": "task-v2-archive-fork"},
         )
         assert archived.status_code == 200
@@ -225,22 +281,67 @@ async def test_v2_task_routes_return_task_attempt_dispatch_and_retry_same_task(
 
 
 @pytest.mark.anyio
-async def test_v2_running_task_archive_returns_pending_until_runtime_confirms_stop(
+async def test_task_create_and_retry_reject_legacy_request_shapes(
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    payload = {
+        "project_id": project_id,
+        "workspace_id": workspace_id,
+        "researcher_type": "vanilla",
+        "harness_engine": "claude-code",
+        "prompt": "Reject compatibility input",
+        "skills": [],
+    }
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        empty_project = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-empty-project"},
+            json={**payload, "project_id": ""},
+        )
+        environment_alias = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-environment-alias"},
+            json={**payload, "environment_id": environment_id},
+        )
+        created = await client.post(
+            f"/api/tasks?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-canonical-create"},
+            json=payload,
+        )
+        task_id = str(_mapping(_body(created)["task"])["task_id"])
+        retry_body = await client.post(
+            f"/api/tasks/{task_id}/retry?api_key={_API_KEY}",
+            headers={"Idempotency-Key": "task-retry-body"},
+            json={},
+        )
+
+    assert empty_project.status_code == 422
+    assert environment_alias.status_code == 422
+    assert created.status_code == 201
+    assert retry_body.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_v2_running_task_archive_returns_pending_until_runtime_confirms_stop(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            f"/tasks?api_key={_API_KEY}",
+            f"/api/tasks?api_key={_API_KEY}",
             headers={"Idempotency-Key": "archive-pending-create"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Keep running until archive cancellation is confirmed",
@@ -274,7 +375,7 @@ async def test_v2_running_task_archive_returns_pending_until_runtime_confirms_st
             conn.commit()
 
         archived = await client.post(
-            f"/tasks/{task_id}/archive?api_key={_API_KEY}",
+            f"/api/tasks/{task_id}/archive?api_key={_API_KEY}",
             headers={"Idempotency-Key": "archive-pending-request"},
         )
 
@@ -301,18 +402,17 @@ async def test_v2_launch_unknown_resolution_is_terminal_and_idempotent(
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         created = await client.post(
-            f"/tasks?api_key={_API_KEY}",
+            f"/api/tasks?api_key={_API_KEY}",
             headers={"Idempotency-Key": "launch-unknown-create"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Resolve an unknown runtime without a blind relaunch",
@@ -332,7 +432,7 @@ async def test_v2_launch_unknown_resolution_is_terminal_and_idempotent(
         attempts.mark_launch_unknown(claim, reason="fixture runtime probe inconclusive")
 
         endpoint = (
-            f"/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown?api_key={_API_KEY}"
+            f"/api/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown?api_key={_API_KEY}"
         )
         resolved = await client.post(
             endpoint,
@@ -372,12 +472,12 @@ async def test_v2_task_capabilities_and_idempotency_contract(
     state_root: Path, tmp_path: Path
 ) -> None:
     app = _v2_app(state_root, tmp_path)
-    project_id, workspace_id, environment_id = _prepare_task_scope(app, state_root)
+    project_id, workspace_id, _ = _prepare_task_scope(app, state_root)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        unavailable = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+        unavailable = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
         assert unavailable.status_code == 200
         unavailable_payload = _body(unavailable)
         assert unavailable_payload["standard_task_create"] is False
@@ -395,7 +495,7 @@ async def test_v2_task_capabilities_and_idempotency_contract(
         maintenance = DomainMaintenanceService(state_root)
         try:
             dispatcher.start()
-            available = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            available = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             assert available.status_code == 200
             available_payload = _body(available)
             assert available_payload["standard_task_create"] is True
@@ -410,7 +510,7 @@ async def test_v2_task_capabilities_and_idempotency_contract(
                     ("2000-01-01T00:00:00+00:00", dispatcher.dispatcher_id),
                 )
                 conn.commit()
-            stale = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            stale = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             stale_payload = _body(stale)
             assert stale_payload["task_attempts"] is False
             stale_dispatcher = _mapping(stale_payload["task_dispatcher"])
@@ -420,7 +520,7 @@ async def test_v2_task_capabilities_and_idempotency_contract(
 
             maintenance.register_participant(dispatcher.dispatcher_id, "task-dispatcher")
             maintenance.enter(actor_id="task-capability-operator", reason="test maintenance")
-            maintenance_blocked = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            maintenance_blocked = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             maintenance_payload = _body(maintenance_blocked)
             assert maintenance_payload["standard_task_create"] is False
             maintenance_dispatcher = _mapping(maintenance_payload["task_dispatcher"])
@@ -428,7 +528,7 @@ async def test_v2_task_capabilities_and_idempotency_contract(
             assert maintenance_dispatcher["ready"] is False
 
             maintenance.drain_participant(dispatcher.dispatcher_id)
-            drained = await client.get(f"/domain/capabilities?api_key={_API_KEY}")
+            drained = await client.get(f"/api/domain/capabilities?api_key={_API_KEY}")
             drained_dispatcher = _mapping(_body(drained)["task_dispatcher"])
             assert drained_dispatcher["ready"] is False
             assert drained_dispatcher["active_participant_ids"] == []
@@ -437,12 +537,11 @@ async def test_v2_task_capabilities_and_idempotency_contract(
             dispatcher.stop()
 
         mismatch = await client.post(
-            f"/tasks?api_key={_API_KEY}",
+            f"/api/tasks?api_key={_API_KEY}",
             headers={"Idempotency-Key": "header-key"},
             json={
                 "project_id": project_id,
                 "workspace_id": workspace_id,
-                "environment_id": environment_id,
                 "researcher_type": "vanilla",
                 "harness_engine": "claude-code",
                 "prompt": "Reject conflicting idempotency transport",
@@ -450,4 +549,4 @@ async def test_v2_task_capabilities_and_idempotency_contract(
                 "idempotency_key": "body-key",
             },
         )
-        assert mismatch.status_code == 409
+        assert mismatch.status_code == 422

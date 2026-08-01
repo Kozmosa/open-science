@@ -1,25 +1,28 @@
-from __future__ import annotations
+"""Lazy execution Adapter exports."""
 
-from ainrf.execution.errors import (
-    BootstrapError,
-    CommandTimeoutError,
-    SSHConnectionError,
-    SSHExecutorError,
-    TransferError,
-    UnsupportedContainerError,
+from typing import Any
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {
+    name: ("ainrf.execution.errors", name)
+    for name in (
+        "BootstrapError",
+        "CommandTimeoutError",
+        "SSHConnectionError",
+        "SSHExecutorError",
+        "TransferError",
+        "UnsupportedContainerError",
+    )
+}
+_EXPORTS.update(
+    {
+        name: ("ainrf.execution.models", name)
+        for name in ("CommandResult", "ContainerConfig", "ContainerHealth")
+    }
 )
-from ainrf.execution.models import CommandResult, ContainerConfig, ContainerHealth
-from ainrf.execution.ssh import SSHExecutor
+_EXPORTS["SSHExecutor"] = ("ainrf.execution.ssh", "SSHExecutor")
+__all__ = list(_EXPORTS)
 
-__all__ = [
-    "BootstrapError",
-    "CommandResult",
-    "CommandTimeoutError",
-    "ContainerConfig",
-    "ContainerHealth",
-    "SSHConnectionError",
-    "SSHExecutor",
-    "SSHExecutorError",
-    "TransferError",
-    "UnsupportedContainerError",
-]
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

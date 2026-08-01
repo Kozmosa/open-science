@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Codex 对齐的 Conversation Domain 设计
 
 **Status:** Accepted direction — 核心领域语义与兼容性策略已确认，等待实现
@@ -5,7 +12,7 @@
 **Scope:** Task、Turn、Item、steer、interrupt、fork、context transfer、运行状态投影与控制请求
 **Depends on:** [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md) 中的 Project、Workspace、Environment、Context 关系仍然有效
 **Follow-ups:** [`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-17-conversation-domain-standalone-migration-design.md`](2026-07-17-conversation-domain-standalone-migration-design.md)
-**Supersedes:** 本文取代 [`2026-07-12-openscience-domain-refactor-execution-spec.md`](2026-07-12-openscience-domain-refactor-execution-spec.md) B5 中 `Task → TaskAttempt → RuntimeSession`、`continue/retry/resume` 共用 Attempt，以及 Task 以最新 Attempt 终态作为生命周期的设计
+**Supersedes:** 本文取代 [`2026-07-12-openscience-domain-refactor-execution-spec.md`](archived/2026-07-12-openscience-domain-refactor-execution-spec.md) B5 中 `Task → TaskAttempt → RuntimeSession`、`continue/retry/resume` 共用 Attempt，以及 Task 以最新 Attempt 终态作为生命周期的设计
 
 ## 1. 决策摘要
 
@@ -404,7 +411,7 @@ POST /tasks/{task_id}/reopen
 - control request 返回 request status，不把“已入队”伪装成 engine 已执行；
 - streaming endpoint 从规范 TurnItem/event journal 输出；
 - 旧 `/continue`、`/retry`、`/pause`、`/resume` 在兼容期分别映射为 create Turn、create retry Turn、410 Gone、410 Gone，并带 deprecation metadata；
-- `/sessions` 只保留管理投影，不能继续作为用户 conversation 写接口。
+- 旧 `/sessions` 管理投影已经删除；当前 `/runs` 管理页直接读取 Task / TaskAttempt，目标迁移仍以本 spec 的 Task / Turn / Item / RuntimeExecution 为准。
 
 ## 12. Usage、token 与事件完整性
 

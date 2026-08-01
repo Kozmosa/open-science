@@ -143,12 +143,12 @@ def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str:
     artifact_sha = (
         supplied
         or os.environ.get(
-            "OPENSCIENCE_DOMAIN_ARTIFACT_SHA", os.environ.get("AINRF_DOMAIN_ARTIFACT_SHA", "")
+            "AINRF_DOMAIN_ARTIFACT_SHA", os.environ.get("OPENSCIENCE_DOMAIN_ARTIFACT_SHA", "")
         ).strip()
     )
     if not artifact_sha:
         raise DomainCutoverError(
-            "OPENSCIENCE_DOMAIN_ARTIFACT_SHA is required for v2 Literature research Task work"
+            "AINRF_DOMAIN_ARTIFACT_SHA is required for v2 Literature research Task work"
         )
     controller.assert_v2_writable(artifact_sha=artifact_sha)
     return artifact_sha

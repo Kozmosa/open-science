@@ -108,22 +108,51 @@ GPU 透传要求宿主机已安装 NVIDIA 驱动和 [nvidia-container-toolkit](h
 
 适用于：不需要 GPU、宿主机未装 NVIDIA 驱动的服务器。使用 `docker-compose.cpu.yml`，与 GPU 版相同但无 GPU 设备透传。
 
-密钥生成步骤与 GPU 版相同，然后：
+这是正式 production 路径。密钥生成步骤与 GPU 版相同，然后：
 
 ```bash
-cd deploy
-# 编辑密钥
-vim docker-compose.cpu.yml
-# 构建并启动
-docker compose -f docker-compose.cpu.yml up -d --build
+# 在 deploy/.env 或受控环境中准备 production secrets
+# 一次构建 Web、API 和监控配置镜像，再部署同一 release manifest
+bash deploy/release-production.sh
 # 获取 admin 密码
-docker compose -f docker-compose.cpu.yml exec ainrf \
+docker compose -f deploy/docker-compose.cpu.yml exec ainrf \
   cat /opt/ainrf/state/admin_initial_password.txt
 # 查看日志
-docker compose -f docker-compose.cpu.yml logs -f ainrf
+docker compose -f deploy/docker-compose.cpu.yml logs -f ainrf
 ```
 
 访问 `http://<机器IP>:8192/`。
+
+Production Compose 不执行源码构建，也不挂载 Git checkout、worktree、`src/ainrf`
+或宿主机 `frontend/dist`。API 和所有 Python worker 使用同一个 API 镜像；WebUI 与
+nginx 配置位于配套 web 镜像中。构建脚本会先完成全部镜像，再写出包含 release ID
+及四个镜像引用的 manifest，随后 Compose 只使用这些预构建镜像启动。
+
+保留上一份 manifest 作为代码回滚单位。OpenScience 默认采用实验室计划维护窗口发布，
+允许约 2–3 小时停机：发布前完成 state、workspace 与 tenant 数据的完整备份和隔离恢复验证，
+停止 writer 后部署同一 manifest，执行必要迁移和只读 smoke；失败时按 runbook 人工恢复数据
+并启动上一份 manifest。独立 release staging 是可选强化，不是默认门禁；如未来接入 registry，
+production 仍应使用已经构建的同一组镜像引用，而不是在主机上重新生成另一套字节。
+
+当前 `deploy/release-production.sh` 尚未自动执行数据备份、隔离恢复验证或数据 rollback；它只负责
+构建同版本制品、部署和健康检查。在维护窗口自动化补齐前，操作员必须先按受控 runbook 手工
+完成备份与恢复验证，不能把该脚本的成功输出视为完整 L4 验收。
+
+### Release staging 人工验收
+
+先用 `build-production.sh` 生成 release manifest，再用仓库外、权限为 `0600` 的
+staging 独立配置启动相同的 API/Web 镜像：
+
+```bash
+export OPENSCIENCE_RELEASE_MANIFEST=/secure/releases/<sha>.env
+export OPENSCIENCE_RELEASE_STAGING_ENV_FILE=/secure/releases/staging.env
+bash deploy/release-staging.sh up
+bash deploy/release-staging.sh smoke
+```
+
+浏览器入口为 `http://127.0.0.1:7192/`。完成登录、核心页面和本次变更的人工验收后，
+用 `down` 停止；只有明确确认时才用 `purge` 删除其一次性数据。这个环境不会执行生产
+迁移、切换或回滚，也不会把自动 smoke 当作人工验收结论。
 
 ---
 

@@ -1,8 +1,8 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import ChatToolCallGroup from '../../../src/components/chat/ChatToolCallGroup';
-import { renderWithProviders } from '@/shared/test/render';
-import type { ChatToolCallData } from '../../../src/components/chat';
+import ChatToolCallGroup from '@features/tasks/components/chat/ChatToolCallGroup';
+import { renderWithProviders } from '@/test-support/render';
+import type { ChatToolCallData } from '@features/tasks/components/chat';
 
 function makeCall(overrides?: Partial<ChatToolCallData>): ChatToolCallData {
   return {

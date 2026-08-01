@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
-import LocaleSwitcher from '../../../src/components/common/LocaleSwitcher';
+import LocaleSwitcher from '../../../src/shared/i18n/LocaleSwitcher';
 import { LocaleProvider, useI18n, useT } from '@/shared/i18n';
 import { messages } from '../../../src/shared/i18n/catalog';
 

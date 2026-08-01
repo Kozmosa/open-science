@@ -1,4 +1,4 @@
-"""Tests for ainrf.api.routes.metrics."""
+"""Tests for neutral metrics plus their HTTP Adapter."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.api.routes.metrics import (
+from ainrf.api.http_telemetry import build_http_metrics_middleware
+from ainrf.telemetry.metrics import (
     dec_gauge,
-    build_http_metrics_middleware,
     get_metrics_text,
     inc_counter,
     inc_gauge,
@@ -22,7 +22,7 @@ from ainrf.api.routes.metrics import (
     set_counter,
     set_gauge,
 )
-from ainrf.api.routes.sla_metrics import rate_limited
+from ainrf.telemetry.sla import rate_limited
 from ainrf.api.routes import client_metrics
 from tests.testutil import get_jwt_headers
 
@@ -93,7 +93,7 @@ class TestMetricsFormat:
 
 class TestPublicMetricPrivacy:
     def test_rate_limit_metric_rejects_raw_dynamic_paths(self) -> None:
-        opaque_path = "/literature/papers/arxiv:2401.12345"
+        opaque_path = "/api/literature/papers/arxiv:2401.12345"
 
         rate_limited("user_quota", opaque_path)
 
@@ -158,7 +158,7 @@ class TestPublicMetricPrivacy:
     async def test_http_metrics_use_route_template_not_raw_url(self) -> None:
         app = FastAPI()
 
-        @app.get("/literature/papers/{paper_id}")
+        @app.get("/api/literature/papers/{paper_id}")
         async def paper_detail(paper_id: str) -> dict[str, str]:
             return {"paper_id": paper_id}
 
@@ -169,12 +169,12 @@ class TestPublicMetricPrivacy:
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.get(
-                f"/literature/papers/{opaque_paper_id}?token={query_secret}"
+                f"/api/literature/papers/{opaque_paper_id}?token={query_secret}"
             )
 
         assert response.status_code == 200
         text = get_metrics_text()
-        assert 'path="/literature/papers/{paper_id}"' in text
+        assert 'path="/api/literature/papers/{paper_id}"' in text
         assert opaque_paper_id not in text
         assert query_secret not in text
 
@@ -200,12 +200,12 @@ class TestPublicMetricPrivacy:
         app = create_app(_make_config(tmp_path, metrics=True))
         private_name = "SECRET_TENANT_VITAL_42"
         private_rating = "tenant-secret-rating"
-        private_url = "/tasks/tenant-private-task?token=private-query-token"
+        private_url = "/api/tasks/tenant-private-task?token=private-query-token"
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.post(
-                "/client-metrics",
+                "/api/client-metrics",
                 json={
                     "metrics": [
                         {"name": "LCP", "value": 2.5, "rating": "good", "url": private_url},

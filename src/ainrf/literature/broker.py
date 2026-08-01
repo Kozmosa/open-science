@@ -21,16 +21,33 @@ class LiteratureRuntimeConfig:
     @classmethod
     def from_env(cls) -> "LiteratureRuntimeConfig":
         return cls(
-            redis_url=os.getenv("OPENSCIENCE_LITERATURE_REDIS_URL", "redis://127.0.0.1:16379/0"),
+            redis_url=os.getenv(
+                "AINRF_LITERATURE_REDIS_URL",
+                os.getenv("OPENSCIENCE_LITERATURE_REDIS_URL", "redis://127.0.0.1:16379/0"),
+            ),
             redis_namespace=os.getenv(
-                "OPENSCIENCE_LITERATURE_REDIS_NAMESPACE", "openscience:literature"
+                "AINRF_LITERATURE_REDIS_NAMESPACE",
+                os.getenv("OPENSCIENCE_LITERATURE_REDIS_NAMESPACE", "ainrf:literature"),
             ),
             state_root=os.getenv("AINRF_STATE_ROOT", os.getenv("OPENSCIENCE_STATE_ROOT", ".ainrf")),
             request_interval_seconds=int(
-                os.getenv("OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS", "3")
+                os.getenv(
+                    "AINRF_LITERATURE_REQUEST_INTERVAL_SECONDS",
+                    os.getenv("OPENSCIENCE_LITERATURE_REQUEST_INTERVAL_SECONDS", "3"),
+                )
             ),
-            daily_source_budget=int(os.getenv("OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET", "24")),
-            daily_search_budget=int(os.getenv("OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET", "8")),
+            daily_source_budget=int(
+                os.getenv(
+                    "AINRF_LITERATURE_DAILY_SOURCE_BUDGET",
+                    os.getenv("OPENSCIENCE_LITERATURE_DAILY_SOURCE_BUDGET", "24"),
+                )
+            ),
+            daily_search_budget=int(
+                os.getenv(
+                    "AINRF_LITERATURE_DAILY_SEARCH_BUDGET",
+                    os.getenv("OPENSCIENCE_LITERATURE_DAILY_SEARCH_BUDGET", "8"),
+                )
+            ),
         )
 
 

@@ -731,7 +731,7 @@ const pages = {
           unavailable: '不可用',
         },
       },
-      sessions: {
+      runs: {
         sidebarTitle: '任务运行',
         sidebarCount: '{{count}} 个运行',
         searchPlaceholder: '搜索任务运行...',
@@ -770,6 +770,12 @@ const pages = {
           outputSeq: '输出事件',
           exitCode: '退出码',
         },
+        usage: {
+          tasks: '项目任务数',
+          attempts: '项目尝试数',
+          tokens: '项目 Token 数',
+          cost: '项目成本',
+        },
         totalTokens: '{{count}} 个 token',
         fileBrowser: {
           loading: '加载文件...',
@@ -802,7 +808,7 @@ const pages = {
           reason: '原因：',
           attemptLabel: '尝试 #{{seq}}',
           viewTask: '查看任务',
-          viewSession: '查看会话',
+          viewSession: '查看运行',
         },
       },
     },

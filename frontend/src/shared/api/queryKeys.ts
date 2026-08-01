@@ -56,6 +56,8 @@ export const queryKeys = {
       ['domain', 'projects', projectId, 'context', 'versions'] as const,
     projectContextCandidates: (projectId: string | null) =>
       ['domain', 'projects', projectId, 'context', 'candidates'] as const,
+    projectUsage: (projectId: string | null) =>
+      ['domain', 'projects', projectId, 'usage-summary'] as const,
     overview: ['domain', 'overview', 'today'] as const,
     overviewJob: (jobId: string | null) =>
       ['domain', 'overview', 'jobs', jobId] as const,
@@ -100,7 +102,7 @@ export const queryKeys = {
     all: ['resources'] as const,
   },
 
-  sessions: {
+  runs: {
     taskRuns: ['session-task-runs'] as const,
   },
 

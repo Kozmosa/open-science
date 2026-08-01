@@ -126,14 +126,13 @@ def _print_payload(payload: dict[str, object], *, as_json: bool) -> None:
 def _print_environment(stack: DevelopmentStack) -> None:
     environment = stack.environment()
     names = (
-        "OPENSCIENCE_STATE_ROOT",
-        "OPENSCIENCE_DOMAIN_MODEL_MODE",
-        "OPENSCIENCE_DOMAIN_ARTIFACT_SHA",
-        "OPENSCIENCE_RUNTIME_RECONCILIATION_ENABLED",
-        "OPENSCIENCE_JWT_SECRET",
+        "AINRF_STATE_ROOT",
+        "AINRF_DOMAIN_ARTIFACT_SHA",
+        "AINRF_RUNTIME_RECONCILIATION_ENABLED",
+        "AINRF_JWT_SECRET",
         "OPENSCIENCE_WEBUI_API_KEY",
         "OPENSCIENCE_WEBUI_BACKEND_TARGET",
-        "OPENSCIENCE_AUTH_COOKIE_NAMESPACE",
+        "AINRF_AUTH_COOKIE_NAMESPACE",
         "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE",
     )
     for name in names:

@@ -16,21 +16,24 @@ source_path: /home/xuyang/code/scholar-agent
 
 ## 当前产品入口
 
-- **[OpenScience Docs](https://kozmosa.github.io/scholar-agent/)**（产品文档站点，Astro + Starlight，源码在 `docs-site/`）
-- 设计规范：`docs/superpowers/specs/`（最新的架构与功能设计）
+- **[OpenScience Docs](https://kozmosa.github.io/open-science/)**（产品文档站点，VitePress，源码在 `docs-site/`）
+- 当前架构、release / rollback 与 compatibility contract：`docs-site/docs/architecture.md`
+- 文档 authority 与生命周期：[[documentation-governance]]
+- 活跃设计规范：`docs/superpowers/specs/`（只保留仍在决策或实施中的设计）
 - 历史文档：`docs/archive/`（V1 框架 RFC、外部项目调研、跨项目综述）
 
 ## 适合什么场景
 
-- 如果你的目标是"直接启动或联调 OpenScience"，访问 [OpenScience Docs](https://kozmosa.github.io/scholar-agent/)。
-- 如果你的目标是"理解当前产品设计与架构取舍"，读 `docs/superpowers/specs/` 下的最新规范。
+- 如果你的目标是"直接启动或联调 OpenScience"，访问 [OpenScience Docs](https://kozmosa.github.io/open-science/)。
+- 如果你的目标是"理解当前产品事实"，优先读 `docs-site/docs/`；如果要理解尚在推进的设计，再读 `docs/superpowers/specs/`。
 - 如果你的目标是"回看历史框架、外部项目比较或早期想法"，进入 `docs/archive/`。
 
 ## 默认阅读顺序
 
-1. [OpenScience Docs](https://kozmosa.github.io/scholar-agent/)
-2. `docs/superpowers/specs/`（最新设计规范）
-3. `docs/archive/`（历史参考）
+1. [OpenScience Docs](https://kozmosa.github.io/open-science/)
+2. [[documentation-governance|文档 authority 与生命周期]]
+3. `docs/superpowers/specs/`（活跃设计）
+4. `docs/archive/` 与 `docs/superpowers/specs/archived/`（历史参考）
 
 ## 参考材料入口
 
@@ -43,4 +46,4 @@ source_path: /home/xuyang/code/scholar-agent
 
 - `docs/` 与 `ref-repos/` 主要提供历史参考，不直接定义 OpenScience 当前 product contract。
 - `docs/LLM-Working/worklog/` 承载开发工作日志，不是产品入口。
-- 若历史设计与当前实现冲突，以当前 OpenScience 代码表面和最新 `superpowers/specs/` 规范为准。
+- 若设计与当前实现冲突，按 [[documentation-governance]] 中的 authority 顺序判断；归档 spec 不得覆盖当前产品 contract。

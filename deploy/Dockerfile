@@ -9,7 +9,7 @@
 #   runtime         — minimal production image
 #
 # Build:
-#   docker build -f deploy/Dockerfile -t openscience:latest .
+#   bash deploy/build-production.sh
 #
 # Run:
 #   docker run -e AINRF_JWT_SECRET=... -e AINRF_API_KEY_HASHES=... openscience:latest
@@ -45,6 +45,22 @@ ARG AINRF_BUILD_COMMITTED_AT=""
 ENV AINRF_BUILD_COMMIT=${AINRF_BUILD_COMMIT}
 ENV AINRF_BUILD_COMMITTED_AT=${AINRF_BUILD_COMMITTED_AT}
 RUN npm run build
+
+# Production web and monitoring images contain their runtime configuration and
+# static assets.  They therefore need no bind mounts from a Git checkout.
+FROM docker.1ms.run/nginx:1.27-alpine AS web
+COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html
+RUN chmod -R a+rX /usr/share/nginx/html
+COPY deploy/config/nginx-release.conf.template /etc/nginx/templates/default.conf.template
+ENV NGINX_ENVSUBST_FILTER=^AINRF_
+
+FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus
+COPY deploy/config/prometheus-host.yml /etc/prometheus/prometheus.yml
+COPY deploy/config/prometheus/rules/ainrf-alerts.yml /etc/prometheus/rules/ainrf.yml
+
+FROM docker.1ms.run/grafana/grafana:11.6.1 AS grafana
+COPY deploy/config/grafana/provisioning-host /etc/grafana/provisioning
+COPY deploy/config/grafana/dashboards /var/lib/grafana/dashboards
 
 # ── Stage 2: Backend build ────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS backend-build
@@ -158,6 +174,7 @@ COPY --from=backend-build /usr/local/bin/openscience /usr/local/bin/openscience
 
 # Copy frontend build output
 COPY --from=frontend-build /build/frontend/dist /opt/ainrf/frontend/dist
+RUN chmod -R a+rX /opt/ainrf/frontend/dist
 
 # ── Stage 3.5: ARIS skill registry ──────────────────────────────────
 # Download the ARIS repo as a zip archive via codeload.github.com
@@ -182,7 +199,7 @@ RUN groupadd --gid 2000 ainrf_tenants && \
     chmod 0755 /home/ainrf_tenants && \
     groupadd --gid 1000 ainrf && \
     useradd --uid 1000 --gid ainrf --create-home --shell /bin/bash ainrf && \
-    mkdir -p /opt/ainrf/state /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
+    mkdir -p /opt/ainrf/state /opt/ainrf/state-workspaces /opt/ainrf/.ainrf_workspaces /opt/ainrf/bin && \
     chown -R ainrf:ainrf /opt/ainrf
 # Generate SSH host keys + login keys for localhost self-test
 RUN mkdir -p /run/sshd /root/.ssh && \
@@ -214,7 +231,7 @@ ENV AINRF_HOST=0.0.0.0
 ENV AINRF_PORT=8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${AINRF_PORT:-8000}/health')"]
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${AINRF_PORT:-8000}/api/health')"]
 
 ENTRYPOINT ["python", "/opt/ainrf/bin/entrypoint.py"]
 CMD ["sh", "-c", "openscience serve --host ${AINRF_HOST:-0.0.0.0} --port ${AINRF_PORT:-8000} --state-root /opt/ainrf/state"]

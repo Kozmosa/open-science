@@ -20,11 +20,10 @@ from ainrf.api.schemas import (
     FileReadResponse,
     FileUploadResponse,
 )
-from ainrf.auth.permissions import check_resource_ownership, get_current_user
+from ainrf.auth.permissions import get_current_user
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
-from ainrf.workspaces.service import WorkspaceNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +34,6 @@ def _get_file_browser_service(request: Request) -> FileBrowserService:
     service = getattr(request.app.state, "file_browser_service", None)
     if service is None:
         raise HTTPException(status_code=500, detail="file browser service not initialized")
-    return service
-
-
-def _get_workspace_service(request: Request):
-    service = getattr(request.app.state, "workspace_service", None)
-    if service is None:
-        raise HTTPException(status_code=500, detail="workspace service not initialized")
     return service
 
 
@@ -58,17 +50,9 @@ def _check_workspace_access(
     """
     if workspace_id is None:
         return None
-    v2_workspace = require_v2_workspace_execution_owner(request, user, workspace_id)
-    if v2_workspace is not None:
-        canonical_path = v2_workspace.get("canonical_path")
-        return canonical_path if isinstance(canonical_path, str) and canonical_path else None
-    ws_service = _get_workspace_service(request)
-    try:
-        workspace = ws_service.get_workspace(workspace_id)
-    except WorkspaceNotFoundError:
-        raise HTTPException(status_code=404, detail="Workspace not found") from None
-    check_resource_ownership(user, workspace.owner_user_id)
-    return workspace.default_workdir
+    workspace = require_v2_workspace_execution_owner(request, user, workspace_id)
+    canonical_path = workspace.get("canonical_path")
+    return canonical_path if isinstance(canonical_path, str) and canonical_path else None
 
 
 def _resolve_tenant_user(request: Request) -> str | None:
@@ -80,20 +64,20 @@ def _resolve_tenant_user(request: Request) -> str | None:
     auth_service = getattr(request.app.state, "auth_service", None)
     if auth_service is None:
         return None
-    from ainrf.auth.service import (
-        _is_container_environment,
-        _linux_user_exists,
+    from ainrf.runtime.tenant_identity import (
+        is_container_environment,
+        linux_user_exists,
         tenant_linux_username,
     )
 
-    if not _is_container_environment():
+    if not is_container_environment():
         return None
     try:
         user_record = auth_service.get_user(user["id"])
     except Exception:
         return None
     linux_user = tenant_linux_username(user_record.username)
-    if not _linux_user_exists(linux_user):
+    if not linux_user_exists(linux_user):
         return None
     return linux_user
 
@@ -123,9 +107,15 @@ async def list_files(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
-        listing = await service.list_directory(environment_id, path, workspace_id)
+        listing = await service.list_directory(
+            environment_id,
+            path,
+            workspace_id,
+            run_as_user=tenant_user,
+        )
     except Exception as exc:
         raise _translate_file_browser_error(exc) from exc
     return FileListResponse(
@@ -155,9 +145,15 @@ async def read_file(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
-        content = await service.read_file(environment_id, path, workspace_id)
+        content = await service.read_file(
+            environment_id,
+            path,
+            workspace_id,
+            run_as_user=tenant_user,
+        )
     except Exception as exc:
         raise _translate_file_browser_error(exc) from exc
     return FileReadResponse(
@@ -182,6 +178,7 @@ async def stream_file(
     user = get_current_user(request)
     require_v2_active_environment(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
         is_local, resolved_path, environment = await service.resolve_stream_target(
@@ -195,6 +192,19 @@ async def stream_file(
         media_type = "application/octet-stream"
 
     if is_local:
+        if tenant_user is not None:
+            try:
+                content = await service.read_stream_file(
+                    resolved_path,
+                    run_as_user=tenant_user,
+                )
+            except Exception as exc:
+                raise _translate_file_browser_error(exc) from exc
+            return StreamingResponse(
+                iter((content,)),
+                media_type=media_type,
+                headers={"X-Frame-Options": "SAMEORIGIN"},
+            )
         return FileResponse(
             resolved_path,
             media_type=media_type,
@@ -279,11 +289,15 @@ async def upload_file(
                     )
                 tmp.write(chunk)
 
+        if tenant_user is not None:
+            tmp_path.chmod(0o644)
+
         result = await service.upload_file(
             environment_id=environment_id,
             path=path,
             local_temp_path=tmp_path,
             workspace_id=workspace_id,
+            run_as_user=tenant_user,
         )
         # Chown uploaded file to tenant user so agent processes can access it
         if tenant_user is not None:

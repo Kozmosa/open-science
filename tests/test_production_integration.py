@@ -19,7 +19,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.execution import ContainerConfig, ContainerHealth
 
@@ -292,6 +292,10 @@ async def test_api_routes_not_intercepted_by_spa(tmp_path: Path) -> None:
         assert resp.status_code == 401
         assert resp.headers.get("content-type", "").startswith("application/json")
 
+        retired = await client.get("/api/sessions?api_key=test-key")
+        assert retired.status_code == 404
+        assert retired.json() == {"detail": "Not Found"}
+
 
 # ---------------------------------------------------------------------------
 # Production mode
@@ -315,8 +319,7 @@ async def test_production_api_routes_require_auth(tmp_path: Path) -> None:
     async with client:
         for path in [
             "/api/tasks",
-            "/api/sessions",
-            "/api/environments",
+            "/api/domain/environments",
             "/api/settings/codex-defaults",
             "/api/settings/deployment-version",
         ]:
@@ -365,12 +368,12 @@ async def test_health_degraded_returns_200(tmp_path: Path) -> None:
     _orig_ping = health_module.SSHExecutor.ping
     _orig_connect = health_module.SSHExecutor.connect
     _orig_close = health_module.SSHExecutor.close
-    health_module.SSHExecutor.ping = fake_ping  # type: ignore[assignment]
-    health_module.SSHExecutor.connect = _noop_async  # type: ignore[assignment]
-    health_module.SSHExecutor.close = _noop_async  # type: ignore[assignment]
+    health_module.SSHExecutor.ping = fake_ping
+    health_module.SSHExecutor.connect = _noop_async
+    health_module.SSHExecutor.close = _noop_async
     try:
         async with client:
-            resp = await client.get("/health")
+            resp = await client.get("/api/health")
             assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
             assert resp.json()["status"] == "degraded"
     finally:

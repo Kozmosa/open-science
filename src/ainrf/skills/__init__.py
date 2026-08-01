@@ -1,12 +1,20 @@
-from ainrf.skills.discovery import SkillsDiscoveryService
-from ainrf.skills.loader import SkillLoader
-from ainrf.skills.models import InjectMode, SkillDefinition, SkillItem, SkillManifest
+"""Lazy skill runtime exports."""
 
-__all__ = [
-    "InjectMode",
-    "SkillDefinition",
-    "SkillItem",
-    "SkillLoader",
-    "SkillManifest",
-    "SkillsDiscoveryService",
-]
+from typing import Any
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {
+    "SkillsDiscoveryService": ("ainrf.skills.discovery", "SkillsDiscoveryService"),
+    "SkillLoader": ("ainrf.skills.loader", "SkillLoader"),
+}
+_EXPORTS.update(
+    {
+        name: ("ainrf.skills.models", name)
+        for name in ("InjectMode", "SkillDefinition", "SkillItem", "SkillManifest")
+    }
+)
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

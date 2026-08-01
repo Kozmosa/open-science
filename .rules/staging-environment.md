@@ -110,6 +110,6 @@ bash scripts/staging.sh purge     # remove isolated volumes; explicit confirmati
 7. **View container logs**: `docker logs ainrf-staging` (backend), `docker logs ainrf-staging-nginx` (nginx), `docker logs ainrf-staging-prometheus` (metrics)
 8. **Restart with preserved state**: `bash scripts/staging.sh down && bash scripts/staging.sh up`
 9. **Reset disposable staging state**: explicitly run `OPENSCIENCE_STAGING_ALLOW_VOLUME_REMOVAL=1 bash scripts/staging.sh purge`, then `up`
-10. **Deploy to production**: once verified on staging, run `bash deploy/redeploy-backend.sh` (production target) and `bash deploy/redeploy-frontend.sh`
+10. **Deploy to production**: after the appropriate release gate and manual approval, run the unified `bash deploy/release-production.sh`; never publish frontend and backend independently
 
 **Important**: staging runs `OPENSCIENCE_PRODUCTION=1` (same effective mode as production) so middleware, auth, and security behavior match. `smoke` assumes staging is already running and deliberately never calls `up`, `down`, Docker, user registration, or mutating business APIs. Health probes may update request metrics and perform temporary filesystem/SSH readiness checks, so the command is non-destructive rather than strictly read-only.

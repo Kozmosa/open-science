@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.domain_control import DomainMaintenanceService
 from ainrf.execution import ContainerConfig, ContainerHealth
@@ -57,7 +57,7 @@ async def test_health_does_not_mutate_a_maintenance_startup_state_tree(tmp_path:
             transport=httpx.ASGITransport(app=app),
             base_url="http://testserver",
         ) as client:
-            response = await client.get("/health")
+            response = await client.get("/api/health")
 
         assert response.status_code == 200
         assert not (tmp_path / "health_check").exists()
@@ -93,7 +93,7 @@ async def test_health_reports_container_probe_success(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/health")
+        response = await client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json()["container_health"]["ssh_ok"] is True
@@ -127,7 +127,7 @@ async def test_health_reports_degraded_container_probe(
         transport=httpx.ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
-        response = await client.get("/health")
+        response = await client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json()["status"] == "degraded"
@@ -154,7 +154,7 @@ async def test_health_skips_remote_container_probe_when_runtime_reconciliation_i
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"
     ) as client:
-        response = await client.get("/health")
+        response = await client.get("/api/health")
 
     assert response.status_code == 200
     assert response.json()["container_health"] is None
@@ -184,7 +184,7 @@ async def test_settings_codex_defaults_never_reads_host_credentials(
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            "/settings/codex-defaults",
+            "/api/settings/codex-defaults",
             headers=jwt_headers,
         )
 
@@ -227,7 +227,7 @@ async def test_settings_deployment_version_reads_backend_build_info(
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            "/settings/deployment-version",
+            "/api/settings/deployment-version",
             headers=jwt_headers,
         )
 

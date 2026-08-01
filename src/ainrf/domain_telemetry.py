@@ -95,7 +95,7 @@ _OUTBOX_BACKLOG_STATES = (
     "launch_unknown",
 )
 _IDEMPOTENCY_OUTCOMES = ("accepted", "missing", "invalid", "conflict", "reused", "stored", "other")
-_LEGACY_WRITE_SOURCES = ("legacy_json", "legacy_session", "other")
+_LEGACY_WRITE_SOURCES = ("legacy_json", "other")
 _PERMISSION_RESOURCES = (
     "project",
     "workspace",
@@ -175,14 +175,6 @@ _OVERVIEW_EVENT_OUTCOMES = (
     "other",
 )
 _OVERVIEW_EVENT_TRIGGERS = ("manual", "scheduled", "catchup", "other")
-_DEPRECATED_ROUTE_GROUPS = (
-    "environments",
-    "literature",
-    "projects",
-    "tasks",
-    "workspaces",
-    "other",
-)
 _SENSITIVE_FIELD_PARTS = (
     "secret",
     "password",
@@ -232,7 +224,6 @@ _TELEMETRY_ANCHOR_FILENAME = "domain_telemetry_anchor.json"
 _TELEMETRY_DELIVERY_FAILURE_LATCH_FILENAME = "domain_telemetry_delivery_failure.json"
 _TELEMETRY_STORE_SCHEMA_VERSION = 2
 _DURABLE_COUNTER_LABEL_VALUES: dict[str, dict[str, tuple[str, ...]]] = {
-    "ainrf_deprecated_route_calls_total": {"route": _DEPRECATED_ROUTE_GROUPS},
     "ainrf_domain_idempotency_requests_total": {"outcome": _IDEMPOTENCY_OUTCOMES},
     "ainrf_domain_legacy_write_attempts_total": {"source": _LEGACY_WRITE_SOURCES},
     "ainrf_domain_literature_saga_events_total": {"outcome": _SAGA_EVENT_OUTCOMES},
@@ -461,7 +452,7 @@ def _counter(
     """Increment a metric without allowing telemetry failures to break work."""
 
     try:
-        from ainrf.api.routes.metrics import inc_counter
+        from ainrf.telemetry.metrics import inc_counter
 
         inc_counter(name, dict(labels) if labels else None)
     except Exception:  # pragma: no cover - metrics must stay non-fatal
@@ -482,7 +473,7 @@ def _gauge(name: str, value: float, labels: Mapping[str, str] | None = None) -> 
     """Publish one gauge without allowing telemetry failures to break work."""
 
     try:
-        from ainrf.api.routes.metrics import set_gauge
+        from ainrf.telemetry.metrics import set_gauge
 
         set_gauge(name, value, dict(labels) if labels else None)
     except Exception:  # pragma: no cover - metrics must stay non-fatal
@@ -493,7 +484,7 @@ def _set_counter(name: str, value: float, labels: Mapping[str, str]) -> None:
     """Hydrate one API-process counter from a durable monotonic total."""
 
     try:
-        from ainrf.api.routes.metrics import set_counter
+        from ainrf.telemetry.metrics import set_counter
 
         set_counter(name, value, dict(labels))
     except Exception:  # pragma: no cover - metrics must stay non-fatal
@@ -963,30 +954,6 @@ def record_permission_denied(
         workspace_id=workspace_id,
         task_id=task_id,
         environment_id=environment_id,
-    )
-
-
-def _deprecated_route_group(route: str) -> str:
-    prefix = route.split(".", 1)[0]
-    return prefix if prefix in _DEPRECATED_ROUTE_GROUPS else "other"
-
-
-def record_deprecated_route(
-    *, route: str, replacement: str, state_root: Path | None = None
-) -> None:
-    """Record a compatibility route once, with release-gate-safe labels."""
-
-    route_group = _deprecated_route_group(route)
-    _counter(
-        "ainrf_deprecated_route_calls_total",
-        {"route": route_group},
-        durable=True,
-        state_root=state_root,
-    )
-    log_domain_event(
-        "domain_deprecated_route",
-        route=route_group,
-        replacement=replacement,
     )
 
 

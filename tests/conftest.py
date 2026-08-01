@@ -10,11 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from ainrf.agentic_researcher.service import AgenticResearcherService
     from ainrf.auth.service import AuthService
-    from ainrf.projects.service import ProjectRegistryService
-    from ainrf.sessions.service import SessionService
-    from ainrf.workspaces.service import WorkspaceRegistryService
 
 
 # Pytest loads this conftest before importing test modules. Point HOME at a
@@ -54,8 +50,8 @@ def isolated_runtime_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     tenant_root.mkdir()
     monkeypatch.setenv("HOME", str(home_dir))
     monkeypatch.setattr("ainrf.auth.jwt_utils._SECRET_PATH", home_dir / ".ainrf" / "jwt_secret")
-    monkeypatch.setattr("ainrf.auth.service._TENANT_HOME_ROOT", tenant_root)
-    monkeypatch.setattr("ainrf.auth.service._is_container_environment", lambda: False)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.TENANT_HOME_ROOT", tenant_root)
+    monkeypatch.setattr("ainrf.runtime.tenant_identity.is_container_environment", lambda: False)
     monkeypatch.setattr("ainrf.runtime.paths._TENANT_HOME_ROOT", tenant_root)
 
 
@@ -94,46 +90,6 @@ def auth_service(state_root: Path) -> AuthService:
     from ainrf.auth.service import AuthService
 
     svc = AuthService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def session_service(state_root: Path) -> SessionService:
-    """Return an initialized SessionService using the isolated state root."""
-    from ainrf.sessions.service import SessionService
-
-    svc = SessionService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def agentic_service(state_root: Path) -> AgenticResearcherService:
-    """Return an initialized AgenticResearcherService using the isolated state root."""
-    from ainrf.agentic_researcher.service import AgenticResearcherService
-
-    svc = AgenticResearcherService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def project_service(state_root: Path) -> ProjectRegistryService:
-    """Return an initialized ProjectRegistryService using the isolated state root."""
-    from ainrf.projects.service import ProjectRegistryService
-
-    svc = ProjectRegistryService(state_root=state_root)
-    svc.initialize()
-    return svc
-
-
-@pytest.fixture
-def workspace_service(state_root: Path) -> WorkspaceRegistryService:
-    """Return an initialized WorkspaceRegistryService using the isolated state root."""
-    from ainrf.workspaces.service import WorkspaceRegistryService
-
-    svc = WorkspaceRegistryService(state_root=state_root)
     svc.initialize()
     return svc
 

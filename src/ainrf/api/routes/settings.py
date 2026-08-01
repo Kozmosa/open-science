@@ -5,7 +5,18 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, ConfigDict
+
+from ainrf.api.schemas import (
+    CodexDefaultsResponse,
+    DeploymentVersionResponse,
+    McpServersResponse,
+    McpServerSummary,
+    MonitoringServiceItem,
+    MonitoringSettingsResponse,
+    SearchBackendItem,
+    SearchSettingsResponse,
+    SearchSettingsUpdateRequest,
+)
 
 from ainrf.deployment_version import resolve_deployment_version
 from ainrf.harness_engine.mcp_servers import (
@@ -21,20 +32,6 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 # ── Codex defaults ──────────────────────────────────────────────────
-
-
-class CodexDefaultsResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    codex_config_toml: str | None = None
-    codex_auth_json: str | None = None
-
-
-class DeploymentVersionResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    short_commit: str | None = None
-    committed_at: str | None = None
 
 
 @router.get("/deployment-version", response_model=DeploymentVersionResponse)
@@ -56,30 +53,6 @@ async def read_codex_defaults() -> CodexDefaultsResponse:
 
 
 # ── Search backend settings ─────────────────────────────────────────
-
-
-class SearchBackendItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    display_name: str
-    description: str
-    requires_mcp: bool
-
-
-class SearchSettingsResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    active_backend: str
-    available_backends: list[SearchBackendItem]
-    auto_start_mcp_servers: list[str]
-
-
-class SearchSettingsUpdateRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    active_backend: str | None = None
-    auto_start_mcp_servers: list[str] | None = None
 
 
 def _get_state_root(request: Request) -> Path:
@@ -154,19 +127,6 @@ async def update_search_settings(
 # ── MCP server discovery (legacy, kept for compatibility) ───────────
 
 
-class McpServerSummary(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    description: str
-
-
-class McpServersResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    servers: list[McpServerSummary]
-
-
 @router.get("/mcp-servers", response_model=McpServersResponse)
 async def list_mcp_servers() -> McpServersResponse:
     """List available MCP-capable search servers."""
@@ -177,24 +137,6 @@ async def list_mcp_servers() -> McpServersResponse:
 
 
 # ── Monitoring / observability platform links ──────────────────────
-
-
-class MonitoringServiceItem(BaseModel):
-    """A configured monitoring/observability service entry point."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    display_name: str
-    description: str
-    url: str | None = None
-    icon: str  # key the frontend maps to a Lucide icon
-
-
-class MonitoringSettingsResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    services: list[MonitoringServiceItem]
 
 
 _MONITORING_SERVICE_DEFAULTS: list[dict[str, object]] = [

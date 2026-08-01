@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 
 pytestmark = [pytest.mark.middleware]
@@ -42,7 +42,7 @@ class TestIpAllowlist:
         """When no CIDRs are configured, all IPs are allowed."""
         client, tmp = _make_app(allowed_cidrs=())
         try:
-            resp = await client.get("/health")
+            resp = await client.get("/api/health")
             assert resp.status_code == 200
         finally:
             await client.aclose()
@@ -50,7 +50,7 @@ class TestIpAllowlist:
     async def test_matching_cidr_allows(self):
         client, tmp = _make_app(allowed_cidrs=("127.0.0.0/8",))
         try:
-            resp = await client.get("/health")
+            resp = await client.get("/api/health")
             assert resp.status_code == 200
         finally:
             await client.aclose()
@@ -60,7 +60,7 @@ class TestIpAllowlist:
         # httpx test client uses 127.0.0.1 which is in 10.0.0.0/8? No.
         client, tmp = _make_app(allowed_cidrs=("10.0.0.0/8",))
         try:
-            resp = await client.get("/health")
+            resp = await client.get("/api/health")
             assert resp.status_code == 403
         finally:
             await client.aclose()
@@ -69,7 +69,7 @@ class TestIpAllowlist:
         client, tmp = _make_app(allowed_cidrs=("10.0.0.0/8",))
         try:
             resp = await client.get(
-                "/health",
+                "/api/health",
                 headers={"X-Forwarded-For": "10.1.2.3"},
             )
             assert resp.status_code == 200
@@ -84,7 +84,7 @@ class TestRequestSizeLimit:
         try:
             # The default limit is 50 MB; a tiny body is fine.
             resp = await client.post(
-                "/auth/login",
+                "/api/auth/login",
                 json={"username": "x", "password": "y"},
             )
             # 401 is expected (bad creds), not 413.
@@ -108,7 +108,7 @@ class TestRequestSizeLimit:
         try:
             big_body = "x" * 200
             resp = await client.post(
-                "/auth/login",
+                "/api/auth/login",
                 content=big_body,
                 headers={"Content-Length": str(len(big_body))},
             )
@@ -171,14 +171,14 @@ class TestProductionMode:
         for production in (False, True):
             client, tmp = _make_app(production=production)
             try:
-                resp = await client.get("/health")
+                resp = await client.get("/api/health")
                 assert resp.status_code == 200
             finally:
                 await client.aclose()
 
     async def test_auth_routes_always_accessible(self):
         """Login/register/refresh are always exempt."""
-        for path in ("/auth/login", "/auth/register", "/auth/refresh"):
+        for path in ("/api/auth/login", "/api/auth/register", "/api/auth/refresh"):
             client, tmp = _make_app(production=True)
             try:
                 resp = await client.post(path, json={})

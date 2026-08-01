@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from ainrf.api.app import create_app
+from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 
 pytestmark = [pytest.mark.middleware]
@@ -76,7 +76,7 @@ class TestAdminApi:
                 transport=httpx.ASGITransport(app=app),
                 base_url="http://testserver",
             ) as anon:
-                resp = await anon.get("/admin/users")
+                resp = await anon.get("/api/admin/users")
                 assert resp.status_code == 401
 
     async def test_non_admin_cannot_list_users(self, tmp_path: Path) -> None:
@@ -107,7 +107,7 @@ class TestAdminApi:
             base_url="http://testserver",
             headers=headers,
         ) as client:
-            resp = await client.get("/admin/users")
+            resp = await client.get("/api/admin/users")
             assert resp.status_code in (403, 404)
 
 

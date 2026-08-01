@@ -3,7 +3,7 @@ import { Alert, Button, Skeleton } from '@design-system';
 import { getDomainTaskAttempts, getDomainTaskContext } from '@features/domain';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { TaskRecord } from '@/shared/types';
-import TaskMetadataDrawer from '@/components/messages/TaskMetadataDrawer';
+import TaskMetadataDrawer from './messages/TaskMetadataDrawer';
 import { useLocale } from '@/shared/i18n';
 import { TechnicalIdentifier } from './TechnicalIdentifier';
 import { formatTaskDateTime, taskMetadataLabels } from '../utils/metadataPresentation';

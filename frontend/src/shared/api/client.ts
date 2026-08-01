@@ -112,6 +112,10 @@ function createErrorMessage(path: string, response: Response, data: unknown): st
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (import.meta.env.DEV) {
+    const { assertTransportRequest } = await import('./transport');
+    assertTransportRequest(options.method ?? 'GET', path);
+  }
   const url = `${API_BASE}${path}`;
   const headers = new Headers(options.headers);
 

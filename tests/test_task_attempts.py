@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ainrf.domain import AttemptService
+from ainrf.domain.attempts import AttemptWorkerModule as AttemptService
 from ainrf.domain_control import DomainCutoverError
 
 pytestmark = [pytest.mark.unit, pytest.mark.db_race]

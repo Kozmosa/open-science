@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { CardGrid, PageShell } from '@design-system';
 import { getRouteDefinition, getVisibleRoutes, ROUTE_REGISTRY } from '@/app/routeRegistry';
 import { LocaleProvider } from '@/shared/i18n';
-import { TopBar } from '@/components/shell';
+import { TopBar } from '@/app/shell';
 
 describe('osci shell contracts', () => {
   it('uses one route registry for titles, navigation, commands, and admin filtering', () => {
     expect(new Set(ROUTE_REGISTRY.map((route) => route.path)).size).toBe(ROUTE_REGISTRY.length);
     expect(getRouteDefinition('/tasks')?.titleKey).toBe('navigation.tasks.label');
     expect(getVisibleRoutes(false, true).some((route) => route.id === 'sessions')).toBe(false);
-    expect(getVisibleRoutes(true, true).some((route) => route.id === 'sessions')).toBe(true);
+    expect(getVisibleRoutes(true, true).some((route) => route.id === 'runs')).toBe(true);
     expect(getVisibleRoutes(true, true).some((route) => route.id === 'workspace-browser')).toBe(false);
     expect(getVisibleRoutes(true, false).some((route) => route.id === 'workspace-browser')).toBe(true);
     expect(getRouteDefinition('/literature')?.keywords).toContain('papers');

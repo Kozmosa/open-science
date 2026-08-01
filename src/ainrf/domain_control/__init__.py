@@ -1,62 +1,55 @@
-"""Persistent maintenance controls for domain migration safety."""
+"""Lazy persistent maintenance and cutover exports."""
 
-# Import the low-level barrier first.  Domain migration reaches the domain
-# service package while the cutover controller is importing, and that package
-# in turn imports ``MaintenanceModeError`` from this public namespace.
-# Keeping the barrier exports available first avoids an import-order-dependent
-# partial-module cycle for the CLI and administrative cutover paths.
-from ainrf.domain_control.service import (
-    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
-    DomainMaintenanceService,
-    DomainModelMode,
-    DomainWriteParticipant,
-    MaintenancePreflight,
-    MaintenanceLease,
-    MaintenanceModeError,
-    MaintenanceStatus,
-    ParticipantStatus,
-)
-from ainrf.domain_control.legacy_source_guard import (
-    LegacySourceDriftError,
-    LegacySourceFile,
-    LegacySourceGuard,
-    LegacySourceGuardError,
-    LegacySourceInventory,
-    LegacySourceSeal,
-    LegacySourceSealError,
-    LegacySourceSealFile,
-)
-from ainrf.domain_control.cutover import (
-    ConstraintFinalization,
-    CutoverPreconditionError,
-    CutoverStatus,
-    DomainCutoverController,
-    DomainCutoverError,
-    backup_manifest_sha256,
-)
+from typing import Any
 
-__all__ = [
-    "ConstraintFinalization",
-    "CUTOVER_REQUIRED_PARTICIPANT_TYPES",
-    "CutoverPreconditionError",
-    "CutoverStatus",
-    "DomainCutoverController",
-    "DomainCutoverError",
-    "DomainMaintenanceService",
-    "DomainModelMode",
-    "DomainWriteParticipant",
-    "LegacySourceDriftError",
-    "LegacySourceFile",
-    "LegacySourceGuard",
-    "LegacySourceGuardError",
-    "LegacySourceInventory",
-    "LegacySourceSeal",
-    "LegacySourceSealError",
-    "LegacySourceSealFile",
-    "MaintenancePreflight",
-    "MaintenanceLease",
-    "MaintenanceModeError",
-    "MaintenanceStatus",
-    "ParticipantStatus",
-    "backup_manifest_sha256",
-]
+from ainrf._lazy_exports import resolve_export
+
+_SERVICE = "ainrf.domain_control.service"
+_GUARD = "ainrf.domain_control.legacy_source_guard"
+_CUTOVER = "ainrf.domain_control.cutover"
+_EXPORTS = {
+    name: (_SERVICE, name)
+    for name in (
+        "CUTOVER_REQUIRED_PARTICIPANT_TYPES",
+        "DomainMaintenanceService",
+        "DomainWriteParticipant",
+        "MaintenancePreflight",
+        "MaintenanceLease",
+        "MaintenanceModeError",
+        "MaintenanceStatus",
+        "ParticipantStatus",
+    )
+}
+_EXPORTS.update(
+    {
+        name: (_GUARD, name)
+        for name in (
+            "LegacySourceDriftError",
+            "LegacySourceFile",
+            "LegacySourceGuard",
+            "LegacySourceGuardError",
+            "LegacySourceInventory",
+            "LegacySourceSeal",
+            "LegacySourceSealError",
+            "LegacySourceSealFile",
+        )
+    }
+)
+_EXPORTS.update(
+    {
+        name: (_CUTOVER, name)
+        for name in (
+            "ConstraintFinalization",
+            "CutoverPreconditionError",
+            "CutoverStatus",
+            "DomainCutoverController",
+            "DomainCutoverError",
+            "backup_manifest_sha256",
+        )
+    }
+)
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

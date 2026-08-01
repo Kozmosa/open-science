@@ -92,29 +92,6 @@ export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'mes
 export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
-export interface TaskRetryResponse {
-  new_task: TaskSummary;
-  archived_task_id: string | null;
-  edge_id: string;
-  task?: TaskSummary | null;
-  attempt?: {
-    attempt_id: string;
-    task_id: string;
-    attempt_seq: number;
-    trigger: string;
-    status: string;
-    [key: string]: unknown;
-  } | null;
-  dispatch?: {
-    dispatch_id: string;
-    task_id: string;
-    attempt_id: string;
-    status: string;
-    launch_state: string;
-    [key: string]: unknown;
-  } | null;
-}
-
 export interface ProjectRecord {
   project_id: string;
   name: string;
@@ -128,20 +105,6 @@ export interface ProjectRecord {
 
 export interface ProjectListResponse {
   items: ProjectRecord[];
-}
-
-export interface ProjectCreateRequest {
-  name: string;
-  description?: string | null;
-  default_workspace_id?: string | null;
-  default_environment_id?: string | null;
-}
-
-export interface ProjectUpdateRequest {
-  name?: string | null;
-  description?: string | null;
-  default_workspace_id?: string | null;
-  default_environment_id?: string | null;
 }
 
 export interface WorkspaceRecord {
@@ -158,21 +121,6 @@ export interface WorkspaceRecord {
 
 export interface WorkspaceListResponse {
   items: WorkspaceRecord[];
-}
-
-export interface WorkspaceCreateRequest {
-  label: string;
-  project_id?: string | null;
-  description?: string | null;
-  default_workdir?: string | null;
-  workspace_prompt: string;
-}
-
-export interface WorkspaceUpdateRequest {
-  label?: string | null;
-  description?: string | null;
-  default_workdir?: string | null;
-  workspace_prompt?: string | null;
 }
 
 export interface WorkspaceSummary {
@@ -320,10 +268,6 @@ export interface TaskListResponse {
   next_cursor?: string | null;
 }
 
-export interface TaskUpdateProjectRequest {
-  project_id: string;
-}
-
 export interface TaskEdge {
   edge_id: string;
   project_id: string;
@@ -335,49 +279,6 @@ export interface TaskEdge {
 
 export interface TaskEdgeListResponse {
   items: TaskEdge[];
-}
-
-export interface TaskEdgeCreateRequest {
-  source_task_id: string;
-  target_task_id: string;
-}
-
-export interface TaskCreateRequest {
-  workspace_id: string;
-  environment_id: string;
-  project_id?: string | null;
-  task_profile: string;
-  task_input: string;
-  title?: string | null;
-  execution_engine?: string | null;
-  auto_connect?: boolean;
-  research_agent_profile?: {
-    profile_id: string;
-    label: string;
-    system_prompt?: string | null;
-    skills?: string[];
-    skills_prompt?: string | null;
-    settings_json?: Record<string, unknown> | null;
-    api_base_url?: string | null;
-    api_key?: string | null;
-    default_opus_model?: string | null;
-    default_sonnet_model?: string | null;
-    default_haiku_model?: string | null;
-    env_overrides?: Record<string, string> | null;
-    codex_base_url?: string | null;
-    codex_api_key?: string | null;
-    codex_model?: string | null;
-    codex_app_server_command?: string | null;
-    codex_approval_policy?: string | null;
-    codex_config_toml?: string | null;
-    codex_auth_json?: string | null;
-  } | null;
-  task_configuration?: {
-    mode: 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
-    template_id?: string | null;
-    template_vars?: Record<string, unknown>;
-    raw_prompt?: string | null;
-  } | null;
 }
 
 export interface TaskCreatePayload {
@@ -504,63 +405,6 @@ export interface ProjectEnvironmentReferenceListResponse {
   items: ProjectEnvironmentReference[];
 }
 
-export interface EnvironmentCreateRequest {
-  alias: string;
-  display_name: string;
-  host: string;
-  description?: string | null;
-  tags?: string[];
-  port?: number;
-  user?: string;
-  auth_kind?: EnvironmentAuthKind;
-  identity_file?: string | null;
-  proxy_jump?: string | null;
-  proxy_command?: string | null;
-  ssh_options?: Record<string, string>;
-  default_workdir?: string | null;
-  preferred_python?: string | null;
-  preferred_env_manager?: string | null;
-  preferred_runtime_notes?: string | null;
-  task_harness_profile?: string | null;
-}
-
-export interface EnvironmentUpdateRequest {
-  alias?: string | null;
-  display_name?: string | null;
-  host?: string | null;
-  description?: string | null;
-  tags?: string[] | null;
-  port?: number | null;
-  user?: string | null;
-  auth_kind?: EnvironmentAuthKind | null;
-  identity_file?: string | null;
-  proxy_jump?: string | null;
-  proxy_command?: string | null;
-  ssh_options?: Record<string, string> | null;
-  default_workdir?: string | null;
-  preferred_python?: string | null;
-  preferred_env_manager?: string | null;
-  preferred_runtime_notes?: string | null;
-  task_harness_profile?: string | null;
-}
-
-export interface ProjectEnvironmentReferenceCreateRequest {
-  environment_id: string;
-  is_default?: boolean;
-  override_workdir?: string | null;
-  override_env_name?: string | null;
-  override_env_manager?: string | null;
-  override_runtime_notes?: string | null;
-}
-
-export interface ProjectEnvironmentReferenceUpdateRequest {
-  is_default?: boolean | null;
-  override_workdir?: string | null;
-  override_env_name?: string | null;
-  override_env_manager?: string | null;
-  override_runtime_notes?: string | null;
-}
-
 export type FileKind = 'file' | 'directory' | 'symlink';
 
 export interface FileEntry {
@@ -623,13 +467,6 @@ export interface SkillPreview {
   label: string;
   settings_fragment: Record<string, unknown>;
   merged_preview: Record<string, unknown>;
-}
-
-export interface SkillImportRequest {
-  source: 'git' | 'local';
-  url?: string | null;
-  local_path?: string | null;
-  skill_id?: string | null;
 }
 
 export interface SkillImportResponse {
@@ -707,10 +544,6 @@ export interface SkillRegistryStatus {
   sync_in_progress: boolean;
 }
 
-export interface SkillRegistryUpdateRequest {
-  force: boolean;
-}
-
 export interface SkillRegistryInstallResponse {
   registry_id: string;
   installed_count: number;
@@ -748,67 +581,6 @@ export interface TaskMessagesResponse {
   messages: MessageItem[];
   has_more: boolean;
   next_sequence: number | null;
-}
-
-// ── Session types ──────────────────────────────────────
-
-export type SessionStatus = 'active' | 'completed' | 'archived';
-export type AttemptStatus = 'running' | 'completed' | 'failed' | 'interrupted';
-
-export interface AttemptRecord {
-  id: string;
-  session_id: string;
-  task_id: string | null;
-  parent_attempt_id: string | null;
-  attempt_seq: number;
-  intervention_reason: string | null;
-  status: AttemptStatus;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
-  token_usage_json: string | null;
-  created_at: string;
-}
-
-export interface SessionRecord {
-  id: string;
-  project_id: string;
-  title: string;
-  status: SessionStatus;
-  task_count: number;
-  total_duration_ms: number;
-  total_cost_usd: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SessionDetailRecord extends SessionRecord {
-  attempts: AttemptRecord[];
-}
-
-export interface SessionListResponse {
-  items: SessionRecord[];
-  total?: number;
-  has_more: boolean;
-  next_cursor?: string | null;
-}
-
-export interface SessionsBatchDetailResponse {
-  items: Record<string, AttemptRecord[]>;
-}
-
-export interface AttemptListResponse {
-  items: AttemptRecord[];
-}
-
-export interface SessionCreateRequest {
-  project_id: string;
-  title: string;
-}
-
-export interface SessionUpdateRequest {
-  title?: string | null;
-  status?: string | null;
 }
 
 // ── Token types ──────────────────────────────────────────
@@ -855,34 +627,19 @@ export interface TaskTokenUsageSummary {
   }>;
 }
 
-export interface ProjectCostSummary {
-  project_id: string;
-  total_cost_usd: number;
-  total_tokens: number;
-  session_count: number;
-  by_model: Record<string, { cost_usd: number; tokens: number }>;
-}
-
 export interface AdminUserItem { id: string; username: string; display_name: string; role: string; status: string; created_at: string; last_login_at: string | null; is_online: boolean }
 export interface AdminUserResponse { id: string; username: string; display_name: string; status: string }
 export interface AdminUserListResponse { items: AdminUserItem[] }
-export interface AdminUserUpdateRequest { status?: string | null }
-export interface AdminPasswordResetRequest { password: string }
 
 export interface CollaboratorItem { user_id: string; username: string; display_name: string; role: string }
 export interface CollaboratorListResponse { items: CollaboratorItem[] }
-export interface CollaboratorRequest { user_id: string; role: string }
 
 export interface EnvAccessItem { user_id: string; username: string; display_name: string; max_concurrent_tasks: number | null }
 export interface EnvAccessListResponse { items: EnvAccessItem[] }
-export interface EnvAccessRequest { user_id: string; max_concurrent_tasks: number | null }
 
 export interface UserInfo { id: string; username: string; display_name: string; role: string; status: string; must_change_password?: boolean }
-export interface LoginRequest { username: string; password: string }
-export interface RegisterRequest { username: string; display_name: string; password: string }
 export interface AuthTokenResponse { access_token: string; refresh_token: string; user: UserInfo }
 export interface AccessTokenResponse { access_token: string }
-export interface ChangePasswordRequest { old_password: string; new_password: string }
 
 export type LiteratureInboxView = 'today' | 'unread' | 'saved' | 'updated' | 'all';
 
@@ -1055,11 +812,6 @@ export interface SearchSettingsResponse {
   active_backend: string;
   available_backends: SearchBackendItem[];
   auto_start_mcp_servers: string[];
-}
-
-export interface SearchSettingsUpdateRequest {
-  active_backend?: string;
-  auto_start_mcp_servers?: string[];
 }
 
 export interface DeploymentVersionResponse {

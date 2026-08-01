@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SkillItem } from '@/shared/types';
-import type { SkillMode } from '@features/settings/types';
 import { useT } from '@/shared/i18n';
+
+export type SkillMode = 'disabled' | 'enabled' | 'auto';
 
 interface Props {
   skills: SkillItem[];

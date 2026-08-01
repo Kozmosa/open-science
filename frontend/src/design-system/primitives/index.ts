@@ -21,7 +21,7 @@ export { SectionHeader } from './SectionHeader';
 export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from './Select';
 export { Sheet } from './Sheet';
 export { Skeleton } from './Skeleton';
-export { SkillToggleGroup } from './SkillToggleGroup';
+export { SkillToggleGroup, type SkillMode } from './SkillToggleGroup';
 export { StatusDot } from './StatusDot';
 export { Switch } from './Switch';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';

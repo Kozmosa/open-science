@@ -13,7 +13,7 @@ import sqlite3
 from collections.abc import Mapping
 
 
-class SqliteDomainRepository:
+class _SqliteDomainRepository:
     """Persistence operations for the v2 Project/Workspace control plane."""
 
     def __init__(self, conn: sqlite3.Connection) -> None:

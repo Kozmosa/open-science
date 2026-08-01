@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { buildTaskStreamUrl, getTaskOutput } from '@/shared/api';
+import { buildTaskStreamUrl, getTaskOutput } from '../api';
 import { useT } from '@/shared/i18n';
 import type { TaskOutputEvent } from '@/shared/types';
 import { getNextOutputSeq, mergeOutputItems } from '../utils/output';

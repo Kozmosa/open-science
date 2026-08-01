@@ -114,7 +114,7 @@ step "[4/5] 健康检查..."
 
 HEALTH_OK=false
 for i in $(seq 1 "${HEALTH_RETRIES}"); do
-    if curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; then
+    if curl -sf http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
         HEALTH_OK=true
         break
     fi

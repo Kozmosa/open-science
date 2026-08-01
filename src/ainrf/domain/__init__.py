@@ -1,48 +1,40 @@
-"""V2 Project, Workspace, Environment, and authorization application services."""
+"""Lazy compatibility exports for v2 application Modules."""
 
-from ainrf.domain.service import (
-    DomainAuthorizationService,
-    DomainNotFoundError,
-    DomainPermissionError,
-    DomainService,
-)
-from ainrf.domain.environment_facade import PersistentEnvironmentFacade
-from ainrf.domain.workspace_facade import PersistentWorkspaceFacade
-from ainrf.domain.context import (
-    ContextAssembler,
-    ContextAssembly,
-    ContextFragment,
-    ContextSource,
-    ProjectContextService,
-)
-from ainrf.domain.attempts import AttemptService, DispatchClaim
-from ainrf.domain.attempt_projection import AttemptProjectionService
-from ainrf.domain.tasks import TaskApplicationService
-from ainrf.domain.task_projection import TaskProjectionService
-from ainrf.domain.session_projection import SessionProjectionService
-from ainrf.domain.overview import OverviewSnapshotPlanner, OverviewSnapshotService
-from ainrf.domain.worker import DispatchRunResult, TaskDispatcher
+from typing import Any
 
-__all__ = [
-    "DomainAuthorizationService",
-    "DomainNotFoundError",
-    "DomainPermissionError",
-    "DomainService",
-    "PersistentEnvironmentFacade",
-    "PersistentWorkspaceFacade",
-    "ContextAssembler",
-    "ContextAssembly",
-    "ContextFragment",
-    "ContextSource",
-    "ProjectContextService",
-    "AttemptService",
-    "AttemptProjectionService",
-    "DispatchClaim",
-    "DispatchRunResult",
-    "TaskDispatcher",
-    "TaskApplicationService",
-    "TaskProjectionService",
-    "SessionProjectionService",
-    "OverviewSnapshotPlanner",
-    "OverviewSnapshotService",
-]
+from ainrf._lazy_exports import resolve_export
+
+_EXPORTS = {
+    "DomainNotFoundError": ("ainrf.domain.service", "DomainNotFoundError"),
+    "DomainPermissionError": ("ainrf.domain.service", "DomainPermissionError"),
+    "DomainModules": ("ainrf.domain.service", "DomainModules"),
+    "build_domain_modules": ("ainrf.domain.service", "build_domain_modules"),
+    "ProjectModule": ("ainrf.domain.interfaces", "ProjectModule"),
+    "WorkspaceModule": ("ainrf.domain.interfaces", "WorkspaceModule"),
+    "EnvironmentModule": ("ainrf.domain.interfaces", "EnvironmentModule"),
+    "ContextModule": ("ainrf.domain.interfaces", "ContextModule"),
+    "TaskLifecycleModule": ("ainrf.domain.interfaces", "TaskLifecycleModule"),
+    "PersistentEnvironmentFacade": (
+        "ainrf.domain.environment_facade",
+        "PersistentEnvironmentFacade",
+    ),
+    "PersistentWorkspaceFacade": ("ainrf.domain.workspace_facade", "PersistentWorkspaceFacade"),
+    "ContextAssembler": ("ainrf.domain.context", "ContextAssembler"),
+    "ContextAssembly": ("ainrf.domain.context", "ContextAssembly"),
+    "ContextFragment": ("ainrf.domain.context", "ContextFragment"),
+    "ContextSource": ("ainrf.domain.context", "ContextSource"),
+    "ProjectContextService": ("ainrf.domain.context", "ProjectContextService"),
+    "AttemptProjectionService": ("ainrf.domain.attempt_projection", "AttemptProjectionService"),
+    "DispatchClaim": ("ainrf.domain.attempts", "DispatchClaim"),
+    "DispatchRunResult": ("ainrf.domain.worker", "DispatchRunResult"),
+    "TaskDispatcher": ("ainrf.domain.worker", "TaskDispatcher"),
+    "TaskApplicationService": ("ainrf.domain.tasks", "TaskApplicationService"),
+    "TaskProjectionService": ("ainrf.domain.task_projection", "TaskProjectionService"),
+    "OverviewSnapshotPlanner": ("ainrf.domain.overview", "OverviewSnapshotPlanner"),
+    "OverviewSnapshotService": ("ainrf.domain.overview", "OverviewSnapshotService"),
+}
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name: str) -> Any:
+    return resolve_export(name, _EXPORTS, globals())

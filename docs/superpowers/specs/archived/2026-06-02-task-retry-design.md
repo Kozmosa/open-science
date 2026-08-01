@@ -1,5 +1,8 @@
 # Task Retry Feature Design
 
+> [!warning] Historical specification
+> 本文已归档，不再定义当前产品 contract。请以 `PROJECT_BASIS.md`、`docs-site/docs/`、代码与活跃 spec 为准；原文保留用于解释历史决策和迁移来源。
+
 > [!warning] Historical design
 > 本文“归档旧 Task、创建新 Task”的 Retry 语义已被 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 取代。当前契约要求 Retry 在同一 Task 下创建或恢复 Attempt；本文仅保留用于历史追溯。
 

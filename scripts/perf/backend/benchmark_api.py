@@ -23,7 +23,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
     """Get admin JWT headers, registering the perf user if needed."""
     # Try login
     resp = client.post(
-        f"{BASE_URL}/auth/login",
+        f"{BASE_URL}/api/auth/login",
         json={"username": ADMIN_USER, "password": ADMIN_PASS},
     )
     if resp.status_code == 200:
@@ -32,7 +32,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
 
     # Register then try again
     client.post(
-        f"{BASE_URL}/auth/register",
+        f"{BASE_URL}/api/auth/register",
         json={
             "username": ADMIN_USER,
             "display_name": "Perf Admin",
@@ -40,7 +40,7 @@ def _admin_headers(client: httpx.Client) -> dict[str, str]:
         },
     )
     resp2 = client.post(
-        f"{BASE_URL}/auth/login",
+        f"{BASE_URL}/api/auth/login",
         json={"username": ADMIN_USER, "password": ADMIN_PASS},
     )
     if resp2.status_code != 200:
@@ -67,7 +67,7 @@ def auth_headers(client):
 def test_login(benchmark, client):
     benchmark(
         lambda: client.post(
-            f"{BASE_URL}/auth/login",
+            f"{BASE_URL}/api/auth/login",
             json={"username": ADMIN_USER, "password": ADMIN_PASS},
         )
     )
@@ -85,11 +85,16 @@ def test_list_projects(benchmark, client, auth_headers):
 
 
 def test_list_tasks(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/tasks", headers=auth_headers))
+    benchmark(lambda: client.get(f"{BASE_URL}/api/tasks?project_id=default", headers=auth_headers))
 
 
 def test_list_task_edges(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/projects/default/task-edges", headers=auth_headers))
+    benchmark(
+        lambda: client.get(
+            f"{BASE_URL}/api/domain/projects/default/task-relationships",
+            headers=auth_headers,
+        )
+    )
 
 
 # --- File endpoints ---
@@ -98,17 +103,10 @@ def test_list_task_edges(benchmark, client, auth_headers):
 def test_file_list(benchmark, client, auth_headers):
     benchmark(
         lambda: client.get(
-            f"{BASE_URL}/files/list?environment_id=env-localhost&path=/",
+            f"{BASE_URL}/api/files/list?environment_id=env-localhost&path=/",
             headers=auth_headers,
         )
     )
-
-
-# --- Session endpoints ---
-
-
-def test_list_sessions(benchmark, client, auth_headers):
-    benchmark(lambda: client.get(f"{BASE_URL}/sessions", headers=auth_headers))
 
 
 # --- Task creation ---
@@ -118,9 +116,11 @@ def test_create_task_minimal(benchmark, client, auth_headers):
     payload = {
         "project_id": "default",
         "workspace_id": "workspace-default",
-        "environment_id": "env-localhost",
-        "task_profile": "claude-code",
-        "task_input": "benchmark",
+        "researcher_type": "vanilla",
+        "harness_engine": "claude-code",
+        "prompt": "benchmark",
+        "skills": [],
+        "mcp_servers": [],
         "title": "perf-bench-task",
     }
     benchmark(lambda: client.post(f"{BASE_URL}/tasks", json=payload, headers=auth_headers))

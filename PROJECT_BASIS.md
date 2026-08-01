@@ -5,19 +5,23 @@
 ## 项目目标与当前边界
 
 - 项目名称：`OpenScience`
-- 当前主要目标：把 OpenScience 持续收敛为本仓库的核心前后端产品，包括可安装 CLI、后端 API、WebUI 控制面，以及与 environment / terminal / task / workspace browser 相关的运行时能力。当前 Python 包与部分运行时路径仍保留 `ainrf` 作为兼容性内部名称；新增对外入口优先使用 `openscience` 与 `OPENSCIENCE_*`。
-- `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 OpenScience 的产品设计、实现取舍和历史追溯提供参考输入，而不是继续充当仓库的默认产品中心。
+- **OpenScience** 是用户可见的产品与品牌名称，以及前端使用的标识（缩写可以使用osci）；`AINRF` / `ainrf` 是稳定的内部工程与后端使用的标识。Python package/import namespace、状态路径、Linux identity、部署资源和 telemetry namespace 等和后端相关部分默认使用 `ainrf`。
+- 面向用户的 WebUI、产品文档、CLI help 和项目宣传材料的品牌标识等用 OpenScience。
+- 后端配置规范使用 `AINRF_*`；对应的 `OPENSCIENCE_*` 后端变量仅作为兼容别名。前端配置以及仓库级开发、CI 和编排配置使用 `OPENSCIENCE_*`。
+- `docs/`、`ref-repos/` 与其他研究笔记材料的主要职责是为 OpenScience 的产品设计、实现取舍和历史追溯提供参考输入，不是工程实现的权威文档。
 - `vsa` 在本项目中指工作在容器内的 vibe scientist agent 研究员预设。
 
 ## 约束优先级
 
-- 更高优先级的局部约束文件，尤其是仓库根目录的 `AGENTS.md`，在用户当次指令和目录内更近的局部约束上优先级更高。
-- 本文件声明的长期工程约定必须遵守，当本文档与工程出现冲突，显式提示用户处理。
+- 本文件是最高优先级、经过人工审阅的长期项目事实与规则来源，只允许由用户人工修改；任何 Agent 都不得修改本文件。
+- `AGENTS.md`、`CLAUDE.md`、局部 Agent 指令及其他文档不得与本文件冲突。发现冲突时，Agent 必须停止受影响的判断并显式询问用户，不得自行选择或修正文档。
+- 当本文件与代码、schema、测试、部署配置或其他可靠工程事实出现漂移时，Agent 必须请用户重新审阅工程事实，由用户决定修正工程实现还是人工修订本文件。
 
 ## LLM 协作与文档目录约定
 
-- 本仓库现有长期文档主目录是 `docs/`；新增需要长期维护、会被纳入知识库与站点构建的 Markdown 内容，默认放入 `docs/` 下合适子目录。
-- `docs/` 的默认入口与主叙事应服务于当前 `ainrf` 产品面；研究笔记、外部项目调研与历史设计文档继续保留，但不应再与 OpenScience 当前实现面竞争同等入口地位。
+- `docs-site/docs/` 是当前对外的公开产品文档的长期目录。
+- `docs/` 是工程内部的文档目录，保存活跃设计、工程参考、研究输入、历史决策和工作日志；它不是当前产品 contract 的唯一 authority。
+- `docs/documentation-governance.md` 定义文档优先级、生命周期、活跃 spec 与归档规则等文档治理策略；新增或移动长期文档必须遵守该文件。
 - `docs/framework/` 用于框架设计、RFC、路线图和体系化方法论。
 - `docs/projects/` 用于外部项目调研与对照分析。
 - `docs/summary/` 用于跨项目综述、矩阵和汇总结论。
@@ -68,17 +72,23 @@
 - `src/ainrf/` 负责可安装 Python 包与 CLI/服务运行时代码，避免把仓库级脚本逻辑直接堆入命令入口。
 - `frontend/` 负责 OpenScience 的 WebUI 前端；它与 `src/ainrf/` 一起构成仓库的核心产品实现面。
 - `scripts/` 负责本地构建与辅助流程；若脚本演化为可复用运行时能力，应回收进入 `src/ainrf/`。
-- `docs/` 负责长期知识资产与产品文档；不要把仅用于一次调试的中间日志混入知识库主目录。
+- `docs/` 负责内部长期知识资产；不要把仅用于一次调试的中间日志混入知识库主目录。
 - `docs/projects/`、`docs/summary/`、`ref-repos/` 与其他调研材料默认视为参考语料层，不直接定义 OpenScience 当前产品 contract。
 - 未来扩展 `ainrf` 时，优先把核心研究逻辑设计为可脱离具体宿主 CLI 复用的模块，再在 Typer 命令层做装配。
+- Backend 以 committed-v2 state 为唯一 product authority；不得重新引入 legacy writer、legacy read fallback、双读或双写。产品 import graph 必须保持无 cycle，且 non-API Module 不得通过直接 import、惰性 import、动态 import 或字符串入口反向依赖 `ainrf.api`。FastAPI application construction、HTTP process composition 与 server lifecycle 属于 HTTP Adapter。
+- Canonical OpenScience product HTTP prefix 是 `/api`。历史 root 与 product `/v1` aliases 已在完成 caller audit、自动验证、隔离环境手动验收并经用户明确批准后删除；不为收集 compatibility telemetry 而将未经完整手动验收的代码部署到 production。`/v1/models` 与 `/v1/messages` 是独立、长期支持的外部模型协议 Interface，不是 OpenScience product route aliases。后续 compatibility removal 必须继续基于明确 caller inventory、充分验证证据和用户逐批批准；证据不足时 fail closed。
+- FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。Frontend generated transport 必须可确定性重建并通过 drift gate；UI 通过 feature adapter 消费 view model，不直接消费 raw generated payload。
+- Frontend 依赖方向为 `app -> features -> shared/design-system`；`shared`、`design-system` 和 legacy component 层不得反向依赖 feature。
+- 当前架构、release/rollback contract 与 compatibility inventory 的长期产品文档位于 `docs-site/docs/architecture.md`。
 
 ## 目录约定
 
 - `docs/`：研究知识库与历史设计材料（Obsidian 笔记）。
 - `docs-site/`：OpenScience 产品文档站点（VitePress，部署至 GitHub Pages）。
 - `frontend/`：OpenScience WebUI 前端。
-- `src/ainrf/`：OpenScience Python 包兼容性内部目录、CLI 入口、后端 API、日志与运行时代码。
-- `src/ainrf/agentic_researcher/`：OpenScience 任务管理门面，提供统一的任务 CRUD 和研究员预设
+- `src/ainrf/`：OpenScience 稳定的 Python package/import namespace、CLI 入口、后端 API、日志与运行时代码。
+- `src/ainrf/agentic_researcher/`：保留研究员 preset 以及当前 runtime 仍使用的稳定 Task/engine 数据模型；它不拥有 Task CRUD 或 Task lifecycle 写入。
+- `src/ainrf/domain/`：当前 committed-v2 Project、Workspace、Environment、Context、Task 与 Attempt application Modules；`TaskApplicationService` 是当前 Task lifecycle 的唯一正式写入 Interface。已接受但尚未实现的 Conversation Domain 设计只有在 schema、runtime、transport、migration 和测试完成 cutover 后，才能取代当前 Task/Attempt 工程事实。
 - `src/ainrf/harness_engine/`：OpenScience 执行引擎抽象，封装 claude-code、agent-sdk、codex-app-server
 - `tests/`：CLI smoke tests 与后续 Python 测试。
 - `scripts/`：本地构建与预览辅助脚本。
@@ -109,6 +119,11 @@
 - 后端全量测试：`bash scripts/test.sh all`（默认最多 8 个 worker，并将 race/contention 测试串行运行）
 - 预览：`cd docs-site && npm run dev`
 - 其他关键命令：
+  - `npm --prefix frontend run check:transport`
+  - `npm --prefix frontend run lint`
+  - `npm --prefix frontend run test:run`
+  - `npm --prefix frontend run build`
+  - `npm --prefix docs-site run build`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ty check`
   - `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`
@@ -123,6 +138,16 @@
   - 先检查 `uv` 环境、依赖安装与 Python 版本是否满足 `>=3.13`
   - 再检查文档源文件 frontmatter、wikilink 与构建脚本输入是否一致
   - 最后检查 CLI 行为、日志配置和测试覆盖是否与当前 scaffold 状态匹配
+
+## 部署与运维模型
+
+- OpenScience 是开源项目，主要部署场景是实验室内部环境，不以互联网企业级公共服务为默认运行模型。
+- 运维人员可以安排维护窗口；生产升级、数据迁移和故障恢复允许最多约 2–3 小时的计划内停机。
+- 项目不要求互联网服务级别的持续可用性、零停机发布或任意中断后的全自动恢复。
+- 项目不以合规审计、高保证供应链证明或逐步骤发布证据留存为默认要求。
+- 生产发布应优先采用简单、可理解、可人工恢复的维护窗口流程，避免为未确认的连续可用性或审计需求引入复杂的发布控制面。
+- 必须保留的生产底线包括：发布前完整备份及恢复验证、前后端与 worker 版本一致、必要的数据迁移、凭据不进入镜像或浏览器制品、发布后 smoke test，以及失败时可执行的人工 rollback。
+- 不可变制品、release manifest 和 L4 验收应以满足上述部署模型的最小实现为目标；除非部署需求发生变化，不建设零停机切换、复杂发布 ledger、逐文件供应链绑定或任意阶段中断后的自动接管恢复。
 
 ## Git 提交信息约定
 
@@ -148,8 +173,7 @@
 
 - 默认采用 worktree-first 开发范式：非微小改动优先在独立 worktree 中实施。
 - 主工作区应尽量保持干净，主要用于同步、检查、轻量文档修改与受控清理动作，而不是默认功能开发现场。
-- 正式开发 worktree 统一放在 `/.worktrees/<branch>`。
-- `/.claude/worktrees/` 仅作为 agent 临时执行空间使用，不作为长期开发工作区。
+- 正式开发与 Agent 工作区统一放在 `.claude/worktrees/<branch>`。
 - 合并完成或确认放弃后，应删除对应本地分支和 worktree。
 - 远程不应长期保留 `worktree-*`、`agent/*` 或其他明显过程性命名分支。
 - 进行仓库卫生巡检时，应使用 `git fetch --prune origin` 清理 stale remote-tracking refs，避免把本地过期引用误判为真实远程状态。
@@ -158,7 +182,7 @@
 ## 变更维护原则
 
 - 修改长期工程约定时，优先更新本文件。
-- 新增长期有效的知识结构、构建规则或运行时约束时，应同步更新相关 `docs/` 文档，并在必要时从本文件补充索引。
+- 新增长期有效的知识结构、构建规则或运行时约束时，应同步更新相关 `docs-site/docs/` 或 `docs/` 文档，并在必要时从本文件补充索引。
 - 新增 CLI 表面、解析行为或构建脚本契约时，必须同步补充或更新 `tests/` 中的 smoke tests。
 - `LLM-Working`目录也需要纳入版本管理
 - 对仓库进行实际修改、开发、验证或提交时，应同步追加当日 `docs/LLM-Working/worklog/YYYY-MM-DD.md`，不得把工作记录只留在会话上下文中。

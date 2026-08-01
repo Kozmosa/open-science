@@ -1,5 +1,8 @@
 # Task Retry E2E Test Design
 
+> [!warning] Historical specification
+> 本文已归档，不再定义当前产品 contract。请以 `PROJECT_BASIS.md`、`docs-site/docs/`、代码与活跃 spec 为准；原文保留用于解释历史决策和迁移来源。
+
 > [!warning] Historical design
 > 本文测试的是已废弃的“Retry 产生新 Task”交互，已被 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的 Task/Attempt 契约取代。新的测试必须验证同一 Task 身份、Attempt 历史和归档门禁。
 

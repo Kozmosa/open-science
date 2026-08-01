@@ -1,3 +1,10 @@
+---
+doc_state: current
+status: accepted
+last_reviewed: 2026-07-30
+review_by: 2026-08-29
+---
+
 # Project、Task 与 Workspace 领域设计
 
 **Status:** Accepted domain design — 核心定义、关系、Context 首期、人工沉淀、任务关系、权限、移动和归档语义已确认
@@ -200,7 +207,10 @@ Task 创建时固定当前 Active Project Context Version。Task 后续 conversa
 
 系统不得在后台自动接受或静默写入 memory。未来即使增加 LLM 提取，也只能产生 `proposed` Candidate。
 
-## 5. Task、Session 与 Attempt
+## 5. Task 与当前运行投影
+
+> [!note]
+> 本节原先冻结的 `Task → TaskAttempt → RuntimeSession` 长期 conversation 模型已由 [[2026-07-17-codex-aligned-conversation-domain-design]] 的 Task / Turn / Item / RuntimeExecution 目标语义取代。当前实现仍以 TaskAttempt 和 RuntimeSession 提供运行历史读投影，但不得将其重新提升为长期用户 Session 领域模型。
 
 为避免与管理员侧运行会话混淆，产品术语保持：
 
@@ -223,7 +233,7 @@ Task（用户会话、目标、Project、Workspace、固定 Context Version）
 - AgenticResearcher 的 `tasks` 是 Task 的唯一权威记录；
 - 在同一领域数据库中建立正式的 `agent_task_attempts`，作为 Attempt 的唯一权威记录；
 - Runtime Session 保存引擎 session ID、tmux/container 标识、开始/结束时间和诊断状态，可按一次 Attempt 关联一个或多个底层 session；
-- 管理侧 Sessions 页面只是 TaskAttempt/RuntimeSession 的查询投影，不再创建独立的用户 Session；
+- 管理侧 Runs 页面直接查询 Task、TaskAttempt 与 Project usage；旧 Session HTTP 投影已删除；
 - 现有 `sessions.sqlite3` 中的 `task_sessions` / `task_attempts` 视为旧管理模型：可唯一映射到现有 Task 的记录迁入新 Attempt/RuntimeSession；无法可靠映射的记录作为只读 legacy audit 保留，迁移完成后停止双写并退役旧服务；
 - API、成本统计、Retry、Timeline 和审计都从同一 Task/Attempt 权威模型读取，禁止通过引擎差异维护第二套任务生命周期。
 
@@ -388,7 +398,7 @@ Project Archive/Unarchive 同样使用幂等请求和单事务更新。Archive �
 
 ## 10. 与当前实现的差异
 
-当前实现已经具备 Task 必填 `project_id`、`workspace_id`、`environment_id`，Project 默认 Workspace/Environment、Task 移动和项目任务关系图。
+当前实现已经具备 Task 必填 `project_id` 与 `workspace_id`、由 Workspace 派生 Environment、Primary Workspace、Task move、Project task relationship 与 usage summary；Task create 不接受独立 `environment_id`。
 
 需要调整的主要差异：
 
@@ -398,7 +408,7 @@ Project Archive/Unarchive 同样使用幂等请求和单事务更新。Archive �
 4. Retry 在部分引擎上会创建新 Task，需要统一为同一 Task 下的 Attempt；
 5. Project Canvas 当前占据整个页面，需要降为 Project 的 Tasks 子视图；
 6. Workspace 和 Project 删除目前缺少完整的关联与文件保留语义；
-7. 管理侧 `task_sessions` / `task_attempts` 与 AgenticResearcher `tasks` 重叠，需要迁移为唯一 Task/Attempt/RuntimeSession 模型。
+7. 当前 TaskAttempt/RuntimeSession 仍是过渡运行投影，后续由 Conversation Domain 的 Turn/Item/RuntimeExecution 迁移接管。
 
 ### 10.1 数据迁移
 
@@ -408,7 +418,7 @@ Project Archive/Unarchive 同样使用幂等请求和单事务更新。Archive �
 2. 新建 Project-Workspace 关联表，将现有 `workspace.project_id` 转成 Primary 关联；
 3. Project 的 `default_workspace_id` 转成 Primary link，`default_environment_id` 仅用于迁移校验后退役；
 4. Task 保留现有 Project/Workspace，Environment 与 Workspace 不一致的记录进入可见修复队列，不能静默改写历史；
-5. API 兼容期仍返回旧字段，但写入只经过新关联服务；调用方迁移完成后删除旧字段。
+5. API 兼容字段和旧 Task/Project/Session 入口已在 caller 迁移与 release staging 验收后删除。
 6. 在 AgenticResearcher 领域数据库建立 `agent_task_attempts` 与 Runtime Session 关联；迁移可可靠映射的旧 Session/Attempt，未映射记录进入只读 legacy audit；停止旧 SessionService 双写。
 7. 旧 Retry 形成的 Task 链保持历史 Task 不变，并将可识别的 retry edge 迁为审计来源；迁移后新的 Retry 只在同一 Task 下创建 Attempt。
 8. 为 `project_collaborators` 补充 `viewer` / `editor` 角色和可选 publish 能力；旧无角色 collaborator 默认迁为 `viewer`，避免迁移后静默获得写权限。

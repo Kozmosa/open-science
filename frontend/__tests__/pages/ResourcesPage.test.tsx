@@ -3,13 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourcesPage from '../../src/pages/ResourcesPage';
 import { resourceRefreshInterval } from '@features/resources/refreshPolicy';
 import type { ResourcesResponse } from '@/shared/types';
-import { renderWithProviders } from '@/shared/test/render';
-import { getResources, getTaskTokenUsageSummary } from '@/shared/api';
+import { renderWithProviders } from '@/test-support/render';
+import { getResources } from '@features/resources/api';
+import { getTaskTokenUsageSummary } from '@features/tasks/api';
 
-vi.mock('@/shared/api', () => ({ getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
-  getResources: vi.fn(),
-  getTaskTokenUsageSummary: vi.fn(),
-}));
+vi.mock('@features/resources/api', () => ({ getResources: vi.fn() }));
+vi.mock('@features/tasks/api', () => ({ getTaskTokenUsageSummary: vi.fn() }));
 
 const mockGetResources = vi.mocked(getResources);
 const mockGetTaskTokenUsageSummary = vi.mocked(getTaskTokenUsageSummary);

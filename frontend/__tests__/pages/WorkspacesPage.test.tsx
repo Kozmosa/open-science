@@ -2,27 +2,20 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import WorkspacesPage from '../../src/pages/WorkspacesPage';
-import { renderWithProviders } from '@/shared/test/render';
-import { getEnvironments, unregisterWorkspace, updateWorkspace } from '@/shared/api';
+import { renderWithProviders } from '@/test-support/render';
+import { getEnvironments } from '@features/environments/api';
 import {
   attachDomainWorkspace,
   createDomainWorkspace,
   getDomainProjects,
   getDomainWorkspaces,
   setDomainPrimaryWorkspace,
+  unregisterDomainWorkspace,
+  updateDomainWorkspace,
   type DomainWorkspaceProjection,
 } from '@features/domain';
 
-vi.mock('@/shared/api', async () => {
-  const actual = await vi.importActual<typeof import('@/shared/api')>('@/shared/api');
-  return {
-    ...actual,
-    getEnvironments: vi.fn(),
-    unregisterWorkspace: vi.fn(),
-    updateWorkspace: vi.fn(),
-  };
-});
-
+vi.mock('@features/environments/api', () => ({ getEnvironments: vi.fn() }));
 vi.mock('@features/domain', async () => {
   const actual = await vi.importActual<typeof import('@features/domain')>('@features/domain');
   return {
@@ -32,6 +25,8 @@ vi.mock('@features/domain', async () => {
     getDomainProjects: vi.fn(),
     getDomainWorkspaces: vi.fn(),
     setDomainPrimaryWorkspace: vi.fn(),
+    unregisterDomainWorkspace: vi.fn(),
+    updateDomainWorkspace: vi.fn(),
   };
 });
 
@@ -99,8 +94,8 @@ const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockCreateDomainWorkspace = vi.mocked(createDomainWorkspace);
 const mockAttachDomainWorkspace = vi.mocked(attachDomainWorkspace);
 const mockSetDomainPrimaryWorkspace = vi.mocked(setDomainPrimaryWorkspace);
-const mockUpdateWorkspace = vi.mocked(updateWorkspace);
-const mockUnregisterWorkspace = vi.mocked(unregisterWorkspace);
+const mockUpdateWorkspace = vi.mocked(updateDomainWorkspace);
+const mockUnregisterWorkspace = vi.mocked(unregisterDomainWorkspace);
 
 beforeEach(() => {
   vi.clearAllMocks();

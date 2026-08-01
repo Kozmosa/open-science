@@ -6,11 +6,10 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
-from ainrf.api.deprecation import deprecation_headers
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
-from ainrf.domain_control import DomainCutoverError, DomainModelMode, MaintenanceModeError
+from ainrf.domain_control import DomainCutoverError, MaintenanceModeError
 from ainrf.literature.models import LiteratureSubscription
 from ainrf.literature.service import LiteratureService
 from ainrf.literature.task_saga import (
@@ -47,16 +46,6 @@ def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
     """Return the formal saga only after the committed v2 fuse is live."""
 
     service = getattr(request.app.state, "literature_task_saga_service", None)
-    domain = getattr(request.app.state, "domain_service", None)
-    if (
-        request.app.state.api_config.domain_model_mode is not DomainModelMode.V2
-        or domain is None
-        or not domain.v2_ready()
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="Literature research Tasks require a committed domain v2 cutover",
-        )
     if not isinstance(service, LiteratureTaskSagaService) or not service.v2_ready():
         raise HTTPException(status_code=503, detail="Literature Task saga service is not ready")
     return service
@@ -126,8 +115,9 @@ async def _json_object(request: Request, *, label: str) -> dict[str, object]:
 
 
 def _research_task_idempotency_key(request: Request, body: dict[str, object]) -> str:
-    body_key = _text_field(body, "idempotency_key")
-    return require_idempotency_key(request, body_key)
+    if "idempotency_key" in body:
+        raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
+    return require_idempotency_key(request)
 
 
 def _research_task_request(body: dict[str, object]) -> dict[str, str | None]:
@@ -486,44 +476,6 @@ async def get_research_task(
         )
     except Exception as exc:
         raise _research_task_error(exc) from exc
-
-
-@router.post("/papers/{paper_id}/convert", status_code=202)
-async def convert_to_task(paper_id: str, request: Request, response: Response):
-    """Deprecated proxy for the validated research-task intent API.
-
-    A legacy caller can retain its path during the compatibility window, but
-    it cannot attach a paper to an arbitrary external Task ID anymore.
-    """
-
-    replacement = f"/literature/papers/{paper_id}/research-task"
-    headers = deprecation_headers(route="literature.convert", replacement=replacement)
-    try:
-        body = await _json_object(request, label="Convert request")
-        if "task_id" in body:
-            raise HTTPException(
-                status_code=400,
-                detail="task_id is no longer accepted; use the research-task intent contract",
-            )
-        subscription_id = _text_field(body, "subscription_id")
-        result = _new_research_task(
-            request,
-            paper_id=paper_id,
-            body=body,
-            subscription_id=subscription_id,
-        )
-    except HTTPException as exc:
-        merged_headers = dict(headers)
-        if exc.headers is not None:
-            merged_headers.update(exc.headers)
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=exc.detail,
-            headers=merged_headers,
-        ) from exc
-    response.headers.update(headers)
-    response.status_code = _research_task_response_status(result)
-    return result
 
 
 @router.get("/subscriptions/{subscription_id}/fetch-status")

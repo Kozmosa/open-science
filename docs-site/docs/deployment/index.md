@@ -72,6 +72,25 @@ description: OpenScience 生产部署前置条件、首次登录、安全检查�
 
 Docker Compose 部署自带 Prometheus + Grafana 监控栈。详见 [监控栈](/observability/monitoring-stack)。
 
+## 三种环境各自负责什么
+
+| 环境 | 用途 | 是否可变 |
+| --- | --- | --- |
+| 本地开发 | 快速修改、单元测试、前后端联调 | 是 |
+| Staging | 遥测观察、集成验证、问题复现 | 是，支持热重载 |
+| Release staging | 运行与生产发布相同的 API/Web 镜像，供人工验收 | 否，不重新构建 |
+
+推荐流程：
+
+```text
+L1 → 构建一次 release → release staging smoke + 人工验收
+   → 安排维护窗口 → 完整备份并验证恢复 → production 部署
+   → smoke；失败时恢复备份和上一份 manifest
+```
+
+Release staging 不会自动操作生产环境，也不负责替代人工判断。发布 manifest 记录 Git SHA、
+四个镜像引用及其本地 image ID；release staging 和 production 启动前都会核对这些记录。
+
 ## 常用运维命令
 
 ```bash
