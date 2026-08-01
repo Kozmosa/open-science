@@ -13,8 +13,11 @@
 | `2026-07-11-openscience-console-design.md` | accepted | OpenScience WebUI 品牌、导航和外壳 |
 | `2026-07-11-osci-design-system-design.md` | accepted | 前端设计系统；`osci` 不替代内部 `ainrf` 身份 |
 | `2026-07-11-project-task-workspace-domain-design.md` | accepted | 当前核心领域关系设计 |
-| `2026-07-17-codex-aligned-conversation-domain-design.md` | accepted / awaiting implementation | Task/Turn/Item 目标领域模型 |
+| `2026-07-17-codex-aligned-conversation-domain-design.md` | accepted / implementation active | Task/Turn/Item 目标领域模型；剩余 cutover 由 2026-08-01 闭合 Spec 跟踪 |
 | `2026-07-17-conversation-domain-standalone-migration-design.md` | proposed | 等待 schema 冻结的数据迁移设计 |
 | `2026-07-17-engine-runtime-and-credential-injection-design.md` | accepted / awaiting implementation | Engine runtime 与 credential 目标设计 |
+| `2026-08-01-http-adapter-dependency-direction-design.md` | proposed | 消除 non-API Module 对 HTTP Adapter 的动态/字符串反向依赖，并建立永久依赖方向 guard |
+| `2026-08-01-conversation-domain-cutover-closure-design.md` | in-progress | 闭合 Task/Attempt 到 Task/Turn/Item/Submission/Execution/Binding 的产品切换 |
+| `2026-08-01-literature-transport-contract-design.md` | proposed | 以 Pydantic/OpenAPI 收口 Literature transport Interface、frontend Adapter 与 legacy retirement |
 
 已实现、被替代、退役或与当前 contract 冲突的设计位于 [`archived/`](archived/README.md)。

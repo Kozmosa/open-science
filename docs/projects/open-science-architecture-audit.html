@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenScience 全栈规模与架构审计</title>
+<style>
+:root{--bg:#f5f7fb;--panel:#fff;--ink:#172033;--muted:#5c667a;--line:#dce2ec;--blue:#315efb;--cyan:#0a8fa3;--green:#18864b;--amber:#b56a00;--red:#b42318;--violet:#7551c2;--shadow:0 8px 24px rgba(23,32,51,.08)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.92em;background:#eef1f7;padding:.1em .35em;border-radius:4px}.wrap{max-width:1440px;margin:auto;padding:26px}.hero{background:linear-gradient(135deg,#15213c,#263e75 58%,#176878);color:#fff;border-radius:20px;padding:34px 38px;box-shadow:var(--shadow)}.hero h1{margin:0 0 8px;font-size:30px;line-height:1.25}.hero p{max-width:1050px;margin:7px 0;color:#e7ecfa}.meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:18px;font-size:12px;color:#d7e0f5}.nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.nav a{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 12px;color:var(--ink)}section{margin:28px 0}h2{font-size:22px;margin:0 0 14px}h3{font-size:16px;margin:20px 0 9px}.lead{font-size:16px;color:#27334a}.grid{display:grid;gap:14px}.kpis{grid-template-columns:repeat(6,minmax(150px,1fr))}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:0 3px 12px rgba(23,32,51,.04)}.kpi .v{font-size:28px;font-weight:750;line-height:1.1}.kpi .l{color:var(--muted);margin-top:5px}.kpi .s{font-size:12px;color:var(--muted);margin-top:4px}.executive{grid-template-columns:1.1fr 1fr 1fr}.good{border-top:4px solid var(--green)}.warn{border-top:4px solid var(--amber)}.risk{border-top:4px solid var(--red)}ul{margin:7px 0;padding-left:20px}li{margin:5px 0}.table-wrap{overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}table{width:100%;border-collapse:collapse;min-width:800px}th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{background:#eef2f8;color:#3c4659;font-size:12px;position:sticky;top:0}tr:last-child td{border-bottom:0}.num{text-align:right;font-variant-numeric:tabular-nums}.bar-row{display:grid;grid-template-columns:190px 1fr 90px;gap:10px;align-items:center;margin:9px 0}.bar-bg{height:18px;background:#e8edf5;border-radius:99px;overflow:hidden}.bar{height:100%;border-radius:99px}.b1{background:var(--blue)}.b2{background:var(--cyan)}.b3{background:var(--violet)}.b4{background:var(--amber)}.b5{background:var(--green)}.arch{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:stretch}.node{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:13px;min-height:94px}.node strong{display:block}.arrow{text-align:center;color:var(--blue);font-size:22px;align-self:center}.flow{display:grid;grid-template-columns:1.1fr 1.2fr 1.3fr 1.2fr 1.4fr;gap:8px;align-items:stretch}.flow>div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}.tag{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;background:#e9eefc;color:#2547aa;margin:1px}.tag.red{background:#fbe9e7;color:var(--red)}.tag.amber{background:#fff0d8;color:#8b5200}.tag.green{background:#e5f5eb;color:#176b3f}.score{font-weight:750}.s5{color:var(--green)}.s4{color:#34745b}.s3{color:var(--amber)}.s2,.s1{color:var(--red)}.matrix{display:grid;grid-template-columns:130px repeat(3,1fr);gap:7px}.matrix>div{padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}.matrix .head{background:#e9eef7;font-weight:700}.matrix .hi{background:#fdebea;border-color:#f2b9b4}.matrix .med{background:#fff4df;border-color:#efd49f}.matrix .lo{background:#eaf6ef;border-color:#b6ddc6}.timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.phase{border-left:5px solid var(--blue)}.phase:nth-child(2){border-left-color:var(--violet)}.phase:nth-child(3){border-left-color:var(--green)}.drift{background:#fff7e9;border:1px solid #f0d098;border-left:5px solid var(--amber)}.note{color:var(--muted);font-size:12px}.footer{color:var(--muted);font-size:12px;padding:20px 0 40px}.tocount{white-space:nowrap}.decision{font-weight:700;color:var(--red)}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.executive,.timeline{grid-template-columns:1fr}.arch{grid-template-columns:repeat(3,1fr)}.flow{grid-template-columns:1fr}.matrix{grid-template-columns:100px 1fr}}
+@media(max-width:650px){.wrap{padding:12px}.hero{padding:22px}.hero h1{font-size:24px}.kpis{grid-template-columns:repeat(2,1fr)}.arch{grid-template-columns:1fr}.bar-row{grid-template-columns:120px 1fr 70px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header class="hero">
+  <h1>OpenScience 全栈代码规模与架构审计</h1>
+  <p>面向 CEO / CTO 的证据驱动单页报告。结论基于锁定的最新 <code>origin/master</code>，区分手写产品、测试、Mock、generated transport、开发工具、部署与文档；不把“大文件”等同于“坏架构”。</p>
+  <div class="meta"><span>SHA 4b9f31717f40a024a9a60ac73ca7ca9a66afee8f</span><span>提交：refactor: finish architecture cleanup (#66)</span><span>统计时间：2026-08-01 01:27:59 +08:00</span><span>快照：git archive origin/master</span></div>
+</header>
+<nav class="nav"><a href="#summary">结论</a><a href="#size">规模</a><a href="#architecture">架构</a><a href="#mapping">端到端映射</a><a href="#depth">Depth 排行</a><a href="#risks">风险</a><a href="#roadmap">30/60/90</a><a href="#method">方法</a></nav>
+
+<section id="summary">
+<h2>CEO / CTO 结论</h2>
+<div class="grid kpis">
+ <div class="card kpi"><div class="v">1,023</div><div class="l">tracked files</div><div class="s">依赖、缓存、构建输出、runtime data 未跟踪</div></div>
+ <div class="card kpi"><div class="v">80,077</div><div class="l">手写产品有效代码行</div><div class="s">后端 57,415 + 前端 22,662</div></div>
+ <div class="card kpi"><div class="v">42,713</div><div class="l">测试物理行</div><div class="s">后端 32,443 + 前端 10,270</div></div>
+ <div class="card kpi"><div class="v">142 + 1</div><div class="l">HTTP operations + WebSocket</div><div class="s">113 path templates；118 generated schemas</div></div>
+ <div class="card kpi"><div class="v">12</div><div class="l">正式认证页面</div><div class="s">另含注册、登录、强制改密流程</div></div>
+ <div class="card kpi"><div class="v">4</div><div class="l">治理漂移待裁决</div><div class="s">相关合规结论已暂停</div></div>
+</div>
+<p class="lead"><strong>总体判断：</strong>OpenScience 已形成可辨认的全栈单向架构，核心执行、任务、备份、HTTP client 与 generated schema 具备较高 Depth 和 Leverage；维护成本主要来自少数超宽 transport / domain Interface、迁移与 compatibility 知识、前端页面编排过重，以及 Mock 与正式 contract 的双重表达。当前不适合“按行数大拆包”，适合先修 governance drift 与 contract ownership，再做有限、证据驱动的深化。</p>
+<div class="grid executive">
+ <div class="card good"><h3>值得保留的结构</h3><ul><li>HarnessEngine：多个真实 Adapter 共用一个执行 Seam。</li><li>TaskDispatcher / BackupService：小 Interface 隐藏高复杂度实现。</li><li>React Query + feature Adapter + shared HTTP client：server state 与 transport 知识集中。</li><li>OpenAPI → generated transport → drift gate：schema authority 已有高 Leverage 基础。</li></ul></div>
+ <div class="card warn"><h3>主要复杂度来源</h3><ul><li>Domain 14,844 行、API 8,899 行，宽 Interface 集中。</li><li>Domain router 50 routes；Literature 26；Task 20。</li><li>迁移/control/compatibility 代码仍约 12k+ 行。</li><li>前端 Tasks/Settings 两个 feature 合计 8,817 物理行。</li></ul></div>
+ <div class="card risk"><h3>优先风险</h3><ul><li>Literature transport 未由 Pydantic/generated schema 约束。</li><li>generated operation metadata 未成为 feature caller Interface。</li><li>EnvironmentsPage / TasksPage 编排过重。</li><li>潜在 import 双向边：domain↔literature、environment↔terminal。</li></ul></div>
+</div>
+</section>
+
+<section id="size">
+<h2>精确规模与分类口径</h2>
+<div class="table-wrap"><table><thead><tr><th>互斥类别</th><th class="num">文件</th><th class="num">物理行</th><th class="num">有效代码行</th><th>说明</th></tr></thead><tbody>
+<tr><td>后端手写产品 Python</td><td class="num">194</td><td class="num">64,679</td><td class="num">57,415</td><td><code>src/ainrf/**/*.py</code>；不含同目录 README</td></tr>
+<tr><td>后端测试 Python</td><td class="num">111</td><td class="num">32,443</td><td class="num">27,152</td><td><code>tests/**/*.py</code>；64 unit、17 API、13 CLI、7 middleware、4 engine、1 integration（可多 marker）</td></tr>
+<tr><td>前端手写产品</td><td class="num">288</td><td class="num">24,798</td><td class="num">22,662</td><td>runtime 15；pages 61；feature implementation 119；shared 39；design-system 54</td></tr>
+<tr><td>前端测试</td><td class="num">67</td><td class="num">10,270</td><td class="num">8,862</td><td><code>frontend/__tests__</code>；单列，不并入产品</td></tr>
+<tr><td>Mock / test-support</td><td class="num">6</td><td class="num">3,174</td><td class="num">3,003</td><td><code>app/mock</code> + <code>src/test-support</code>；不并入产品</td></tr>
+<tr><td>generated transport</td><td class="num">6</td><td class="num">8,213</td><td class="num">4,070</td><td>TS 3 文件占 8,203 行；另含压缩为单行的 OpenAPI/manifest JSON 与 README</td></tr>
+<tr><td>开发工具（全仓）</td><td class="num">56 tracked</td><td class="num">4,365</td><td class="num">3,152</td><td><code>scripts/ testing/ .github/ .agents/</code>；42 个被 tokei 识别的文本文件</td></tr>
+<tr><td>部署与运维脚本/配置</td><td class="num">61 tracked</td><td class="num">4,590</td><td class="num">3,722</td><td><code>deploy/</code> 与 Docker/Compose；未操作任何环境</td></tr>
+<tr><td>文档/治理</td><td class="num">约 198</td><td class="num">约 29.1k</td><td class="num">N/A</td><td>Markdown 物理行；不把 prose 的 tokei “comments” 当代码</td></tr>
+</tbody></table></div>
+<p class="note">物理行 = tokei code + comments + blanks；有效代码行 = tokei Code。docstring 通常按代码统计。JSON 压缩文件的物理行会低估信息量，因此 generated transport 同时报告 schema 数（118）与 operation 数（142）。</p>
+
+<h3>手写产品有效代码规模</h3>
+<div class="card">
+ <div class="bar-row"><span>后端产品</span><div class="bar-bg"><div class="bar b1" style="width:100%"></div></div><b class="num">57,415</b></div>
+ <div class="bar-row"><span>前端产品</span><div class="bar-bg"><div class="bar b2" style="width:39.5%"></div></div><b class="num">22,662</b></div>
+ <div class="bar-row"><span>后端测试</span><div class="bar-bg"><div class="bar b3" style="width:47.3%"></div></div><b class="num">27,152</b></div>
+ <div class="bar-row"><span>前端测试</span><div class="bar-bg"><div class="bar b4" style="width:15.4%"></div></div><b class="num">8,862</b></div>
+ <div class="bar-row"><span>generated transport</span><div class="bar-bg"><div class="bar b5" style="width:7.1%"></div></div><b class="num">4,070</b></div>
+</div>
+
+<h3>后端 package 规模</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th class="num">文件</th><th class="num">物理行</th><th class="num">有效代码</th><th>主要职责</th></tr></thead><tbody>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/domain/">domain</a></td><td class="num">20</td><td class="num">14,844</td><td class="num">13,615</td><td>committed-v2、任务/Attempt、权限、Context、worker、projection</td></tr>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/api/">api</a></td><td class="num">37</td><td class="num">8,899</td><td class="num">7,360</td><td>FastAPI transport、middleware、schema、presenter</td></tr>
+<tr><td>domain_migration</td><td class="num">5</td><td class="num">5,329</td><td class="num">5,034</td><td>legacy import、审计、reconciliation</td></tr>
+<tr><td>literature</td><td class="num">17</td><td class="num">4,358</td><td class="num">3,908</td><td>provider、tracking、summary、research-task saga</td></tr>
+<tr><td>db</td><td class="num">9</td><td class="num">3,881</td><td class="num">3,577</td><td>SQLite registry、连接与 schema migrations</td></tr>
+<tr><td>harness_engine</td><td class="num">12</td><td class="num">3,809</td><td class="num">3,278</td><td>Claude/Codex/Agent SDK Adapter 与执行 Interface</td></tr>
+<tr><td>domain_control</td><td class="num">4</td><td class="num">3,446</td><td class="num">3,143</td><td>maintenance/cutover/legacy guard</td></tr>
+<tr><td>development</td><td class="num">8</td><td class="num">3,108</td><td class="num">2,847</td><td>fixture、dev profile；不属于正式 runtime complexity</td></tr>
+<tr><td>backup / terminal</td><td class="num">8</td><td class="num">4,702</td><td class="num">4,085</td><td>备份恢复；PTY/tmux/session/attachment</td></tr>
+</tbody></table></div>
+
+<h3>前端分层规模</h3>
+<div class="table-wrap"><table><thead><tr><th>层/Module</th><th class="num">文件</th><th class="num">物理行</th><th class="num">有效代码</th><th>判断</th></tr></thead><tbody>
+<tr><td>feature implementation</td><td class="num">119</td><td class="num">10,943</td><td class="num">9,943</td><td>Tasks 4,429、Settings 4,388 是主要复杂度中心</td></tr>
+<tr><td>pages + route shims</td><td class="num">61</td><td class="num">5,902</td><td class="num">5,468</td><td>12 个正式页面；15 个根 shim 仅一行 re-export</td></tr>
+<tr><td>shared</td><td class="num">39</td><td class="num">5,018</td><td class="num">4,581</td><td>HTTP、类型、i18n、公共 Hook；无 feature 反向 import</td></tr>
+<tr><td>design-system</td><td class="num">54</td><td class="num">2,105</td><td class="num">1,922</td><td>约 40 primitives/layout/theme，深度中等</td></tr>
+<tr><td>runtime/app composition</td><td class="num">15</td><td class="num">830</td><td class="num">748</td><td>route registry、shell、query client、入口</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="architecture">
+<h2>当前架构与依赖方向</h2>
+<div class="arch">
+ <div class="node"><strong>App / Pages</strong>12 routes<br>composition、权限 gate、局部 UI state</div>
+ <div class="node"><strong>Feature Modules</strong>React Query、view model、workflow Adapter</div>
+ <div class="node"><strong>Shared / Design System</strong>HTTP client、types、layout、primitives</div>
+ <div class="node"><strong>FastAPI Transport</strong>142 operations + 1 WS<br>JWT/API-key/middleware</div>
+ <div class="node"><strong>Domain Modules</strong>Project、Workspace、Environment、Task、Literature</div>
+ <div class="node"><strong>Persistence / Runtime</strong>SQLite、worker、Harness、SSH/tmux/files</div>
+</div>
+<p class="lead"><strong>依赖方向总体成立：</strong><code>app → features → shared/design-system</code> 未发现 shared/design-system 反向依赖 feature；后端主要方向为 <code>api → domain/application → db/runtime Adapter</code>。但 feature 之间横向调用较多，Domain 与 Literature、Environment 与 Terminal 存在需 AST 精确验证的双向 import 风险。</p>
+<div class="card"><strong>Generated transport Seam</strong><br>FastAPI OpenAPI 生成 118 schemas 与 operation metadata；schema 通过 <code>shared/api/transportTypes.ts</code> 收窄后进入 feature Adapter，具备较高 Depth。短板是 <code>transportPath()</code> 在产品代码零调用，feature 仍手写 URL；DEV/MSW 会 assert，production build 不做运行时路径校验。</div>
+</section>
+
+<section id="mapping">
+<h2>页面 → Feature → HTTP Interface → Backend Module → 状态/执行</h2>
+<div class="table-wrap"><table><thead><tr><th>页面 / 用户职责</th><th>Feature / 状态</th><th>主要 operations</th><th>Backend owner</th><th>Persistence / worker</th></tr></thead><tbody>
+<tr><td>Today：今日工作概览与刷新</td><td>overview + domain；React Query polling</td><td>overview today / refresh / job</td><td>OverviewSnapshotService</td><td>domain + literature + auth SQLite；overview job</td></tr>
+<tr><td>Projects：项目画布、成员、上下文、任务关系</td><td>projects + domain + tasks + auth</td><td>project/workspace/context/member/relationship/usage</td><td>Project / Workspace / Context Modules</td><td>agentic_researcher.sqlite3</td></tr>
+<tr><td>Tasks：创建、聊天、流式输出、生命周期</td><td>tasks + domain；React Query + EventSource</td><td>20-route Task Interface</td><td>TaskApplication + Projection</td><td>SQLite → TaskDispatcher → Harness/runtime</td></tr>
+<tr><td>Workspaces / Browser：注册、关联、文件访问</td><td>workspaces + environments + tasks；files</td><td>workspace CRUD/link/primary；files list/read/stream/upload</td><td>Workspace Module；FileBrowserService</td><td>SQLite；tenant owner → SSH/container/filesystem</td></tr>
+<tr><td>Environments：运行环境配置与检测</td><td>environments Adapter over domain</td><td>environment CRUD/detect/project refs</td><td>Environment / Project Modules</td><td>SQLite + runtime detection</td></tr>
+<tr><td>Terminal：tenant terminal 与附件</td><td>terminal hooks + xterm lifecycle</td><td>6 HTTP + 1 WebSocket</td><td>SessionManager / PTY / attachment</td><td>terminal_state.sqlite3 + SSH/tmux/runtime</td></tr>
+<tr><td>Literature：主题、论文、检查、摘要、研究任务</td><td>literature + TaskCreateFlow</td><td>26 routes / 18 frontend adapter operations</td><td>LiteratureService / Tracking / Saga</td><td>literature.sqlite3 → Domain Task worker</td></tr>
+<tr><td>Resources：资源与 token 使用</td><td>resources + tasks</td><td>/resources；/tasks/token-usage</td><td>ResourceMonitor / TaskProjection</td><td>host metrics + domain SQLite</td></tr>
+<tr><td>Runs / Timeline：管理态运行审计</td><td>tasks + domain + projects</td><td>task list/detail/attempts/project usage</td><td>Task projections</td><td>agentic_researcher.sqlite3；客户端 Gantt</td></tr>
+<tr><td>Settings：偏好、skills、registry、admin</td><td>settings + auth + domain + environments</td><td>settings/skills/registries/admin users/access</td><td>Config / Skills / Auth / Domain</td><td>localStorage + config/filesystem/git + SQLite</td></tr>
+</tbody></table></div>
+
+<h3>正式 HTTP Interface 分布</h3>
+<div class="card">
+ <div class="bar-row"><span>Domain</span><div class="bar-bg"><div class="bar b1" style="width:100%"></div></div><b>50</b></div>
+ <div class="bar-row"><span>Literature</span><div class="bar-bg"><div class="bar b2" style="width:52%"></div></div><b>26</b></div>
+ <div class="bar-row"><span>Tasks</span><div class="bar-bg"><div class="bar b3" style="width:40%"></div></div><b>20</b></div>
+ <div class="bar-row"><span>Admin</span><div class="bar-bg"><div class="bar b4" style="width:16%"></div></div><b>8</b></div>
+ <div class="bar-row"><span>Auth / Skill registries</span><div class="bar-bg"><div class="bar b5" style="width:14%"></div></div><b>7 / 7</b></div>
+ <div class="bar-row"><span>Terminal</span><div class="bar-bg"><div class="bar b2" style="width:14%"></div></div><b>6 + WS</b></div>
+</div>
+<p class="note">认证：全局 JWT/cookie/API-key middleware；admin routes 显式 require_admin；domain/tasks 将 owner/member/editor 规则下沉到正式 Domain Interface；files/terminal 要求 workspace execution owner，admin 也不能绕过 tenant owner Seam。</p>
+</section>
+
+<section id="depth">
+<h2>Module Depth 与大小排行榜</h2>
+<p>评分 1–5 衡量 Interface 学习成本相对其隐藏行为与复用 Leverage，不是 LOC 比率。推荐动作由调用方、测试 Seam、依赖方向、Locality 与 compatibility 职责共同决定。</p>
+<h3>后端</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th class="num">实现规模</th><th>Interface / caller 证据</th><th class="num">Depth</th><th>Locality / 测试</th><th>动作</th></tr></thead><tbody>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/harness_engine/base.py#L150">HarnessEngine</a></td><td class="num">3,809</td><td>统一 start/cancel/pause/resume/input/probe；3 个真实 engine Adapter</td><td class="score s5">5</td><td>worker caller；1,140 行 harness tests</td><td><span class="tag green">保留</span>观察 ExecutionContext 膨胀</td></tr>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/domain/worker.py#L132">TaskDispatcher</a></td><td class="num">1,417</td><td>start/stop/run_once/run_forever 隐藏 claim/lease/recovery/runtime</td><td class="score s5">5</td><td>1,319 行 worker tests + lifecycle tests</td><td><span class="tag green">保留</span>深化内部 Locality</td></tr>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/backup/service.py#L1576">BackupService</a></td><td class="num">2,332</td><td>小 Interface 隐藏 dump/manifest/archive/POSIX restore</td><td class="score s5">5</td><td>1,466 行正式行为测试</td><td><span class="tag green">保留</span>仅整理私有内部 Module</td></tr>
+<tr><td>Terminal</td><td class="num">2,350 + route 946</td><td>6 HTTP + 1 WS 隐藏 PTY/SSH/attachment/session</td><td class="score s4">4</td><td>权限 Locality 强；session/API tests</td><td><span class="tag green">保留</span>内部按控制/附件整理</td></tr>
+<tr><td>LiteratureTaskSaga</td><td class="num">1,274</td><td>约 5 操作隐藏幂等、租约、跨库 Task 创建</td><td class="score s4">4</td><td>1,137 行 tests；跨三库风险</td><td><span class="tag amber">深化</span>减少内部行结构知识</td></tr>
+<tr><td>Domain application cluster</td><td class="num">14,844</td><td>Project 19、Workspace 13、Context 15、Task lifecycle 17 方法；dict/*args 隐含 contract</td><td class="score s3">3</td><td>高 Leverage，但 Interface 精确性不足</td><td><span class="tag amber">深化</span>typed command/result；先 Spec</td></tr>
+<tr><td><a href="file:///data/yile.chen/code/open-science/src/ainrf/api/routes/domain.py#L1">Domain HTTP router</a></td><td class="num">1,122 / 50 routes</td><td>多个业务域聚在一个 transport 文件</td><td class="score s2">2</td><td>底层 Module 已分，transport Locality 差</td><td><span class="tag red">拆分</span>仅内部 ownership，不改 URL</td></tr>
+<tr><td>domain_telemetry.py</td><td class="num">2,501</td><td>多事件 owner 与统计职责聚合</td><td class="score s2">2</td><td>测试 1,042 行，但 review blast radius 大</td><td><span class="tag red">拆分/深化</span>保持 metric Interface</td></tr>
+<tr><td>projects/workspaces/state facades</td><td class="num">100 合计</td><td>模型/re-export；删除后复杂度可能直接消失</td><td class="score s1">1</td><td>低 caller/test Leverage</td><td><span class="tag">合并/删除候选</span></td></tr>
+</tbody></table></div>
+
+<h3>前端</h3>
+<div class="table-wrap"><table><thead><tr><th>Module</th><th class="num">实现规模</th><th>Interface / caller 证据</th><th class="num">Depth</th><th>风险</th><th>动作</th></tr></thead><tbody>
+<tr><td><a href="file:///data/yile.chen/code/open-science/frontend/src/shared/api/client.ts#L1">shared HTTP client</a></td><td class="num">222</td><td>get/post/put/patch/delete 隐藏 token、refresh single-flight、error/request-id</td><td class="score s5">5</td><td>几乎所有 feature Adapter caller</td><td><span class="tag green">保留</span></td></tr>
+<tr><td>generated transport schema</td><td class="num">8,213</td><td>118 schemas，一处 authority，多 caller re-export</td><td class="score s5">5</td><td>operation path Seam 尚未被 caller 使用</td><td><span class="tag green">保留</span>深化 typed operation binding</td></tr>
+<tr><td>Tasks feature</td><td class="num">4,429</td><td>Task lifecycle/chat/stream/hooks 隐藏复杂状态</td><td class="score s4">4</td><td>TasksPage 646 行编排过重</td><td><span class="tag amber">保留并拆页面编排</span></td></tr>
+<tr><td>Settings feature</td><td class="num">4,388</td><td>storage/default/migration kernel 有深度</td><td class="score s3">3</td><td>偏好、skills、admin 聚合多职责</td><td><span class="tag amber">拆 composition</span>保留 storage kernel</td></tr>
+<tr><td>Design system</td><td class="num">2,105</td><td>约 40 primitives/layout/theme，多页面 caller</td><td class="score s3">3</td><td>个别 primitive 可能是浅 wrapper</td><td><span class="tag">继续观察</span>用 deletion test</td></tr>
+<tr><td>domain/api.ts</td><td class="num">311 / ~47 exports</td><td>高 caller，但多数是 path pass-through</td><td class="score s2">2</td><td>宽 Interface、业务 ownership 混合</td><td><span class="tag red">深化/分组</span>Project/Workspace/Environment/Overview</td></tr>
+<tr><td>Mock state</td><td class="num">3,041 核心</td><td>scenario + legacyState 两套状态表达</td><td class="score s2">2</td><td>响应语义与正式 contract 漂移</td><td><span class="tag red">合并</span>先补 contract matrix</td></tr>
+<tr><td>root page shims</td><td class="num">15 个一行文件</td><td>纯 re-export，复杂度不会扩散</td><td class="score s1">1</td><td>PlaceholderPage 无 caller</td><td><span class="tag">删除/合并候选</span></td></tr>
+</tbody></table></div>
+</section>
+
+<section id="risks">
+<h2>风险矩阵、维护成本与治理漂移</h2>
+<div class="matrix">
+ <div class="head">影响 / 紧迫</div><div class="head">现在</div><div class="head">下一阶段</div><div class="head">观察</div>
+ <div class="head">高</div><div class="hi">Literature 无 Pydantic schema；治理文本冲突；潜在 import cycle gate 缺失</div><div class="hi">Domain typed Interface；generated operation binding；Mock contract 合并</div><div class="med">Conversation/runtime accepted specs 尚待实现，可能改变 Task Interface</div>
+ <div class="head">中</div><div class="med">EnvironmentsPage 786；TasksPage 646；Domain router 50 routes</div><div class="med">schema/router locality；shared/types 834 行 ownership 审计</div><div class="lo">Terminal route 内部拆分；design-system 浅 wrapper</div>
+ <div class="head">低</div><div class="lo">client_logs 缺直接测试；PlaceholderPage 无 caller</div><div class="lo">page shim 删除；re-export facade 收窄</div><div class="lo">i18n 大文件属于内容规模，不是架构风险</div>
+</div>
+
+<h3>必须由用户复核的 PROJECT_BASIS ↔ 工程事实漂移</h3>
+<div class="grid">
+ <div class="card drift"><strong>1. 产品 root / v1 aliases</strong><br>Basis 表述为 compatibility aliases；当前架构与代码称产品 aliases 已删除，只保留独立 <code>/v1/models</code>、<code>/v1/messages</code>。<span class="decision">删除合规性结论暂停。</span></div>
+ <div class="card drift"><strong>2. AgenticResearcher 职责</strong><br>Basis 定义其为统一 Task CRUD 门面；代码仅 3 文件/170 行 preset 与数据类型，实际 CRUD 位于 Domain Task/Attempt/Worker。<span class="decision">该 Module 的合并/删除/迁移建议暂停。</span></div>
+ <div class="card drift"><strong>3. Literature transport authority</strong><br><a href="file:///data/yile.chen/code/open-science/src/ainrf/api/routes/literature.py#L168">26 routes</a> 直接 <code>request.json()</code>/dict，无 Pydantic request/response schema；前端使用手写 Literature types。与“OpenAPI 唯一 transport schema authority”存在实质漂移。<span class="decision">需决定修实现还是人工修 Basis。</span></div>
+ <div class="card drift"><strong>4. non-API → ainrf.api</strong><br><a href="file:///data/yile.chen/code/open-science/src/ainrf/server.py#L23">server.py:23</a> 作为 composition root 动态加载 <code>ainrf.api.app</code>。可能是合理装配例外，也可能违反 literal invariant。<span class="decision">需用户明确 composition-root 例外。</span></div>
+</div>
+
+<h3>维护成本判断</h3>
+<ul><li><strong>可控：</strong>测试有效代码约为后端产品 47.3%，Task/Domain/Auth 的正式 HTTP Interface 测试杠杆较好；generated drift gate 和单向前端依赖降低了跨栈改动风险。</li><li><strong>偏高：</strong>一个 transport 变更可能同时触达 route、集中 schema、generated artifacts、feature Adapter、Mock 和 page test；Literature 当前缺少这条自动闭环。</li><li><strong>结构性成本：</strong>migration/control/compatibility 的历史知识虽已有 Locality，但仍渗入 domain、terminal、harness Interface；删除需要 telemetry 与治理决策，不能仅靠静态 caller scan。</li><li><strong>低杠杆缺口：</strong>client_logs 无直接测试；Literature 26 routes 仅约 3 个 HTTP 测试文件；observability、agentic_researcher、state/workspaces 测试调用少。</li></ul>
+</section>
+
+<section id="roadmap">
+<h2>按收益 / 风险 / 工作量排序的候选与 30/60/90 天路径</h2>
+<div class="table-wrap"><table><thead><tr><th>优先级</th><th>候选</th><th>收益</th><th>风险</th><th>工作量</th><th>前置</th></tr></thead><tbody>
+<tr><td>P0</td><td>用户裁决 4 项治理漂移并同步 authority</td><td>极高</td><td>低</td><td>低</td><td><strong>用户/治理决策</strong></td></tr>
+<tr><td>P0</td><td>AST import graph + cycle CI gate</td><td>高</td><td>低</td><td>低</td><td>可直接写小型工程 Spec 或 lint contract</td></tr>
+<tr><td>P0</td><td>Literature Pydantic schema 与 HTTP contract matrix</td><td>极高</td><td>中</td><td>中</td><td><strong>先写 Spec</strong>，确认兼容与前端迁移</td></tr>
+<tr><td>P1</td><td>generated operationId/path 成为 feature Adapter Interface</td><td>高</td><td>中</td><td>中</td><td><strong>先写 Spec</strong>，选择 typed client 或 path builder</td></tr>
+<tr><td>P1</td><td>Domain Interface typed command/result，移除 dict/*args 隐式 contract</td><td>高</td><td>高</td><td>大</td><td><strong>必须先写 Spec</strong>；涉及测试与 transport</td></tr>
+<tr><td>P1</td><td>拆 EnvironmentsPage / TasksPage orchestration Module</td><td>高</td><td>中</td><td>中</td><td>保持页面 Interface 与 URL 不变</td></tr>
+<tr><td>P1</td><td>合并 scenario/legacyState Mock，补语义 contract cases</td><td>高</td><td>中</td><td>中</td><td>先建立覆盖差异清单</td></tr>
+<tr><td>P2</td><td>Domain router、api/schemas 按业务 owner colocate</td><td>中高</td><td>中</td><td>中</td><td><strong>先写 Spec</strong>；不得改变 OpenAPI</td></tr>
+<tr><td>P2</td><td>domain_telemetry 按事件 owner 深化</td><td>中</td><td>中</td><td>中</td><td>保持 metric 名称/registry Interface</td></tr>
+<tr><td>P2</td><td>删除 Placeholder/page shims 与浅 re-export facade</td><td>低中</td><td>低</td><td>低</td><td>deletion test + caller scan</td></tr>
+<tr><td>P3</td><td>migration/control retirement</td><td>高</td><td>高</td><td>大</td><td><strong>生产 telemetry 窗口 + 用户 removal 决策</strong></td></tr>
+</tbody></table></div>
+
+<div class="timeline">
+ <div class="card phase"><h3>0–30 天：修 authority 与可验证性</h3><ul><li>用户裁决 4 项 drift。</li><li>建立 AST import/cycle gate。</li><li>为 Literature 写 transport contract Spec。</li><li>补 client_logs、Literature 正式 Interface 测试。</li><li>冻结本报告统计脚本口径作为趋势基线。</li></ul></div>
+ <div class="card phase"><h3>31–60 天：深化高杠杆 Seam</h3><ul><li>实施 Literature Pydantic/generated migration。</li><li>让 operationId/path 进入 feature Adapter。</li><li>拆 Tasks/Environments 页面编排。</li><li>Mock 单一状态 owner。</li><li>完成 shared/types 与 domain types ownership 盘点。</li></ul></div>
+ <div class="card phase"><h3>61–90 天：收窄核心 Interface</h3><ul><li>按批准 Spec 推进 typed Domain commands/results。</li><li>transport schema/router 按 owner colocate。</li><li>深化 telemetry Locality。</li><li>仅在完整 telemetry 证据后提出 compatibility retirement。</li><li>将 Conversation/runtime 已接受方向与本轮变更重新排程。</li></ul></div>
+</div>
+</section>
+
+<section id="method">
+<h2>方法、复现命令与限制</h2>
+<div class="card"><strong>工具版本</strong><br>git 2.34.1 · Python 3.13.12 · Node 24.14.1 · npm 11.18.0 · tokei 14.0.0 · ripgrep 15.2.0</div>
+<h3>核心复现命令</h3>
+<pre class="card"><code>git fetch --prune origin master
+git rev-parse origin/master
+git archive origin/master | tar -x -C /tmp/openscience-audit-&lt;id&gt;
+tokei src/ainrf tests
+find src/ainrf -type f -name '*.py' -print0 | xargs -0 wc -l
+find tests -type f -name '*.py' -print0 | xargs -0 wc -l
+tokei --files --output json /tmp/openscience-audit-&lt;id&gt;
+jq '[.components.schemas|keys[]]|length' frontend/src/generated/transport/openapi.json
+jq -r '.paths|to_entries[]|.key as $p|.value|to_entries[]|select(.key|IN("get","post","put","patch","delete"))|[.key,$p,.value.operationId]|@tsv' frontend/src/generated/transport/openapi.json
+rg -n '^\s*@router\.(get|post|put|patch|delete|websocket)' src/ainrf/api/routes
+rg -n 'transportPath' frontend/src
+rg -n 'from ["'"']@features/' frontend/src/shared frontend/src/design-system</code></pre>
+<h3>统计规则</h3>
+<ul><li>只统计锁定 SHA 的 tracked snapshot；不扫描 <code>node_modules</code>、cache、dist、runtime data 或 ref-repo 工作树。</li><li>分类按路径、生成标记与用途互斥；generated、tests、Mock 不并入手写产品。</li><li>前端产品只统计 <code>frontend/src/**/*.{ts,tsx,css}</code>；测试单列 <code>frontend/__tests__</code>。</li><li>route 来自 generated OpenAPI；WebSocket 因不进入 OpenAPI单独静态计数。</li><li>caller/test coverage 是 import、HTTP client 和测试文件检索证据，不是动态 coverage 百分比。</li></ul>
+<h3>已知限制与不确定性</h3>
+<ul><li>未运行 coverage instrumentation，也未以圈复杂度作为 Module Depth 代理。</li><li>静态 import 双向边可能由延迟导入、TYPE_CHECKING 或 composition root 造成；需 AST/运行时 gate 确认。</li><li>tokei 将 Python docstring 通常计为代码；Markdown 不报告“有效代码”。</li><li>压缩 JSON 物理行严重低估信息量，因此 generated 以 schemas/operations 辅助解释。</li><li>未操作 production、staging、Docker、浏览器或网络业务接口；结论是代码与长期文档静态审计。</li><li>四项治理漂移遵循规则未自行裁决；涉及它们的推荐动作明确暂停或要求用户决策。</li></ul>
+</section>
+
+<footer class="footer">OpenScience architecture audit · locked master SHA 4b9f31717f40a024a9a60ac73ca7ca9a66afee8f · report generated outside repository</footer>
+</main>
+</body>
+</html>
