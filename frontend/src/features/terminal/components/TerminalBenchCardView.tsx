@@ -80,7 +80,7 @@ function TerminalBenchCardView({
   };
 
   return (
-    <SectionCard>
+    <div className="space-y-5" data-testid="terminal-bench-content">
       <div>
         <div className="space-y-4">
           <SectionHeader
@@ -191,7 +191,7 @@ function TerminalBenchCardView({
           />
         </div>
       </SectionCard>
-    </SectionCard>
+    </div>
   );
 }
 

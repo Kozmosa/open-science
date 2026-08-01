@@ -16,8 +16,8 @@ function TerminalPage() {
   }, [environmentSelection, routeEnvironmentId]);
 
   return (
-    <PageShell>
-      <div className="p-3">
+    <PageShell variant="canvas">
+      <div className="mx-auto flex w-full max-w-[1450px] flex-col p-4 md:p-6">
         <TerminalBenchCard selectedEnvironment={environmentSelection.selectedEnvironment} />
       </div>
     </PageShell>

@@ -122,6 +122,7 @@ describe('TerminalBenchCard', () => {
 
     expect(await screen.findByRole('heading', { name: 'Personal terminal session' })).toBeInTheDocument();
     expect(screen.getByText('PERSONAL TERMINAL SESSION')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-bench-content').tagName).toBe('DIV');
     expect(screen.queryByText(/Attach, detach, or reset the persistent personal terminal session/)).not.toBeInTheDocument();
 
     unmount();

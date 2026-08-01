@@ -58,6 +58,8 @@ describe('TerminalPage', () => {
     });
 
     expect(screen.getByTestId('terminal-bench-card')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-bench-card').closest('[data-page-shell-variant]'))
+      .toHaveAttribute('data-page-shell-variant', 'canvas');
   });
 
   it('does not expose task-attach intent labels in the terminal page content', async () => {
