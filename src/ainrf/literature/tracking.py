@@ -429,6 +429,8 @@ class LiteratureTrackingService:
         view: str = "today",
         topic_id: str | None = None,
         category: str | None = None,
+        summary_status: str | None = None,
+        has_research_task: bool | None = None,
         cursor: str | None = None,
         limit: int = 30,
     ) -> dict[str, Any]:
@@ -453,6 +455,38 @@ class LiteratureTrackingService:
         if category:
             clauses.append("cp.primary_category = ?")
             params.append(category)
+        if summary_status:
+            valid_summary_statuses = {
+                "not_requested",
+                "queued",
+                "generating",
+                "completed",
+                "stale",
+                "failed",
+            }
+            if summary_status not in valid_summary_statuses:
+                raise ValueError("Unsupported summary status")
+            if summary_status == "not_requested":
+                clauses.append(
+                    "NOT EXISTS (SELECT 1 FROM literature_summaries s WHERE s.version_id = cp.current_version_id)"
+                )
+            elif summary_status == "stale":
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM literature_summaries s WHERE s.paper_id = cp.paper_id AND s.version_id != cp.current_version_id)"
+                )
+                clauses.append(
+                    "NOT EXISTS (SELECT 1 FROM literature_summaries s WHERE s.version_id = cp.current_version_id)"
+                )
+            else:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM literature_summaries s WHERE s.version_id = cp.current_version_id AND s.status = ?)"
+                )
+                params.append(summary_status)
+        if has_research_task is not None:
+            predicate = "EXISTS" if has_research_task else "NOT EXISTS"
+            clauses.append(
+                f"{predicate} (SELECT 1 FROM literature_research_task_intents intent WHERE intent.user_id = ups.user_id AND intent.paper_id = cp.paper_id)"
+            )
         if cursor:
             clauses.append("(ups.last_seen_at, cp.paper_id) < (?, ?)")
             cursor_at, _, cursor_id = cursor.partition("|")
@@ -628,7 +662,19 @@ class LiteratureTrackingService:
                 "SELECT * FROM literature_summaries WHERE version_id = ? ORDER BY created_at DESC LIMIT 1",
                 (accessible["current_version_id"],),
             ).fetchone()
-        return self._summary_dict(row) if row else {"status": "not_requested"}
+            stale = None
+            if row is None:
+                stale = conn.execute(
+                    "SELECT * FROM literature_summaries WHERE paper_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (paper_id,),
+                ).fetchone()
+        if row is not None:
+            return self._summary_dict(row)
+        if stale is not None:
+            result = self._summary_dict(stale)
+            result["status"] = "stale"
+            return result
+        return {"status": "not_requested"}
 
     def summary_context(self, summary_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -1031,7 +1077,7 @@ class LiteratureTrackingService:
             (paper_id,),
         ).fetchall()
         result = self._paper_for_user(conn, user_id, row)
-        result["versions"] = [dict(version) for version in versions]
+        result["versions"] = [self._version_dict(version) for version in versions]
         return result
 
     @staticmethod
@@ -1215,4 +1261,16 @@ class LiteratureTrackingService:
             "practice_note": row["practice_note"],
             "error": row["error_message"],
             "version_id": row["version_id"],
+        }
+
+    @staticmethod
+    def _version_dict(row: sqlite3.Row) -> dict[str, Any]:
+        """Keep persistence-only version columns behind the presenter Seam."""
+
+        return {
+            "version_id": row["version_id"],
+            "provider_version": row["provider_version"],
+            "published_at": row["published_at"],
+            "updated_at": row["updated_at"],
+            "first_seen_at": row["first_seen_at"],
         }

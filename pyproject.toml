@@ -37,8 +37,8 @@ dependencies = [
 ]
 
 [project.scripts]
-ainrf = "ainrf.cli:main"
-openscience = "ainrf.cli:main"
+ainrf = "ainrf.api.cli:main"
+openscience = "ainrf.api.cli:main"
 
 [dependency-groups]
 dev = [

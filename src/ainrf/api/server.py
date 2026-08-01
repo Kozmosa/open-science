@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import os
 import signal
 import subprocess
@@ -13,50 +12,48 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
+from ainrf.api.app import create_app
 from ainrf.logging import configure_logging
 from ainrf.runtime.product_config import ApiConfig
 
 
-def create_app(config: ApiConfig) -> FastAPI:
-    """Load the HTTP Adapter at the process composition root."""
-
-    module = importlib.import_module("ainrf.api.app")
-    factory = getattr(module, "create_app")
-    app = factory(config)
-    if not isinstance(app, FastAPI):
-        raise TypeError("HTTP composition root did not return a FastAPI application")
-    return app
-
-
 def create_development_app() -> FastAPI:
-    """Build an env-configured app for the uvicorn development reloader."""
+    """Build the environment-configured HTTP Adapter for the reload process."""
 
     config = ApiConfig.from_env()
     configure_logging(config.state_root)
     return create_app(config)
 
 
-def run_server(
+def run_http_server(
     host: str,
     port: int,
     state_root: Path,
     *,
     workers: int = 1,
+    reload: bool = False,
 ) -> None:
     configure_logging(state_root)
-    app = create_app(ApiConfig.from_env(state_root))
+    application: FastAPI | str
+    if reload:
+        application = "ainrf.api.server:create_development_app"
+    else:
+        application = create_app(ApiConfig.from_env(state_root))
     uvicorn.run(
-        app,
+        application,
+        factory=reload,
         host=host,
         port=port,
         log_level="info",
         ws_ping_interval=10.0,
         ws_ping_timeout=30.0,
         workers=workers,
+        reload=reload,
+        reload_dirs=[str(Path(__file__).resolve().parents[1])] if reload else None,
     )
 
 
-def run_server_daemon(
+def run_http_server_daemon(
     host: str,
     port: int,
     state_root: Path,
@@ -97,7 +94,7 @@ def run_server_daemon(
     raise RuntimeError(f"OpenScience API daemon failed to become healthy on {host}:{port}")
 
 
-def stop_server_daemon(pid_file: Path) -> bool:
+def stop_http_server_daemon(pid_file: Path) -> bool:
     if not pid_file.exists():
         return False
     raw_value = pid_file.read_text(encoding="utf-8").strip()
@@ -117,8 +114,8 @@ async def _wait_until_healthy_async(host: str, port: int, timeout_seconds: float
     async with httpx.AsyncClient() as client:
         while time.monotonic() < deadline:
             try:
-                resp = await client.get(url, timeout=1.0)
-                if resp.status_code in {200, 503}:
+                response = await client.get(url, timeout=1.0)
+                if response.status_code in {200, 503}:
                     return True
             except httpx.HTTPError:
                 pass
@@ -127,7 +124,6 @@ async def _wait_until_healthy_async(host: str, port: int, timeout_seconds: float
 
 
 def _wait_until_healthy(host: str, port: int, timeout_seconds: float = 10.0) -> bool:
-    """Deprecated: prefer _wait_until_healthy_async. Kept for sync callers."""
     import anyio
 
     return anyio.run(_wait_until_healthy_async, host, port, timeout_seconds)

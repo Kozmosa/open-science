@@ -560,13 +560,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_literature_papers_paper_id_research_task": {
-    "method": "GET",
-    "path": "/api/literature/papers/{paper_id}/research-task",
-    "clientPath": "/literature/papers/{paper_id}/research-task",
-    "canonical": true,
-    "deprecated": false
-  },
   "post_api_literature_papers_paper_id_research_task": {
     "method": "POST",
     "path": "/api/literature/papers/{paper_id}/research-task",
@@ -599,6 +592,13 @@ export const transportOperations = {
     "method": "POST",
     "path": "/api/literature/papers/{paper_id}/summary",
     "clientPath": "/literature/papers/{paper_id}/summary",
+    "canonical": true,
+    "deprecated": false
+  },
+  "get_api_literature_papers_paper_id_versions": {
+    "method": "GET",
+    "path": "/api/literature/papers/{paper_id}/versions",
+    "clientPath": "/literature/papers/{paper_id}/versions",
     "canonical": true,
     "deprecated": false
   },

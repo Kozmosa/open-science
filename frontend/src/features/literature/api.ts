@@ -1,6 +1,40 @@
-import { api } from '@/shared/api/client';
+import { api } from "@/shared/api/client";
+import { transportPath } from "@/shared/api/transport";
+import type {
+  LiteratureCheckListResponse as CheckListTransport,
+  LiteratureCheckRequest,
+  LiteratureCheckResponse as CheckTransport,
+  LiteratureOverviewResponse as OverviewTransport,
+  LiteraturePaperDetailResponse as PaperDetailTransport,
+  LiteraturePaperListResponse as PaperListTransport,
+  LiteraturePaperStateRequest,
+  LiteratureResearchTaskListResponse as TaskListTransport,
+  LiteratureResearchTaskRequest,
+  LiteratureResearchTaskResponse as TaskTransport,
+  LiteratureSummaryRequest,
+  LiteratureSummaryResponse as SummaryTransport,
+  LiteratureTopicListResponse as TopicListTransport,
+  LiteratureTopicPreviewResponse as TopicPreviewTransport,
+  LiteratureTopicRequest,
+  LiteratureTopicResponse as TopicTransport,
+  LiteratureTopicUpdateRequest,
+} from "@/generated/transport";
+import {
+  adaptCheck,
+  adaptCheckList,
+  adaptOverview,
+  adaptPaper,
+  adaptPaperList,
+  adaptSummary,
+  adaptTask,
+  adaptTaskList,
+  adaptTopic,
+  adaptTopicList,
+  adaptTopicPreview,
+} from "./adapter";
 import type {
   LiteratureCheck,
+  LiteratureList,
   LiteratureOverview,
   LiteraturePaperDetail,
   LiteraturePaperListParams,
@@ -10,87 +44,182 @@ import type {
   LiteratureTopic,
   LiteratureTopicInput,
   LiteratureTopicPreview,
-} from '@/shared/types';
+} from "./types";
 
-function queryString(params: Record<string, string | number | undefined>): string {
+function queryString(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(params))
     if (value !== undefined) search.set(key, String(value));
-  }
   const query = search.toString();
-  return query ? `?${query}` : '';
+  return query ? `?${query}` : "";
 }
 
-export const getLiteratureOverview = (): Promise<LiteratureOverview> =>
-  api.get('/literature/overview');
-export const getLiteratureTopics = (): Promise<{ items: LiteratureTopic[] }> =>
-  api.get('/literature/topics');
-export const createLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopic> =>
-  api.post('/literature/topics', payload);
-export const updateLiteratureTopic = (
+export const getLiteratureOverview = async (): Promise<LiteratureOverview> =>
+  adaptOverview(
+    await api.get<OverviewTransport>(
+      transportPath("get_api_literature_overview"),
+    ),
+  );
+export const getLiteratureTopics = async (): Promise<
+  LiteratureList<LiteratureTopic>
+> =>
+  adaptTopicList(
+    await api.get<TopicListTransport>(
+      transportPath("get_api_literature_topics"),
+    ),
+  );
+export const createLiteratureTopic = async (
+  payload: LiteratureTopicInput,
+): Promise<LiteratureTopic> =>
+  adaptTopic(
+    await api.post<TopicTransport>(
+      transportPath("post_api_literature_topics"),
+      payload satisfies LiteratureTopicRequest,
+    ),
+  );
+export const updateLiteratureTopic = async (
   topicId: string,
-  payload: Partial<LiteratureTopicInput & Pick<LiteratureTopic, 'is_active'>>,
-): Promise<LiteratureTopic> => api.patch(`/literature/topics/${topicId}`, payload);
+  payload: LiteratureTopicUpdateRequest,
+): Promise<LiteratureTopic> =>
+  adaptTopic(
+    await api.patch<TopicTransport>(
+      transportPath("patch_api_literature_topics_topic_id", {
+        topic_id: topicId,
+      }),
+      payload,
+    ),
+  );
 export const deleteLiteratureTopic = (topicId: string): Promise<void> =>
-  api.delete(`/literature/topics/${topicId}`);
-export const previewLiteratureTopic = (payload: LiteratureTopicInput): Promise<LiteratureTopicPreview> =>
-  api.post('/literature/topics/preview', payload);
+  api.delete(
+    transportPath("delete_api_literature_topics_topic_id", {
+      topic_id: topicId,
+    }),
+  );
+export const previewLiteratureTopic = async (
+  payload: LiteratureTopicInput,
+): Promise<LiteratureTopicPreview> =>
+  adaptTopicPreview(
+    await api.post<TopicPreviewTransport>(
+      transportPath("post_api_literature_topics_preview"),
+      payload satisfies LiteratureTopicRequest,
+    ),
+  );
 
-export const getLiteraturePapers = (
+export const getLiteraturePapers = async (
   params: LiteraturePaperListParams = {},
-): Promise<LiteraturePaperListResponse> => api.get(`/literature/papers${queryString({
-  view: params.view,
-  topic_id: params.topic_id,
-  category: params.category,
-  cursor: params.cursor,
-  limit: params.limit,
-})}`);
-export const getLiteraturePaper = (paperId: string): Promise<LiteraturePaperDetail> =>
-  api.get(`/literature/papers/${paperId}`);
-export const updateLiteraturePaperState = (
+): Promise<LiteraturePaperListResponse> =>
+  adaptPaperList(
+    await api.get<PaperListTransport>(
+      `${transportPath("get_api_literature_papers")}${queryString({ view: params.view, topic_id: params.topic_id, category: params.category, summary_status: params.summary_status, has_research_task: params.has_research_task, cursor: params.cursor, limit: params.limit })}`,
+    ),
+  );
+export const getLiteraturePaper = async (
   paperId: string,
-  payload: Partial<Pick<LiteraturePaperDetail['user_state'], 'is_read' | 'is_saved' | 'is_ignored'>>,
+): Promise<LiteraturePaperDetail> =>
+  adaptPaper(
+    await api.get<PaperDetailTransport>(
+      transportPath("get_api_literature_papers_paper_id", {
+        paper_id: paperId,
+      }),
+    ),
+  );
+export const updateLiteraturePaperState = async (
+  paperId: string,
+  payload: LiteraturePaperStateRequest,
   idempotencyKey: string,
-): Promise<LiteraturePaperDetail> => api.patch(`/literature/papers/${paperId}/state`, payload, {
-  headers: { 'Idempotency-Key': idempotencyKey },
-});
-export const getLiteratureSummary = (paperId: string): Promise<LiteratureSummary> =>
-  api.get(`/literature/papers/${paperId}/summary`);
-export const requestLiteratureSummary = (
+): Promise<LiteraturePaperDetail> =>
+  adaptPaper(
+    await api.patch<PaperDetailTransport>(
+      transportPath("patch_api_literature_papers_paper_id_state", {
+        paper_id: paperId,
+      }),
+      payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+  );
+export const getLiteratureSummary = async (
+  paperId: string,
+): Promise<LiteratureSummary> =>
+  adaptSummary(
+    await api.get<SummaryTransport>(
+      transportPath("get_api_literature_papers_paper_id_summary", {
+        paper_id: paperId,
+      }),
+    ),
+  );
+export const requestLiteratureSummary = async (
   paperId: string,
   idempotencyKey: string,
-  language = 'zh',
-): Promise<LiteratureSummary> => api.post(`/literature/papers/${paperId}/summary`, { language }, {
-  headers: { 'Idempotency-Key': idempotencyKey },
-});
-export const createLiteratureCheck = (
+  language = "zh",
+): Promise<LiteratureSummary> =>
+  adaptSummary(
+    await api.post<SummaryTransport>(
+      transportPath("post_api_literature_papers_paper_id_summary", {
+        paper_id: paperId,
+      }),
+      { language } satisfies LiteratureSummaryRequest,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+  );
+export const createLiteratureCheck = async (
   idempotencyKey: string,
   topicIds?: string[],
-): Promise<LiteratureCheck> => api.post('/literature/checks', topicIds ? { topic_ids: topicIds } : {}, {
-  headers: { 'Idempotency-Key': idempotencyKey },
-});
-export const getCurrentLiteratureCheck = (): Promise<LiteratureCheck | null> =>
-  api.get('/literature/checks/current');
-export const getLiteratureChecks = (limit = 30): Promise<{ items: LiteratureCheck[] }> =>
-  api.get(`/literature/checks${queryString({ limit })}`);
-export const getLiteratureCheck = (checkId: string): Promise<LiteratureCheck> =>
-  api.get(`/literature/checks/${checkId}`);
-export const createLiteratureResearchTask = (
+): Promise<LiteratureCheck> =>
+  adaptCheck(
+    await api.post<CheckTransport>(
+      transportPath("post_api_literature_checks"),
+      { topic_ids: topicIds ?? null } satisfies LiteratureCheckRequest,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+  );
+export const getCurrentLiteratureCheck =
+  async (): Promise<LiteratureCheck | null> => {
+    const value = await api.get<CheckTransport | null>(
+      transportPath("get_api_literature_checks_current"),
+    );
+    return value ? adaptCheck(value) : null;
+  };
+export const getLiteratureChecks = async (
+  limit = 30,
+): Promise<LiteratureList<LiteratureCheck>> =>
+  adaptCheckList(
+    await api.get<CheckListTransport>(
+      `${transportPath("get_api_literature_checks")}${queryString({ limit })}`,
+    ),
+  );
+export const getLiteratureCheck = async (
+  checkId: string,
+): Promise<LiteratureCheck> =>
+  adaptCheck(
+    await api.get<CheckTransport>(
+      transportPath("get_api_literature_checks_check_id", {
+        check_id: checkId,
+      }),
+    ),
+  );
+export const createLiteratureResearchTask = async (
   paperId: string,
-  payload: { project_id: string; workspace_id: string; task_preset: string; title?: string },
+  payload: LiteratureResearchTaskRequest,
   idempotencyKey: string,
-): Promise<LiteratureTaskIntent> => api.post(
-  `/literature/papers/${encodeURIComponent(paperId)}/research-task`,
-  payload,
-  { headers: { 'Idempotency-Key': idempotencyKey } },
-);
-export const getLiteratureResearchTask = (
+): Promise<LiteratureTaskIntent> =>
+  adaptTask(
+    await api.post<TaskTransport>(
+      transportPath("post_api_literature_papers_paper_id_research_task", {
+        paper_id: paperId,
+      }),
+      payload,
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    ),
+  );
+export const getLiteratureResearchTasks = async (
   paperId: string,
-  idempotencyKey: string,
-): Promise<LiteratureTaskIntent> => api.get(
-  `/literature/papers/${encodeURIComponent(paperId)}/research-task?idempotency_key=${encodeURIComponent(idempotencyKey)}`,
-);
-export const getLiteratureResearchTasks = (
-  paperId: string,
-): Promise<{ items: LiteratureTaskIntent[] }> =>
-  api.get(`/literature/papers/${encodeURIComponent(paperId)}/research-tasks`);
+): Promise<LiteratureList<LiteratureTaskIntent>> =>
+  adaptTaskList(
+    await api.get<TaskListTransport>(
+      transportPath("get_api_literature_papers_paper_id_research_tasks", {
+        paper_id: paperId,
+      }),
+    ),
+  );

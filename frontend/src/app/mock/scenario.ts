@@ -2,11 +2,6 @@ import { http as mswHttp, HttpResponse } from 'msw';
 import type {
   AdminUserItem,
   EnvAccessItem,
-  LiteratureCheck,
-  LiteraturePaperDetail,
-  LiteratureSummary,
-  LiteratureTaskIntent,
-  LiteratureTopic,
   MessageItem,
   SearchSettingsResponse,
   TaskCreatePayload,
@@ -14,6 +9,19 @@ import type {
   TaskRecord,
   TaskStatus,
 } from '@/shared/types';
+import type {
+  LiteratureCheck,
+  LiteraturePaperDetail,
+  LiteratureSummary,
+  LiteratureTaskIntent,
+  LiteratureTopic,
+} from '@/features/literature/types';
+import type {
+  LiteraturePaperStateRequest,
+  LiteratureResearchTaskRequest,
+  LiteratureTopicRequest,
+  LiteratureTopicUpdateRequest,
+} from '@/generated/transport';
 import type {
   DomainCapabilities,
   DomainContextCandidate,
@@ -1225,13 +1233,16 @@ export const frontendV2MockHandlers = [
     return noContent();
   }),
   http.get('/api/literature/overview', () => HttpResponse.json(literatureOverview())),
-  http.get('/api/literature/topics', () => HttpResponse.json({ items: state.topics })),
+  http.get('/api/literature/topics', () => HttpResponse.json({ items: state.topics, total: state.topics.length, next_cursor: null })),
   http.post('/api/literature/topics', async ({ request }) => {
-    const payload = await requestJson<{ label: string; include_terms: string[]; exclude_terms: string[]; categories: string[] }>(request);
+    const payload = await requestJson<LiteratureTopicRequest>(request);
     const topic: LiteratureTopic = {
       topic_id: `topic-mock-${state.topics.length + 1}`,
       user_id: OWNER_ID,
-      ...payload,
+      label: payload.label,
+      include_terms: payload.include_terms ?? [],
+      exclude_terms: payload.exclude_terms ?? [],
+      categories: payload.categories,
       status: 'active',
       is_active: true,
       created_at: LATER_TIME,
@@ -1247,11 +1258,16 @@ export const frontendV2MockHandlers = [
     local_coverage: { paper_count: state.papers.length, complete: true },
     needs_check: false,
   })),
+  http.get('/api/literature/topics/:topicId', ({ params }) => {
+    const topicId = textParam(params, 'topicId');
+    const topic = state.topics.find((item) => item.topic_id === topicId);
+    return topic ? HttpResponse.json(topic) : notFound('Literature Topic', topicId);
+  }),
   http.patch('/api/literature/topics/:topicId', async ({ params, request }) => {
     const topicId = textParam(params, 'topicId');
     const topic = state.topics.find((item) => item.topic_id === topicId);
     if (!topic) return notFound('Literature Topic', topicId);
-    Object.assign(topic, await requestJson<Partial<LiteratureTopic>>(request), { updated_at: LATER_TIME });
+    Object.assign(topic, await requestJson<LiteratureTopicUpdateRequest>(request), { updated_at: LATER_TIME });
     return HttpResponse.json(topic);
   }),
   http.delete('/api/literature/topics/:topicId', ({ params }) => {
@@ -1282,7 +1298,7 @@ export const frontendV2MockHandlers = [
     const paperId = textParam(params, 'paperId');
     const paper = state.papers.find((item) => item.paper_id === paperId);
     if (!paper) return notFound('Literature Paper', paperId);
-    Object.assign(paper.user_state, await requestJson<Partial<LiteraturePaperDetail['user_state']>>(request), { last_seen_at: LATER_TIME });
+    Object.assign(paper.user_state, await requestJson<LiteraturePaperStateRequest>(request), { last_seen_at: LATER_TIME });
     return HttpResponse.json(paper);
   }),
   http.post('/api/literature/papers/:paperId/research-task', async ({ params, request }) => {
@@ -1292,14 +1308,14 @@ export const frontendV2MockHandlers = [
     const key = idempotencyKey(request);
     const existing = state.intents[key];
     if (existing) return HttpResponse.json(existing.intent);
-    const payload = await requestJson<{ project_id: string; workspace_id: string; task_preset: string; title?: string }>(request);
+    const payload = await requestJson<LiteratureResearchTaskRequest>(request);
     state.intent_counter += 1;
     const intent: LiteratureTaskIntent = {
       intent_id: `intent-mock-${state.intent_counter}`,
       paper_id: paperId,
       project_id: payload.project_id,
-      workspace_id: payload.workspace_id,
-      task_preset: payload.task_preset,
+      workspace_id: payload.workspace_id ?? 'workspace-mock-primary',
+      task_preset: payload.task_preset ?? 'structured-research-default',
       title: payload.title ?? `Research: ${paper.title}`,
       task_id: null,
       status: 'creating_task',
@@ -1316,26 +1332,25 @@ export const frontendV2MockHandlers = [
     state.intents[key] = { intent, poll_count: 0 };
     return HttpResponse.json(intent, { status: 202 });
   }),
-  http.get('/api/literature/papers/:paperId/research-task', ({ params, request }) => {
-    const paperId = textParam(params, 'paperId');
-    const key = new URL(request.url).searchParams.get('idempotency_key') ?? '';
-    const record = state.intents[key];
-    return record && record.intent.paper_id === paperId
-      ? HttpResponse.json(advanceIntent(record))
-      : notFound('Literature Research Task Intent', key);
-  }),
   http.get('/api/literature/papers/:paperId/research-tasks', ({ params }) => {
     const paperId = textParam(params, 'paperId');
     return HttpResponse.json({
       items: Object.values(state.intents)
         .filter((record) => record.intent.paper_id === paperId)
-        .map((record) => record.intent),
+        .map((record) => advanceIntent(record)),
+      total: Object.values(state.intents).filter((record) => record.intent.paper_id === paperId).length,
+      next_cursor: null,
     });
   }),
   http.get('/api/literature/papers/:paperId', ({ params }) => {
     const paperId = textParam(params, 'paperId');
     const paper = state.papers.find((item) => item.paper_id === paperId);
     return paper ? HttpResponse.json(paper) : notFound('Literature Paper', paperId);
+  }),
+  http.get('/api/literature/papers/:paperId/versions', ({ params }) => {
+    const paperId = textParam(params, 'paperId');
+    const paper = state.papers.find((item) => item.paper_id === paperId);
+    return paper ? HttpResponse.json({ items: paper.versions, total: paper.versions.length, next_cursor: null }) : notFound('Literature Paper', paperId);
   }),
   http.get('/api/literature/papers', ({ request }) => {
     const search = new URL(request.url).searchParams;
@@ -1382,7 +1397,7 @@ export const frontendV2MockHandlers = [
     const check = state.checks.find((item) => item.check_id === checkId);
     return check ? HttpResponse.json(completeCheck(check)) : notFound('Literature Check', checkId);
   }),
-  http.get('/api/literature/checks', () => HttpResponse.json({ items: state.checks })),
+  http.get('/api/literature/checks', () => HttpResponse.json({ items: state.checks, total: state.checks.length, next_cursor: null })),
 
   http.post('/api/domain/overview/today/refresh', ({ request }) => {
     const key = idempotencyKey(request);

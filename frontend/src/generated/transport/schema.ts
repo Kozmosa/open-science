@@ -1201,6 +1201,851 @@ export type HealthResponse = {
 };
 
 /**
+ * LegacyLiteratureFetchResponse
+ */
+export type LegacyLiteratureFetchResponse = {
+    /**
+     * Check Id
+     */
+    check_id: string;
+    /**
+     * Status
+     */
+    status: 'fetch_started';
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
+};
+
+/**
+ * LegacyLiteratureFetchStatusResponse
+ */
+export type LegacyLiteratureFetchStatusResponse = {
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * LegacyLiteratureReadRequest
+ */
+export type LegacyLiteratureReadRequest = {
+    /**
+     * Subscription Id
+     */
+    subscription_id?: string | null;
+};
+
+/**
+ * LegacyLiteratureSubscriptionListResponse
+ */
+export type LegacyLiteratureSubscriptionListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LegacyLiteratureSubscriptionResponse>;
+};
+
+/**
+ * LegacyLiteratureSubscriptionRequest
+ */
+export type LegacyLiteratureSubscriptionRequest = {
+    /**
+     * Arxiv Categories
+     */
+    arxiv_categories?: Array<string>;
+    /**
+     * Frequency
+     */
+    frequency?: string;
+    /**
+     * Keywords
+     */
+    keywords?: Array<string>;
+    /**
+     * Label
+     */
+    label?: string;
+    /**
+     * Max Results
+     */
+    max_results?: number;
+};
+
+/**
+ * LegacyLiteratureSubscriptionResponse
+ */
+export type LegacyLiteratureSubscriptionResponse = {
+    /**
+     * Arxiv Categories
+     */
+    arxiv_categories: Array<string>;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Frequency
+     */
+    frequency: string;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Keywords
+     */
+    keywords: Array<string>;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Max Results
+     */
+    max_results: number;
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
+ * LegacyLiteratureSubscriptionUpdateRequest
+ */
+export type LegacyLiteratureSubscriptionUpdateRequest = {
+    /**
+     * Arxiv Categories
+     */
+    arxiv_categories?: Array<string> | null;
+    /**
+     * Frequency
+     */
+    frequency?: string | null;
+    /**
+     * Is Active
+     */
+    is_active?: boolean | null;
+    /**
+     * Keywords
+     */
+    keywords?: Array<string> | null;
+    /**
+     * Label
+     */
+    label?: string | null;
+    /**
+     * Max Results
+     */
+    max_results?: number | null;
+};
+
+/**
+ * LiteratureCheckListResponse
+ */
+export type LiteratureCheckListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LiteratureCheckResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor?: string | null;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * LiteratureCheckRequest
+ */
+export type LiteratureCheckRequest = {
+    /**
+     * Topic Ids
+     */
+    topic_ids?: Array<string> | null;
+};
+
+/**
+ * LiteratureCheckResponse
+ */
+export type LiteratureCheckResponse = {
+    /**
+     * Check Id
+     */
+    check_id: string;
+    /**
+     * Completed At
+     */
+    completed_at: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Next Attempt At
+     */
+    next_attempt_at: string | null;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Status
+     */
+    status: 'planned' | 'checking' | 'partial' | 'completed' | 'retrying' | 'failed';
+    /**
+     * Trigger
+     */
+    trigger: string;
+    /**
+     * Window End
+     */
+    window_end: string | null;
+    /**
+     * Window Start
+     */
+    window_start: string | null;
+};
+
+/**
+ * LiteratureLocalCoverage
+ */
+export type LiteratureLocalCoverage = {
+    /**
+     * Complete
+     */
+    complete: boolean;
+    /**
+     * Paper Count
+     */
+    paper_count: number;
+};
+
+/**
+ * LiteratureOverviewCounts
+ */
+export type LiteratureOverviewCounts = {
+    /**
+     * Saved
+     */
+    saved: number;
+    /**
+     * Today
+     */
+    today: number;
+    /**
+     * Unread
+     */
+    unread: number;
+    /**
+     * Updated
+     */
+    updated: number;
+};
+
+/**
+ * LiteratureOverviewResponse
+ */
+export type LiteratureOverviewResponse = {
+    active_check: LiteratureCheckResponse | null;
+    counts: LiteratureOverviewCounts;
+    /**
+     * Last Successful Check At
+     */
+    last_successful_check_at: string | null;
+    /**
+     * Next Scheduled Check At
+     */
+    next_scheduled_check_at: string | null;
+};
+
+/**
+ * LiteraturePaperDetailResponse
+ */
+export type LiteraturePaperDetailResponse = {
+    /**
+     * Abstract
+     */
+    abstract: string;
+    /**
+     * Authors
+     */
+    authors: Array<string>;
+    /**
+     * Categories
+     */
+    categories: Array<string>;
+    /**
+     * Current Version Id
+     */
+    current_version_id: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Matched Topics
+     */
+    matched_topics: Array<LiteratureTopicMatchResponse>;
+    /**
+     * Paper Id
+     */
+    paper_id: string;
+    /**
+     * Pdf Url
+     */
+    pdf_url: string;
+    /**
+     * Primary Category
+     */
+    primary_category: string;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Published At
+     */
+    published_at: string | null;
+    /**
+     * Source Url
+     */
+    source_url: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    user_state: LiteratureUserPaperStateResponse;
+    /**
+     * Versions
+     */
+    versions: Array<LiteraturePaperVersionResponse>;
+};
+
+/**
+ * LiteraturePaperListResponse
+ */
+export type LiteraturePaperListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LiteraturePaperResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor: string | null;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * LiteraturePaperResponse
+ */
+export type LiteraturePaperResponse = {
+    /**
+     * Abstract
+     */
+    abstract: string;
+    /**
+     * Authors
+     */
+    authors: Array<string>;
+    /**
+     * Categories
+     */
+    categories: Array<string>;
+    /**
+     * Current Version Id
+     */
+    current_version_id: string | null;
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Matched Topics
+     */
+    matched_topics: Array<LiteratureTopicMatchResponse>;
+    /**
+     * Paper Id
+     */
+    paper_id: string;
+    /**
+     * Pdf Url
+     */
+    pdf_url: string;
+    /**
+     * Primary Category
+     */
+    primary_category: string;
+    /**
+     * Provider
+     */
+    provider: string;
+    /**
+     * Published At
+     */
+    published_at: string | null;
+    /**
+     * Source Url
+     */
+    source_url: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    user_state: LiteratureUserPaperStateResponse;
+};
+
+/**
+ * LiteraturePaperStateRequest
+ */
+export type LiteraturePaperStateRequest = {
+    /**
+     * Is Ignored
+     */
+    is_ignored?: boolean | null;
+    /**
+     * Is Read
+     */
+    is_read?: boolean | null;
+    /**
+     * Is Saved
+     */
+    is_saved?: boolean | null;
+};
+
+/**
+ * LiteraturePaperVersionListResponse
+ */
+export type LiteraturePaperVersionListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LiteraturePaperVersionResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor?: string | null;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * LiteraturePaperVersionResponse
+ */
+export type LiteraturePaperVersionResponse = {
+    /**
+     * First Seen At
+     */
+    first_seen_at: string;
+    /**
+     * Provider Version
+     */
+    provider_version: string;
+    /**
+     * Published At
+     */
+    published_at: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    /**
+     * Version Id
+     */
+    version_id: string;
+};
+
+/**
+ * LiteratureResearchTaskListResponse
+ */
+export type LiteratureResearchTaskListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LiteratureResearchTaskResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor?: string | null;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * LiteratureResearchTaskRequest
+ */
+export type LiteratureResearchTaskRequest = {
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Task Preset
+     */
+    task_preset?: string;
+    /**
+     * Title
+     */
+    title?: string | null;
+    /**
+     * Workspace Id
+     */
+    workspace_id?: string | null;
+};
+
+/**
+ * LiteratureResearchTaskResponse
+ */
+export type LiteratureResearchTaskResponse = {
+    /**
+     * Attempt Count
+     */
+    attempt_count: number;
+    /**
+     * Completed At
+     */
+    completed_at: string | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Heartbeat At
+     */
+    heartbeat_at: string | null;
+    /**
+     * Idempotency Key
+     */
+    idempotency_key: string;
+    /**
+     * Intent Id
+     */
+    intent_id: string;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Next Retry At
+     */
+    next_retry_at: string | null;
+    /**
+     * Paper Id
+     */
+    paper_id: string;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string | null;
+    /**
+     * Task Preset
+     */
+    task_preset: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Work Item Id
+     */
+    work_item_id: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
+};
+
+/**
+ * LiteratureSummaryRequest
+ */
+export type LiteratureSummaryRequest = {
+    /**
+     * Language
+     */
+    language?: string;
+};
+
+/**
+ * LiteratureSummaryResponse
+ */
+export type LiteratureSummaryResponse = {
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Practice Note
+     */
+    practice_note?: string | null;
+    /**
+     * Status
+     */
+    status: 'not_requested' | 'queued' | 'generating' | 'completed' | 'stale' | 'failed';
+    /**
+     * Summary Id
+     */
+    summary_id?: string | null;
+    /**
+     * Text
+     */
+    text?: string | null;
+    /**
+     * Version Id
+     */
+    version_id?: string | null;
+};
+
+/**
+ * LiteratureTopicListResponse
+ */
+export type LiteratureTopicListResponse = {
+    /**
+     * Items
+     */
+    items: Array<LiteratureTopicResponse>;
+    /**
+     * Next Cursor
+     */
+    next_cursor?: string | null;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * LiteratureTopicMatchResponse
+ */
+export type LiteratureTopicMatchResponse = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Reasons
+     */
+    reasons: Array<string>;
+    /**
+     * Topic Id
+     */
+    topic_id: string;
+};
+
+/**
+ * LiteratureTopicPreviewResponse
+ */
+export type LiteratureTopicPreviewResponse = {
+    local_coverage: LiteratureLocalCoverage;
+    /**
+     * Matched Count
+     */
+    matched_count: number;
+    /**
+     * Needs Check
+     */
+    needs_check: boolean;
+    /**
+     * Samples
+     */
+    samples: Array<LiteratureTopicPreviewSample>;
+};
+
+/**
+ * LiteratureTopicPreviewSample
+ */
+export type LiteratureTopicPreviewSample = {
+    /**
+     * Paper Id
+     */
+    paper_id: string;
+    /**
+     * Primary Category
+     */
+    primary_category: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * LiteratureTopicRequest
+ */
+export type LiteratureTopicRequest = {
+    /**
+     * Categories
+     */
+    categories: Array<string>;
+    /**
+     * Exclude Terms
+     */
+    exclude_terms?: Array<string>;
+    /**
+     * Include Terms
+     */
+    include_terms?: Array<string>;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * LiteratureTopicResponse
+ */
+export type LiteratureTopicResponse = {
+    /**
+     * Categories
+     */
+    categories: Array<string>;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Exclude Terms
+     */
+    exclude_terms: Array<string>;
+    /**
+     * Include Terms
+     */
+    include_terms: Array<string>;
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Last Matched At
+     */
+    last_matched_at: string | null;
+    /**
+     * Status
+     */
+    status: 'pending_first_check' | 'active' | 'paused' | 'attention_needed';
+    /**
+     * Topic Id
+     */
+    topic_id: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * User Id
+     */
+    user_id: string;
+};
+
+/**
+ * LiteratureTopicUpdateRequest
+ */
+export type LiteratureTopicUpdateRequest = {
+    /**
+     * Categories
+     */
+    categories?: Array<string> | null;
+    /**
+     * Exclude Terms
+     */
+    exclude_terms?: Array<string> | null;
+    /**
+     * Include Terms
+     */
+    include_terms?: Array<string> | null;
+    /**
+     * Is Active
+     */
+    is_active?: boolean | null;
+    /**
+     * Label
+     */
+    label?: string | null;
+};
+
+/**
+ * LiteratureUserPaperStateResponse
+ */
+export type LiteratureUserPaperStateResponse = {
+    /**
+     * First Seen At
+     */
+    first_seen_at: string;
+    /**
+     * Is Ignored
+     */
+    is_ignored: boolean;
+    /**
+     * Is Read
+     */
+    is_read: boolean;
+    /**
+     * Is Saved
+     */
+    is_saved: boolean;
+    /**
+     * Last Seen At
+     */
+    last_seen_at: string;
+    /**
+     * Latest Seen Version Id
+     */
+    latest_seen_version_id: string | null;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -5204,22 +6049,35 @@ export type GetApiLiteratureChecksResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureCheckListResponse;
 };
 
+export type GetApiLiteratureChecksResponse = GetApiLiteratureChecksResponses[keyof GetApiLiteratureChecksResponses];
+
 export type PostApiLiteratureChecksData = {
-    body?: never;
+    body: LiteratureCheckRequest;
     path?: never;
     query?: never;
     url: '/api/literature/checks';
 };
 
+export type PostApiLiteratureChecksErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiLiteratureChecksError = PostApiLiteratureChecksErrors[keyof PostApiLiteratureChecksErrors];
+
 export type PostApiLiteratureChecksResponses = {
     /**
      * Successful Response
      */
-    202: unknown;
+    202: LiteratureCheckResponse;
 };
+
+export type PostApiLiteratureChecksResponse = PostApiLiteratureChecksResponses[keyof PostApiLiteratureChecksResponses];
 
 export type GetApiLiteratureChecksCurrentData = {
     body?: never;
@@ -5230,10 +6088,14 @@ export type GetApiLiteratureChecksCurrentData = {
 
 export type GetApiLiteratureChecksCurrentResponses = {
     /**
+     * Response Get Api Literature Checks Current
+     *
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureCheckResponse | null;
 };
+
+export type GetApiLiteratureChecksCurrentResponse = GetApiLiteratureChecksCurrentResponses[keyof GetApiLiteratureChecksCurrentResponses];
 
 export type GetApiLiteratureChecksCheckIdData = {
     body?: never;
@@ -5260,8 +6122,10 @@ export type GetApiLiteratureChecksCheckIdResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureCheckResponse;
 };
+
+export type GetApiLiteratureChecksCheckIdResponse = GetApiLiteratureChecksCheckIdResponses[keyof GetApiLiteratureChecksCheckIdResponses];
 
 export type GetApiLiteratureOverviewData = {
     body?: never;
@@ -5274,25 +6138,19 @@ export type GetApiLiteratureOverviewResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureOverviewResponse;
 };
+
+export type GetApiLiteratureOverviewResponse = GetApiLiteratureOverviewResponses[keyof GetApiLiteratureOverviewResponses];
 
 export type GetApiLiteraturePapersData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Subscription Id
-         */
-        subscription_id?: string | null;
-        /**
-         * Unread Only
-         */
-        unread_only?: boolean;
-        /**
          * View
          */
-        view?: string | null;
+        view?: 'today' | 'unread' | 'saved' | 'updated' | 'all';
         /**
          * Topic Id
          */
@@ -5302,6 +6160,14 @@ export type GetApiLiteraturePapersData = {
          */
         category?: string | null;
         /**
+         * Summary Status
+         */
+        summary_status?: string | null;
+        /**
+         * Has Research Task
+         */
+        has_research_task?: boolean | null;
+        /**
          * Cursor
          */
         cursor?: string | null;
@@ -5309,10 +6175,6 @@ export type GetApiLiteraturePapersData = {
          * Limit
          */
         limit?: number;
-        /**
-         * Offset
-         */
-        offset?: number;
     };
     url: '/api/literature/papers';
 };
@@ -5330,8 +6192,10 @@ export type GetApiLiteraturePapersResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteraturePaperListResponse;
 };
+
+export type GetApiLiteraturePapersResponse = GetApiLiteraturePapersResponses[keyof GetApiLiteraturePapersResponses];
 
 export type GetApiLiteraturePapersPaperIdData = {
     body?: never;
@@ -5358,11 +6222,13 @@ export type GetApiLiteraturePapersPaperIdResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteraturePaperDetailResponse;
 };
 
+export type GetApiLiteraturePapersPaperIdResponse = GetApiLiteraturePapersPaperIdResponses[keyof GetApiLiteraturePapersPaperIdResponses];
+
 export type PostApiLiteraturePapersPaperIdReadData = {
-    body?: never;
+    body: LegacyLiteratureReadRequest;
     path: {
         /**
          * Paper Id
@@ -5391,41 +6257,8 @@ export type PostApiLiteraturePapersPaperIdReadResponses = {
 
 export type PostApiLiteraturePapersPaperIdReadResponse = PostApiLiteraturePapersPaperIdReadResponses[keyof PostApiLiteraturePapersPaperIdReadResponses];
 
-export type GetApiLiteraturePapersPaperIdResearchTaskData = {
-    body?: never;
-    path: {
-        /**
-         * Paper Id
-         */
-        paper_id: string;
-    };
-    query: {
-        /**
-         * Idempotency Key
-         */
-        idempotency_key: string;
-    };
-    url: '/api/literature/papers/{paper_id}/research-task';
-};
-
-export type GetApiLiteraturePapersPaperIdResearchTaskErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiLiteraturePapersPaperIdResearchTaskError = GetApiLiteraturePapersPaperIdResearchTaskErrors[keyof GetApiLiteraturePapersPaperIdResearchTaskErrors];
-
-export type GetApiLiteraturePapersPaperIdResearchTaskResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
 export type PostApiLiteraturePapersPaperIdResearchTaskData = {
-    body?: never;
+    body: LiteratureResearchTaskRequest;
     path: {
         /**
          * Paper Id
@@ -5449,8 +6282,10 @@ export type PostApiLiteraturePapersPaperIdResearchTaskResponses = {
     /**
      * Successful Response
      */
-    202: unknown;
+    202: LiteratureResearchTaskResponse;
 };
+
+export type PostApiLiteraturePapersPaperIdResearchTaskResponse = PostApiLiteraturePapersPaperIdResearchTaskResponses[keyof PostApiLiteraturePapersPaperIdResearchTaskResponses];
 
 export type GetApiLiteraturePapersPaperIdResearchTasksData = {
     body?: never;
@@ -5477,11 +6312,13 @@ export type GetApiLiteraturePapersPaperIdResearchTasksResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureResearchTaskListResponse;
 };
 
+export type GetApiLiteraturePapersPaperIdResearchTasksResponse = GetApiLiteraturePapersPaperIdResearchTasksResponses[keyof GetApiLiteraturePapersPaperIdResearchTasksResponses];
+
 export type PatchApiLiteraturePapersPaperIdStateData = {
-    body?: never;
+    body: LiteraturePaperStateRequest;
     path: {
         /**
          * Paper Id
@@ -5505,8 +6342,10 @@ export type PatchApiLiteraturePapersPaperIdStateResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteraturePaperDetailResponse;
 };
+
+export type PatchApiLiteraturePapersPaperIdStateResponse = PatchApiLiteraturePapersPaperIdStateResponses[keyof PatchApiLiteraturePapersPaperIdStateResponses];
 
 export type GetApiLiteraturePapersPaperIdSummaryData = {
     body?: never;
@@ -5533,11 +6372,13 @@ export type GetApiLiteraturePapersPaperIdSummaryResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureSummaryResponse;
 };
 
+export type GetApiLiteraturePapersPaperIdSummaryResponse = GetApiLiteraturePapersPaperIdSummaryResponses[keyof GetApiLiteraturePapersPaperIdSummaryResponses];
+
 export type PostApiLiteraturePapersPaperIdSummaryData = {
-    body?: never;
+    body: LiteratureSummaryRequest;
     path: {
         /**
          * Paper Id
@@ -5561,8 +6402,40 @@ export type PostApiLiteraturePapersPaperIdSummaryResponses = {
     /**
      * Successful Response
      */
-    202: unknown;
+    202: LiteratureSummaryResponse;
 };
+
+export type PostApiLiteraturePapersPaperIdSummaryResponse = PostApiLiteraturePapersPaperIdSummaryResponses[keyof PostApiLiteraturePapersPaperIdSummaryResponses];
+
+export type GetApiLiteraturePapersPaperIdVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Paper Id
+         */
+        paper_id: string;
+    };
+    query?: never;
+    url: '/api/literature/papers/{paper_id}/versions';
+};
+
+export type GetApiLiteraturePapersPaperIdVersionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetApiLiteraturePapersPaperIdVersionsError = GetApiLiteraturePapersPaperIdVersionsErrors[keyof GetApiLiteraturePapersPaperIdVersionsErrors];
+
+export type GetApiLiteraturePapersPaperIdVersionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiteraturePaperVersionListResponse;
+};
+
+export type GetApiLiteraturePapersPaperIdVersionsResponse = GetApiLiteraturePapersPaperIdVersionsResponses[keyof GetApiLiteraturePapersPaperIdVersionsResponses];
 
 export type GetApiLiteratureSubscriptionsData = {
     body?: never;
@@ -5575,22 +6448,35 @@ export type GetApiLiteratureSubscriptionsResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LegacyLiteratureSubscriptionListResponse;
 };
 
+export type GetApiLiteratureSubscriptionsResponse = GetApiLiteratureSubscriptionsResponses[keyof GetApiLiteratureSubscriptionsResponses];
+
 export type PostApiLiteratureSubscriptionsData = {
-    body?: never;
+    body: LegacyLiteratureSubscriptionRequest;
     path?: never;
     query?: never;
     url: '/api/literature/subscriptions';
 };
 
+export type PostApiLiteratureSubscriptionsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiLiteratureSubscriptionsError = PostApiLiteratureSubscriptionsErrors[keyof PostApiLiteratureSubscriptionsErrors];
+
 export type PostApiLiteratureSubscriptionsResponses = {
     /**
      * Successful Response
      */
-    201: unknown;
+    201: LegacyLiteratureSubscriptionResponse;
 };
+
+export type PostApiLiteratureSubscriptionsResponse = PostApiLiteratureSubscriptionsResponses[keyof PostApiLiteratureSubscriptionsResponses];
 
 export type DeleteApiLiteratureSubscriptionsSubscriptionIdData = {
     body?: never;
@@ -5623,7 +6509,7 @@ export type DeleteApiLiteratureSubscriptionsSubscriptionIdResponses = {
 export type DeleteApiLiteratureSubscriptionsSubscriptionIdResponse = DeleteApiLiteratureSubscriptionsSubscriptionIdResponses[keyof DeleteApiLiteratureSubscriptionsSubscriptionIdResponses];
 
 export type PutApiLiteratureSubscriptionsSubscriptionIdData = {
-    body?: never;
+    body: LegacyLiteratureSubscriptionUpdateRequest;
     path: {
         /**
          * Subscription Id
@@ -5647,8 +6533,10 @@ export type PutApiLiteratureSubscriptionsSubscriptionIdResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LegacyLiteratureSubscriptionResponse;
 };
+
+export type PutApiLiteratureSubscriptionsSubscriptionIdResponse = PutApiLiteratureSubscriptionsSubscriptionIdResponses[keyof PutApiLiteratureSubscriptionsSubscriptionIdResponses];
 
 export type PostApiLiteratureSubscriptionsSubscriptionIdFetchData = {
     body?: never;
@@ -5675,8 +6563,10 @@ export type PostApiLiteratureSubscriptionsSubscriptionIdFetchResponses = {
     /**
      * Successful Response
      */
-    202: unknown;
+    202: LegacyLiteratureFetchResponse;
 };
+
+export type PostApiLiteratureSubscriptionsSubscriptionIdFetchResponse = PostApiLiteratureSubscriptionsSubscriptionIdFetchResponses[keyof PostApiLiteratureSubscriptionsSubscriptionIdFetchResponses];
 
 export type GetApiLiteratureSubscriptionsSubscriptionIdFetchStatusData = {
     body?: never;
@@ -5703,8 +6593,10 @@ export type GetApiLiteratureSubscriptionsSubscriptionIdFetchStatusResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LegacyLiteratureFetchStatusResponse;
 };
+
+export type GetApiLiteratureSubscriptionsSubscriptionIdFetchStatusResponse = GetApiLiteratureSubscriptionsSubscriptionIdFetchStatusResponses[keyof GetApiLiteratureSubscriptionsSubscriptionIdFetchStatusResponses];
 
 export type GetApiLiteratureTopicsData = {
     body?: never;
@@ -5717,36 +6609,60 @@ export type GetApiLiteratureTopicsResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureTopicListResponse;
 };
 
+export type GetApiLiteratureTopicsResponse = GetApiLiteratureTopicsResponses[keyof GetApiLiteratureTopicsResponses];
+
 export type PostApiLiteratureTopicsData = {
-    body?: never;
+    body: LiteratureTopicRequest;
     path?: never;
     query?: never;
     url: '/api/literature/topics';
 };
 
+export type PostApiLiteratureTopicsErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiLiteratureTopicsError = PostApiLiteratureTopicsErrors[keyof PostApiLiteratureTopicsErrors];
+
 export type PostApiLiteratureTopicsResponses = {
     /**
      * Successful Response
      */
-    201: unknown;
+    201: LiteratureTopicResponse;
 };
 
+export type PostApiLiteratureTopicsResponse = PostApiLiteratureTopicsResponses[keyof PostApiLiteratureTopicsResponses];
+
 export type PostApiLiteratureTopicsPreviewData = {
-    body?: never;
+    body: LiteratureTopicRequest;
     path?: never;
     query?: never;
     url: '/api/literature/topics/preview';
 };
 
+export type PostApiLiteratureTopicsPreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiLiteratureTopicsPreviewError = PostApiLiteratureTopicsPreviewErrors[keyof PostApiLiteratureTopicsPreviewErrors];
+
 export type PostApiLiteratureTopicsPreviewResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureTopicPreviewResponse;
 };
+
+export type PostApiLiteratureTopicsPreviewResponse = PostApiLiteratureTopicsPreviewResponses[keyof PostApiLiteratureTopicsPreviewResponses];
 
 export type DeleteApiLiteratureTopicsTopicIdData = {
     body?: never;
@@ -5803,11 +6719,13 @@ export type GetApiLiteratureTopicsTopicIdResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureTopicResponse;
 };
 
+export type GetApiLiteratureTopicsTopicIdResponse = GetApiLiteratureTopicsTopicIdResponses[keyof GetApiLiteratureTopicsTopicIdResponses];
+
 export type PatchApiLiteratureTopicsTopicIdData = {
-    body?: never;
+    body: LiteratureTopicUpdateRequest;
     path: {
         /**
          * Topic Id
@@ -5831,8 +6749,10 @@ export type PatchApiLiteratureTopicsTopicIdResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: LiteratureTopicResponse;
 };
+
+export type PatchApiLiteratureTopicsTopicIdResponse = PatchApiLiteratureTopicsTopicIdResponses[keyof PatchApiLiteratureTopicsTopicIdResponses];
 
 export type GetApiResourcesData = {
     body?: never;

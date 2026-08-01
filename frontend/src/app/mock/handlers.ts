@@ -1,7 +1,5 @@
 import { http as mswHttp, HttpResponse } from 'msw';
-import type {
-  LiteratureTopicInput,
-} from '@/shared/types';
+import type { LiteratureTopicRequest } from '@/generated/transport';
 import type {
   EnvironmentCreateRequest,
   EnvironmentUpdateRequest,
@@ -285,9 +283,9 @@ export const legacyMockHandlers = [
   http.post('/api/skill-registries/:registryId/update', ({ params }) => HttpResponse.json({ registry_id: textParam(params, 'registryId'), updated_count: 0, added: [], removed: [] })),
 
   http.get('/api/literature/overview', () => HttpResponse.json({ last_successful_check_at: null, next_scheduled_check_at: null, active_check: null, counts: { today: 0, unread: 0, saved: 0, updated: 0 } })),
-  http.get('/api/literature/topics', () => HttpResponse.json({ items: [] })),
+  http.get('/api/literature/topics', () => HttpResponse.json({ items: [], total: 0, next_cursor: null })),
   http.post('/api/literature/topics', resolveJson(async ({ request }) => {
-    const payload = await request.json() as LiteratureTopicInput;
+    const payload = await request.json() as LiteratureTopicRequest;
     return HttpResponse.json({ topic_id: 'mock-topic', user_id: mockUser.id, label: payload.label, include_terms: payload.include_terms, exclude_terms: payload.exclude_terms ?? [], categories: payload.categories, status: 'active', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), last_matched_at: null });
   })),
   http.post('/api/literature/topics/preview', () => HttpResponse.json({ matched_count: 0, samples: [], local_coverage: { paper_count: 0, complete: false }, needs_check: false })),

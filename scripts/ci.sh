@@ -22,6 +22,8 @@ _run() {
 }
 
 run_python_quality() {
+  _info "Python dependency direction"
+  _run uv run python scripts/check_dependency_direction.py
   _info "Python lint and format"
   _run uv run ruff check src tests scripts
   _run uv run ruff format --check src tests scripts
