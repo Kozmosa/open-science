@@ -364,7 +364,7 @@ function TasksPage() {
     <div className="flex min-h-0 flex-1 flex-col p-3">
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--osci-color-border-subtle)] pb-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--osci-color-text-muted)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--osci-color-primary)]">
             {t('pages.tasks.sidebarEyebrow')}
           </p>
           <p className="mt-1 truncate text-lg font-semibold tracking-tight text-[var(--osci-color-text)]">

@@ -104,7 +104,7 @@ const pages = {
         },
       },
       tasks: {
-        sidebarEyebrow: '任务运行',
+        sidebarEyebrow: 'TASKS',
         sidebarTitle: 'Agent 任务',
         sidebarCount: '共 {{count}} 个 · 实时输出回放',
         newTask: '新建任务',

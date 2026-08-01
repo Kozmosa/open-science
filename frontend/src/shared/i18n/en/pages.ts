@@ -106,7 +106,7 @@ const pages = {
         },
       },
       tasks: {
-        sidebarEyebrow: 'Task runs',
+        sidebarEyebrow: 'TASKS',
         sidebarTitle: 'Agent tasks',
         sidebarCount: '{{count}} total · canonical Item polling',
         newTask: 'New task',

@@ -905,6 +905,7 @@ describe('TasksPage', () => {
   it('renders task page copy from Chinese i18n messages', async () => {
     renderWithProviders(<TasksPage />, { locale: 'zh' });
 
+    expect(await screen.findByText('TASKS')).toHaveClass('text-[var(--osci-color-primary)]');
     expect(await screen.findByText('Agent 任务')).toBeInTheDocument();
     expect(screen.queryByText('Inspect the current Task conversation and its durable Turn history.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建任务' })).toBeInTheDocument();
