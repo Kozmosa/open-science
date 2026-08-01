@@ -100,8 +100,8 @@ describe('ResourcesPage', () => {
     });
 
     expect(await screen.findByRole('heading', { name: '资源监控' })).toBeInTheDocument();
-    // In Chinese, eyebrow and title are both "资源监控", so use getAllByText
-    expect(screen.getAllByText('资源监控').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('RESOURCES')).toBeInTheDocument();
+    expect(screen.queryByText('所有环境的实时系统资源占用情况。')).not.toBeInTheDocument();
   });
 
   it('renders resource data for multiple environments', async () => {

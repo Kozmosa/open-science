@@ -117,7 +117,6 @@ export default function ResourcesPage() {
         <PageHeader
           eyebrow={t('pages.resources.eyebrow')}
           title={t('pages.resources.title')}
-          description={t('pages.resources.description')}
           actions={(
             <Button variant="secondary" size="sm" onClick={refresh} isLoading={resourcesQuery.isFetching || tokenUsageQuery.isFetching} className="gap-2">
               <RefreshCw aria-hidden="true" size={14} />

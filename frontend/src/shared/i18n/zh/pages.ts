@@ -687,7 +687,7 @@ const pages = {
         attachProjectReference: '绑定到项目',
       },
       resources: {
-        eyebrow: '资源监控',
+        eyebrow: 'RESOURCES',
         title: '资源监控',
         description: '所有环境的实时系统资源占用情况。',
         loading: '正在加载资源数据...',
