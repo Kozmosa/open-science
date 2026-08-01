@@ -254,7 +254,6 @@ describe('App routes', () => {
     expect(within(palette).getByRole('heading', { name: 'Open command palette' })).toHaveClass('sr-only');
     expect(within(palette).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
     const commandInput = screen.getByRole('combobox', { name: 'Open command palette' });
-    expect(commandInput).toHaveAttribute('data-command-input');
     await user.type(commandInput, 'browse files');
     await user.click(screen.getByText('Browse Files'));
     expect(await screen.findByTestId('workspace-browser-page')).toBeInTheDocument();

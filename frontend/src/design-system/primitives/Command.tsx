@@ -13,7 +13,7 @@ export function CommandInput({ className, ...props }: React.ComponentPropsWithou
   return (
     <div className="flex items-center border-b border-[var(--osci-color-border)] px-3">
       <Search aria-hidden="true" className="mr-2 shrink-0 text-[var(--osci-color-text-muted)]" size={17} />
-      <CommandPrimitive.Input data-command-input className={cn('h-11 w-full bg-transparent text-sm outline-none placeholder:text-[var(--osci-color-text-muted)] disabled:opacity-50', className)} {...props} />
+      <CommandPrimitive.Input className={cn('h-11 w-full bg-transparent text-sm outline-none placeholder:text-[var(--osci-color-text-muted)] disabled:opacity-50', className)} {...props} />
     </div>
   );
 }
