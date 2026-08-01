@@ -219,7 +219,9 @@ describe('App routes', () => {
     );
 
     expect(await screen.findByTestId('tasks-page')).toBeInTheDocument();
-    expect(screen.getByLabelText('Expand sidebar')).toBeInTheDocument();
+    const sidebarToggle = screen.getByLabelText('Expand sidebar');
+    expect(sidebarToggle).toBeInTheDocument();
+    expect(sidebarToggle.querySelector('img[src="/openscience-mark.svg"]')).not.toBeNull();
     expect(screen.queryByText(/Task \|/)).not.toBeInTheDocument();
     expect(mockGetTasks).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: 'Browse Files' })).not.toBeInTheDocument();
@@ -236,7 +238,8 @@ describe('App routes', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Expand sidebar' }));
-    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+    const sidebarToggle = screen.getByRole('button', { name: 'Collapse sidebar' });
+    expect(sidebarToggle.querySelector('img[src="/openscience-mark.svg"]')).not.toBeNull();
     expect(window.localStorage.getItem('openscience:preference:test-user:sidebar-collapsed')).toBe('false');
   });
 

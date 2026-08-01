@@ -35,7 +35,7 @@ const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
 const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'turns', 'context', 'closed']);
-const NARROW_TASKS_QUERY = '(max-width: 767px)';
+const NARROW_TASKS_QUERY = '(max-width: 1023px)';
 
 function usePageVisibility(): boolean {
   const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
@@ -361,7 +361,7 @@ function TasksPage() {
     : SIDEBAR_COLLAPSED_WIDTH;
 
   const taskSidebarContent = taskSidebarCollapsed ? null : (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col p-3">
       <div className="mb-3 flex items-start justify-between gap-3 border-b border-[var(--osci-color-border-subtle)] pb-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--osci-color-text-muted)]">
@@ -411,7 +411,7 @@ function TasksPage() {
         onSearchQueryChange={setTaskSearchQuery}
         onSelectTask={selectTask}
       />
-    </>
+    </div>
   );
 
   return (
@@ -458,7 +458,7 @@ function TasksPage() {
               ) : null}
             />
           ) : (
-            <div className="flex h-full min-h-0 flex-col p-3" data-testid="task-mobile-list">
+            <div className="flex h-full min-h-0 flex-col" data-testid="task-mobile-list">
               {taskSidebarContent}
             </div>
           )

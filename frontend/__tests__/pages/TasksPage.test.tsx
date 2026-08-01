@@ -31,7 +31,7 @@ import { getDomainProjects } from '@features/domain';
 
 function stubTaskViewport(narrow: boolean): void {
   vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
-    matches: query === '(max-width: 767px)' ? narrow : false,
+    matches: query === '(max-width: 1023px)' ? narrow : false,
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -631,6 +631,7 @@ describe('TasksPage', () => {
 
     const sidebar = await screen.findByTestId('task-sidebar');
     expect(sidebar).toHaveClass('bg-[var(--osci-color-surface)]');
+    expect(sidebar.querySelector('.p-3')).not.toBeNull();
     expect(sidebar.parentElement?.querySelector('main')).toHaveClass('bg-[var(--osci-color-surface)]');
     expect(await screen.findByTestId('task-metadata-sidebar')).toHaveClass('bg-[var(--osci-color-surface)]');
     expect(container.firstElementChild).toHaveClass('p-3');

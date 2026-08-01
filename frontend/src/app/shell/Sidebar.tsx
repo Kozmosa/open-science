@@ -1,4 +1,3 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { BrandMark, Button } from '@design-system';
 import type { ResolvedAppRoute } from '@/app/routeRegistry';
 import { useT } from '@/shared/i18n';
@@ -25,16 +24,17 @@ export function Sidebar({ routes, collapsed, onCollapsedChange, user, onLogout }
       )}
     >
       <div className="flex h-12 items-center gap-2 border-b border-[var(--osci-color-border)] px-2.5">
-        <BrandMark showName={false} className="h-7 w-7 shrink-0" />
-        {collapsed ? null : <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t('common.appName')}</span>}
         <Button
           size="icon-sm"
           variant="ghost"
           aria-label={collapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
+          title={collapsed ? t('layout.expandSidebar') : t('layout.collapseSidebar')}
           onClick={() => onCollapsedChange(!collapsed)}
+          className="shrink-0 p-0"
         >
-          {collapsed ? <ChevronRight aria-hidden="true" size={15} /> : <ChevronLeft aria-hidden="true" size={15} />}
+          <BrandMark showName={false} className="h-8 w-8" />
         </Button>
+        {collapsed ? null : <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t('common.appName')}</span>}
       </div>
       <NavigationLinks routes={routes} collapsed={collapsed} />
       <div className="border-t border-[var(--osci-color-border)] p-2">
