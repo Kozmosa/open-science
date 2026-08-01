@@ -5,7 +5,7 @@ const pages = {
         eyebrow: 'Today',
         title: 'Today overview',
         description: 'A persisted, read-only view of attention, progress, literature, recent work and resource health.',
-        refresh: 'Refresh overview',
+        refresh: 'Refresh',
         nextRefresh: 'Next scheduled refresh: {{time}}',
         refreshed: 'Snapshot cutoff: {{time}}',
         loading: 'Loading the latest persisted overview…',

@@ -336,7 +336,6 @@ export default function TodayPage() {
         <PageHeader
           eyebrow={t('pages.today.eyebrow')}
           title={t('pages.today.title')}
-          description={t('pages.today.description')}
           actions={(
             <Button
               size="sm"

@@ -5,7 +5,7 @@ const pages = {
         eyebrow: 'TODAY',
         title: '今日概览',
         description: '只读呈现已持久化的异常、进度、文献、近期工作和资源状态。',
-        refresh: '刷新概览',
+        refresh: '刷新',
         nextRefresh: '下次计划刷新：{{time}}',
         refreshed: '数据截止：{{time}}',
         loading: '正在读取最近一次持久化概览…',
