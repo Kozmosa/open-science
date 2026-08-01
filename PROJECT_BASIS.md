@@ -75,8 +75,8 @@
 - `docs/` 负责内部长期知识资产；不要把仅用于一次调试的中间日志混入知识库主目录。
 - `docs/projects/`、`docs/summary/`、`ref-repos/` 与其他调研材料默认视为参考语料层，不直接定义 OpenScience 当前产品 contract。
 - 未来扩展 `ainrf` 时，优先把核心研究逻辑设计为可脱离具体宿主 CLI 复用的模块，再在 Typer 命令层做装配。
-- Backend 以 committed-v2 state 为唯一 product authority；不得重新引入 legacy writer、legacy read fallback、双读或双写。产品 import graph 必须保持无 cycle，且 non-API 模块不得反向依赖 `ainrf.api`。
-- Canonical HTTP prefix 是 `/api`；root 与 `/v1` 仅作为受 telemetry 约束的 compatibility aliases。没有完整生产观察窗口的零调用证据时，compatibility removal 必须 fail-closed。
+- Backend 以 committed-v2 state 为唯一 product authority；不得重新引入 legacy writer、legacy read fallback、双读或双写。产品 import graph 必须保持无 cycle，且 non-API Module 不得通过直接 import、惰性 import、动态 import 或字符串入口反向依赖 `ainrf.api`。FastAPI application construction、HTTP process composition 与 server lifecycle 属于 HTTP Adapter。
+- Canonical OpenScience product HTTP prefix 是 `/api`。历史 root 与 product `/v1` aliases 已在完成 caller audit、自动验证、隔离环境手动验收并经用户明确批准后删除；不为收集 compatibility telemetry 而将未经完整手动验收的代码部署到 production。`/v1/models` 与 `/v1/messages` 是独立、长期支持的外部模型协议 Interface，不是 OpenScience product route aliases。后续 compatibility removal 必须继续基于明确 caller inventory、充分验证证据和用户逐批批准；证据不足时 fail closed。
 - FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。Frontend generated transport 必须可确定性重建并通过 drift gate；UI 通过 feature adapter 消费 view model，不直接消费 raw generated payload。
 - Frontend 依赖方向为 `app -> features -> shared/design-system`；`shared`、`design-system` 和 legacy component 层不得反向依赖 feature。
 - 当前架构、release/rollback contract 与 compatibility inventory 的长期产品文档位于 `docs-site/docs/architecture.md`。
@@ -87,7 +87,8 @@
 - `docs-site/`：OpenScience 产品文档站点（VitePress，部署至 GitHub Pages）。
 - `frontend/`：OpenScience WebUI 前端。
 - `src/ainrf/`：OpenScience 稳定的 Python package/import namespace、CLI 入口、后端 API、日志与运行时代码。
-- `src/ainrf/agentic_researcher/`：OpenScience 任务管理门面，提供统一的任务 CRUD 和研究员预设
+- `src/ainrf/agentic_researcher/`：保留研究员 preset 以及当前 runtime 仍使用的稳定 Task/engine 数据模型；它不拥有 Task CRUD 或 Task lifecycle 写入。
+- `src/ainrf/domain/`：当前 committed-v2 Project、Workspace、Environment、Context、Task 与 Attempt application Modules；`TaskApplicationService` 是当前 Task lifecycle 的唯一正式写入 Interface。已接受但尚未实现的 Conversation Domain 设计只有在 schema、runtime、transport、migration 和测试完成 cutover 后，才能取代当前 Task/Attempt 工程事实。
 - `src/ainrf/harness_engine/`：OpenScience 执行引擎抽象，封装 claude-code、agent-sdk、codex-app-server
 - `tests/`：CLI smoke tests 与后续 Python 测试。
 - `scripts/`：本地构建与预览辅助脚本。
