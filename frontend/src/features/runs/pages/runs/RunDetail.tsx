@@ -2,13 +2,12 @@ import { SectionStack, semanticToneClasses } from '@design-system';
 import { useLocale, useT } from '@/shared/i18n';
 import { formatTaskDateTime, taskStatusLabel } from '@features/tasks';
 import type { TaskRecord } from '@/shared/types';
-import type { DomainTaskAttempt } from '@features/domain';
-import type { ProjectUsageSummaryResponse } from '@/shared/api/transportTypes';
-import { AttemptChain } from './AttemptChain';
+import type { ProjectUsageSummaryResponse, TurnResponse } from '@/shared/api/transportTypes';
+import { TurnChain } from './TurnChain';
 
 interface Props {
   detail: TaskRecord | null;
-  attempts: DomainTaskAttempt[];
+  turns: TurnResponse[];
   usage: ProjectUsageSummaryResponse | null;
   loading: boolean;
   selectedId: string | null;
@@ -34,7 +33,7 @@ function DetailRow({ label, value }: { label: string; value: string | number | n
   );
 }
 
-export function RunDetail({ detail, attempts, usage, loading, selectedId }: Props) {
+export function RunDetail({ detail, turns, usage, loading, selectedId }: Props) {
   const t = useT();
   const locale = useLocale();
 
@@ -101,13 +100,13 @@ export function RunDetail({ detail, attempts, usage, loading, selectedId }: Prop
         {usage ? (
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
             <DetailRow label={t('pages.runs.usage.tasks')} value={usage.task_count} />
-            <DetailRow label={t('pages.runs.usage.attempts')} value={usage.attempt_count} />
+            <DetailRow label="Turns" value={usage.attempt_count} />
             <DetailRow label={t('pages.runs.usage.tokens')} value={usage.total_tokens} />
             <DetailRow label={t('pages.runs.usage.cost')} value={`$${usage.total_cost_usd.toFixed(2)}`} />
           </div>
         ) : null}
 
-        <AttemptChain attempts={attempts} />
+        <TurnChain turns={turns} />
       </SectionStack>
     </div>
   );

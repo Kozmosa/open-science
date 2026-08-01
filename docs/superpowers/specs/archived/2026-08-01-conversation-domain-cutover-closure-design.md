@@ -1,13 +1,16 @@
 ---
-doc_state: current
-status: in-progress
+doc_state: historical
+status: implemented
 last_reviewed: 2026-08-01
 review_by: 2026-08-31
 ---
 
 # Conversation Domain Cutover 闭合设计
 
-**Status:** In progress — core persistence and application implementation exists on `feat/conversation-domain-v3`; transport/runtime/migration cutover is incomplete
+> [!success] Implemented and archived
+> 本设计已于 2026-08-01 完整实现并通过 L1、迁移/并发/recovery 测试及隔离 restart 人工验收。Task/Turn/Item/Submission/Execution/Binding 已成为正式 authority；本文的“当前基线”保留为实施前历史记录。
+
+**Status:** Implemented and archived on 2026-08-01
 **Date:** 2026-08-01
 **Scope:** 将当前 Task/Attempt/RuntimeSession 产品行为闭合迁移为已接受的 Task/Turn/Item/Submission/Execution/Binding 模型
 **Depends on:** [`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)、[`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-17-conversation-domain-standalone-migration-design.md`](2026-07-17-conversation-domain-standalone-migration-design.md)

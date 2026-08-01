@@ -41,7 +41,7 @@ describe('TaskActionsMenu', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Attempt' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Turn' }));
     expect(handlers.onRetry).toHaveBeenCalledTimes(1);
   });
 
@@ -57,7 +57,7 @@ describe('TaskActionsMenu', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
-    expect(await screen.findByRole('menuitem', { name: 'Retry as new Attempt' }))
+    expect(await screen.findByRole('menuitem', { name: 'Retry as new Turn' }))
       .toHaveAttribute('data-disabled');
   });
 });

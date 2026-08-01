@@ -7,7 +7,7 @@
 **Date:** 2026-07-29
 **Scope:** Release E 执行、monorepo 边界、legacy/v2 收口、Python 后端模块划分与依赖方向、前后端契约、前端分层、测试与仓库卫生
 **Detailed cutover contract:** [`2026-07-12-openscience-domain-refactor-execution-spec.md`](2026-07-12-openscience-domain-refactor-execution-spec.md)
-**Related:** [`2026-07-17-engine-runtime-and-credential-injection-design.md`](../2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-11-five-layer-hybrid-ci-design.md`](../2026-07-11-five-layer-hybrid-ci-design.md)
+**Related:** [`2026-07-17-engine-runtime-and-credential-injection-design.md`](2026-07-17-engine-runtime-and-credential-injection-design.md)、[`2026-07-11-five-layer-hybrid-ci-design.md`](../2026-07-11-five-layer-hybrid-ci-design.md)
 **Does not supersede:** 已接受的 Project / Task / Workspace、Conversation、Engine Runtime 和五层 CI 领域契约
 
 > [!done]

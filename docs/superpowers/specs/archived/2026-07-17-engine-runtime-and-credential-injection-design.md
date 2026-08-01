@@ -1,18 +1,21 @@
 ---
-doc_state: current
-status: accepted
-last_reviewed: 2026-07-30
+doc_state: historical
+status: implemented
+last_reviewed: 2026-08-01
 review_by: 2026-08-29
 ---
 
 # Engine Runtime 与 Credential Injection 设计
 
-**Status:** Accepted direction — runtime topology、driver 分层、compatible API 与 credential 边界已确认，等待实现
+> [!success] Implemented and archived
+> 本设计已于 2026-08-01 通过 Conversation runtime Seam、driver Adapter、capability matrix、credential resolution 与 worker recovery 实现。当前 contract 以 `PROJECT_BASIS.md`、公开架构文档、代码和测试为准。
+
+**Status:** Implemented and archived on 2026-08-01
 **Date:** 2026-07-17
 **Scope:** Codex App Server、Claude Agent SDK、Claude CLI fallback、runtime supervision、Linux tenant isolation、provider profile、credential resolution、usage/telemetry
 **Depends on:** [`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)
 **Follow-up:** [`2026-07-17-conversation-domain-standalone-migration-design.md`](2026-07-17-conversation-domain-standalone-migration-design.md)
-**Related research:** [`../../projects/breakwater-agent-runtime.md`](../../projects/breakwater-agent-runtime.md)
+**Related research:** [`../../../projects/breakwater-agent-runtime.md`](../../../projects/breakwater-agent-runtime.md)
 **Supersedes:** 当前 `HarnessEngine.start()/send_input()/pause()/resume()/cancel()` 的 Task-scoped long-running contract，以及 Task 表直接保存 `api_key/codex_api_key` 的 credential override 方式
 
 ## 1. 决策摘要

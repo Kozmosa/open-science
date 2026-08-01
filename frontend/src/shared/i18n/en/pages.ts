@@ -88,7 +88,7 @@ const pages = {
       tasks: {
         sidebarEyebrow: 'Task runs',
         sidebarTitle: 'Agent tasks',
-        sidebarCount: '{{count}} total · live output replay',
+        sidebarCount: '{{count}} total · canonical Item polling',
         newTask: 'New task',
         backToList: 'Back to task list',
         resizeTaskList: 'Resize task list',
@@ -284,6 +284,7 @@ const pages = {
           pause: 'Pause',
           resume: 'Resume',
           pauseFailed: 'Pause failed: {{error}}',
+          interruptFailed: 'Interrupt failed: {{error}}',
           resumeFailed: 'Resume failed: {{error}}',
           sendPromptFailed: 'Send prompt failed: {{error}}',
           noTaskSelected: 'No task selected',
@@ -752,9 +753,9 @@ const pages = {
         notFound: 'Task run not found',
         outputCount: '{{count}} output events',
         taskCount: '{{count}} tasks',
-        attemptsTitle: 'Attempts',
-        noAttempts: 'No attempts recorded',
-        attemptLabel: 'Attempt #{{seq}}',
+        attemptsTitle: 'Turns',
+        noAttempts: 'No Turns recorded',
+        attemptLabel: 'Turn #{{seq}}',
         viewTask: 'View task',
         hasTokens: 'Token data',
         status: {
@@ -784,7 +785,7 @@ const pages = {
         },
         usage: {
           tasks: 'Project tasks',
-          attempts: 'Project attempts',
+          attempts: 'Project Turns',
           tokens: 'Project tokens',
           cost: 'Project cost',
         },

@@ -93,6 +93,41 @@ export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
 export type ApiStatus = 'ok' | 'degraded';
 
 /**
+ * ApprovalDecisionRequest
+ */
+export type ApprovalDecisionRequest = {
+    /**
+     * Decision
+     */
+    decision?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Status
+     */
+    status: 'approved' | 'denied';
+};
+
+/**
+ * ApprovalDecisionResponse
+ */
+export type ApprovalDecisionResponse = {
+    /**
+     * Approval Id
+     */
+    approval_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    [key: string]: unknown;
+};
+
+/**
  * AuthTokenResponse
  */
 export type AuthTokenResponse = {
@@ -180,6 +215,26 @@ export type ComponentHealth = {
      * Status
      */
     status: string;
+};
+
+/**
+ * ConversationReceiptResponse
+ */
+export type ConversationReceiptResponse = {
+    [key: string]: unknown;
+};
+
+/**
+ * ConversationTaskMutationResponse
+ */
+export type ConversationTaskMutationResponse = {
+    submission: TurnSubmissionResponse;
+    /**
+     * Task
+     */
+    task: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -984,6 +1039,80 @@ export type FileUploadResponse = {
      * Size
      */
     size: number;
+};
+
+/**
+ * ForkConfirmRequest
+ */
+export type ForkConfirmRequest = {
+    /**
+     * Full Transcript Confirmed
+     */
+    full_transcript_confirmed?: boolean;
+    /**
+     * Preview Hash
+     */
+    preview_hash: string;
+    /**
+     * Source Revision
+     */
+    source_revision: string;
+    /**
+     * Transfer Mode
+     */
+    transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+    /**
+     * Truncation Acknowledged
+     */
+    truncation_acknowledged?: boolean;
+};
+
+/**
+ * ForkPreviewRequest
+ */
+export type ForkPreviewRequest = {
+    /**
+     * Disclosure
+     */
+    disclosure?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Metrics
+     */
+    metrics?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Target Engine Family
+     */
+    target_engine_family: 'codex' | 'claude';
+    /**
+     * Target Harness Engine
+     */
+    target_harness_engine?: 'codex-app-server' | 'agent-sdk' | 'claude-code' | null;
+    /**
+     * Target Project Id
+     */
+    target_project_id?: string | null;
+    /**
+     * Target Title
+     */
+    target_title?: string | null;
+    /**
+     * Target Workspace Id
+     */
+    target_workspace_id?: string | null;
+    /**
+     * Transfer Mode
+     */
+    transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+    /**
+     * Transfer Range
+     */
+    transfer_range?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -1973,32 +2102,6 @@ export type MemoryInfo = {
 };
 
 /**
- * MessageItemResponse
- */
-export type MessageItemResponse = {
-    /**
-     * Content
-     */
-    content: string | {
-        [key: string]: unknown;
-    };
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Metadata
-     */
-    metadata: {
-        [key: string]: unknown;
-    };
-    /**
-     * Type
-     */
-    type: string;
-};
-
-/**
  * MonitoringServiceItem
  */
 export type MonitoringServiceItem = {
@@ -2885,137 +2988,6 @@ export type SkillRegistryUpdateResponse = {
 };
 
 /**
- * TaskAttemptListResponse
- */
-export type TaskAttemptListResponse = {
-    /**
-     * Items
-     */
-    items: Array<TaskAttemptResponse>;
-};
-
-/**
- * TaskAttemptResponse
- *
- * Authoritative v2 TaskAttempt projection.
- */
-export type TaskAttemptResponse = {
-    /**
-     * Artifact Refs
-     */
-    artifact_refs?: Array<string>;
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Attempt Seq
-     */
-    attempt_seq: number;
-    /**
-     * Authorization Checked At
-     */
-    authorization_checked_at?: string | null;
-    /**
-     * Authorization Environment Id
-     */
-    authorization_environment_id?: string | null;
-    /**
-     * Authorization Grant Version
-     */
-    authorization_grant_version?: number | null;
-    /**
-     * Code Refs
-     */
-    code_refs?: Array<string>;
-    /**
-     * Context Snapshot Id
-     */
-    context_snapshot_id?: string | null;
-    /**
-     * Context Version Id
-     */
-    context_version_id?: string | null;
-    /**
-     * Cost Usd
-     */
-    cost_usd?: number | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Data Refs
-     */
-    data_refs?: Array<string>;
-    dispatch?: TaskDispatchResponse | null;
-    /**
-     * Duration Ms
-     */
-    duration_ms?: number | null;
-    /**
-     * Failure Reason
-     */
-    failure_reason?: string | null;
-    /**
-     * Finished At
-     */
-    finished_at?: string | null;
-    /**
-     * Message End Seq
-     */
-    message_end_seq?: number | null;
-    /**
-     * Message Start Seq
-     */
-    message_start_seq?: number | null;
-    /**
-     * Output End Seq
-     */
-    output_end_seq?: number | null;
-    /**
-     * Output Start Seq
-     */
-    output_start_seq?: number | null;
-    /**
-     * Runtime Sessions
-     */
-    runtime_sessions?: Array<TaskRuntimeSessionResponse>;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Stop Reason
-     */
-    stop_reason?: string | null;
-    /**
-     * Stop Requested At
-     */
-    stop_requested_at?: string | null;
-    /**
-     * Stop Requested Reason
-     */
-    stop_requested_reason?: string | null;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    /**
-     * Token Usage Json
-     */
-    token_usage_json?: string | null;
-    /**
-     * Trigger
-     */
-    trigger: string;
-};
-
-/**
  * TaskContextConfirmRequest
  *
  * Confirm a previously rendered Task Context update preview.
@@ -3063,78 +3035,6 @@ export type TaskCreateRequest = {
      * Workspace Id
      */
     workspace_id: string;
-};
-
-/**
- * TaskDispatchResponse
- *
- * Durable dispatcher state for a Task Attempt.
- */
-export type TaskDispatchResponse = {
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Cancel Reason
-     */
-    cancel_reason?: string | null;
-    /**
-     * Cancelled At
-     */
-    cancelled_at?: string | null;
-    /**
-     * Claim Expires At
-     */
-    claim_expires_at?: string | null;
-    /**
-     * Claim Heartbeat At
-     */
-    claim_heartbeat_at?: string | null;
-    /**
-     * Claimed At
-     */
-    claimed_at?: string | null;
-    /**
-     * Completed At
-     */
-    completed_at?: string | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Dispatch Id
-     */
-    dispatch_id: string;
-    /**
-     * Dispatcher Id
-     */
-    dispatcher_id?: string | null;
-    /**
-     * Last Error
-     */
-    last_error?: string | null;
-    /**
-     * Launch State
-     */
-    launch_state: string;
-    /**
-     * Runtime Launch Key
-     */
-    runtime_launch_key?: string | null;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    /**
-     * Updated At
-     */
-    updated_at?: string | null;
 };
 
 /**
@@ -3204,24 +3104,6 @@ export type TaskListResponse = {
 };
 
 /**
- * TaskMessagesResponse
- */
-export type TaskMessagesResponse = {
-    /**
-     * Has More
-     */
-    has_more: boolean;
-    /**
-     * Messages
-     */
-    messages: Array<MessageItemResponse>;
-    /**
-     * Next Sequence
-     */
-    next_sequence?: number | null;
-};
-
-/**
  * TaskMoveRequest
  *
  * Move a not-yet-started Task to a Project Context selected by the caller.
@@ -3235,97 +3117,6 @@ export type TaskMoveRequest = {
      * Project Id
      */
     project_id: string;
-};
-
-/**
- * TaskMutationResponse
- */
-export type TaskMutationResponse = {
-    attempt: TaskAttemptResponse;
-    dispatch: TaskDispatchResponse;
-    task: TaskSummaryResponse;
-};
-
-/**
- * TaskOutputItemResponse
- */
-export type TaskOutputItemResponse = {
-    /**
-     * Content
-     */
-    content: string;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Kind
-     */
-    kind: string;
-    /**
-     * Seq
-     */
-    seq: number;
-    /**
-     * Task Id
-     */
-    task_id: string;
-};
-
-/**
- * TaskOutputResponse
- */
-export type TaskOutputResponse = {
-    /**
-     * Has More
-     */
-    has_more?: boolean;
-    /**
-     * Items
-     */
-    items: Array<TaskOutputItemResponse>;
-    /**
-     * Next Seq
-     */
-    next_seq?: number;
-};
-
-/**
- * TaskPauseResponse
- */
-export type TaskPauseResponse = {
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-};
-
-/**
- * TaskPromptRequest
- */
-export type TaskPromptRequest = {
-    /**
-     * Prompt
-     */
-    prompt: string;
-};
-
-/**
- * TaskPromptSendResponse
- */
-export type TaskPromptSendResponse = {
-    /**
-     * Sequence
-     */
-    sequence: number;
-    /**
-     * Task Id
-     */
-    task_id: string;
 };
 
 /**
@@ -3380,72 +3171,6 @@ export type TaskRelationshipResponse = {
      * Target Task Id
      */
     target_task_id: string;
-};
-
-/**
- * TaskResumeResponse
- */
-export type TaskResumeResponse = {
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-};
-
-/**
- * TaskRuntimeSessionResponse
- *
- * Read-only runtime identity associated with one durable Attempt.
- */
-export type TaskRuntimeSessionResponse = {
-    /**
-     * Adopted At
-     */
-    adopted_at?: string | null;
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Engine Name
-     */
-    engine_name?: string | null;
-    /**
-     * Engine Session Key
-     */
-    engine_session_key?: string | null;
-    /**
-     * Failure Reason
-     */
-    failure_reason?: string | null;
-    /**
-     * Finished At
-     */
-    finished_at?: string | null;
-    /**
-     * Last Probe At
-     */
-    last_probe_at?: string | null;
-    /**
-     * Runtime Session Id
-     */
-    runtime_session_id: string;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
 };
 
 /**
@@ -3770,6 +3495,181 @@ export type ToolStatusResponse = {
      * Version
      */
     version?: string | null;
+};
+
+/**
+ * TurnControlResponse
+ */
+export type TurnControlResponse = {
+    /**
+     * Control Request Id
+     */
+    control_request_id: string;
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnCreateRequest
+ */
+export type TurnCreateRequest = {
+    /**
+     * Allow Next Turn
+     */
+    allow_next_turn?: boolean;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * TurnInterruptRequest
+ */
+export type TurnInterruptRequest = {
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+};
+
+/**
+ * TurnItemListResponse
+ */
+export type TurnItemListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TurnItemResponse>;
+};
+
+/**
+ * TurnItemResponse
+ */
+export type TurnItemResponse = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Item Id
+     */
+    item_id: string;
+    /**
+     * Item Type
+     */
+    item_type: string;
+    /**
+     * Payload
+     */
+    payload?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Task Item Seq
+     */
+    task_item_seq: number;
+    /**
+     * Turn Id
+     */
+    turn_id: string;
+    /**
+     * Turn Item Seq
+     */
+    turn_item_seq: number;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnListResponse
+ */
+export type TurnListResponse = {
+    /**
+     * Items
+     */
+    items: Array<TurnResponse>;
+};
+
+/**
+ * TurnResponse
+ */
+export type TurnResponse = {
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    /**
+     * Turn Id
+     */
+    turn_id: string;
+    /**
+     * Turn Seq
+     */
+    turn_seq: number;
+    [key: string]: unknown;
+};
+
+/**
+ * TurnSteerRequest
+ */
+export type TurnSteerRequest = {
+    /**
+     * Expected Turn Id
+     */
+    expected_turn_id: string;
+    /**
+     * Text
+     */
+    text: string;
+};
+
+/**
+ * TurnSubmissionResponse
+ */
+export type TurnSubmissionResponse = {
+    /**
+     * Intent
+     */
+    intent: string;
+    /**
+     * Reserved Turn Id
+     */
+    reserved_turn_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
 };
 
 /**
@@ -7333,7 +7233,7 @@ export type PostApiTasksResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: ConversationTaskMutationResponse;
 };
 
 export type PostApiTasksResponse = PostApiTasksResponses[keyof PostApiTasksResponses];
@@ -7428,6 +7328,40 @@ export type PatchApiTasksTaskIdResponses = {
 
 export type PatchApiTasksTaskIdResponse = PatchApiTasksTaskIdResponses[keyof PatchApiTasksTaskIdResponses];
 
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveData = {
+    body: ApprovalDecisionRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Approval Id
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/approvals/{approval_id}/resolve';
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveError = PostApiTasksTaskIdApprovalsApprovalIdResolveErrors[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveErrors];
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponses = {
+    /**
+     * Successful Response
+     */
+    200: ApprovalDecisionResponse;
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponse = PostApiTasksTaskIdApprovalsApprovalIdResolveResponses[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveResponses];
+
 export type PostApiTasksTaskIdArchiveData = {
     body?: never;
     path: {
@@ -7457,70 +7391,6 @@ export type PostApiTasksTaskIdArchiveResponses = {
 };
 
 export type PostApiTasksTaskIdArchiveResponse = PostApiTasksTaskIdArchiveResponses[keyof PostApiTasksTaskIdArchiveResponses];
-
-export type GetApiTasksTaskIdAttemptsData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/attempts';
-};
-
-export type GetApiTasksTaskIdAttemptsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdAttemptsError = GetApiTasksTaskIdAttemptsErrors[keyof GetApiTasksTaskIdAttemptsErrors];
-
-export type GetApiTasksTaskIdAttemptsResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskAttemptListResponse;
-};
-
-export type GetApiTasksTaskIdAttemptsResponse = GetApiTasksTaskIdAttemptsResponses[keyof GetApiTasksTaskIdAttemptsResponses];
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-        /**
-         * Attempt Id
-         */
-        attempt_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/attempts/{attempt_id}/resolve-launch-unknown';
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownError = PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors[keyof PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownErrors];
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskAttemptResponse;
-};
-
-export type PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponse = PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses[keyof PostApiTasksTaskIdAttemptsAttemptIdResolveLaunchUnknownResponses];
 
 export type PostApiTasksTaskIdCancelData = {
     body?: never;
@@ -7552,36 +7422,6 @@ export type PostApiTasksTaskIdCancelResponses = {
 
 export type PostApiTasksTaskIdCancelResponse = PostApiTasksTaskIdCancelResponses[keyof PostApiTasksTaskIdCancelResponses];
 
-export type PostApiTasksTaskIdContinueData = {
-    body: TaskPromptRequest;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/continue';
-};
-
-export type PostApiTasksTaskIdContinueErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiTasksTaskIdContinueError = PostApiTasksTaskIdContinueErrors[keyof PostApiTasksTaskIdContinueErrors];
-
-export type PostApiTasksTaskIdContinueResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskPromptSendResponse;
-};
-
-export type PostApiTasksTaskIdContinueResponse = PostApiTasksTaskIdContinueResponses[keyof PostApiTasksTaskIdContinueResponses];
-
 export type PostApiTasksTaskIdForkData = {
     body: TaskForkRequest;
     path: {
@@ -7607,10 +7447,74 @@ export type PostApiTasksTaskIdForkResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: ConversationTaskMutationResponse;
 };
 
 export type PostApiTasksTaskIdForkResponse = PostApiTasksTaskIdForkResponses[keyof PostApiTasksTaskIdForkResponses];
+
+export type PostApiTasksTaskIdForkPreviewData = {
+    body: ForkPreviewRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/fork-preview';
+};
+
+export type PostApiTasksTaskIdForkPreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdForkPreviewError = PostApiTasksTaskIdForkPreviewErrors[keyof PostApiTasksTaskIdForkPreviewErrors];
+
+export type PostApiTasksTaskIdForkPreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConversationReceiptResponse;
+};
+
+export type PostApiTasksTaskIdForkPreviewResponse = PostApiTasksTaskIdForkPreviewResponses[keyof PostApiTasksTaskIdForkPreviewResponses];
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmData = {
+    body: ForkConfirmRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Preview Id
+         */
+        preview_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/fork-preview/{preview_id}/confirm';
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmError = PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors[keyof PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors];
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConversationReceiptResponse;
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponse = PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses[keyof PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses];
 
 export type GetApiTasksTaskIdHealthData = {
     body?: never;
@@ -7642,45 +7546,6 @@ export type GetApiTasksTaskIdHealthResponses = {
 
 export type GetApiTasksTaskIdHealthResponse = GetApiTasksTaskIdHealthResponses[keyof GetApiTasksTaskIdHealthResponses];
 
-export type GetApiTasksTaskIdMessagesData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: {
-        /**
-         * After Seq
-         */
-        after_seq?: number;
-        /**
-         * Limit
-         */
-        limit?: number;
-    };
-    url: '/api/tasks/{task_id}/messages';
-};
-
-export type GetApiTasksTaskIdMessagesErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdMessagesError = GetApiTasksTaskIdMessagesErrors[keyof GetApiTasksTaskIdMessagesErrors];
-
-export type GetApiTasksTaskIdMessagesResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskMessagesResponse;
-};
-
-export type GetApiTasksTaskIdMessagesResponse = GetApiTasksTaskIdMessagesResponses[keyof GetApiTasksTaskIdMessagesResponses];
-
 export type PostApiTasksTaskIdMoveData = {
     body: TaskMoveRequest;
     path: {
@@ -7711,48 +7576,7 @@ export type PostApiTasksTaskIdMoveResponses = {
 
 export type PostApiTasksTaskIdMoveResponse = PostApiTasksTaskIdMoveResponses[keyof PostApiTasksTaskIdMoveResponses];
 
-export type GetApiTasksTaskIdOutputData = {
-    body?: never;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-    };
-    query?: {
-        /**
-         * After Seq
-         */
-        after_seq?: number;
-        /**
-         * Limit
-         *
-         * Max items to return; 0 means unlimited
-         */
-        limit?: number;
-    };
-    url: '/api/tasks/{task_id}/output';
-};
-
-export type GetApiTasksTaskIdOutputErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiTasksTaskIdOutputError = GetApiTasksTaskIdOutputErrors[keyof GetApiTasksTaskIdOutputErrors];
-
-export type GetApiTasksTaskIdOutputResponses = {
-    /**
-     * Successful Response
-     */
-    200: TaskOutputResponse;
-};
-
-export type GetApiTasksTaskIdOutputResponse = GetApiTasksTaskIdOutputResponses[keyof GetApiTasksTaskIdOutputResponses];
-
-export type PostApiTasksTaskIdPauseData = {
+export type GetApiTasksTaskIdTurnsData = {
     body?: never;
     path: {
         /**
@@ -7761,29 +7585,29 @@ export type PostApiTasksTaskIdPauseData = {
         task_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/pause';
+    url: '/api/tasks/{task_id}/turns';
 };
 
-export type PostApiTasksTaskIdPauseErrors = {
+export type GetApiTasksTaskIdTurnsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdPauseError = PostApiTasksTaskIdPauseErrors[keyof PostApiTasksTaskIdPauseErrors];
+export type GetApiTasksTaskIdTurnsError = GetApiTasksTaskIdTurnsErrors[keyof GetApiTasksTaskIdTurnsErrors];
 
-export type PostApiTasksTaskIdPauseResponses = {
+export type GetApiTasksTaskIdTurnsResponses = {
     /**
      * Successful Response
      */
-    200: TaskPauseResponse;
+    200: TurnListResponse;
 };
 
-export type PostApiTasksTaskIdPauseResponse = PostApiTasksTaskIdPauseResponses[keyof PostApiTasksTaskIdPauseResponses];
+export type GetApiTasksTaskIdTurnsResponse = GetApiTasksTaskIdTurnsResponses[keyof GetApiTasksTaskIdTurnsResponses];
 
-export type PostApiTasksTaskIdResumeData = {
-    body?: never;
+export type PostApiTasksTaskIdTurnsData = {
+    body: TurnCreateRequest;
     path: {
         /**
          * Task Id
@@ -7791,89 +7615,162 @@ export type PostApiTasksTaskIdResumeData = {
         task_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/resume';
+    url: '/api/tasks/{task_id}/turns';
 };
 
-export type PostApiTasksTaskIdResumeErrors = {
+export type PostApiTasksTaskIdTurnsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdResumeError = PostApiTasksTaskIdResumeErrors[keyof PostApiTasksTaskIdResumeErrors];
+export type PostApiTasksTaskIdTurnsError = PostApiTasksTaskIdTurnsErrors[keyof PostApiTasksTaskIdTurnsErrors];
 
-export type PostApiTasksTaskIdResumeResponses = {
+export type PostApiTasksTaskIdTurnsResponses = {
     /**
      * Successful Response
      */
-    200: TaskResumeResponse;
+    202: TurnSubmissionResponse;
 };
 
-export type PostApiTasksTaskIdResumeResponse = PostApiTasksTaskIdResumeResponses[keyof PostApiTasksTaskIdResumeResponses];
+export type PostApiTasksTaskIdTurnsResponse = PostApiTasksTaskIdTurnsResponses[keyof PostApiTasksTaskIdTurnsResponses];
 
-export type PostApiTasksTaskIdRetryData = {
-    body?: never;
+export type PostApiTasksTaskIdTurnsTurnIdInterruptData = {
+    body: TurnInterruptRequest;
     path: {
         /**
          * Task Id
          */
         task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
     };
     query?: never;
-    url: '/api/tasks/{task_id}/retry';
+    url: '/api/tasks/{task_id}/turns/{turn_id}/interrupt';
 };
 
-export type PostApiTasksTaskIdRetryErrors = {
+export type PostApiTasksTaskIdTurnsTurnIdInterruptErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type PostApiTasksTaskIdRetryError = PostApiTasksTaskIdRetryErrors[keyof PostApiTasksTaskIdRetryErrors];
+export type PostApiTasksTaskIdTurnsTurnIdInterruptError = PostApiTasksTaskIdTurnsTurnIdInterruptErrors[keyof PostApiTasksTaskIdTurnsTurnIdInterruptErrors];
 
-export type PostApiTasksTaskIdRetryResponses = {
+export type PostApiTasksTaskIdTurnsTurnIdInterruptResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: TurnControlResponse;
 };
 
-export type PostApiTasksTaskIdRetryResponse = PostApiTasksTaskIdRetryResponses[keyof PostApiTasksTaskIdRetryResponses];
+export type PostApiTasksTaskIdTurnsTurnIdInterruptResponse = PostApiTasksTaskIdTurnsTurnIdInterruptResponses[keyof PostApiTasksTaskIdTurnsTurnIdInterruptResponses];
 
-export type GetApiTasksTaskIdStreamData = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsData = {
     body?: never;
     path: {
         /**
          * Task Id
          */
         task_id: string;
-    };
-    query?: {
         /**
-         * After Seq
+         * Turn Id
          */
-        after_seq?: number;
+        turn_id: string;
     };
-    url: '/api/tasks/{task_id}/stream';
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/items';
 };
 
-export type GetApiTasksTaskIdStreamErrors = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
 
-export type GetApiTasksTaskIdStreamError = GetApiTasksTaskIdStreamErrors[keyof GetApiTasksTaskIdStreamErrors];
+export type GetApiTasksTaskIdTurnsTurnIdItemsError = GetApiTasksTaskIdTurnsTurnIdItemsErrors[keyof GetApiTasksTaskIdTurnsTurnIdItemsErrors];
 
-export type GetApiTasksTaskIdStreamResponses = {
+export type GetApiTasksTaskIdTurnsTurnIdItemsResponses = {
     /**
      * Successful Response
      */
-    200: unknown;
+    200: TurnItemListResponse;
 };
+
+export type GetApiTasksTaskIdTurnsTurnIdItemsResponse = GetApiTasksTaskIdTurnsTurnIdItemsResponses[keyof GetApiTasksTaskIdTurnsTurnIdItemsResponses];
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryData = {
+    body: TurnCreateRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/retry';
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryError = PostApiTasksTaskIdTurnsTurnIdRetryErrors[keyof PostApiTasksTaskIdTurnsTurnIdRetryErrors];
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryResponses = {
+    /**
+     * Successful Response
+     */
+    202: TurnSubmissionResponse;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdRetryResponse = PostApiTasksTaskIdTurnsTurnIdRetryResponses[keyof PostApiTasksTaskIdTurnsTurnIdRetryResponses];
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerData = {
+    body: TurnSteerRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Turn Id
+         */
+        turn_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/turns/{turn_id}/steer';
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerError = PostApiTasksTaskIdTurnsTurnIdSteerErrors[keyof PostApiTasksTaskIdTurnsTurnIdSteerErrors];
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerResponses = {
+    /**
+     * Successful Response
+     */
+    202: TurnControlResponse;
+};
+
+export type PostApiTasksTaskIdTurnsTurnIdSteerResponse = PostApiTasksTaskIdTurnsTurnIdSteerResponses[keyof PostApiTasksTaskIdTurnsTurnIdSteerResponses];
 
 export type PostApiTasksTaskIdUnarchiveData = {
     body?: never;

@@ -144,6 +144,49 @@ class CodexAppServerEngine(HarnessEngine):
                 self._sessions[runtime_identity] = session
             session.pending_prompts.append(text)
 
+    async def steer_turn(
+        self,
+        task_id: str,
+        expected_turn_id: str,
+        text: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> dict[str, object]:
+        """Apply Codex native same-Turn steer with its causal guard."""
+
+        runtime_identity = runtime_launch_key or task_id
+        async with self._lock:
+            session = self._sessions.get(runtime_identity)
+            if session is None or session.thread_id is None or session.turn_id != expected_turn_id:
+                raise RuntimeError("Codex active Turn does not match expected_turn_id")
+            result = await self._rpc_request(
+                session,
+                "turn/steer",
+                {
+                    "threadId": session.thread_id,
+                    "expectedTurnId": expected_turn_id,
+                    "input": [{"type": "text", "text": text}],
+                },
+            )
+        return {"support": "native", "evidence": result}
+
+    async def interrupt_turn(
+        self,
+        task_id: str,
+        expected_turn_id: str,
+        *,
+        runtime_launch_key: str | None = None,
+    ) -> dict[str, object]:
+        """Request Codex native interrupt without claiming terminal completion."""
+
+        runtime_identity = runtime_launch_key or task_id
+        async with self._lock:
+            session = self._sessions.get(runtime_identity)
+            if session is None or session.turn_id != expected_turn_id:
+                raise RuntimeError("Codex active Turn does not match expected_turn_id")
+            await self._interrupt_turn(session)
+        return {"support": "native", "accepted": True}
+
     async def cancel(self, task_id: str, *, runtime_launch_key: str | None = None) -> None:
         runtime_identity = runtime_launch_key or task_id
         async with self._lock:

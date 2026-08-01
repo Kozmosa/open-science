@@ -147,6 +147,7 @@ class TaskDispatcher:
         engine_factory: EngineFactory | None = None,
         lease_seconds: int = 30,
         artifact_sha: str | None = None,
+        conversation_only: bool = False,
     ) -> None:
         if lease_seconds <= 2:
             raise ValueError("lease_seconds must be greater than two seconds")
@@ -154,6 +155,7 @@ class TaskDispatcher:
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._artifact_sha = artifact_sha
+        self._conversation_only = conversation_only
         self._maintenance = DomainMaintenanceService(state_root)
         self.dispatcher_id = dispatcher_id or f"domain-worker-{uuid4().hex[:12]}"
         self._participant = DomainWriteParticipant(
@@ -182,6 +184,16 @@ class TaskDispatcher:
         self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
         if not self._maintenance_startup_read_only:
             self._initialize_writable_services()
+
+        if self._conversation_only:
+            from ainrf.domain.conversation_worker import ConversationDispatcher
+
+            self._conversation_dispatcher = ConversationDispatcher(
+                state_root,
+                artifact_sha=artifact_sha,
+            )
+        else:
+            self._conversation_dispatcher = None
 
     def _initialize_writable_services(self) -> None:
         """Assemble migration-capable services behind one startup lease.
@@ -306,6 +318,12 @@ class TaskDispatcher:
             except MaintenanceModeError:
                 self._participant.drain()
                 return DispatchRunResult(outcome="maintenance_drained")
+            if self._conversation_dispatcher is not None:
+                dispatched = await self._conversation_dispatcher.run_once()
+                if dispatched:
+                    return DispatchRunResult(outcome="completed")
+                self._participant.heartbeat()
+                return DispatchRunResult(outcome="idle")
             claim = self._attempts.claim_next(self.dispatcher_id, lease_seconds=self._lease_seconds)
             if claim is None:
                 self._participant.heartbeat()
@@ -820,7 +838,7 @@ class TaskDispatcher:
                             attempt_id=active_claim.attempt_id,
                         )
                     pending_resume_control_id = resume_control.control_request_id
-                    run = engine.resume(context, emit)
+                    run = getattr(engine, "resume")(context, emit)
                     continue
                 state = self._attempts.dispatch_state(active_claim.dispatch_id)
                 if stop_requested and state["status"] in {"claimed", "dispatched"}:
@@ -908,7 +926,7 @@ class TaskDispatcher:
                     if not isinstance(prompt, str) or not prompt:
                         raise ValueError("Continuation control request requires a prompt")
                     self._maintenance.check_lease(lease)
-                    await engine.send_input(
+                    await getattr(engine, "send_input")(
                         claim.task_id,
                         prompt,
                         runtime_launch_key=claim.runtime_launch_key,
@@ -916,7 +934,7 @@ class TaskDispatcher:
                     self._attempts.complete_control(claim, control.control_request_id)
                 elif control.action == "pause":
                     self._maintenance.check_lease(lease)
-                    await engine.pause(
+                    await getattr(engine, "pause")(
                         claim.task_id,
                         runtime_launch_key=claim.runtime_launch_key,
                     )
@@ -988,7 +1006,7 @@ class TaskDispatcher:
                     if not isinstance(prompt, str) or not prompt:
                         raise ValueError("Continuation control request requires a prompt")
                     self._maintenance.check_lease(lease)
-                    await engine.send_input(
+                    await getattr(engine, "send_input")(
                         claim.task_id,
                         prompt,
                         runtime_launch_key=claim.runtime_launch_key,

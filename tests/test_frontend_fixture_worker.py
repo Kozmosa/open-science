@@ -14,7 +14,8 @@ from ainrf.api.cli import app
 from ainrf.db import connect
 from ainrf.development.frontend_fixture import prepare_frontend_dev_fixture
 from ainrf.development.frontend_worker import FrontendFixtureWorker
-from ainrf.domain import OverviewSnapshotService, TaskApplicationService
+from ainrf.domain import OverviewSnapshotService
+from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain_control import DomainCutoverError
 from ainrf.literature.tracking import LiteratureTrackingService
 
@@ -47,7 +48,7 @@ def test_frontend_fixture_worker_completes_tasks_without_external_runtime(tmp_pa
     state_root = tmp_path / "fixture"
     artifact_sha = "d" * 64
     owner = _prepare(state_root, artifact_sha)
-    task = TaskApplicationService(state_root, artifact_sha=artifact_sha).create_task(
+    task = ConversationApplicationService(state_root, artifact_sha=artifact_sha).create_task(
         {"id": owner["user_id"], "role": owner["auth_role"]},
         project_id="project-frontend-dev",
         workspace_id="workspace-frontend-primary",
@@ -65,29 +66,29 @@ def test_frontend_fixture_worker_completes_tasks_without_external_runtime(tmp_pa
     assert result.outcome == "processed"
     assert result.task_outcome == "completed"
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
-        task_row = conn.execute(
-            "SELECT status, latest_output_seq FROM tasks WHERE task_id = ?", (task["task_id"],)
+        turn = conn.execute(
+            "SELECT turn_id, status FROM task_turns WHERE task_id = ?", (task["task_id"],)
         ).fetchone()
-        attempt_row = conn.execute(
-            "SELECT status, token_usage_json, cost_usd FROM agent_task_attempts WHERE attempt_id = ?",
-            (task["attempt_id"],),
+        submission = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (task["submission_id"],),
         ).fetchone()
-        runtime_row = conn.execute(
-            "SELECT status, engine_name FROM agent_runtime_sessions WHERE attempt_id = ?",
-            (task["attempt_id"],),
+        runtime = conn.execute(
+            "SELECT status, native_runtime_kind FROM runtime_executions WHERE turn_id = ?",
+            (turn["turn_id"],),
         ).fetchone()
-        outputs = conn.execute(
-            "SELECT kind, content FROM task_outputs WHERE task_id = ? ORDER BY seq",
-            (task["task_id"],),
+        items = conn.execute(
+            "SELECT item_type, payload_json FROM turn_items WHERE turn_id = ? ORDER BY turn_item_seq",
+            (turn["turn_id"],),
         ).fetchall()
-    assert task_row["status"] == "succeeded"
-    assert task_row["latest_output_seq"] == 3
-    assert attempt_row["status"] == "succeeded"
-    assert json.loads(attempt_row["token_usage_json"])["source"] == "frontend-fixture"
-    assert attempt_row["cost_usd"] == 0
-    assert runtime_row["status"] == "completed"
-    assert runtime_row["engine_name"] == "codex-app-server"
-    assert any("without starting an external runtime" in row["content"] for row in outputs)
+    assert turn["status"] == "completed"
+    assert submission["status"] == "delivered"
+    assert runtime["status"] == "completed"
+    assert runtime["native_runtime_kind"] == "worker"
+    assert any(
+        "without starting an external runtime" in str(json.loads(row["payload_json"]))
+        for row in items
+    )
 
 
 def test_frontend_fixture_worker_completes_literature_and_overview_jobs(

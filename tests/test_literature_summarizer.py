@@ -66,6 +66,7 @@ async def test_batch_summarize_populates_papers(monkeypatch: pytest.MonkeyPatch)
 @pytest.mark.anyio
 async def test_cache_skips_already_summarized_papers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("AINRF_LITERATURE_MODEL", "claude-sonnet-4-5")
 
     paper = _paper()
     paper.title_zh = "已有标题"

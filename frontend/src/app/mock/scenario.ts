@@ -29,7 +29,6 @@ import type {
   DomainProjectContext,
   DomainProjectMember,
   DomainProjectProjection,
-  DomainTaskAttempt,
   DomainWorkspaceProjection,
   OverviewDisplayCard,
   OverviewRefreshJob,
@@ -62,7 +61,6 @@ interface MockIntent {
 
 interface FrontendV2MockState {
   task_counter: number;
-  attempt_counter: number;
   project_counter: number;
   workspace_counter: number;
   context_version_counter: number;
@@ -71,7 +69,6 @@ interface FrontendV2MockState {
   projects: DomainProjectProjection[];
   workspaces: DomainWorkspaceProjection[];
   tasks: TaskRecord[];
-  attempts: Record<string, DomainTaskAttempt[]>;
   messages: Record<string, MessageItem[]>;
   task_edges: TaskEdge[];
   contexts: Record<string, DomainProjectContext>;
@@ -313,45 +310,6 @@ function makeTask(
   };
 }
 
-function makeAttempt(
-  taskId: string,
-  sequence: number,
-  trigger: string,
-  status: string,
-): DomainTaskAttempt {
-  const finished = status === 'succeeded';
-  return {
-    attempt_id: `attempt-${taskId}-${sequence}`,
-    task_id: taskId,
-    attempt_seq: sequence,
-    trigger,
-    status,
-    context_snapshot_id: `snapshot-${taskId}-${sequence}`,
-    context_version_id: null,
-    created_at: BASE_TIME,
-    started_at: status === 'queued' ? null : BASE_TIME,
-    finished_at: finished ? LATER_TIME : null,
-    duration_ms: finished ? 300000 : null,
-    token_usage_json: finished ? '{"input_tokens":120,"output_tokens":80}' : null,
-    cost_usd: finished ? 0.42 : null,
-    failure_reason: null,
-    stop_reason: null,
-    runtime_sessions: finished ? [{
-      runtime_session_id: `runtime-${taskId}-${sequence}`,
-      attempt_id: `attempt-${taskId}-${sequence}`,
-      status: 'completed',
-      engine_name: 'claude-code',
-      started_at: BASE_TIME,
-      finished_at: LATER_TIME,
-    }] : [],
-    dispatch: {
-      dispatch_id: `dispatch-${taskId}-${sequence}`,
-      status: finished ? 'completed' : 'queued',
-      launch_state: finished ? 'completed' : 'pending',
-    },
-  };
-}
-
 function makeContextVersion(projectId: string, sequence: number, content: string): DomainContextVersion {
   return {
     context_version_id: `context-${projectId}-v${sequence}`,
@@ -452,12 +410,9 @@ function createState(): FrontendV2MockState {
     'Review the deterministic frontend fixture and report the result.',
     'succeeded',
   );
-  const seedAttempt = makeAttempt('task-seed', 1, 'initial', 'succeeded');
-  seedAttempt.context_version_id = alphaContext.context_version_id;
   const displayCards = makeOverviewCards();
   return {
     task_counter: 1,
-    attempt_counter: 1,
     project_counter: 1,
     workspace_counter: 1,
     context_version_counter: 1,
@@ -472,7 +427,6 @@ function createState(): FrontendV2MockState {
       makeWorkspace('workspace-alpha', 'Alpha Workspace', 'project-alpha', 'Alpha Research'),
     ],
     tasks: [seedTask],
-    attempts: { 'task-seed': [seedAttempt] },
     messages: {
       'task-seed': [
         {
@@ -978,53 +932,40 @@ export const frontendV2MockHandlers = [
     by_engine: { 'claude-code': { task_count: state.tasks.length, tasks_with_usage: 1, tokens: 200, cost_usd: 0.42 } },
     top_tasks: [{ task_id: 'task-seed', title: 'Review seeded frontend flow', status: 'succeeded', harness_engine: 'claude-code', total_tokens: 200, cost_usd: 0.42, duration_ms: 300000 }],
   })),
-  http.get('/api/tasks/:taskId/attempts', ({ params }) => {
-    const taskId = textParam(params, 'taskId');
-    return taskById(taskId) ? HttpResponse.json({ items: state.attempts[taskId] ?? [] }) : notFound('Task', taskId);
-  }),
-  http.get('/api/tasks/:taskId/messages', ({ params, request }) => {
+  http.get('/api/tasks/:taskId/turns', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     if (!taskById(taskId)) return notFound('Task', taskId);
-    const search = new URL(request.url).searchParams;
-    const afterSeq = Number(search.get('after_seq') ?? 0);
-    const limit = Number(search.get('limit') ?? 100);
-    const messages = (state.messages[taskId] ?? [])
-      .filter((message) => message.metadata.sequence > afterSeq)
-      .slice(0, limit);
-    return HttpResponse.json({ messages, has_more: false, next_sequence: messages.at(-1)?.metadata.sequence ?? null });
+    return HttpResponse.json({ items: [{
+      turn_id: `turn-${taskId}-1`, task_id: taskId, turn_seq: 1, status: 'completed',
+      retry_of_turn_id: null, accepted_at: BASE_TIME, started_at: BASE_TIME,
+      finished_at: LATER_TIME, failure_code: null,
+    }] });
   }),
-  http.get('/api/tasks/:taskId/output', ({ params, request }) => {
+  http.get('/api/tasks/:taskId/turns/:turnId/items', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     if (!taskById(taskId)) return notFound('Task', taskId);
-    const afterSeq = Number(new URL(request.url).searchParams.get('after_seq') ?? 0);
     const items = (state.messages[taskId] ?? [])
-      .filter((message) => message.metadata.sequence > afterSeq)
       .map((message) => ({
-        task_id: taskId,
-        seq: message.metadata.sequence,
-        kind: message.metadata.sourceKind ?? 'message',
-        content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-        created_at: message.metadata.timestamp,
+        item_id: message.id, task_id: taskId, turn_id: `turn-${taskId}-1`,
+        task_item_seq: message.metadata.sequence, turn_item_seq: message.metadata.sequence,
+        item_type: message.type === 'user' ? 'user_message' : message.type === 'assistant' ? 'agent_message' : 'system_notice',
+        actor: message.type === 'user' ? 'user' : message.type === 'assistant' ? 'agent' : 'system',
+        payload: { text: typeof message.content === 'string' ? message.content : JSON.stringify(message.content) },
+        native_provenance: { source: 'mock' }, occurred_at: message.metadata.timestamp,
+        ingested_at: message.metadata.timestamp, persisted_at: message.metadata.timestamp,
       }));
-    return HttpResponse.json({ items, next_seq: items.at(-1)?.seq ?? afterSeq, has_more: false });
+    return HttpResponse.json({ items });
   }),
-  http.get('/api/tasks/:taskId/stream', () => new HttpResponse('', {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-  })),
-  http.post('/api/tasks/:taskId/retry', ({ params }) => {
+  http.post('/api/tasks/:taskId/turns/:turnId/retry', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     const task = taskById(taskId);
     if (!task) return notFound('Task', taskId);
-    const sequence = (state.attempts[taskId]?.length ?? 0) + 1;
-    const attempt = makeAttempt(taskId, sequence, 'retry', 'queued');
-    state.attempts[taskId] = [...(state.attempts[taskId] ?? []), attempt];
     updateTaskStatus(task, 'queued');
     task.completed_at = null;
     task.exit_code = null;
     return HttpResponse.json({
-      task,
-      attempt,
-      dispatch: attempt.dispatch,
+      submission_id: `submission-${taskId}-retry`, task_id: taskId,
+      reserved_turn_id: `turn-${taskId}-retry`, status: 'queued', disposition: 'queued',
     });
   }),
   http.post('/api/tasks/:taskId/archive', ({ params }) => {
@@ -1048,34 +989,24 @@ export const frontendV2MockHandlers = [
     const task = taskById(taskId);
     return task ? HttpResponse.json(updateTaskStatus(task, 'cancelled')) : notFound('Task', taskId);
   }),
-  http.post('/api/tasks/:taskId/pause', ({ params }) => {
-    const taskId = textParam(params, 'taskId');
-    const task = taskById(taskId);
-    return task ? HttpResponse.json(updateTaskStatus(task, 'paused')) : notFound('Task', taskId);
-  }),
-  http.post('/api/tasks/:taskId/resume', ({ params }) => {
+  http.post('/api/tasks/:taskId/turns', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');
     const task = taskById(taskId);
     if (!task) return notFound('Task', taskId);
-    const sequence = (state.attempts[taskId]?.length ?? 0) + 1;
-    state.attempts[taskId] = [...(state.attempts[taskId] ?? []), makeAttempt(taskId, sequence, 'resume', 'running')];
-    return HttpResponse.json(updateTaskStatus(task, 'running'));
-  }),
-  http.post('/api/tasks/:taskId/continue', async ({ params, request }) => {
-    const taskId = textParam(params, 'taskId');
-    const task = taskById(taskId);
-    if (!task) return notFound('Task', taskId);
-    const payload = await requestJson<{ prompt: string }>(request);
+    const payload = await requestJson<{ text: string }>(request);
     const messages = state.messages[taskId] ?? [];
     const sequence = (messages.at(-1)?.metadata.sequence ?? 0) + 1;
     messages.push({
       id: `message-${taskId}-${sequence}`,
       type: 'user',
-      content: payload.prompt,
+      content: payload.text,
       metadata: { timestamp: LATER_TIME, sequence, sourceKind: 'message' },
     });
     state.messages[taskId] = messages;
-    return HttpResponse.json({ task_id: taskId, sequence });
+    return HttpResponse.json({
+      submission_id: `submission-${taskId}-${sequence}`, task_id: taskId,
+      reserved_turn_id: `turn-${taskId}-${sequence}`, status: 'queued', disposition: 'queued',
+    }, { status: 202 });
   }),
   http.post('/api/tasks/:taskId/move', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');
@@ -1104,8 +1035,6 @@ export const frontendV2MockHandlers = [
       payload.prompt ?? source.prompt,
     );
     state.tasks.unshift(task);
-    const attempt = makeAttempt(taskId, 1, 'initial', 'queued');
-    state.attempts[taskId] = [attempt];
     state.messages[taskId] = [{
       id: `message-${taskId}-1`,
       type: 'user',
@@ -1120,7 +1049,13 @@ export const frontendV2MockHandlers = [
       relationship_type: 'derived_from',
       created_at: LATER_TIME,
     });
-    return HttpResponse.json({ task, attempt, dispatch: attempt.dispatch }, { status: 201 });
+    return HttpResponse.json({
+      task,
+      submission: {
+        submission_id: `submission-${taskId}-1`, task_id: taskId,
+        reserved_turn_id: `turn-${taskId}-1`, status: 'queued', intent: 'create',
+      },
+    }, { status: 202 });
   }),
   http.patch('/api/tasks/:taskId', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');
@@ -1162,17 +1097,20 @@ export const frontendV2MockHandlers = [
     task.researcher_type = payload.researcher_type;
     task.harness_engine = payload.harness_engine;
     task.project_context_version_id = state.contexts[payload.project_id]?.active_version?.context_version_id ?? null;
-    const attempt = makeAttempt(taskId, 1, 'initial', 'queued');
-    attempt.context_version_id = task.project_context_version_id ?? null;
     state.tasks.unshift(task);
-    state.attempts[taskId] = [attempt];
     state.messages[taskId] = [{
       id: `message-${taskId}-1`,
       type: 'user',
       content: task.prompt,
       metadata: { timestamp: BASE_TIME, sequence: 1, sourceKind: 'message' },
     }];
-    return HttpResponse.json({ task, attempt, dispatch: attempt.dispatch }, { status: 201 });
+    return HttpResponse.json({
+      task,
+      submission: {
+        submission_id: `submission-${taskId}-1`, task_id: taskId,
+        reserved_turn_id: `turn-${taskId}-1`, status: 'queued', disposition: 'queued',
+      },
+    }, { status: 202 });
   }),
 
   http.get('/api/domain/projects/:projectId/members', ({ params }) => {

@@ -35,6 +35,7 @@ from ainrf.api.routes.settings import router as settings_router
 from ainrf.api.routes.skill_registries import router as skill_registries_router
 from ainrf.api.routes.skills import router as skills_router
 from ainrf.api.routes.tasks import router as tasks_router
+from ainrf.api.routes.conversation_tasks import router as conversation_tasks_router
 from ainrf.api.routes.terminal import router as terminal_router
 from ainrf.api.routes.client_logs import router as client_logs_router
 from ainrf.api.routes.client_metrics import router as client_metrics_router
@@ -57,7 +58,7 @@ from ainrf.domain_control import (
     DomainWriteParticipant,
 )
 from ainrf.domain import (
-    AttemptProjectionService,
+    ConversationApplicationService,
     build_domain_modules,
     OverviewSnapshotService,
     PersistentEnvironmentFacade,
@@ -149,6 +150,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     skills_router,
     skill_registries_router,
     terminal_router,
+    conversation_tasks_router,
     tasks_router,
     literature_router,
     resources_router,
@@ -418,7 +420,7 @@ def create_app(
         app.state.project_context_service = None
         app.state.persistent_environment_facade = None
         app.state.task_application_service = None
-        app.state.attempt_projection_service = None
+        app.state.conversation_application_service = None
         app.state.task_projection_service = None
         app.state.project_task_projection_service = None
         app.state.session_projection_service = None
@@ -456,12 +458,10 @@ def create_app(
         app.state.task_application_service = TaskApplicationService(
             api_config.state_root, artifact_sha=artifact_sha
         )
-        attempt_projection = AttemptProjectionService(api_config.state_root)
-        app.state.attempt_projection_service = attempt_projection
-        app.state.task_projection_service = TaskProjectionService(
-            api_config.state_root,
-            attempt_projection=attempt_projection,
+        app.state.conversation_application_service = ConversationApplicationService(
+            api_config.state_root, artifact_sha=artifact_sha
         )
+        app.state.task_projection_service = TaskProjectionService(api_config.state_root)
         app.state.overview_snapshot_service = OverviewSnapshotService(
             api_config.state_root,
             artifact_sha=artifact_sha,

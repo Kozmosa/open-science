@@ -692,6 +692,116 @@ class TaskMutationResponse(BaseModel):
     dispatch: TaskDispatchResponse
 
 
+class TurnSubmissionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    submission_id: str
+    task_id: str
+    reserved_turn_id: str
+    status: str
+    intent: str
+
+
+class ConversationTaskMutationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task: dict[str, Any]
+    submission: TurnSubmissionResponse
+
+
+class TurnCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str = Field(min_length=1)
+    allow_next_turn: bool = False
+
+
+class TurnResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    turn_id: str
+    task_id: str
+    turn_seq: int
+    status: str
+
+
+class TurnListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[TurnResponse]
+
+
+class TurnItemResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    item_id: str
+    task_id: str
+    turn_id: str
+    task_item_seq: int
+    turn_item_seq: int
+    item_type: str
+    actor: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class TurnItemListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[TurnItemResponse]
+
+
+class TurnSteerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_turn_id: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class TurnInterruptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_turn_id: str = Field(min_length=1)
+
+
+class TurnControlResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    control_request_id: str
+    task_id: str
+    expected_turn_id: str
+    kind: str
+    status: str
+
+
+class ApprovalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["approved", "denied"]
+    decision: dict[str, Any] = Field(default_factory=dict)
+
+
+class ApprovalDecisionResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    approval_id: str
+    task_id: str
+    status: str
+
+
+class ForkPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_engine_family: Literal["codex", "claude"]
+    target_project_id: str | None = None
+    target_workspace_id: str | None = None
+    target_harness_engine: Literal["codex-app-server", "agent-sdk", "claude-code"] | None = None
+    target_title: str | None = Field(default=None, max_length=500)
+    transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
+    transfer_range: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    disclosure: dict[str, Any] = Field(default_factory=dict)
+
+
+class ForkConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preview_hash: str = Field(min_length=1)
+    source_revision: str = Field(min_length=1)
+    transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
+    truncation_acknowledged: bool = False
+    full_transcript_confirmed: bool = False
+
+
+class ConversationReceiptResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
 class TaskRelationshipResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

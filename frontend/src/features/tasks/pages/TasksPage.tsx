@@ -34,7 +34,7 @@ import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idemp
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
-const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'attempts', 'context', 'closed']);
+const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'turns', 'context', 'closed']);
 const NARROW_TASKS_QUERY = '(max-width: 767px)';
 
 function usePageVisibility(): boolean {
@@ -238,23 +238,14 @@ function TasksPage() {
   const retryMutation = useMutation({
     mutationFn: async (taskId: string) => {
       const key = retryKeyManager.keyFor(semanticMutationValue({ taskId }));
-      return { result: await retryTask(taskId, key), key };
+      return { result: await retryTask(taskId, key), key, taskId };
     },
-    onSuccess: ({ result, key }) => {
+    onSuccess: ({ key, taskId }) => {
       retryKeyManager.markSucceeded(key);
-      const retriedTask = result;
-      const affectedProjectIds = new Set([
-        selectedTask?.project_id,
-        retriedTask.project_id,
-      ].filter((projectId): projectId is string => Boolean(projectId)));
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(retriedTask.task_id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.domain.taskAttempts(retriedTask.task_id) });
-      for (const projectId of affectedProjectIds) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.taskEdges.byProject(projectId) });
-      }
-      selectTask(retriedTask.task_id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
+      selectTask(taskId);
       showToast(t('pages.tasks.retrySuccess'), 'success');
     },
     onError: () => {
@@ -421,7 +412,7 @@ function TasksPage() {
         <PageHeader
           eyebrow="Tasks"
           title={t('pages.tasks.sidebarTitle')}
-          description="Inspect the current Task conversation and its durable Attempt history."
+          description="Inspect the current Task conversation and its durable Turn history."
           actions={(
             <Button ref={createButtonRef} onClick={() => setCreateDialogOpen(true)}>
               <Plus size={16} />
@@ -620,7 +611,7 @@ function TasksPage() {
             </>
           ) : (
             <p className="text-sm text-[var(--osci-color-text-muted)]">
-              The Task ID, Workspace, and Attempt history remain unchanged. The target Project active Context Version will be pinned.
+              The Task ID, Workspace, and Turn history remain unchanged. The target Project active Context Version will be pinned.
             </p>
           )}
           {moveMutation.error instanceof Error ? <p className="text-sm text-[var(--osci-color-danger)]">{moveMutation.error.message}</p> : null}

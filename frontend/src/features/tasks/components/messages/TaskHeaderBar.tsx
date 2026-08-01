@@ -11,10 +11,8 @@ import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idemp
 
 interface TaskHeaderBarProps {
   task: TaskRecord;
-  showPause?: boolean;
-  showResume?: boolean;
-  onPause?: () => void;
-  onResume?: () => void;
+  showInterrupt?: boolean;
+  onInterrupt?: () => void;
   taskSidebarCollapsed?: boolean;
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
@@ -27,10 +25,8 @@ interface TaskHeaderBarProps {
 
 export default function TaskHeaderBar({
   task,
-  showPause = false,
-  showResume = false,
-  onPause,
-  onResume,
+  showInterrupt = false,
+  onInterrupt,
   taskSidebarCollapsed = false,
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
@@ -131,22 +127,13 @@ export default function TaskHeaderBar({
 
       <div className="flex items-center gap-2">
         {actions}
-        {showPause && onPause && (
+        {showInterrupt && onInterrupt && (
           <button
             type="button"
-            onClick={onPause}
+            onClick={onInterrupt}
             className="rounded-lg bg-[var(--osci-color-surface-subtle)] px-3 py-1 text-xs font-medium text-[var(--osci-color-text-secondary)] transition hover:bg-[var(--osci-color-primary-soft)] hover:text-[var(--osci-color-text)]"
           >
-            {t('pages.tasks.actions.pause')}
-          </button>
-        )}
-        {showResume && onResume && (
-          <button
-            type="button"
-            onClick={onResume}
-            className="rounded-lg bg-[var(--osci-color-primary-soft)] px-3 py-1 text-xs font-medium text-[var(--osci-color-primary)] transition hover:opacity-80"
-          >
-            {t('pages.tasks.actions.resume')}
+            Interrupt
           </button>
         )}
 

@@ -106,4 +106,4 @@ TaskCreateForm 表单配置项：
 
 - [终端管理](/terminal) — 任务代理终端与会话管理
 - [工作区](/workspace) — 工作区与目录管理
-- [运行记录](/runs) — Task 与 Attempt 执行历史
+- [运行记录](/runs) — Task 与 Turn/Item 执行历史

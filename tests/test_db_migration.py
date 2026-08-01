@@ -41,7 +41,24 @@ class TestBaselineCreatesTables:
             ("sessions", {"task_sessions", "task_attempts"}),
             (
                 "agentic_researcher",
-                {"tasks", "task_outputs", "overview_refresh_idempotency_requests"},
+                {
+                    "tasks",
+                    "task_outputs",
+                    "overview_refresh_idempotency_requests",
+                    "conversation_task_authorities",
+                    "task_turns",
+                    "turn_items",
+                    "engine_conversation_bindings",
+                    "turn_submissions",
+                    "runtime_executions",
+                    "turn_control_requests",
+                    "runtime_approval_requests",
+                    "fork_preview_receipts",
+                    "fork_transfer_receipts",
+                    "conversation_task_states",
+                    "conversation_submission_intents",
+                    "next_turn_submissions",
+                },
             ),
             (
                 "literature",
@@ -82,7 +99,7 @@ class TestBaselineCreatesTables:
         [
             ("auth", 7),
             ("sessions", 3),
-            ("agentic_researcher", 26),
+            ("agentic_researcher", 32),
             ("literature", 7),
             ("terminal", 1),
         ],
@@ -217,7 +234,7 @@ class TestUpgradeFromV0:
 
         with _connect(db_file) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
-            assert run_pending(conn, "agentic_researcher") == 6
+            assert run_pending(conn, "agentic_researcher") == 12
             columns = {
                 str(row["name"]) for row in conn.execute("PRAGMA table_info(overview_refresh_jobs)")
             }
@@ -281,7 +298,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "agentic_researcher") == 6
+            assert run_pending(conn, "agentic_researcher") == 12
             version = conn.execute(
                 """SELECT fragment_manifest_json FROM project_context_versions
                    WHERE context_version_id = 'context-version-legacy'"""
@@ -336,7 +353,7 @@ class TestUpgradeFromV0:
             conn.commit()
 
         with _connect(db_file) as conn:
-            assert run_pending(conn, "agentic_researcher") == 3
+            assert run_pending(conn, "agentic_researcher") == 9
             legacy = conn.execute(
                 "SELECT status FROM project_context_candidates WHERE candidate_id = 'candidate-legacy'"
             ).fetchone()
@@ -472,7 +489,7 @@ class TestMaintenanceBarrierRepair:
         assert status.maintenance_epoch == 0
         assert not status.is_active
         with _connect(db_file) as conn:
-            assert current_version(conn, "agentic_researcher") == 26
+            assert current_version(conn, "agentic_researcher") == 32
             tables = {
                 str(row["name"])
                 for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -514,12 +531,12 @@ class TestMaintenanceBarrierRepair:
         with _connect(db_file) as conn:
             from ainrf.db.migration import set_version
 
-            set_version(conn, "agentic_researcher", 27)
+            set_version(conn, "agentic_researcher", 33)
             conn.commit()
 
         with _connect(db_file) as conn:
             with pytest.raises(
-                RuntimeError, match="unsupported agentic_researcher schema version 27"
+                RuntimeError, match="unsupported agentic_researcher schema version 33"
             ):
                 run_pending(conn, "agentic_researcher")
 

@@ -132,7 +132,7 @@ async def test_api_fresh_project_has_an_initial_context_and_can_create_a_task(
                 "skills": [],
             },
         )
-        assert created.status_code == 201
+        assert created.status_code == 202
         task_id = str(_nested(_payload(created), "task")["task_id"])
 
         task_context = await client.get(_api_path(f"/api/domain/tasks/{task_id}/context"))
@@ -203,7 +203,7 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
                 "skills": [],
             },
         )
-        assert task_response.status_code == 201
+        assert task_response.status_code == 202
         task_id = str(_nested(_payload(task_response), "task")["task_id"])
 
         with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
