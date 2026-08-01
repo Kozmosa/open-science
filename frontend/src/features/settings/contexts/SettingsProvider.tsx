@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
-import { applyOsciTheme } from '@design-system';
+import { applyOsciTheme, MotionPreferenceProvider } from '@design-system';
 import {
   clampEditorFontSize,
   clampTerminalFontSize,
@@ -56,6 +56,7 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
     settings.general.appearance?.theme === 'dark' || settings.general.appearance?.theme === 'system'
       ? settings.general.appearance.theme
       : 'light';
+  const motionEnabled = settings.general.appearance?.motionEnabled !== false;
 
   const sanitizedProjectDefaults: Record<string, DefaultProjectSettings> = {};
   for (const [projectId, projectSettings] of Object.entries(settings.projectDefaults)) {
@@ -97,7 +98,7 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
         ? settings.general.defaultRoute : 'today',
       terminal: { fontSize: clampTerminalFontSize(settings.general.terminal.fontSize) },
       editor: { fontSize: editorFontSize, fontFamily: editorFontFamily },
-      appearance: { theme: appearanceTheme },
+      appearance: { theme: appearanceTheme, motionEnabled },
     },
     taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
@@ -332,7 +333,9 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
           <TaskConfigurationProvider value={taskConfigurationValue}>
             <ProjectDefaultsProvider value={projectDefaultsValue}>
               <LlmProvidersProvider value={llmProvidersValue}>
-                {children}
+                <MotionPreferenceProvider motionEnabled={state.settings.general.appearance.motionEnabled}>
+                  {children}
+                </MotionPreferenceProvider>
               </LlmProvidersProvider>
             </ProjectDefaultsProvider>
           </TaskConfigurationProvider>

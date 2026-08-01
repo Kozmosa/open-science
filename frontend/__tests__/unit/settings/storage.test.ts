@@ -52,6 +52,7 @@ describe('settings storage v2 task configuration', () => {
     expect(settings.version).toBe(5);
     expect(settings.general.defaultRoute).toBe('today');
     expect(settings.general.appearance.theme).toBe('light');
+    expect(settings.general.appearance.motionEnabled).toBe(true);
     expect(settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
     expect(settings.taskConfiguration.defaultResearchAgentProfileId).toBe(
       defaultResearchAgentProfileId
@@ -71,6 +72,18 @@ describe('settings storage v2 task configuration', () => {
     expect(modes).toContain('reproduce_baseline');
     expect(modes).toContain('discover_ideas');
     expect(modes).toContain('validate_ideas');
+  });
+
+  it('backfills enabled motion for older appearance settings', () => {
+    const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    const general = settings.general as Record<string, unknown>;
+    general.appearance = { theme: 'dark' };
+    window.localStorage.setItem(settingsStorageKeyForUser('test-user'), JSON.stringify(settings));
+
+    expect(readStoredSettings().settings.general.appearance).toEqual({
+      theme: 'dark',
+      motionEnabled: true,
+    });
   });
 
   it('upgrades v1 settings and preserves environment task templates', () => {

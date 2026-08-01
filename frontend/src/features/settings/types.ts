@@ -60,6 +60,7 @@ export interface DefaultProjectSettings {
 
 export interface AppearanceSettings {
   theme: ThemePreference;
+  motionEnabled: boolean;
 }
 
 export interface TaskConfigurationSettings {

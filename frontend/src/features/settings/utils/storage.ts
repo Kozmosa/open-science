@@ -384,6 +384,7 @@ export function readStoredSettings(userId = 'test-user'): SettingsLoadResult {
     appearanceSettings?.theme === 'dark' || appearanceSettings?.theme === 'system'
       ? appearanceSettings.theme
       : 'light';
+  const motionEnabled = appearanceSettings?.motionEnabled !== false;
 
   const missingDefaultRoute = general.defaultRoute === undefined;
   const invalidDefaultRoute = general.defaultRoute !== undefined && !isDefaultRoute(general.defaultRoute);
@@ -413,6 +414,7 @@ export function readStoredSettings(userId = 'test-user'): SettingsLoadResult {
         },
         appearance: {
           theme,
+          motionEnabled,
         },
       },
       taskConfiguration,

@@ -107,3 +107,8 @@ function DialogCloseButton({ label }: { label: string }) {
 
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
+export const DialogRoot = DialogPrimitive.Root;
+export const DialogPortal = DialogPrimitive.Portal;
+export const DialogOverlay = DialogPrimitive.Overlay;
+export const DialogContent = DialogPrimitive.Content;
+export const DialogTitle = DialogPrimitive.Title;

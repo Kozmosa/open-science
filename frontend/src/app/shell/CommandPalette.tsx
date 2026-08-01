@@ -1,4 +1,3 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -8,6 +7,12 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  DialogContent,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  LiquidGlass,
 } from '@design-system';
 import type { ResolvedAppRoute } from '@/app/routeRegistry';
 import { useT } from '@/shared/i18n';
@@ -45,24 +50,25 @@ export function CommandPalette({ open, onOpenChange, routes }: CommandPalettePro
   }, [onOpenChange, open]);
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
-        <DialogPrimitive.Content
+    <DialogRoot open={open} onOpenChange={onOpenChange}>
+      <DialogPortal>
+        <DialogOverlay className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
+        <DialogContent
           aria-label={t('layout.openCommandPalette')}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             restoreFocusRef.current?.focus();
             restoreFocusRef.current = null;
           }}
-          className="fixed left-1/2 top-[16vh] z-50 w-[min(42rem,calc(100%-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/20 bg-[var(--prism-glass)] shadow-[0_28px_90px_rgb(0_0_0/0.32)] outline-none backdrop-blur-2xl backdrop-saturate-150 data-[state=open]:animate-in data-[state=closed]:animate-out"
+          className="fixed left-1/2 top-[16vh] z-50 w-[min(42rem,calc(100%-2rem))] -translate-x-1/2 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out"
         >
-          <DialogPrimitive.Title className="sr-only">
+          <DialogTitle className="sr-only">
             {t('layout.openCommandPalette')}
-          </DialogPrimitive.Title>
-          <Command label={t('layout.openCommandPalette')} className="rounded-2xl bg-transparent">
-            <CommandInput autoFocus placeholder={t('layout.commandPlaceholder')} className="h-14 text-base" />
-            <CommandList className="max-h-[min(26rem,60vh)] p-2">
+          </DialogTitle>
+          <LiquidGlass variant="prominent" interactive className="rounded-2xl">
+            <Command label={t('layout.openCommandPalette')} className="rounded-2xl bg-transparent">
+              <CommandInput autoFocus placeholder={t('layout.commandPlaceholder')} className="h-14 text-base" />
+              <CommandList className="max-h-[min(26rem,60vh)] p-2">
               <CommandEmpty>{t('layout.commandNoResults')}</CommandEmpty>
               <CommandGroup className="p-0">
                 {routes.map((route) => {
@@ -84,10 +90,11 @@ export function CommandPalette({ open, onOpenChange, routes }: CommandPalettePro
                   );
                 })}
               </CommandGroup>
-            </CommandList>
-          </Command>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+              </CommandList>
+            </Command>
+          </LiquidGlass>
+        </DialogContent>
+      </DialogPortal>
+    </DialogRoot>
   );
 }

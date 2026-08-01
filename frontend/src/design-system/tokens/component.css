@@ -13,3 +13,71 @@
     --osci-topbar-backdrop-filter: none;
   }
 }
+
+.osci-liquid-glass {
+  --osci-glass-pointer-x: 50%;
+  --osci-glass-pointer-y: 50%;
+  --osci-glass-shift-x: 0px;
+  --osci-glass-shift-y: 0px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.24);
+  background: color-mix(in srgb, var(--osci-color-surface-elevated) 72%, transparent);
+  box-shadow: var(--osci-shadow-md), inset 0 1px 0 rgb(255 255 255 / 0.22);
+  backdrop-filter: blur(20px) saturate(150%);
+}
+
+.osci-liquid-glass[data-variant='subtle'] {
+  background: color-mix(in srgb, var(--osci-color-surface-elevated) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(125%);
+}
+
+.osci-liquid-glass[data-variant='prominent'] {
+  border-color: rgb(255 255 255 / 0.32);
+  background: color-mix(in srgb, var(--osci-color-surface-elevated) 62%, transparent);
+  box-shadow: var(--osci-shadow-lg), inset 0 1px 0 rgb(255 255 255 / 0.3);
+  backdrop-filter: blur(26px) saturate(170%);
+}
+
+.osci-liquid-glass__material {
+  position: absolute;
+  z-index: -1;
+  inset: -8px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--osci-glass-pointer-x) var(--osci-glass-pointer-y), rgb(255 255 255 / 0.22), transparent 38%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.16), transparent 42%, rgb(255 255 255 / 0.07));
+  opacity: 0.72;
+}
+
+.osci-liquid-glass[data-enhanced='true'] .osci-liquid-glass__material {
+  filter: url('#osci-liquid-glass-refraction');
+}
+
+.osci-liquid-glass__content {
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+
+.osci-liquid-glass[data-interactive='true'] {
+  transform: translate3d(var(--osci-glass-shift-x), var(--osci-glass-shift-y), 0);
+  transition: transform 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+.osci-liquid-glass[data-interactive='true']:hover {
+  border-color: rgb(255 255 255 / 0.38);
+  box-shadow: var(--osci-shadow-lg), inset 0 1px 0 rgb(255 255 255 / 0.34);
+}
+
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
+  .osci-liquid-glass {
+    background: var(--osci-color-surface-elevated);
+    backdrop-filter: none;
+  }
+
+  .osci-liquid-glass__material {
+    display: none;
+  }
+}

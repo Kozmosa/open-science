@@ -11,6 +11,15 @@
     <title>OpenScience 学术系统</title>
   </head>
   <body>
+    <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+      <defs>
+        <filter id="osci-liquid-glass-refraction" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.012 0.025" numOctaves="1" seed="7" result="noise" />
+          <feGaussianBlur in="noise" stdDeviation="1.2" result="softNoise" />
+          <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="10" xChannelSelector="R" yChannelSelector="B" />
+        </filter>
+      </defs>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

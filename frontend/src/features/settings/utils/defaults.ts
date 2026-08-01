@@ -279,6 +279,7 @@ export function createDefaultWebUiSettings(): WebUiSettingsDocument {
       },
       appearance: {
         theme: 'light',
+        motionEnabled: true,
       },
     },
     taskConfiguration: createDefaultTaskConfigurationSettings(),

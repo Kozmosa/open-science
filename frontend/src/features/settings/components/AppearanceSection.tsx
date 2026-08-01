@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
+import { Button, FormField, SectionCard, SectionHeader, NativeSelect, Switch } from '@design-system';
 import { useT } from '@/shared/i18n';
 import type { WebUiSettingsDocument } from '@features/settings/types';
 
@@ -12,7 +12,8 @@ export interface AppearanceSectionProps {
 export function AppearanceSection({ savedAppearance, onSave, onReset }: AppearanceSectionProps) {
   const t = useT();
   const [draft, setDraft] = useState(savedAppearance);
-  const hasChanges = draft.theme !== savedAppearance.theme;
+  const hasChanges = draft.theme !== savedAppearance.theme
+    || draft.motionEnabled !== savedAppearance.motionEnabled;
 
   return (
     <SectionCard
@@ -30,13 +31,25 @@ export function AppearanceSection({ savedAppearance, onSave, onReset }: Appearan
             aria-label={t('pages.settings.appearance.themeLabel')}
             value={draft.theme}
             onChange={(event) =>
-              setDraft({ theme: event.target.value as 'light' | 'dark' | 'system' })
+              setDraft({ ...draft, theme: event.target.value as 'light' | 'dark' | 'system' })
             }
           >
             <option value="light">{t('pages.settings.appearance.light')}</option>
             <option value="dark">{t('pages.settings.appearance.dark')}</option>
             <option value="system">{t('pages.settings.appearance.system')}</option>
           </NativeSelect>
+        </FormField>
+        <FormField label={t('pages.settings.appearance.motionLabel')}>
+          <div className="flex min-h-10 items-center justify-between gap-4 rounded-lg border border-[var(--osci-color-border-subtle)] px-3">
+            <span className="text-sm text-[var(--osci-color-text-secondary)]">
+              {t('pages.settings.appearance.motionDescription')}
+            </span>
+            <Switch
+              aria-label={t('pages.settings.appearance.motionLabel')}
+              checked={draft.motionEnabled}
+              onCheckedChange={(motionEnabled) => setDraft({ ...draft, motionEnabled })}
+            />
+          </div>
         </FormField>
       </div>
 

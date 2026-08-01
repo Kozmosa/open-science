@@ -575,7 +575,9 @@ const pages = {
           light: 'Light',
           dark: 'Dark',
           system: 'Follow system',
-          previewHint: 'Save changes to apply this theme across the entire interface.',
+          motionLabel: 'Motion effects',
+          motionDescription: 'Enable interface motion and enhanced glass effects',
+          previewHint: 'Save changes to apply appearance settings across the interface.',
         },
         users: {
           title: 'User Management',
