@@ -60,6 +60,7 @@ const navigation = {
       openNavigation: 'Open navigation',
       closeNavigation: 'Close navigation',
       openCommandPalette: 'Open command palette',
+      commandTrigger: 'Command',
       commandPlaceholder: 'Search pages and actions…',
       commandNoResults: 'No matching destination.',
       accountMenu: 'Open account menu',

@@ -60,7 +60,23 @@ describe('osci shell contracts', () => {
       </LocaleProvider>,
     );
     expect(screen.getByText('Task | Total: 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Search pages and actions….*Ctrl\/⌘\+Shift\+P.*Open command palette/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Command, Ctrl + Shift + P, Open command palette' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Alice.*Open account menu/ })).toBeInTheDocument();
+  });
+
+  it('uses the Command glyph shortcut on Apple platforms', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+    Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' });
+    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'user', status: 'active' } as const;
+
+    render(
+      <LocaleProvider initialLocale="en">
+        <TopBar user={user} taskStatusSummary={null} onOpenNavigation={() => undefined} onOpenCommandPalette={() => undefined} onLogout={() => undefined} />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Command, Command + Shift + P, Open command palette' })).toBeInTheDocument();
+    expect(screen.getByText('⇧ P')).toBeInTheDocument();
+    if (originalPlatform) Object.defineProperty(navigator, 'platform', originalPlatform);
   });
 });

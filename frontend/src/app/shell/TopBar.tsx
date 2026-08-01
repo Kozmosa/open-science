@@ -1,4 +1,4 @@
-import { Menu, Search } from 'lucide-react';
+import { Command, Menu } from 'lucide-react';
 import { Button } from '@design-system';
 import type { UserInfo } from '@/shared/types';
 import { useT } from '@/shared/i18n';
@@ -15,7 +15,8 @@ interface TopBarProps {
 
 export function TopBar({ user, taskStatusSummary, onOpenNavigation, onOpenCommandPalette, onLogout }: TopBarProps) {
   const t = useT();
-  const commandShortcut = 'Ctrl/⌘+Shift+P';
+  const isApplePlatform = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+  const commandShortcut = isApplePlatform ? 'Command + Shift + P' : 'Ctrl + Shift + P';
   return (
     <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between border-b border-[var(--osci-color-border)] bg-[var(--osci-topbar-background-translucent)] px-3 backdrop-blur-[16px] md:px-5 [backdrop-filter:var(--osci-topbar-backdrop-filter)]">
       <div className="flex items-center gap-2">
@@ -27,11 +28,20 @@ export function TopBar({ user, taskStatusSummary, onOpenNavigation, onOpenComman
           size="sm"
           onClick={onOpenCommandPalette}
           className="gap-2"
+          aria-label={`${t('layout.commandTrigger')}, ${commandShortcut}, ${t('layout.openCommandPalette')}`}
         >
-          <Search aria-hidden="true" size={15} />
-          <span className="hidden sm:inline">{t('layout.commandPlaceholder')}</span>
-          <kbd className="hidden rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] lg:inline">{commandShortcut}</kbd>
-          <span className="sr-only">{t('layout.openCommandPalette')}</span>
+          <Command aria-hidden="true" size={15} />
+          <span className="hidden sm:inline">{t('layout.commandTrigger')}</span>
+          <kbd aria-hidden="true" className="hidden items-center gap-1 rounded border border-[var(--osci-color-border)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--osci-color-text-muted)] sm:inline-flex">
+            {isApplePlatform ? (
+              <>
+                <Command size={11} />
+                <span>⇧ P</span>
+              </>
+            ) : (
+              <span>Ctrl + Shift + P</span>
+            )}
+          </kbd>
         </Button>
       </div>
       <div className="flex items-center gap-2">
