@@ -198,13 +198,16 @@ def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
             started_at=_NOW,
             updated_at=_NOW,
         )
-        assert execution.transition_runtime_execution(
-            runtime_execution_id="execution-projection",
-            expected_status="starting",
-            status="running",
-            evidence_json="{}",
-            updated_at=_NOW,
-        ) == 1
+        assert (
+            execution.transition_runtime_execution(
+                runtime_execution_id="execution-projection",
+                expected_status="starting",
+                status="running",
+                evidence_json="{}",
+                updated_at=_NOW,
+            )
+            == 1
+        )
         conn.commit()
     ConversationExecutionService(state_root).append_item(
         RuntimeExecutionClaim(
@@ -237,9 +240,12 @@ def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
     assert health["engine_alive"] is True
     assert usage["total_tokens"] == 10
     with closing(connect(_db_path(state_root))) as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = 'task-1'"
-        ).fetchone()[0] == 0
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = 'task-1'"
+            ).fetchone()[0]
+            == 0
+        )
 
 
 def test_task_metadata_and_cancel_stay_inside_conversation_interface(
@@ -261,9 +267,12 @@ def test_task_metadata_and_cancel_stay_inside_conversation_interface(
     )
     assert titled["task_id"] == "task-1"
     with closing(connect(_db_path(state_root))) as conn:
-        assert conn.execute(
-            "SELECT work_status FROM conversation_task_states WHERE task_id = 'task-1'"
-        ).fetchone()[0] == "cancelled"
+        assert (
+            conn.execute(
+                "SELECT work_status FROM conversation_task_states WHERE task_id = 'task-1'"
+            ).fetchone()[0]
+            == "cancelled"
+        )
         control = conn.execute("SELECT kind, status FROM turn_control_requests").fetchone()
         assert control is not None
         assert (control["kind"], control["status"]) == ("interrupt", "requested")

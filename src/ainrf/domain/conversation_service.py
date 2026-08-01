@@ -567,6 +567,114 @@ class ConversationApplicationService:
             allow_next_turn=allow_next_turn,
         )
 
+    def move_task(
+        self,
+        task_id: str,
+        user: Mapping[str, object],
+        *,
+        project_id: str,
+        context_version_id: str,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Move an idle Conversation Task while preserving its causal history."""
+
+        actor = self._actor(user)
+        request = {
+            "task_id": task_id,
+            "project_id": project_id,
+            "context_version_id": context_version_id,
+        }
+        created_at = _now()
+        with closing(self._connect()) as conn:
+            try:
+                self._begin(conn)
+                domain = _SqliteDomainRepository(conn)
+                digest, replay = self._replay(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.MOVE_TASK,
+                    key=idempotency_key,
+                    request=request,
+                )
+                if replay is not None:
+                    DomainAuthorizationService(conn).require_task_owner(task_id, dict(user))
+                    conn.commit()
+                    return replay
+                authorization = DomainAuthorizationService(conn)
+                authorization.require_task_owner(task_id, dict(user))
+                authorization.require_project_editor(project_id, dict(user))
+                task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
+                if task is None:
+                    raise DomainNotFoundError(task_id)
+                conversations = SqliteConversationRepository(conn)
+                self._require_v3(conversations, task_id)
+                if conversations.active_turn(task_id) is not None:
+                    raise DomainConflictError("Active Turn must be interrupted before moving Task")
+                if str(task["project_id"]) == project_id:
+                    raise DomainConflictError("Task already belongs to the target Project")
+                authorization.require_workspace_owner(
+                    str(task["workspace_id"]), dict(user), resource_visible=True
+                )
+                self._writable_workspace(
+                    conn,
+                    project_id=project_id,
+                    workspace_id=str(task["workspace_id"]),
+                    expected_environment_id=str(task["environment_id"]),
+                )
+                snapshot_id = (
+                    self._context_service._create_snapshot_for_task_context_version_in_transaction(
+                        conn,
+                        project_id=project_id,
+                        workspace_id=str(task["workspace_id"]),
+                        task_id=task_id,
+                        task_prompt=str(task["prompt"]),
+                        context_version_id=context_version_id,
+                    )
+                )
+                conn.execute(
+                    """
+                    UPDATE tasks SET project_id = ?, project_context_version_id = ?,
+                        project_context_snapshot_id = ?, updated_at = ? WHERE task_id = ?
+                    """,
+                    (project_id, context_version_id, snapshot_id, created_at, task_id),
+                )
+                conn.execute(
+                    """
+                    UPDATE turn_submissions SET context_snapshot_ref = ?, updated_at = ?
+                    WHERE task_id = ? AND status = 'queued'
+                    """,
+                    (snapshot_id, created_at, task_id),
+                )
+                result: dict[str, object] = {
+                    "task_id": task_id,
+                    "project_id": project_id,
+                    "workspace_id": str(task["workspace_id"]),
+                    "context_version_id": context_version_id,
+                    "context_snapshot_id": snapshot_id,
+                }
+                self._store(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.MOVE_TASK,
+                    key=idempotency_key,
+                    digest=digest,
+                    response=result,
+                    created_at=created_at,
+                )
+                self._audit(
+                    domain,
+                    actor=actor,
+                    event_type="conversation.task.moved",
+                    subject_type="task",
+                    subject_id=task_id,
+                    created_at=created_at,
+                )
+                conn.commit()
+                return result
+            except BaseException:
+                conn.rollback()
+                raise
+
     def retry_turn(
         self,
         task_id: str,
@@ -857,12 +965,15 @@ class ConversationApplicationService:
                     )
                 if current is TaskWorkStatus.OPEN:
                     require_task_work_transition(current, TaskWorkStatus.CANCELLED)
-                    if conversations.update_work_status(
-                        task_id=task_id,
-                        expected_status=current,
-                        status=TaskWorkStatus.CANCELLED,
-                        updated_at=updated_at,
-                    ) != 1:
+                    if (
+                        conversations.update_work_status(
+                            task_id=task_id,
+                            expected_status=current,
+                            status=TaskWorkStatus.CANCELLED,
+                            updated_at=updated_at,
+                        )
+                        != 1
+                    ):
                         raise DomainConflictError("Task cancellation lost a state race")
                 conn.execute(
                     "UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE task_id = ?",
@@ -1196,10 +1307,8 @@ class ConversationApplicationService:
                     )
                 if (
                     execution is None
-                    or str(execution["runtime_execution_id"])
-                    != persisted_runtime_execution_id
-                    or int(execution["runtime_generation"])
-                    != persisted_runtime_generation
+                    or str(execution["runtime_execution_id"]) != persisted_runtime_execution_id
+                    or int(execution["runtime_generation"]) != persisted_runtime_generation
                 ):
                     raise ConversationContractError(
                         ConversationErrorCode.RUNTIME_LOST,

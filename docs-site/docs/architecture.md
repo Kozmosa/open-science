@@ -40,7 +40,9 @@ flowchart TD
 - Canonical HTTP prefix 是 `/api`。
 - 产品 router 只注册在 `/api`。root 与产品 `/v1` aliases 已在用户确认当前无外部调用者后删除；`/v1/models`、`/v1/messages` 继续作为独立外部协议保留。
 - FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。
-- `/api/tasks` 是唯一正式 Task HTTP Interface；Project-owned relationship 与 usage 投影位于 `/api/domain/projects/{project_id}/task-relationships` 和 `/usage-summary`。管理侧 `/runs` 直接读取 Task 与 TaskAttempt，不存在独立 Session 资源。
+- `/api/tasks` 是唯一正式 Task HTTP Interface；Conversation Module 在该 Seam 后拥有 Task、Turn、Item、Submission、Execution 与 Binding 的行为和持久化。Project-owned relationship 与 usage 投影位于 `/api/domain/projects/{project_id}/task-relationships` 和 `/usage-summary`。管理侧 `/runs` 读取 Task/Turn/Item 投影，不存在独立 Session 资源。
+
+Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递、runtime control 与 SQLite 事务，形成足够的 Depth。HTTP、worker 与 runtime driver 是该 Module 不同 Seam 上的 Adapter；这种 Locality 让状态机修复集中在一个实现中，并为所有 caller 提供 Leverage。旧 Attempt/RuntimeSession 表只允许 standalone migration 与 legacy-authority read-only Adapter 使用，普通产品路径不得回退或双写。
 - `npm --prefix frontend run generate:transport` 确定性生成 `frontend/src/generated/transport/`。
 - `npm --prefix frontend run check:transport` 重建并检查 schema manifest、operation/path metadata 与工作树 drift。
 - Generated transport 的长期验证由正常 drift gate、真实 HTTP contract tests 和 MSW Adapter tests 负责；临时 architecture-cleanup suite 已在 P6 删除。

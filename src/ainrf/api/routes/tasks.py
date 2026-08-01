@@ -358,10 +358,10 @@ async def unarchive_task(request: Request, task_id: str) -> TaskSummaryResponse:
 async def move_task(
     task_id: str, payload: TaskMoveRequest, request: Request
 ) -> TaskSummaryResponse:
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
     try:
-        task_application.move_task(
+        conversation.move_task(
             task_id,
             user,
             project_id=payload.project_id,

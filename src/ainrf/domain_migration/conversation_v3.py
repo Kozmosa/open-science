@@ -86,9 +86,7 @@ class ConversationV3Migration:
             "manifest": manifest.as_dict(),
             "ready": manifest.active_legacy_count == 0,
             "blockers": (
-                []
-                if manifest.active_legacy_count == 0
-                else ["active_or_unknown_legacy_execution"]
+                [] if manifest.active_legacy_count == 0 else ["active_or_unknown_legacy_execution"]
             ),
         }
 
@@ -101,9 +99,7 @@ class ConversationV3Migration:
             "manifest": manifest.as_dict(),
             "ready": manifest.active_legacy_count == 0,
             "task_count": len(plan),
-            "turn_count": sum(
-                len(cast(Sequence[object], item["turns"])) for item in plan
-            ),
+            "turn_count": sum(len(cast(Sequence[object], item["turns"])) for item in plan),
             "ambiguous_turn_count": sum(
                 turn["confidence"] == "ambiguous"
                 for item in plan
@@ -124,7 +120,9 @@ class ConversationV3Migration:
         if manifest.active_legacy_count:
             raise ValueError("active or unknown legacy execution blocks migration")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        credential_store = FileCredentialStore(destination.parent / f"{destination.name}.credentials")
+        credential_store = FileCredentialStore(
+            destination.parent / f"{destination.name}.credentials"
+        )
         with closing(sqlite3.connect(f"file:{source}?mode=ro", uri=True)) as source_conn:
             source_conn.row_factory = sqlite3.Row
             plan = self._plan(source_conn)
@@ -143,9 +141,7 @@ class ConversationV3Migration:
             "artifact_sha": artifact_sha,
             "destination": str(destination),
             "task_count": len(plan),
-            "turn_count": sum(
-                len(cast(Sequence[object], item["turns"])) for item in plan
-            ),
+            "turn_count": sum(len(cast(Sequence[object], item["turns"])) for item in plan),
             "completed_at": _now(),
         }
         report_path = destination.with_suffix(destination.suffix + ".conversation-v3.json")
@@ -318,9 +314,12 @@ class ConversationV3Migration:
         for entry in plan:
             task = cast(Mapping[str, object], entry["task"])
             task_id = str(task["task_id"])
-            if conn.execute(
-                "SELECT 1 FROM conversation_task_authorities WHERE task_id = ?", (task_id,)
-            ).fetchone() is not None:
+            if (
+                conn.execute(
+                    "SELECT 1 FROM conversation_task_authorities WHERE task_id = ?", (task_id,)
+                ).fetchone()
+                is not None
+            ):
                 continue
             timestamp = str(task["updated_at"])
             conn.execute(
@@ -332,7 +331,9 @@ class ConversationV3Migration:
             work_status = (
                 "completed"
                 if legacy_status == "succeeded"
-                else "cancelled" if legacy_status in {"cancelled", "stopped"} else "open"
+                else "cancelled"
+                if legacy_status in {"cancelled", "stopped"}
+                else "open"
             )
             conn.execute(
                 "INSERT INTO conversation_task_states"

@@ -202,8 +202,20 @@ class ConversationDispatcher:
         if claim is None:
             return False
         self._execution.begin_delivery(claim.submission_id)
-        context = self._context_factory(claim)
-        adapter = self._adapter_factory(context.engine_type)
+        try:
+            context = self._context_factory(claim)
+            adapter = self._adapter_factory(context.engine_type)
+        except Exception as exc:
+            self._execution.mark_delivery_unknown(
+                claim.submission_id,
+                failure_code="worker_failed_before_acceptance",
+                evidence={
+                    "source": "worker_setup",
+                    "error_type": type(exc).__name__,
+                    "replay_forbidden": True,
+                },
+            )
+            return True
         execution: RuntimeExecutionClaim | None = None
         terminal_status: TurnStatus | None = None
         failure_code: str | None = None
@@ -264,7 +276,12 @@ class ConversationDispatcher:
             terminal_status = TurnStatus.FAILED
             failure_code = failure_code or "runtime_error"
         if execution is None:
-            raise RuntimeError("Engine ended before producing provider-acceptance evidence")
+            self._execution.mark_delivery_unknown(
+                claim.submission_id,
+                failure_code="provider_acceptance_unproven",
+                evidence={"source": "runtime_adapter", "replay_forbidden": True},
+            )
+            return True
         terminal_status = terminal_status or TurnStatus.COMPLETED
         self._execution.finish_execution(
             execution,

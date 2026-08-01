@@ -83,17 +83,17 @@ def test_execute_verify_and_cutover_are_deterministic_and_secret_safe(
     assert source.read_bytes().find(b"top-secret-value") >= 0
     assert destination.read_bytes().find(b"top-secret-value") < 0
     with closing(connect(destination)) as conn:
-        assert conn.execute(
-            "SELECT authority FROM conversation_task_authorities "
-            "WHERE task_id = 'legacy-task'"
-        ).fetchone()[0] == "conversation_v3"
+        assert (
+            conn.execute(
+                "SELECT authority FROM conversation_task_authorities WHERE task_id = 'legacy-task'"
+            ).fetchone()[0]
+            == "conversation_v3"
+        )
         assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM turn_items").fetchone()[0] == 1
 
 
-def test_active_or_unknown_legacy_runtime_blocks_execute(
-    state_root: Path, tmp_path: Path
-) -> None:
+def test_active_or_unknown_legacy_runtime_blocks_execute(state_root: Path, tmp_path: Path) -> None:
     source = _legacy_source(state_root, runtime_status="running")
     migration = ConversationV3Migration()
 

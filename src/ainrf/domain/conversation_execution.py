@@ -12,7 +12,7 @@ import sqlite3
 from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -74,20 +74,70 @@ class ConversationExecutionService:
         if state is None or bool(state["is_active"]):
             raise MaintenanceModeError("domain writes are paused for maintenance")
 
-    def claim_next_submission(self) -> SubmissionClaim | None:
-        """Claim the oldest ready submission with a SQLite CAS fence."""
+    def claim_next_submission(self, *, stale_after_seconds: float = 30.0) -> SubmissionClaim | None:
+        """Claim queued work or safely reclaim a pre-delivery crashed claim."""
+
+        if stale_after_seconds <= 0:
+            raise ValueError("stale_after_seconds must be positive")
 
         claimed_at = _now()
+        stale_before = (
+            datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+        ).isoformat()
         with closing(connect(self._db_path)) as conn:
             try:
                 self._begin(conn)
                 repository = SqliteConversationExecutionRepository(conn)
+                stale_delivering = conn.execute(
+                    """
+                    SELECT submission_id FROM turn_submissions
+                    WHERE status = 'delivering' AND delivering_at < ?
+                    ORDER BY delivering_at, submission_id
+                    """,
+                    (stale_before,),
+                ).fetchall()
+                for stale in stale_delivering:
+                    repository.transition_submission(
+                        submission_id=str(stale["submission_id"]),
+                        expected_status="delivering",
+                        status="delivery_unknown",
+                        failure_code="worker_lost_during_delivery",
+                        delivery_evidence_json=_canonical_json(
+                            {"source": "worker_recovery", "replay_forbidden": True}
+                        ),
+                        updated_at=claimed_at,
+                    )
                 row = repository.next_ready_submission()
+                if row is None:
+                    row = conn.execute(
+                        """
+                        SELECT submission.* FROM turn_submissions AS submission
+                        LEFT JOIN next_turn_submissions AS next_turn
+                          ON next_turn.submission_id = submission.submission_id
+                        WHERE submission.status = 'claimed' AND submission.claimed_at < ?
+                          AND (next_turn.submission_id IS NULL OR next_turn.status = 'ready')
+                        ORDER BY submission.claimed_at, submission.submission_id
+                        LIMIT 1
+                        """,
+                        (stale_before,),
+                    ).fetchone()
+                    if row is not None:
+                        updated = conn.execute(
+                            """
+                            UPDATE turn_submissions SET claimed_at = ?, updated_at = ?
+                            WHERE submission_id = ? AND status = 'claimed' AND claimed_at = ?
+                            """,
+                            (claimed_at, claimed_at, row["submission_id"], row["claimed_at"]),
+                        ).rowcount
+                        if updated != 1:
+                            raise DomainConflictError(
+                                "Stale submission reclaim lost its compare-and-swap race"
+                            )
                 if row is None:
                     conn.commit()
                     return None
                 submission_id = str(row["submission_id"])
-                if (
+                if str(row["status"]) == "queued" and (
                     repository.transition_submission(
                         submission_id=submission_id,
                         expected_status="queued",
@@ -114,6 +164,43 @@ class ConversationExecutionService:
                 None if row["context_snapshot_ref"] is None else str(row["context_snapshot_ref"])
             ),
         )
+
+    def mark_delivery_unknown(
+        self,
+        submission_id: str,
+        *,
+        failure_code: str,
+        evidence: Mapping[str, object],
+    ) -> None:
+        """Fence a delivery whose external acceptance cannot be proven."""
+
+        updated_at = _now()
+        with closing(connect(self._db_path)) as conn:
+            try:
+                self._begin(conn)
+                repository = SqliteConversationExecutionRepository(conn)
+                row = repository.submission_by_id(submission_id)
+                if row is None:
+                    raise DomainNotFoundError(submission_id)
+                if str(row["status"]) == "delivery_unknown":
+                    conn.commit()
+                    return
+                if (
+                    repository.transition_submission(
+                        submission_id=submission_id,
+                        expected_status="delivering",
+                        status="delivery_unknown",
+                        failure_code=failure_code,
+                        delivery_evidence_json=_canonical_json(evidence),
+                        updated_at=updated_at,
+                    )
+                    != 1
+                ):
+                    raise DomainConflictError("Submission is no longer delivering")
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
 
     def begin_delivery(self, submission_id: str) -> None:
         delivered_at = _now()

@@ -1095,9 +1095,7 @@ def conversation_v3_migration_execute(
 ) -> None:
     """Build a new shadow generation; never overwrite the source snapshot."""
     try:
-        result = ConversationV3Migration().execute(
-            source, destination, artifact_sha=artifact_sha
-        )
+        result = ConversationV3Migration().execute(source, destination, artifact_sha=artifact_sha)
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc

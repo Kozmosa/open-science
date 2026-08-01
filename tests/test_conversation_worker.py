@@ -31,6 +31,11 @@ class FakeRuntimeAdapter(ConversationRuntimeAdapter):
         )
 
 
+class NoAcceptanceRuntimeAdapter(FakeRuntimeAdapter):
+    async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+        _ = context, emit
+
+
 @pytest.fixture
 def state_root(tmp_path: Path) -> Path:
     root = tmp_path / "ainrf-state"
@@ -106,3 +111,64 @@ async def test_dispatcher_projects_engine_events_to_canonical_items(state_root: 
     assert task["runtime_status"] == "idle"
     assert turns[0]["status"] == "completed"
     assert [item["item_type"] for item in items] == ["user_message", "agent_message"]
+
+
+@pytest.mark.anyio
+async def test_worker_crash_before_delivery_reclaims_same_submission_without_extra_turn(
+    state_root: Path,
+) -> None:
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT submission_id FROM turn_submissions").fetchone()
+        conn.execute(
+            """
+            UPDATE turn_submissions
+            SET status = 'claimed', claimed_at = '2000-01-01T00:00:00+00:00',
+                updated_at = '2000-01-01T00:00:00+00:00'
+            WHERE submission_id = ?
+            """,
+            (submission["submission_id"],),
+        )
+        conn.commit()
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine_type: FakeRuntimeAdapter(),
+        context_factory=lambda claim: ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        ),
+    )
+
+    assert await dispatcher.run_once() is True
+    turns = ConversationApplicationService(state_root).list_turns("task-1", _USER)
+    items = ConversationApplicationService(state_root).list_items("task-1", _USER)
+    assert len(turns) == 1
+    assert [item["item_type"] for item in items].count("user_message") == 1
+
+
+@pytest.mark.anyio
+async def test_unproven_delivery_becomes_unknown_without_materializing_or_replaying_turn(
+    state_root: Path,
+) -> None:
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine_type: NoAcceptanceRuntimeAdapter(),
+        context_factory=lambda claim: ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        ),
+    )
+
+    assert await dispatcher.run_once() is True
+    assert await dispatcher.run_once() is False
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+        turn_count = conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0]
+    assert submission["status"] == "delivery_unknown"
+    assert submission["failure_code"] == "provider_acceptance_unproven"
+    assert turn_count == 0

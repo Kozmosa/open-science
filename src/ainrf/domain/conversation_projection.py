@@ -35,8 +35,9 @@ def _duration_ms(started_at: object, finished_at: object) -> int | None:
     try:
         return max(
             int(
-                (datetime.fromisoformat(finished_at) - datetime.fromisoformat(started_at))
-                .total_seconds()
+                (
+                    datetime.fromisoformat(finished_at) - datetime.fromisoformat(started_at)
+                ).total_seconds()
                 * 1000
             ),
             0,
@@ -110,6 +111,8 @@ class ConversationProjectionService:
 
         result: dict[str, ConversationTaskProjection] = {}
         for task_id in unique:
+            if task_id not in states:
+                continue
             turns = turns_by_task[task_id]
             executions = [
                 execution
@@ -135,8 +138,10 @@ class ConversationProjectionService:
             last_events = [
                 str(value)
                 for row in (*executions, *items)
-                for value in (row["updated_at"] if "updated_at" in row.keys() else None,
-                              row["persisted_at"] if "persisted_at" in row.keys() else None)
+                for value in (
+                    row["updated_at"] if "updated_at" in row.keys() else None,
+                    row["persisted_at"] if "persisted_at" in row.keys() else None,
+                )
                 if value
             ]
             turn_projections = tuple(
@@ -216,15 +221,16 @@ class ConversationProjectionService:
             if isinstance(model, str) and model:
                 aggregate = by_model.setdefault(
                     model,
-                    {field: 0 for field in TOKEN_TOTAL_FIELDS}
-                    | {"cost_usd": 0.0, "tokens": 0},
+                    {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
                 )
                 for field in TOKEN_TOTAL_FIELDS:
                     aggregate[field] = _integer(aggregate[field]) + _integer(total.get(field))
                 aggregate["cost_usd"] = _number(aggregate["cost_usd"]) + _number(
                     total.get("cost_usd")
                 )
-                aggregate["tokens"] = sum(_integer(aggregate[field]) for field in TOKEN_TOTAL_FIELDS)
+                aggregate["tokens"] = sum(
+                    _integer(aggregate[field]) for field in TOKEN_TOTAL_FIELDS
+                )
         token_usage_json = None
         if has_usage:
             token_usage_json = json.dumps(

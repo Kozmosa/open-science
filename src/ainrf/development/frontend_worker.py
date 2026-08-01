@@ -8,7 +8,8 @@ from pathlib import Path
 
 from ainrf.db import connect
 from ainrf.development.frontend_profiles import FRONTEND_DEV_FIXTURE_VERSION
-from ainrf.domain import TaskDispatcher
+from ainrf.domain.conversation_worker import ConversationDispatcher
+from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain_control import DomainCutoverController, DomainCutoverError
 from ainrf.harness_engine import (
     EngineEvent,
@@ -19,6 +20,7 @@ from ainrf.harness_engine import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.base import EngineEmit
+from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
 from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
 
 
@@ -106,11 +108,16 @@ class FrontendFixtureWorker:
         self._validate_fixture_marker()
         self._literature = LiteratureTrackingService(self.state_root)
         self._literature.initialize()
-        self._dispatcher = TaskDispatcher(
+        self._dispatcher = ConversationDispatcher(
             self.state_root,
-            dispatcher_id="frontend-fixture-worker:tasks",
-            engine_factory=FrontendFixtureEngine,
-            lease_seconds=10,
+            artifact_sha=self.artifact_sha,
+            adapter_factory=lambda engine_type: ConversationRuntimeAdapter(
+                FrontendFixtureEngine(engine_type)
+            ),
+        )
+        self._overview = OverviewSnapshotPlanner(
+            self.state_root,
+            planner_id="frontend-fixture-worker:overview",
             artifact_sha=self.artifact_sha,
         )
 
@@ -138,8 +145,9 @@ class FrontendFixtureWorker:
 
     async def run_once(self) -> FrontendFixtureWorkerRunResult:
         literature_outcome = self._run_literature_once()
-        task_result = await self._dispatcher.run_once()
-        task_outcome = task_result.outcome
+        self._overview.run_once()
+        task_processed = await self._dispatcher.run_once()
+        task_outcome = "completed" if task_processed else "idle"
         outcome = "idle" if task_outcome == "idle" and literature_outcome == "idle" else "processed"
         return FrontendFixtureWorkerRunResult(
             outcome=outcome,
@@ -155,10 +163,10 @@ class FrontendFixtureWorker:
                 await self.run_once()
                 await asyncio.sleep(poll_seconds)
         finally:
-            self._dispatcher.stop()
+            self._overview.stop()
 
     def stop(self) -> None:
-        self._dispatcher.stop()
+        self._overview.stop()
 
     def _run_literature_once(self) -> str:
         work_item_id = self._next_literature_work_item_id()

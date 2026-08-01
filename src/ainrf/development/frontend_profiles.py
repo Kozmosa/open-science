@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from enum import StrEnum
@@ -10,6 +11,10 @@ from pathlib import Path
 from ainrf.auth.service import AuthService, provision_tenant_owned_path
 from ainrf.db import connect
 from ainrf.domain import build_domain_modules
+from ainrf.domain.conversation_execution_repository import (
+    SqliteConversationExecutionRepository,
+)
+from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
@@ -383,6 +388,13 @@ def _seed_representative_tasks(
                     json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
                 ),
             )
+            _seed_canonical_conversation(
+                conn,
+                task_id=task_id,
+                task_status=task_status,
+                owner_user_id=owner_user_id,
+                index=index,
+            )
             conn.execute(
                 """
                 INSERT OR IGNORE INTO agent_task_attempts (
@@ -452,6 +464,195 @@ def _seed_representative_tasks(
             (_LATER,),
         )
         conn.commit()
+
+
+def _seed_canonical_conversation(
+    conn: sqlite3.Connection,
+    *,
+    task_id: str,
+    task_status: str,
+    owner_user_id: str,
+    index: int,
+) -> None:
+    conversations = SqliteConversationRepository(conn)
+    executions = SqliteConversationExecutionRepository(conn)
+    if conversations.task_authority(task_id) == "conversation_v3":
+        return
+    conversations.insert_task_authority(task_id=task_id, created_at=_NOW)
+    conversations.insert_task_state(task_id=task_id, created_at=_NOW)
+    if task_status == "cancelled":
+        conversations.update_work_status(
+            task_id=task_id,
+            expected_status="open",
+            status="cancelled",
+            updated_at=_LATER,
+        )
+
+    submission_id = f"submission-frontend-{task_status}"
+    turn_id = f"turn-frontend-{task_status}"
+    executions.insert_submission(
+        submission_id=submission_id,
+        task_id=task_id,
+        reserved_turn_id=turn_id,
+        actor_user_id=owner_user_id,
+        idempotency_key=f"frontend-fixture-{task_status}",
+        request_hash=sha256(task_id.encode("utf-8")).hexdigest(),
+        input_json=json.dumps({"text": f"Synthetic {task_status} fixture Turn."}),
+        context_snapshot_ref="context-snapshot-frontend-dev",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    executions.insert_submission_intent(
+        submission_id=submission_id,
+        task_id=task_id,
+        kind="create",
+        retry_of_turn_id=None,
+        created_at=_NOW,
+    )
+    for current, target in (
+        ("queued", "claimed"),
+        ("claimed", "delivering"),
+    ):
+        executions.transition_submission(
+            submission_id=submission_id,
+            expected_status=current,
+            status=target,
+            claimed_at=_NOW if target == "claimed" else None,
+            delivering_at=_NOW if target == "delivering" else None,
+            updated_at=_NOW,
+        )
+    if task_status == "launch_unknown":
+        executions.transition_submission(
+            submission_id=submission_id,
+            expected_status="delivering",
+            status="delivery_unknown",
+            delivery_evidence_json=json.dumps({"source": "frontend_fixture"}),
+            failure_code="legacy_launch_unknown",
+            updated_at=_LATER,
+        )
+        return
+
+    terminal_status = {
+        "succeeded": "completed",
+        "failed": "failed",
+        "cancelled": "interrupted",
+        "stopped": "interrupted",
+        "stopped_by_project_archive": "interrupted",
+        "stopped_permission_revoked": "interrupted",
+    }[task_status]
+    conversations.insert_turn(
+        turn_id=turn_id,
+        task_id=task_id,
+        turn_seq=1,
+        status="in_progress",
+        retry_of_turn_id=None,
+        context_snapshot_ref="context-snapshot-frontend-dev",
+        binding_id=None,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        contract_version=1,
+        provider_profile_ref=None,
+        provider_profile_version=None,
+        provider_profile_fingerprint=None,
+        model="frontend-fixture",
+        native_turn_kind="fixture_turn",
+        native_turn_ref=turn_id,
+        accepted_at=_NOW,
+        started_at=_NOW,
+        updated_at=_NOW,
+    )
+    executions.transition_submission(
+        submission_id=submission_id,
+        expected_status="delivering",
+        status="delivered",
+        accepted_at=_NOW,
+        finished_at=_NOW,
+        native_turn_kind="fixture_turn",
+        native_turn_ref=turn_id,
+        delivery_evidence_json=json.dumps({"source": "frontend_fixture"}),
+        updated_at=_NOW,
+    )
+    for sequence, (item_type, actor, payload) in enumerate(
+        (
+            ("user_message", "user", {"text": f"Synthetic {task_status} fixture Turn."}),
+            (
+                "agent_message" if terminal_status == "completed" else "error",
+                "agent" if terminal_status == "completed" else "system",
+                {
+                    "text": f"Synthetic {task_status} Conversation result.",
+                    "usage": {
+                        "source": "frontend-fixture",
+                        "total": {
+                            "input_tokens": 100 * index,
+                            "output_tokens": 50 * index,
+                            "cost_usd": round(index * 0.013, 3),
+                        },
+                    },
+                },
+            ),
+        ),
+        start=1,
+    ):
+        conversations.insert_turn_item(
+            item_id=f"item-frontend-{task_status}-{sequence}",
+            task_id=task_id,
+            turn_id=turn_id,
+            task_item_seq=sequence,
+            turn_item_seq=sequence,
+            envelope_type="canonical_item",
+            envelope_version=1,
+            item_type=item_type,
+            actor=actor,
+            payload_json=json.dumps(payload, sort_keys=True),
+            native_provenance_json=json.dumps({"source": "frontend_fixture"}),
+            native_dedupe_scope=None,
+            native_item_id=None,
+            parent_item_id=None,
+            call_item_id=None,
+            occurred_at=_NOW if sequence == 1 else _LATER,
+            ingested_at=_NOW if sequence == 1 else _LATER,
+            persisted_at=_NOW if sequence == 1 else _LATER,
+        )
+    runtime_execution_id = f"execution-frontend-{task_status}"
+    executions.insert_runtime_execution(
+        runtime_execution_id=runtime_execution_id,
+        task_id=task_id,
+        turn_id=turn_id,
+        execution_seq=1,
+        runtime_generation=1,
+        binding_id=None,
+        native_runtime_kind="frontend_fixture",
+        native_runtime_ref=f"runtime-frontend-{task_status}",
+        native_turn_kind="fixture_turn",
+        native_turn_ref=turn_id,
+        evidence_json=json.dumps({"source": "frontend_fixture"}),
+        created_at=_NOW,
+        started_at=_NOW,
+        updated_at=_NOW,
+    )
+    executions.transition_runtime_execution(
+        runtime_execution_id=runtime_execution_id,
+        expected_status="starting",
+        status="running",
+        evidence_json=json.dumps({"source": "frontend_fixture"}),
+        updated_at=_NOW,
+    )
+    executions.transition_runtime_execution(
+        runtime_execution_id=runtime_execution_id,
+        expected_status="running",
+        status=terminal_status,
+        evidence_json=json.dumps({"source": "frontend_fixture"}),
+        updated_at=_LATER,
+        finished_at=_LATER,
+        failure_code=f"fixture_{task_status}" if terminal_status == "failed" else None,
+    )
+    conversations.finish_turn(
+        turn_id=turn_id,
+        status=terminal_status,
+        finished_at=_LATER,
+        updated_at=_LATER,
+        failure_code=f"fixture_{task_status}" if terminal_status == "failed" else None,
+    )
 
 
 def _seed_permission_matrix(state_root: Path, *, users: FrontendDevUsers) -> None:

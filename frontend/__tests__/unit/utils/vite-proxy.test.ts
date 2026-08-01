@@ -78,10 +78,10 @@ describe('OpenScience Vite proxy', () => {
     expect(proxyRequestHeaders.get('X-API-Key')).toBe('legacy-proxy-secret');
   });
 
-  it('rewrites only /api requests and keeps /code plus /terminal paths intact', async () => {
+  it('preserves backend route prefixes for every proxied Interface', async () => {
     const { sharedOpenScienceProxyConfig } = await import('../../../vite.proxy');
 
-    expect(sharedOpenScienceProxyConfig['/api'].rewrite?.('/api/health')).toBe('/health');
+    expect(sharedOpenScienceProxyConfig['/api'].rewrite).toBeUndefined();
     expect(sharedOpenScienceProxyConfig['/code'].rewrite).toBeUndefined();
     expect(sharedOpenScienceProxyConfig['/terminal'].rewrite).toBeUndefined();
   });

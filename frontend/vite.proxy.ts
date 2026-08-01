@@ -46,9 +46,6 @@ function createProxyRule(pathPrefix: '/api' | '/code' | '/terminal'): ProxyOptio
     },
   };
 
-  if (pathPrefix === '/api') {
-    rule.rewrite = (path) => path.replace(/^\/api/, '');
-  }
   if (pathPrefix === '/terminal') {
     rule.ws = true;
   }

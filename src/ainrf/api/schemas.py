@@ -779,9 +779,7 @@ class ApprovalDecisionResponse(BaseModel):
 class ForkPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target_engine_family: Literal["codex", "claude"]
-    transfer_mode: Literal[
-        "selected_turns", "recent_turns", "full_transcript", "context_only"
-    ]
+    transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
     transfer_range: dict[str, Any] = Field(default_factory=dict)
     metrics: dict[str, Any] = Field(default_factory=dict)
     disclosure: dict[str, Any] = Field(default_factory=dict)
@@ -791,9 +789,7 @@ class ForkConfirmRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     preview_hash: str = Field(min_length=1)
     source_revision: str = Field(min_length=1)
-    transfer_mode: Literal[
-        "selected_turns", "recent_turns", "full_transcript", "context_only"
-    ]
+    transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
     truncation_acknowledged: bool = False
     full_transcript_confirmed: bool = False
 

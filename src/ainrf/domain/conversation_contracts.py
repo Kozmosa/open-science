@@ -187,6 +187,7 @@ class IdempotencyScope(StrEnum):
     ARCHIVE_TASK = "archive_task"
     UNARCHIVE_TASK = "unarchive_task"
     UPDATE_TASK_TITLE = "update_task_title"
+    MOVE_TASK = "move_task"
 
 
 class CompatibilityBehavior(StrEnum):
