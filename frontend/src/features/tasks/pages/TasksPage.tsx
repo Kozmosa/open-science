@@ -12,7 +12,7 @@ import {
   retryTask,
   unarchiveTask,
 } from '../api';
-import { Button, Checkbox, Dialog, FormField, NativeSelect, PageHeader, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
+import { Button, Checkbox, Dialog, FormField, NativeSelect, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import type { TaskListResponse, TaskSummary } from '@/shared/types';
@@ -375,6 +375,14 @@ function TasksPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          <Button
+            ref={createButtonRef}
+            size="sm"
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            <Plus size={14} />
+            {t('pages.tasks.newTask')}
+          </Button>
           <NativeSelect
             value={taskSort}
             onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
@@ -409,17 +417,6 @@ function TasksPage() {
   return (
     <>
       <PageShell variant="canvas" className="gap-4 p-3">
-        <PageHeader
-          eyebrow="Tasks"
-          title={t('pages.tasks.sidebarTitle')}
-          description="Inspect the current Task conversation and its durable Turn history."
-          actions={(
-            <Button ref={createButtonRef} onClick={() => setCreateDialogOpen(true)}>
-              <Plus size={16} />
-              {t('pages.tasks.newTask')}
-            </Button>
-          )}
-        />
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border border-[var(--osci-color-border)]">
         {isNarrow ? (
           effectiveSelectedTaskId ? (
