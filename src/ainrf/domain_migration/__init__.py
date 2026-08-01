@@ -25,6 +25,10 @@ _EXPORTS = {
     "SourceSnapshotSet": ("ainrf.domain_migration.sources", "SourceSnapshotSet"),
     "SourceStaleError": ("ainrf.domain_migration.sources", "SourceStaleError"),
     "capture_source_manifest": ("ainrf.domain_migration.sources", "capture_source_manifest"),
+    "ConversationV3Migration": (
+        "ainrf.domain_migration.conversation_v3",
+        "ConversationV3Migration",
+    ),
 }
 __all__ = list(_EXPORTS)
 

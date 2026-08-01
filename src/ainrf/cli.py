@@ -40,6 +40,7 @@ from ainrf.domain_control import (
     MaintenanceModeError,
 )
 from ainrf.domain_migration import (
+    ConversationV3Migration,
     DomainImporter,
     DomainReconciliationService,
     capture_source_manifest,
@@ -74,6 +75,13 @@ app.add_typer(domain_maintenance_app, name="domain-maintenance")
 
 domain_migration_app = typer.Typer(help="Inspect legacy sources before domain-model migration.")
 app.add_typer(domain_migration_app, name="domain-migration")
+
+migration_app = typer.Typer(help="Run explicit standalone generation migrations.")
+conversation_v3_migration_app = typer.Typer(
+    help="Migrate an immutable legacy snapshot to a Conversation v3 generation."
+)
+migration_app.add_typer(conversation_v3_migration_app, name="conversation-v3")
+app.add_typer(migration_app, name="migration")
 
 domain_cutover_app = typer.Typer(help="Prepare and commit the durable domain v2 cutover fuse.")
 app.add_typer(domain_cutover_app, name="domain-cutover")
@@ -1051,6 +1059,80 @@ def domain_migration_dry_run(
 ) -> None:
     """Print an immutable source manifest without modifying legacy state."""
     typer.echo(json_mod.dumps(capture_source_manifest(state_root).as_dict(), indent=2))
+
+
+@conversation_v3_migration_app.command("inspect")
+def conversation_v3_migration_inspect(
+    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
+) -> None:
+    """Inspect the source manifest and active/unknown cutover blockers."""
+    try:
+        result = ConversationV3Migration().inspect(source)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
+
+
+@conversation_v3_migration_app.command("dry-run")
+def conversation_v3_migration_dry_run(
+    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
+) -> None:
+    """Infer Turn boundaries without writing a destination generation."""
+    try:
+        result = ConversationV3Migration().dry_run(source)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
+
+
+@conversation_v3_migration_app.command("execute")
+def conversation_v3_migration_execute(
+    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
+    destination: Annotated[Path, typer.Option(help="New shadow generation SQLite path.")],
+    artifact_sha: Annotated[str, typer.Option(help="Immutable migration artifact SHA.")],
+) -> None:
+    """Build a new shadow generation; never overwrite the source snapshot."""
+    try:
+        result = ConversationV3Migration().execute(
+            source, destination, artifact_sha=artifact_sha
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
+
+
+@conversation_v3_migration_app.command("verify")
+def conversation_v3_migration_verify(
+    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
+    destination: Annotated[Path, typer.Option(help="Shadow generation SQLite path.")],
+) -> None:
+    """Verify reconciliation, integrity, authority coverage, and secret removal."""
+    try:
+        result = ConversationV3Migration().verify(source, destination)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
+    if not result["ready"]:
+        raise typer.Exit(code=2)
+
+
+@conversation_v3_migration_app.command("cutover")
+def conversation_v3_migration_cutover(
+    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
+    destination: Annotated[Path, typer.Option(help="Verified shadow generation SQLite path.")],
+    pointer: Annotated[Path, typer.Option(help="Active-generation pointer file.")],
+) -> None:
+    """Atomically switch the explicit active-generation pointer after verify."""
+    try:
+        result = ConversationV3Migration().cutover(source, destination, pointer)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(result, indent=2))
 
 
 @domain_migration_app.command("apply")
