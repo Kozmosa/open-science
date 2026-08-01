@@ -34,7 +34,7 @@ export function useTaskActions(taskId: string | null) {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(taskId) });
     },
     onError: (error) => {
-      showToast(t('pages.tasks.actions.pauseFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
+      showToast(t('pages.tasks.actions.interruptFailed', { error: getErrorMessage(error, t('pages.tasks.actions.unexpectedError')) }), 'error');
     },
   });
 

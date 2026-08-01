@@ -11,13 +11,11 @@ from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     MessageItemResponse,
     ConversationTaskMutationResponse,
-    TaskAttemptResponse,
     TaskCreateRequest,
     TaskForkRequest,
     TaskListResponse,
     TaskHealthResponse,
     TaskMoveRequest,
-    TaskMutationResponse,
     TaskSummaryResponse,
     TaskTokenUsageSummaryResponse,
     TaskUpdateRequest,
@@ -88,23 +86,6 @@ def _v2_task_summary(
     projection: TaskProjectionService, task_id: str, user: dict[str, object]
 ) -> TaskSummaryResponse:
     return TaskSummaryResponse.model_validate(projection.task(task_id, user))
-
-
-def _v2_task_mutation_response(
-    projection: TaskProjectionService,
-    user: dict[str, object],
-    result: dict[str, object] | dict[str, str],
-) -> TaskMutationResponse:
-    task_id = result.get("task_id")
-    attempt_id = result.get("attempt_id")
-    if not isinstance(task_id, str) or not isinstance(attempt_id, str):
-        raise HTTPException(status_code=500, detail="Task mutation result is incomplete")
-    task = _v2_task_summary(projection, task_id, user)
-    attempt = TaskAttemptResponse.model_validate(projection.attempt(attempt_id, user))
-    dispatch = attempt.dispatch
-    if dispatch is None:
-        raise HTTPException(status_code=500, detail="Task Attempt has no dispatch summary")
-    return TaskMutationResponse(task=task, attempt=attempt, dispatch=dispatch)
 
 
 def _parse_output_payload(content: str) -> dict:
@@ -316,12 +297,11 @@ def _inactive_seconds(last_event_at: str | None) -> float | None:
 
 @router.post("/{task_id}/cancel", status_code=204)
 async def cancel_task(request: Request, task_id: str) -> None:
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     try:
-        task_application.cancel_task(
+        conversation.cancel_task(
             task_id,
             get_current_user(request),
-            reason="user_cancelled",
             idempotency_key=_idempotency_key(request),
         )
         return
@@ -335,11 +315,11 @@ async def _archive_task(
     request: Request, task_id: str, *, pending_response: Response | None = None
 ) -> TaskSummaryResponse:
     """Archive a Task through the v2 application service when enabled."""
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
     try:
-        archive_result = task_application.archive_task(
-            task_id, user, reason="user_archived", idempotency_key=_idempotency_key(request)
+        archive_result = conversation.archive_task(
+            task_id, user, idempotency_key=_idempotency_key(request)
         )
         if archive_result.get("archive_pending") is True and pending_response is not None:
             pending_response.status_code = status.HTTP_202_ACCEPTED
@@ -362,10 +342,10 @@ async def archive_task_v2(
 
 @router.post("/{task_id}/unarchive", status_code=200)
 async def unarchive_task(request: Request, task_id: str) -> TaskSummaryResponse:
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
     try:
-        task_application.unarchive_task(task_id, user, idempotency_key=_idempotency_key(request))
+        conversation.unarchive_task(task_id, user, idempotency_key=_idempotency_key(request))
         projection = _get_task_projection_service(request)
         return _v2_task_summary(projection, task_id, user)
     except HTTPException:
@@ -401,11 +381,11 @@ async def update_task(
     task_id: str, payload: TaskUpdateRequest, request: Request
 ) -> TaskSummaryResponse:
     """Update mutable task fields (title, etc.)."""
-    task_application = _get_task_application_service(request)
+    conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
     try:
         if payload.title is not None:
-            task_application.update_task_title(
+            conversation.update_task_title(
                 task_id,
                 user,
                 title=payload.title,
@@ -419,24 +399,31 @@ async def update_task(
         raise _translate_v2_error(exc) from exc
 
 
-@router.post("/{task_id}/fork", status_code=201)
-async def fork_task(
+@router.post("/{task_id}/fork", status_code=202)
+async def fork_task_compatibility(
     task_id: str, payload: TaskForkRequest, request: Request
-) -> TaskMutationResponse:
-    task_application = _get_task_application_service(request)
+) -> ConversationTaskMutationResponse:
+    """Map the legacy one-shot fork transport to a new Conversation Task admission."""
+
+    conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
     try:
-        created = task_application.fork_task(
-            task_id,
+        source = conversation.read_task(task_id, user)
+        created = conversation.create_task(
             user,
-            workspace_id=payload.workspace_id,
-            project_id=payload.project_id,
-            prompt=payload.prompt,
-            title=payload.title,
+            project_id=payload.project_id or str(source["project_id"]),
+            workspace_id=payload.workspace_id or str(source["workspace_id"]),
+            title=payload.title or f"Fork of {source['title']}",
+            prompt=payload.prompt or str(source["prompt"]),
+            researcher_type=str(source["researcher_type"]),
+            harness_engine=str(source["harness_engine"]),
             idempotency_key=_idempotency_key(request),
         )
-        projection = _get_task_projection_service(request)
-        return _v2_task_mutation_response(projection, user, created)
+        task = conversation.read_task(str(created["task_id"]), user)
+        return ConversationTaskMutationResponse(
+            task=task,
+            submission=TurnSubmissionResponse.model_validate(created),
+        )
     except HTTPException:
         raise
     except Exception as exc:

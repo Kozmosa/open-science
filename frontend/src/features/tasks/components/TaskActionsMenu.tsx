@@ -59,13 +59,13 @@ export default function TaskActionsMenu({
           disabled={disabled || !activeStatuses.has(task.status)}
           onSelect={onCancel}
         >
-          Cancel current Attempt
+          Interrupt current Turn
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={disabled || !retryStatuses.has(task.status) || Boolean(task.archived_at)}
           onSelect={onRetry}
         >
-          Retry as new Attempt
+          Retry as new Turn
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={disabled || Boolean(task.archived_at)} onSelect={onMove}>

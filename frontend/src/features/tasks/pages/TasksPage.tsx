@@ -34,7 +34,7 @@ import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idemp
 const SIDEBAR_COLLAPSED_WIDTH = 0;
 const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
-const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'attempts', 'context', 'closed']);
+const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'turns', 'context', 'closed']);
 const NARROW_TASKS_QUERY = '(max-width: 767px)';
 
 function usePageVisibility(): boolean {
@@ -412,7 +412,7 @@ function TasksPage() {
         <PageHeader
           eyebrow="Tasks"
           title={t('pages.tasks.sidebarTitle')}
-          description="Inspect the current Task conversation and its durable Attempt history."
+          description="Inspect the current Task conversation and its durable Turn history."
           actions={(
             <Button ref={createButtonRef} onClick={() => setCreateDialogOpen(true)}>
               <Plus size={16} />
@@ -611,7 +611,7 @@ function TasksPage() {
             </>
           ) : (
             <p className="text-sm text-[var(--osci-color-text-muted)]">
-              The Task ID, Workspace, and Attempt history remain unchanged. The target Project active Context Version will be pinned.
+              The Task ID, Workspace, and Turn history remain unchanged. The target Project active Context Version will be pinned.
             </p>
           )}
           {moveMutation.error instanceof Error ? <p className="text-sm text-[var(--osci-color-danger)]">{moveMutation.error.message}</p> : null}

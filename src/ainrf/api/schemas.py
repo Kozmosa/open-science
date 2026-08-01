@@ -763,6 +763,45 @@ class TurnControlResponse(BaseModel):
     status: str
 
 
+class ApprovalDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["approved", "denied"]
+    decision: dict[str, Any] = Field(default_factory=dict)
+
+
+class ApprovalDecisionResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    approval_id: str
+    task_id: str
+    status: str
+
+
+class ForkPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_engine_family: Literal["codex", "claude"]
+    transfer_mode: Literal[
+        "selected_turns", "recent_turns", "full_transcript", "context_only"
+    ]
+    transfer_range: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    disclosure: dict[str, Any] = Field(default_factory=dict)
+
+
+class ForkConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preview_hash: str = Field(min_length=1)
+    source_revision: str = Field(min_length=1)
+    transfer_mode: Literal[
+        "selected_turns", "recent_turns", "full_transcript", "context_only"
+    ]
+    truncation_acknowledged: bool = False
+    full_transcript_confirmed: bool = False
+
+
+class ConversationReceiptResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
 class TaskRelationshipResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

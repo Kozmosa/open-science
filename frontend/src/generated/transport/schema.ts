@@ -93,6 +93,41 @@ export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
 export type ApiStatus = 'ok' | 'degraded';
 
 /**
+ * ApprovalDecisionRequest
+ */
+export type ApprovalDecisionRequest = {
+    /**
+     * Decision
+     */
+    decision?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Status
+     */
+    status: 'approved' | 'denied';
+};
+
+/**
+ * ApprovalDecisionResponse
+ */
+export type ApprovalDecisionResponse = {
+    /**
+     * Approval Id
+     */
+    approval_id: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Task Id
+     */
+    task_id: string;
+    [key: string]: unknown;
+};
+
+/**
  * AuthTokenResponse
  */
 export type AuthTokenResponse = {
@@ -180,6 +215,13 @@ export type ComponentHealth = {
      * Status
      */
     status: string;
+};
+
+/**
+ * ConversationReceiptResponse
+ */
+export type ConversationReceiptResponse = {
+    [key: string]: unknown;
 };
 
 /**
@@ -997,6 +1039,64 @@ export type FileUploadResponse = {
      * Size
      */
     size: number;
+};
+
+/**
+ * ForkConfirmRequest
+ */
+export type ForkConfirmRequest = {
+    /**
+     * Full Transcript Confirmed
+     */
+    full_transcript_confirmed?: boolean;
+    /**
+     * Preview Hash
+     */
+    preview_hash: string;
+    /**
+     * Source Revision
+     */
+    source_revision: string;
+    /**
+     * Transfer Mode
+     */
+    transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+    /**
+     * Truncation Acknowledged
+     */
+    truncation_acknowledged?: boolean;
+};
+
+/**
+ * ForkPreviewRequest
+ */
+export type ForkPreviewRequest = {
+    /**
+     * Disclosure
+     */
+    disclosure?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Metrics
+     */
+    metrics?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Target Engine Family
+     */
+    target_engine_family: 'codex' | 'claude';
+    /**
+     * Transfer Mode
+     */
+    transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+    /**
+     * Transfer Range
+     */
+    transfer_range?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -2027,127 +2127,6 @@ export type SkillRegistryUpdateResponse = {
 };
 
 /**
- * TaskAttemptResponse
- *
- * Authoritative v2 TaskAttempt projection.
- */
-export type TaskAttemptResponse = {
-    /**
-     * Artifact Refs
-     */
-    artifact_refs?: Array<string>;
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Attempt Seq
-     */
-    attempt_seq: number;
-    /**
-     * Authorization Checked At
-     */
-    authorization_checked_at?: string | null;
-    /**
-     * Authorization Environment Id
-     */
-    authorization_environment_id?: string | null;
-    /**
-     * Authorization Grant Version
-     */
-    authorization_grant_version?: number | null;
-    /**
-     * Code Refs
-     */
-    code_refs?: Array<string>;
-    /**
-     * Context Snapshot Id
-     */
-    context_snapshot_id?: string | null;
-    /**
-     * Context Version Id
-     */
-    context_version_id?: string | null;
-    /**
-     * Cost Usd
-     */
-    cost_usd?: number | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Data Refs
-     */
-    data_refs?: Array<string>;
-    dispatch?: TaskDispatchResponse | null;
-    /**
-     * Duration Ms
-     */
-    duration_ms?: number | null;
-    /**
-     * Failure Reason
-     */
-    failure_reason?: string | null;
-    /**
-     * Finished At
-     */
-    finished_at?: string | null;
-    /**
-     * Message End Seq
-     */
-    message_end_seq?: number | null;
-    /**
-     * Message Start Seq
-     */
-    message_start_seq?: number | null;
-    /**
-     * Output End Seq
-     */
-    output_end_seq?: number | null;
-    /**
-     * Output Start Seq
-     */
-    output_start_seq?: number | null;
-    /**
-     * Runtime Sessions
-     */
-    runtime_sessions?: Array<TaskRuntimeSessionResponse>;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Stop Reason
-     */
-    stop_reason?: string | null;
-    /**
-     * Stop Requested At
-     */
-    stop_requested_at?: string | null;
-    /**
-     * Stop Requested Reason
-     */
-    stop_requested_reason?: string | null;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    /**
-     * Token Usage Json
-     */
-    token_usage_json?: string | null;
-    /**
-     * Trigger
-     */
-    trigger: string;
-};
-
-/**
  * TaskContextConfirmRequest
  *
  * Confirm a previously rendered Task Context update preview.
@@ -2195,78 +2174,6 @@ export type TaskCreateRequest = {
      * Workspace Id
      */
     workspace_id: string;
-};
-
-/**
- * TaskDispatchResponse
- *
- * Durable dispatcher state for a Task Attempt.
- */
-export type TaskDispatchResponse = {
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Cancel Reason
-     */
-    cancel_reason?: string | null;
-    /**
-     * Cancelled At
-     */
-    cancelled_at?: string | null;
-    /**
-     * Claim Expires At
-     */
-    claim_expires_at?: string | null;
-    /**
-     * Claim Heartbeat At
-     */
-    claim_heartbeat_at?: string | null;
-    /**
-     * Claimed At
-     */
-    claimed_at?: string | null;
-    /**
-     * Completed At
-     */
-    completed_at?: string | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Dispatch Id
-     */
-    dispatch_id: string;
-    /**
-     * Dispatcher Id
-     */
-    dispatcher_id?: string | null;
-    /**
-     * Last Error
-     */
-    last_error?: string | null;
-    /**
-     * Launch State
-     */
-    launch_state: string;
-    /**
-     * Runtime Launch Key
-     */
-    runtime_launch_key?: string | null;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    /**
-     * Updated At
-     */
-    updated_at?: string | null;
 };
 
 /**
@@ -2352,15 +2259,6 @@ export type TaskMoveRequest = {
 };
 
 /**
- * TaskMutationResponse
- */
-export type TaskMutationResponse = {
-    attempt: TaskAttemptResponse;
-    dispatch: TaskDispatchResponse;
-    task: TaskSummaryResponse;
-};
-
-/**
  * TaskRelationshipCreateRequest
  */
 export type TaskRelationshipCreateRequest = {
@@ -2412,58 +2310,6 @@ export type TaskRelationshipResponse = {
      * Target Task Id
      */
     target_task_id: string;
-};
-
-/**
- * TaskRuntimeSessionResponse
- *
- * Read-only runtime identity associated with one durable Attempt.
- */
-export type TaskRuntimeSessionResponse = {
-    /**
-     * Adopted At
-     */
-    adopted_at?: string | null;
-    /**
-     * Attempt Id
-     */
-    attempt_id: string;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Engine Name
-     */
-    engine_name?: string | null;
-    /**
-     * Engine Session Key
-     */
-    engine_session_key?: string | null;
-    /**
-     * Failure Reason
-     */
-    failure_reason?: string | null;
-    /**
-     * Finished At
-     */
-    finished_at?: string | null;
-    /**
-     * Last Probe At
-     */
-    last_probe_at?: string | null;
-    /**
-     * Runtime Session Id
-     */
-    runtime_session_id: string;
-    /**
-     * Started At
-     */
-    started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
 };
 
 /**
@@ -6546,6 +6392,40 @@ export type PatchApiTasksTaskIdResponses = {
 
 export type PatchApiTasksTaskIdResponse = PatchApiTasksTaskIdResponses[keyof PatchApiTasksTaskIdResponses];
 
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveData = {
+    body: ApprovalDecisionRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Approval Id
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/approvals/{approval_id}/resolve';
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveError = PostApiTasksTaskIdApprovalsApprovalIdResolveErrors[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveErrors];
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponses = {
+    /**
+     * Successful Response
+     */
+    200: ApprovalDecisionResponse;
+};
+
+export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponse = PostApiTasksTaskIdApprovalsApprovalIdResolveResponses[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveResponses];
+
 export type PostApiTasksTaskIdArchiveData = {
     body?: never;
     path: {
@@ -6631,10 +6511,74 @@ export type PostApiTasksTaskIdForkResponses = {
     /**
      * Successful Response
      */
-    201: TaskMutationResponse;
+    202: ConversationTaskMutationResponse;
 };
 
 export type PostApiTasksTaskIdForkResponse = PostApiTasksTaskIdForkResponses[keyof PostApiTasksTaskIdForkResponses];
+
+export type PostApiTasksTaskIdForkPreviewData = {
+    body: ForkPreviewRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/fork-preview';
+};
+
+export type PostApiTasksTaskIdForkPreviewErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdForkPreviewError = PostApiTasksTaskIdForkPreviewErrors[keyof PostApiTasksTaskIdForkPreviewErrors];
+
+export type PostApiTasksTaskIdForkPreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConversationReceiptResponse;
+};
+
+export type PostApiTasksTaskIdForkPreviewResponse = PostApiTasksTaskIdForkPreviewResponses[keyof PostApiTasksTaskIdForkPreviewResponses];
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmData = {
+    body: ForkConfirmRequest;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+        /**
+         * Preview Id
+         */
+        preview_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/fork-preview/{preview_id}/confirm';
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmError = PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors[keyof PostApiTasksTaskIdForkPreviewPreviewIdConfirmErrors];
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses = {
+    /**
+     * Successful Response
+     */
+    200: ConversationReceiptResponse;
+};
+
+export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponse = PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses[keyof PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses];
 
 export type GetApiTasksTaskIdHealthData = {
     body?: never;

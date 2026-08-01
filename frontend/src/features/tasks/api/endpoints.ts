@@ -5,13 +5,11 @@ import type {
   TaskListResponse,
   TaskRecord,
   TaskSummary,
-  TaskStatus,
   TaskTokenUsageSummary,
 } from '@/shared/types';
 import type {
   TaskCreatePayload,
   ConversationTaskMutationResponse,
-  TaskMutationResponse,
   TaskRelationshipCreateRequest,
   TaskRelationshipListResponse,
   TaskRelationshipResponse,
@@ -21,25 +19,6 @@ import type {
   TurnListResponse,
   TurnSubmissionResponse,
 } from '@/shared/api/transportTypes';
-
-const TASK_STATUSES = new Set<TaskStatus>([
-  'queued', 'starting', 'running', 'succeeded', 'failed', 'cancelled', 'paused',
-  'launch_unknown', 'stopped_by_project_archive', 'stopped_permission_revoked',
-  'stopped_runtime_unknown',
-]);
-
-function mutationTask(response: TaskMutationResponse): TaskSummary {
-  if (!TASK_STATUSES.has(response.task.status as TaskStatus)) {
-    throw new Error(`Unknown Task status: ${response.task.status}`);
-  }
-  return {
-    ...response.task,
-    status: response.task.status as TaskStatus,
-    started_at: response.task.started_at ?? null,
-    completed_at: response.task.completed_at ?? null,
-    error_summary: response.task.error_summary ?? null,
-  };
-}
 
 export const getTasks = (params: {
   includeArchived?: boolean;
@@ -157,10 +136,10 @@ export const forkTask = async (
   payload: { workspace_id: string; project_id?: string; prompt?: string; title?: string },
   key: string,
 ): Promise<TaskSummary> => {
-  const response = await api.post<TaskMutationResponse>(`/tasks/${taskId}/fork`, payload, {
+  const response = await api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/fork`, payload, {
     headers: { 'Idempotency-Key': key },
   });
-  return mutationTask(response);
+  return response.task as unknown as TaskSummary;
 };
 
 export const updateTask = (

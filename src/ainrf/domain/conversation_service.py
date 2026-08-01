@@ -800,6 +800,209 @@ class ConversationApplicationService:
                 raise
         return result
 
+    def cancel_task(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Cancel Task work and causally interrupt its active Turn, if any."""
+
+        actor = self._actor(user)
+        updated_at = _now()
+        request = {"task_id": task_id}
+        with closing(self._connect()) as conn:
+            try:
+                self._begin(conn)
+                DomainAuthorizationService(conn).require_task_owner(task_id, user)
+                domain = _SqliteDomainRepository(conn)
+                digest, replay = self._replay(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.CANCEL_TASK,
+                    key=idempotency_key,
+                    request=request,
+                )
+                if replay is not None:
+                    conn.commit()
+                    return replay
+                conversations = SqliteConversationRepository(conn)
+                executions = SqliteConversationExecutionRepository(conn)
+                state = self._require_v3(conversations, task_id)
+                current = TaskWorkStatus(str(state["work_status"]))
+                control_request_id: str | None = None
+                active_turn = conversations.active_turn(task_id)
+                if active_turn is not None:
+                    execution = executions.active_runtime_execution(str(active_turn["turn_id"]))
+                    if execution is None:
+                        raise ConversationContractError(
+                            ConversationErrorCode.RUNTIME_LOST,
+                            "Active Turn has no interruptible RuntimeExecution",
+                        )
+                    control_request_id = uuid4().hex
+                    executions.insert_control_request(
+                        control_request_id=control_request_id,
+                        task_id=task_id,
+                        expected_turn_id=str(active_turn["turn_id"]),
+                        runtime_execution_id=str(execution["runtime_execution_id"]),
+                        runtime_generation=int(execution["runtime_generation"]),
+                        kind=ControlKind.INTERRUPT,
+                        actor_user_id=actor,
+                        idempotency_key=idempotency_key,
+                        request_hash=digest,
+                        payload_json="{}",
+                        created_at=updated_at,
+                        updated_at=updated_at,
+                    )
+                if current is TaskWorkStatus.OPEN:
+                    require_task_work_transition(current, TaskWorkStatus.CANCELLED)
+                    if conversations.update_work_status(
+                        task_id=task_id,
+                        expected_status=current,
+                        status=TaskWorkStatus.CANCELLED,
+                        updated_at=updated_at,
+                    ) != 1:
+                        raise DomainConflictError("Task cancellation lost a state race")
+                conn.execute(
+                    "UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE task_id = ?",
+                    (updated_at, task_id),
+                )
+                result: dict[str, object] = {
+                    "task_id": task_id,
+                    "work_status": TaskWorkStatus.CANCELLED,
+                    "control_request_id": control_request_id,
+                }
+                self._store(
+                    domain,
+                    actor=actor,
+                    scope=IdempotencyScope.CANCEL_TASK,
+                    key=idempotency_key,
+                    digest=digest,
+                    response=result,
+                    created_at=updated_at,
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return result
+
+    def archive_task(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Archive an idle Conversation Task without hiding active execution."""
+
+        return self._update_task_metadata(
+            task_id,
+            user,
+            scope=IdempotencyScope.ARCHIVE_TASK,
+            idempotency_key=idempotency_key,
+            request={"task_id": task_id, "archived": True},
+            require_idle=True,
+            sql="UPDATE tasks SET archived_at = ?, archive_reason = 'user_archived', "
+            "updated_at = ? WHERE task_id = ? AND archived_at IS NULL",
+            parameters=lambda now: (now, now, task_id),
+        )
+
+    def unarchive_task(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        return self._update_task_metadata(
+            task_id,
+            user,
+            scope=IdempotencyScope.UNARCHIVE_TASK,
+            idempotency_key=idempotency_key,
+            request={"task_id": task_id, "archived": False},
+            require_idle=False,
+            sql="UPDATE tasks SET archived_at = NULL, archive_reason = NULL, updated_at = ? "
+            "WHERE task_id = ? AND archived_at IS NOT NULL",
+            parameters=lambda now: (now, task_id),
+        )
+
+    def update_task_title(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        title: str,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        normalized = title.strip()
+        if not normalized:
+            raise ValueError("Task title must not be empty")
+        return self._update_task_metadata(
+            task_id,
+            user,
+            scope=IdempotencyScope.UPDATE_TASK_TITLE,
+            idempotency_key=idempotency_key,
+            request={"task_id": task_id, "title": normalized},
+            require_idle=False,
+            sql="UPDATE tasks SET title = ?, updated_at = ? WHERE task_id = ?",
+            parameters=lambda now: (normalized, now, task_id),
+        )
+
+    def _update_task_metadata(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        scope: IdempotencyScope,
+        idempotency_key: str,
+        request: Mapping[str, object],
+        require_idle: bool,
+        sql: str,
+        parameters: Callable[[str], tuple[object, ...]],
+    ) -> dict[str, object]:
+        actor = self._actor(user)
+        updated_at = _now()
+        with closing(self._connect()) as conn:
+            try:
+                self._begin(conn)
+                DomainAuthorizationService(conn).require_task_owner(task_id, user)
+                domain = _SqliteDomainRepository(conn)
+                digest, replay = self._replay(
+                    domain,
+                    actor=actor,
+                    scope=scope,
+                    key=idempotency_key,
+                    request=request,
+                )
+                if replay is not None:
+                    conn.commit()
+                    return replay
+                conversations = SqliteConversationRepository(conn)
+                self._require_v3(conversations, task_id)
+                if require_idle and conversations.active_turn(task_id) is not None:
+                    raise ConversationContractError(
+                        ConversationErrorCode.ACTIVE_TURN_EXISTS,
+                        "Interrupt the active Turn before archiving its Task",
+                    )
+                conn.execute(sql, parameters(updated_at))
+                result: dict[str, object] = {"task_id": task_id, "updated_at": updated_at}
+                self._store(
+                    domain,
+                    actor=actor,
+                    scope=scope,
+                    key=idempotency_key,
+                    digest=digest,
+                    response=result,
+                    created_at=updated_at,
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return result
+
     def request_steer(
         self,
         task_id: str,
@@ -930,9 +1133,9 @@ class ConversationApplicationService:
         user: dict[str, object],
         *,
         status: ApprovalStatus,
-        runtime_execution_id: str,
-        runtime_generation: int,
-        tool_call_ref: str,
+        runtime_execution_id: str | None = None,
+        runtime_generation: int | None = None,
+        tool_call_ref: str | None = None,
         decision: Mapping[str, object],
         idempotency_key: str,
     ) -> dict[str, object]:
@@ -947,9 +1150,6 @@ class ConversationApplicationService:
             "task_id": task_id,
             "approval_id": approval_id,
             "status": status,
-            "runtime_execution_id": runtime_execution_id,
-            "runtime_generation": runtime_generation,
-            "tool_call_ref": tool_call_ref,
             "decision": dict(decision),
         }
         resolved_at = _now()
@@ -974,6 +1174,18 @@ class ConversationApplicationService:
                 approval = executions.approval_by_id(approval_id)
                 if approval is None or str(approval["task_id"]) != task_id:
                     raise DomainNotFoundError(approval_id)
+                persisted_runtime_execution_id = str(approval["runtime_execution_id"])
+                persisted_runtime_generation = int(approval["runtime_generation"])
+                persisted_tool_call_ref = str(approval["tool_call_ref"])
+                if runtime_execution_id is not None and (
+                    runtime_execution_id != persisted_runtime_execution_id
+                    or runtime_generation != persisted_runtime_generation
+                    or tool_call_ref != persisted_tool_call_ref
+                ):
+                    raise ConversationContractError(
+                        ConversationErrorCode.RUNTIME_LOST,
+                        "Approval runtime or tool-call scope is stale",
+                    )
                 require_approval_transition(ApprovalStatus(str(approval["status"])), status)
                 turn = conversations.turn_by_id(str(approval["turn_id"]))
                 execution = executions.active_runtime_execution(str(approval["turn_id"]))
@@ -984,11 +1196,10 @@ class ConversationApplicationService:
                     )
                 if (
                     execution is None
-                    or str(approval["runtime_execution_id"]) != runtime_execution_id
-                    or int(approval["runtime_generation"]) != runtime_generation
-                    or str(approval["tool_call_ref"]) != tool_call_ref
-                    or str(execution["runtime_execution_id"]) != runtime_execution_id
-                    or int(execution["runtime_generation"]) != runtime_generation
+                    or str(execution["runtime_execution_id"])
+                    != persisted_runtime_execution_id
+                    or int(execution["runtime_generation"])
+                    != persisted_runtime_generation
                 ):
                     raise ConversationContractError(
                         ConversationErrorCode.RUNTIME_LOST,

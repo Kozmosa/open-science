@@ -242,6 +242,36 @@ def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
         ).fetchone()[0] == 0
 
 
+def test_task_metadata_and_cancel_stay_inside_conversation_interface(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+    _insert_runtime_and_approval(state_root, turn_id)
+
+    with pytest.raises(ConversationContractError) as active_archive:
+        service.archive_task("task-1", _USER, idempotency_key="archive-active")
+    assert active_archive.value.code is ConversationErrorCode.ACTIVE_TURN_EXISTS
+
+    cancelled = service.cancel_task("task-1", _USER, idempotency_key="cancel-1")
+    assert cancelled["work_status"] == TaskWorkStatus.CANCELLED
+    assert isinstance(cancelled["control_request_id"], str)
+    titled = service.update_task_title(
+        "task-1", _USER, title="Renamed Conversation", idempotency_key="title-1"
+    )
+    assert titled["task_id"] == "task-1"
+    with closing(connect(_db_path(state_root))) as conn:
+        assert conn.execute(
+            "SELECT work_status FROM conversation_task_states WHERE task_id = 'task-1'"
+        ).fetchone()[0] == "cancelled"
+        control = conn.execute("SELECT kind, status FROM turn_control_requests").fetchone()
+        assert control is not None
+        assert (control["kind"], control["status"]) == ("interrupt", "requested")
+        assert conn.execute("SELECT title FROM tasks WHERE task_id = 'task-1'").fetchone()[0] == (
+            "Renamed Conversation"
+        )
+
+
 def test_admission_is_durable_idempotent_and_not_canonical_history(
     state_root: Path,
 ) -> None:

@@ -1,10 +1,10 @@
 import { TokenFlowBar } from '@features/tasks';
 import { SectionStack, semanticDotClasses, semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { DomainTaskAttempt } from '@features/domain';
+import type { TurnResponse } from '@/shared/api/transportTypes';
 
 interface Props {
-  attempts: DomainTaskAttempt[];
+  turns: TurnResponse[];
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
@@ -29,7 +29,7 @@ function formatDuration(ms: number | null): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-export function AttemptChain({ attempts }: Props) {
+export function TurnChain({ turns }: Props) {
   const t = useT();
   const attemptStatusLabel = (status: string): string => {
     if (status === 'running') return t('pages.runs.attemptStatus.running');
@@ -43,29 +43,36 @@ export function AttemptChain({ attempts }: Props) {
     return status;
   };
 
-  if (attempts.length === 0) {
-    return <p className="text-sm text-[var(--text-tertiary)]">{t('pages.runs.noAttempts')}</p>;
+  if (turns.length === 0) {
+    return <p className="text-sm text-[var(--text-tertiary)]">No Turns recorded</p>;
   }
 
   return (
     <SectionStack gap={2}>
       <h3 className="text-sm font-semibold text-[var(--text)]">
-        {t('pages.runs.attemptsTitle')}
+        Turns
       </h3>
       <div className="relative pl-6">
-        {attempts.map((a, i) => (
-          <div key={a.attempt_id} className="relative pb-4 last:pb-0">
+        {turns.map((a, i) => {
+          const startedAt = typeof a.started_at === 'string' ? a.started_at : null;
+          const finishedAt = typeof a.finished_at === 'string' ? a.finished_at : null;
+          const durationMs = startedAt && finishedAt
+            ? Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime())
+            : null;
+          const failureReason = typeof a.failure_code === 'string' ? a.failure_code : null;
+          const tokenUsageJson = typeof a.token_usage_json === 'string' ? a.token_usage_json : null;
+          return <div key={a.turn_id} className="relative pb-4 last:pb-0">
             <div
               className={`absolute left-[-22px] top-[14px] z-10 h-3 w-3 rounded-full border-2 border-[var(--surface)] ${STATUS_DOT_CLASSES[a.status] ?? semanticDotClasses.muted}`}
             />
-            {i < attempts.length - 1 && (
+            {i < turns.length - 1 && (
               <div className="absolute left-[-16.5px] top-[26px] h-full w-[1px] bg-[var(--border)]" />
             )}
 
             <div className={`rounded-lg border p-3 ${STATUS_BADGE_CLASSES[a.status] ?? STATUS_BADGE_CLASSES.interrupted}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-[var(--text)]">
-                  {t('pages.runs.attemptLabel', { seq: a.attempt_seq })}
+                  Turn {a.turn_seq}
                 </span>
                 <span
                   className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[a.status] ?? STATUS_BADGE_CLASSES.interrupted}`}
@@ -73,8 +80,8 @@ export function AttemptChain({ attempts }: Props) {
                   {attemptStatusLabel(a.status)}
                 </span>
               </div>
-              {a.failure_reason && (
-                <p className="mt-1 text-xs text-[var(--text-secondary)]">{a.failure_reason}</p>
+              {failureReason && (
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">{failureReason}</p>
               )}
               <div className="mt-2 flex items-center gap-4 text-xs text-[var(--text-secondary)]">
                 {a.task_id && (
@@ -86,12 +93,12 @@ export function AttemptChain({ attempts }: Props) {
                     {t('pages.runs.viewTask')}
                   </a>
                 )}
-                <span>{formatDuration(a.duration_ms)}</span>
-                <TokenFlowBar tokenUsageJson={a.token_usage_json} />
+                <span>{formatDuration(durationMs)}</span>
+                <TokenFlowBar tokenUsageJson={tokenUsageJson} />
                 {(() => {
-                  if (!a.token_usage_json) return null;
+                  if (!tokenUsageJson) return null;
                   try {
-                    const tu = JSON.parse(a.token_usage_json);
+                    const tu = JSON.parse(tokenUsageJson);
                     if (!tu.by_model || Object.keys(tu.by_model).length === 0) return null;
                     return (
                       <details className="mt-2 text-xs">
@@ -119,8 +126,8 @@ export function AttemptChain({ attempts }: Props) {
                 })()}
               </div>
             </div>
-          </div>
-        ))}
+          </div>;
+        })}
       </div>
     </SectionStack>
   );

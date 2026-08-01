@@ -847,6 +847,13 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
+  "post_api_tasks_task_id_approvals_approval_id_resolve": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/approvals/{approval_id}/resolve",
+    "clientPath": "/tasks/{task_id}/approvals/{approval_id}/resolve",
+    "canonical": true,
+    "deprecated": false
+  },
   "post_api_tasks_task_id_archive": {
     "method": "POST",
     "path": "/api/tasks/{task_id}/archive",
@@ -865,6 +872,20 @@ export const transportOperations = {
     "method": "POST",
     "path": "/api/tasks/{task_id}/fork",
     "clientPath": "/tasks/{task_id}/fork",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_tasks_task_id_fork_preview": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/fork-preview",
+    "clientPath": "/tasks/{task_id}/fork-preview",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_tasks_task_id_fork_preview_preview_id_confirm": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/fork-preview/{preview_id}/confirm",
+    "clientPath": "/tasks/{task_id}/fork-preview/{preview_id}/confirm",
     "canonical": true,
     "deprecated": false
   },

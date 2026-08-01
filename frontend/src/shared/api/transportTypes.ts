@@ -44,7 +44,6 @@ export type {
   HealthResponse as SystemHealth,
   TaskCreateRequest as TaskCreatePayload,
   TaskListResponse,
-  TaskMutationResponse,
   TaskRelationshipCreateRequest,
   TaskRelationshipListResponse,
   TaskRelationshipResponse,

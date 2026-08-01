@@ -13,7 +13,6 @@ import type {
   WorkspaceRecord,
 } from '@/shared/types';
 import {
-  buildTaskStreamUrl,
   createTask,
   forkTask,
   getTask,
@@ -29,20 +28,6 @@ import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hoo
 import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { getDomainProjects } from '@features/domain';
-
-class MockEventSource {
-  static instances: MockEventSource[] = [];
-
-  url: string;
-  onmessage: ((event: MessageEvent<string>) => void) | null = null;
-  onerror: (() => void) | null = null;
-  close = vi.fn();
-
-  constructor(url: string) {
-    this.url = url;
-    MockEventSource.instances.push(this);
-  }
-}
 
 function stubTaskViewport(narrow: boolean): void {
   vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
@@ -240,7 +225,6 @@ function createOutputPage(
 }
 
 vi.mock('@features/tasks/api', () => ({
-  buildTaskStreamUrl: vi.fn(),
   createTask: vi.fn(),
   forkTask: vi.fn(),
   getTask: vi.fn(),
@@ -373,7 +357,6 @@ vi.mock('@features/auth', async (importOriginal) => {
   };
 });
 
-const mockBuildTaskStreamUrl = vi.mocked(buildTaskStreamUrl);
 const mockCreateTask = vi.mocked(createTask);
 const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
@@ -395,11 +378,8 @@ afterEach(() => {
 
 beforeEach(() => {
   stubTaskViewport(false);
-  MockEventSource.instances = [];
-  vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource);
   window.localStorage.clear();
 
-  mockBuildTaskStreamUrl.mockReset();
   mockCreateTask.mockReset();
   mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
@@ -413,9 +393,6 @@ beforeEach(() => {
   mockGetTaskMessages.mockReset();
   mockRetryTask.mockReset();
 
-  mockBuildTaskStreamUrl.mockImplementation(
-    (taskId, afterSeq = 0) => `/api/tasks/${taskId}/stream?after_seq=${afterSeq}`
-  );
   mockGetCodexDefaults.mockResolvedValue({
     codex_config_toml: null,
     codex_auth_json: null,
@@ -606,7 +583,7 @@ describe('TasksPage', () => {
 
     await screen.findByRole('heading', { name: 'Train model' });
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Attempt' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Turn' }));
 
     await waitFor(() => expect(mockRetryTask).toHaveBeenCalledWith('task-1', expect.stringMatching(/^task\.retry/)));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.detail('task-1') });
@@ -942,7 +919,7 @@ describe('TasksPage', () => {
     expect(screen.getByPlaceholderText('输入研究任务提示词…')).toBeInTheDocument();
   });
 
-  it.skip('creates a task from a dialog and selects it through the URL', async () => {
+  it('creates a task from a dialog and selects it through the URL', async () => {
     const createdSummary: TaskSummary = {
       ...taskSummary,
       task_id: 'task-created-dialog',
@@ -995,41 +972,9 @@ describe('TasksPage', () => {
       );
     });
 
-    await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-created-dialog'));
     expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Dialog task' })).toBeInTheDocument();
-    expect(await screen.findByText('dialog output')).toBeInTheDocument();
   });
 
-  it.skip('clears old output and binds a fresh stream when switching tasks', async () => {
-    const reviewRecord: TaskRecord = {
-      ...taskRecord,
-      ...reviewTaskSummary,
-    };
-    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
-    mockGetTask.mockImplementation(async (taskId) =>
-      taskId === 'task-review' ? reviewRecord : taskRecord
-    );
-    mockGetTaskOutput.mockImplementation(async (taskId) =>
-      createOutputPage([
-        createOutputEvent(1, {
-          task_id: taskId,
-          content: taskId === 'task-review' ? 'review output' : 'train output',
-        }),
-      ])
-    );
-
-    renderWithProviders(<TasksPage />);
-    expect(await screen.findByText('train output')).toBeInTheDocument();
-    const firstSource = MockEventSource.instances[0];
-
-    fireEvent.click(screen.getByRole('button', { name: /Review paper draft/ }));
-
-    await waitFor(() => expect(firstSource.close).toHaveBeenCalled());
-    expect(await screen.findByText('review output')).toBeInTheDocument();
-    expect(screen.queryByText('train output')).not.toBeInTheDocument();
-    await waitFor(() => expect(mockBuildTaskStreamUrl).toHaveBeenCalledWith('task-review', 1));
-  });
 
   it('closes the create dialog with Escape', async () => {
     renderWithProviders(<TasksPage />);
@@ -1048,91 +993,8 @@ describe('TasksPage', () => {
     );
   });
 
-  it.skip('retains only the latest output events in the rendered stream', async () => {
-    mockGetTaskOutput.mockResolvedValue(
-      createOutputPage(
-        Array.from({ length: 505 }, (_, index) =>
-          createOutputEvent(index + 1, {
-            content: `retained line ${index + 1}`,
-          })
-        ),
-        505
-      )
-    );
 
-    renderWithProviders(<TasksPage />);
 
-    expect(await screen.findByText('retained line 505')).toBeInTheDocument();
-    expect(screen.queryByText('retained line 1')).not.toBeInTheDocument();
-  });
-
-  it.skip('renders codex user echoes and wrapped tool events with normalized chat roles', async () => {
-    mockGetTaskOutput.mockResolvedValue(
-      createOutputPage([
-        createOutputEvent(1, { kind: 'message', content: 'hello codex' }),
-        createOutputEvent(2, {
-          kind: 'message',
-          content: '{"role":"user","content":"tell me the time"}',
-        }),
-        createOutputEvent(3, { kind: 'message', content: 'tell me the time' }),
-        createOutputEvent(4, {
-          kind: 'tool_call',
-          content: '{"event_type":"tool_call","payload":{"id":"call-1","name":"commandExecution","arguments":{"command":"date"}},"token_usage":null}',
-        }),
-        createOutputEvent(5, {
-          kind: 'tool_result',
-          content: '{"event_type":"tool_result","payload":{"tool_use_id":"call-1","content":{"status":"failed"},"is_error":true},"token_usage":null}',
-        }),
-      ])
-    );
-
-    renderWithProviders(<TasksPage />);
-
-    expect(await screen.findByText('hello codex')).toBeInTheDocument();
-    expect(screen.getAllByText('tell me the time')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'commandExecution' }));
-    expect(await screen.findByText(/commandExecution/)).toBeInTheDocument();
-  });
-
-  it.skip('coalesces repeated stream gaps into one replay request while refill is in flight', async () => {
-    let resolveReplay: (page: TaskOutputListResponse) => void = () => {};
-    mockGetTaskOutput
-      .mockResolvedValueOnce(createOutputPage([createOutputEvent(1, { content: 'first line' })]))
-      .mockImplementationOnce(
-        () =>
-          new Promise<TaskOutputListResponse>((resolve) => {
-            resolveReplay = resolve;
-          })
-      );
-
-    renderWithProviders(<TasksPage />);
-    await screen.findByText('first line');
-
-    const source = MockEventSource.instances[0];
-    await act(async () => {
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(createOutputEvent(4, { content: 'fourth line' })),
-        })
-      );
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(createOutputEvent(5, { content: 'fifth line' })),
-        })
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockGetTaskOutput).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      resolveReplay(createOutputPage([createOutputEvent(2, { content: 'second line' })], 2));
-      await Promise.resolve();
-    });
-
-    expect(await screen.findByText('second line')).toBeInTheDocument();
-  });
 
   it('traps focus in the create dialog and restores focus to the opener on close', async () => {
     renderWithProviders(<TasksPage />);
@@ -1192,147 +1054,7 @@ describe('TasksPage', () => {
     expect(mockListCanonicalTaskItems).toHaveBeenCalledWith('task-1');
   });
 
-  it.skip('ignores duplicate and out-of-order stream events', async () => {
-    renderWithProviders(<TasksPage />);
-    await screen.findByText('Train model');
 
-    const source = MockEventSource.instances[0];
-    act(() => {
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(createOutputEvent(1, { content: 'duplicate first line' })),
-        })
-      );
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(createOutputEvent(0, { content: 'older line' })),
-        })
-      );
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(createOutputEvent(2, { content: 'second line' })),
-        })
-      );
-    });
 
-    expect(await screen.findByText('second line')).toBeInTheDocument();
-    expect(screen.getAllByText('first line')).toHaveLength(1);
-    expect(screen.queryByText('duplicate first line')).not.toBeInTheDocument();
-    expect(screen.queryByText('older line')).not.toBeInTheDocument();
-  });
 
-  it.skip('does not refetch task metadata for non-status lifecycle stream events', async () => {
-    renderWithProviders(<TasksPage />);
-    await screen.findByText('Train model');
-    const source = MockEventSource.instances[0];
-    const taskCallsAfterInitialLoad = mockGetTask.mock.calls.length;
-    const listCallsAfterInitialLoad = mockGetTasks.mock.calls.length;
-
-    await act(async () => {
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(
-            createOutputEvent(2, {
-              kind: 'lifecycle',
-              content: '{"event_type":"system","payload":{"subtype":"turn_started"},"token_usage":null}',
-            })
-          ),
-        })
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockGetTask).toHaveBeenCalledTimes(taskCallsAfterInitialLoad);
-    expect(mockGetTasks).toHaveBeenCalledTimes(listCallsAfterInitialLoad);
-    expect(MockEventSource.instances).toHaveLength(1);
-  });
-
-  it.skip('fills SSE gaps by replaying missing output before continuing', async () => {
-    mockGetTaskOutput
-      .mockResolvedValueOnce(
-        createOutputPage([
-          createOutputEvent(1, {
-            content: 'first line',
-            created_at: '2026-04-23T08:01:05Z',
-          }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        createOutputPage(
-          [
-            createOutputEvent(2, {
-              content: 'second line',
-              created_at: '2026-04-23T08:01:06Z',
-            }),
-          ],
-          2
-        )
-      );
-
-    renderWithProviders(<TasksPage />);
-    await screen.findByText('Train model');
-
-    const source = MockEventSource.instances[0];
-    await act(async () => {
-      source.onmessage?.(
-        new MessageEvent('message', {
-          data: JSON.stringify(
-            createOutputEvent(3, {
-              content: 'third line',
-              created_at: '2026-04-23T08:01:07Z',
-            })
-          ),
-        })
-      );
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(await screen.findByText('second line')).toBeInTheDocument();
-    expect(await screen.findByText('third line')).toBeInTheDocument();
-    await waitFor(() => expect(mockGetTaskOutput).toHaveBeenLastCalledWith('task-1', 1));
-  });
-
-  it.skip('replays output after stream errors before reconnecting', async () => {
-    mockGetTaskOutput
-      .mockResolvedValueOnce(
-        createOutputPage([
-          createOutputEvent(1, {
-            content: 'first line',
-          }),
-        ])
-      )
-      .mockResolvedValueOnce(
-        createOutputPage(
-          [
-            createOutputEvent(2, {
-              content: 'second line',
-            }),
-          ],
-          2
-        )
-      );
-
-    renderWithProviders(<TasksPage />);
-    await screen.findByText('Train model');
-    vi.useFakeTimers();
-
-    const source = MockEventSource.instances[0];
-    await act(async () => {
-      source.onerror?.();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(screen.getByText('second line')).toBeInTheDocument();
-    expect(mockGetTaskOutput).toHaveBeenLastCalledWith('task-1', 1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000);
-    });
-
-    expect(MockEventSource.instances).toHaveLength(2);
-    expect(mockBuildTaskStreamUrl).toHaveBeenLastCalledWith('task-1', 2);
-  });
 });

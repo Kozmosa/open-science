@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTask, getTasks } from '@features/tasks';
-import { getDomainTaskAttempts } from '@features/domain';
+import { getTask, getTasks, getTaskTurns } from '@features/tasks';
 import { getProjectUsageSummary } from '@features/projects';
 import { PageShell, SplitPane } from '@design-system';
 import { RunDetail } from './runs/RunDetail';
@@ -30,9 +29,9 @@ export default function RunsPage() {
     enabled: selectedId !== null,
   });
 
-  const attemptsQuery = useQuery({
-    queryKey: queryKeys.domain.taskAttempts(selectedId),
-    queryFn: () => getDomainTaskAttempts(selectedId!),
+  const turnsQuery = useQuery({
+    queryKey: queryKeys.tasks.turns(selectedId),
+    queryFn: () => getTaskTurns(selectedId!),
     enabled: selectedId !== null,
   });
 
@@ -67,7 +66,7 @@ export default function RunsPage() {
       >
         <RunDetail
           detail={detailQuery.data ?? null}
-          attempts={attemptsQuery.data?.items ?? []}
+          turns={turnsQuery.data?.items ?? []}
           usage={usageQuery.data ?? null}
           loading={detailQuery.isLoading}
           selectedId={selectedId}

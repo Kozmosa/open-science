@@ -183,6 +183,10 @@ class IdempotencyScope(StrEnum):
     UPDATE_WORK_STATUS = "update_work_status"
     FORK_PREVIEW = "fork_preview"
     FORK_CONFIRM = "fork_confirm"
+    CANCEL_TASK = "cancel_task"
+    ARCHIVE_TASK = "archive_task"
+    UNARCHIVE_TASK = "unarchive_task"
+    UPDATE_TASK_TITLE = "update_task_title"
 
 
 class CompatibilityBehavior(StrEnum):

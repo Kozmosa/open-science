@@ -34,6 +34,7 @@ export const queryKeys = {
     archived: (showArchived: true) => ['tasks', showArchived] as const,
     detail: (taskId: string | null) => ['task', taskId] as const,
     messages: (taskId: string | null) => ['task-messages', taskId] as const,
+    turns: (taskId: string | null) => ['task-turns', taskId] as const,
     tokenUsage: (opts: { includeArchived: boolean }) =>
       ['task-token-usage', opts] as const,
   },
@@ -48,8 +49,6 @@ export const queryKeys = {
       ['domain', 'workspaces', { includeUnregistered }] as const,
     workspace: (workspaceId: string | null) =>
       ['domain', 'workspaces', workspaceId] as const,
-    taskAttempts: (taskId: string | null) =>
-      ['domain', 'tasks', taskId, 'attempts'] as const,
     projectContext: (projectId: string | null) =>
       ['domain', 'projects', projectId, 'context'] as const,
     projectContextVersions: (projectId: string | null) =>

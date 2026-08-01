@@ -8,7 +8,6 @@ import type {
   DomainProjectContext,
   DomainProjectMember,
   DomainProjectProjection,
-  DomainTaskAttempt,
   DomainTaskContextSnapshot,
   DomainWorkspaceProjection,
   OverviewRefreshJob,
@@ -83,10 +82,6 @@ export function setDomainPrimaryWorkspace(
     {},
     { headers: idempotencyHeaders(idempotencyKey) },
   );
-}
-
-export function getDomainTaskAttempts(taskId: string): Promise<ItemList<DomainTaskAttempt>> {
-  return api.get(`/tasks/${encodeURIComponent(taskId)}/attempts`);
 }
 
 export function getDomainTaskContext(taskId: string): Promise<DomainTaskContextSnapshot> {
