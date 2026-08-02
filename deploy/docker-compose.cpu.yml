@@ -165,7 +165,7 @@ services:
     volumes:
       - literature-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping"]
+      test: ["CMD-SHELL", "redis-cli -p 16379 -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping"]
       interval: 15s
       timeout: 5s
       retries: 5

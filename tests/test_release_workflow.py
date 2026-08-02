@@ -98,6 +98,19 @@ def test_web_image_uses_one_port_parameterized_nginx_template() -> None:
     assert "RUN chmod -R a+rX /opt/ainrf/frontend/dist" in dockerfile
 
 
+def test_production_monitoring_services_use_runtime_ports_and_readable_config() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
+    compose = yaml.safe_load(
+        (root / "deploy/docker-compose.cpu.yml").read_text(encoding="utf-8")
+    )
+
+    redis = compose["services"]["literature-redis"]
+    assert redis["command"][redis["command"].index("--port") + 1] == "16379"
+    assert "redis-cli -p 16379" in redis["healthcheck"]["test"][1]
+    assert "RUN chmod -R a+rX /etc/prometheus" in dockerfile
+
+
 def test_development_and_mutable_staging_remain_separate_paths() -> None:
     root = Path(__file__).resolve().parents[1]
     dev = (root / "scripts/dev.sh").read_text(encoding="utf-8")
