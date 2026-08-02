@@ -88,8 +88,10 @@ production 与 staging 默认启用核心和监控探针；staging SSH 默认关
 `GATUS_DEVELOPMENT_MONITORING_ENABLED`、`GATUS_DEVELOPMENT_WORKER_ENABLED` 和 SSH 开关均需
 指向稳定实例后显式启用。
 
-自定义状态页可读取 `/uptime/api/v1/endpoints/statuses`，以及单 endpoint 的
-`statuses`、`uptimes/{duration}` 和 `response-times/{duration}/history` API。公网
+OpenScience 在 `http(s)://<host>/status/` 提供内置状态页，直接消费上述
+`/uptime/api/v1/endpoints/statuses`、单 endpoint 的 `statuses` 与 `uptimes/{duration}`
+API，按 Production 组件展示整体状态、30 天 uptime 条带、响应时间、事件日历与历史事件，
+支持明暗主题与中英文切换；外部实现同样可读取这些 API 构建自定义状态页。公网
 `/uptime/metrics` 明确返回 404；Prometheus 仍通过 loopback 上的 Gatus 原生 `/metrics` 抓取。
 
 :::caution

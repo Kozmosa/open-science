@@ -14,9 +14,12 @@ const manifestPath = resolve(outDir, '.vite/manifest.json');
 const KIB = 1024;
 const MIB = 1024 * KIB;
 const budgets = {
-  // The authenticated shell now includes the public design-system barrel plus
-  // Radix focus, toast, and form-control accessibility infrastructure.
-  entry: { raw: 825 * KIB, gzip: 260 * KIB },
+  // The authenticated shell includes the public design-system barrel, Radix
+  // focus/toast/form-control infrastructure, and the multi-page modulepreload
+  // polyfill shared with the public status page.
+  entry: { raw: 825 * KIB, gzip: 264 * KIB },
+  // Public status page is a standalone multi-page entry and must stay small.
+  statusPage: { raw: 64 * KIB, gzip: 32 * KIB },
   fileBrowserBeforeEditor: { raw: 850 * KIB, gzip: 300 * KIB },
   monacoIncremental: { raw: 4 * MIB, gzip: 1100 * KIB },
 };
@@ -96,11 +99,18 @@ async function main() {
     .filter(([, chunk]) => chunk.isEntry)
     .map(([key]) => key);
 
-  if (entryKeys.length !== 1) {
-    throw new Error(`Expected one frontend entry in ${manifestPath}, found ${entryKeys.length}`);
+  if (
+    entryKeys.length !== 2 ||
+    !entryKeys.includes('index.html') ||
+    !entryKeys.includes('status/index.html')
+  ) {
+    throw new Error(
+      `Expected main and status frontend entries in ${manifestPath}, found ${entryKeys.join(', ')}`,
+    );
   }
 
-  const entryKey = entryKeys[0];
+  const entryKey = 'index.html';
+  const statusEntryKey = 'status/index.html';
   const fileBrowserKey = 'src/pages/FileBrowserPage.tsx';
   const monacoKey = 'src/features/workspaces/components/file-browser/MonacoTextViewer.tsx';
   const fileBrowserChunk = manifest[fileBrowserKey];
@@ -116,6 +126,7 @@ async function main() {
   }
 
   const entryClosure = collectStaticClosure(manifest, entryKey);
+  const statusEntryClosure = collectStaticClosure(manifest, statusEntryKey);
   const fileBrowserClosure = collectStaticClosure(manifest, fileBrowserKey);
   const monacoClosure = collectStaticClosure(manifest, monacoKey);
   const monacoIncrementalClosure = new Set(
@@ -138,6 +149,11 @@ async function main() {
       closure: entryClosure,
       forbiddenTokens: [...monacoStaticTokens, ...terminalStaticTokens],
     },
+    {
+      label: 'status entry',
+      closure: statusEntryClosure,
+      forbiddenTokens: [...monacoStaticTokens, ...terminalStaticTokens],
+    },
     ...pagePolicies,
   ];
 
@@ -152,9 +168,11 @@ async function main() {
   }
 
   const entrySize = await measureJavaScript(manifest, entryClosure);
+  const statusEntrySize = await measureJavaScript(manifest, statusEntryClosure);
   const fileBrowserSize = await measureJavaScript(manifest, fileBrowserClosure);
   const monacoSize = await measureJavaScript(manifest, monacoIncrementalClosure);
   assertBudget('Entry static JavaScript', entrySize, budgets.entry, failures);
+  assertBudget('Status page static JavaScript', statusEntrySize, budgets.statusPage, failures);
   assertBudget(
     'FileBrowser static JavaScript before opening a text file',
     fileBrowserSize,
