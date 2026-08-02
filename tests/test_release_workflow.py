@@ -147,12 +147,18 @@ def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> N
 
     assert config["metrics"] is True
     assert config["storage"]["type"] == "sqlite"
+    assert config["ui"]["title"] == "OpenScience Status"
+    assert config["ui"]["logo"].startswith("data:image/svg+xml,")
+    assert config["ui"]["buttons"] == [{"name": "OpenScience", "link": "/"}]
+    assert "--osci-shadow-card" in config["ui"]["custom-css"]
+    assert ".endpoint-group" in config["ui"]["custom-css"]
     assert [endpoint["group"] for endpoint in config["endpoints"]] == [
         "Production",
         "Staging",
         "Development",
     ]
     assert config["endpoints"][2]["enabled"] == "${GATUS_DEVELOPMENT_ENABLED}"
+    assert all(endpoint["ui"]["hide-hostname"] for endpoint in config["endpoints"])
     dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
     assert "twinproduction/gatus:v5.36.0 AS gatus" in dockerfile
 
