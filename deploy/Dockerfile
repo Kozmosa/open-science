@@ -55,9 +55,11 @@ COPY deploy/config/nginx-release.conf.template /etc/nginx/templates/default.conf
 ENV NGINX_ENVSUBST_FILTER=^AINRF_
 
 FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus
+USER root
 COPY deploy/config/prometheus-host.yml /etc/prometheus/prometheus.yml
 COPY deploy/config/prometheus/rules/ainrf-alerts.yml /etc/prometheus/rules/ainrf.yml
 RUN chmod -R a+rX /etc/prometheus
+USER nobody
 
 FROM docker.1ms.run/grafana/grafana:11.6.1 AS grafana
 COPY deploy/config/grafana/provisioning-host /etc/grafana/provisioning

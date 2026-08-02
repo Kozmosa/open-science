@@ -108,7 +108,9 @@ def test_production_monitoring_services_use_runtime_ports_and_readable_config() 
     redis = compose["services"]["literature-redis"]
     assert redis["command"][redis["command"].index("--port") + 1] == "16379"
     assert "redis-cli -p 16379" in redis["healthcheck"]["test"][1]
+    assert "FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus\nUSER root" in dockerfile
     assert "RUN chmod -R a+rX /etc/prometheus" in dockerfile
+    assert "RUN chmod -R a+rX /etc/prometheus\nUSER nobody" in dockerfile
 
 
 def test_development_and_mutable_staging_remain_separate_paths() -> None:
