@@ -251,6 +251,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  gatus:
+    image: ${OPENSCIENCE_GATUS_IMAGE:?Set OPENSCIENCE_GATUS_IMAGE to an immutable release image}
+    restart: unless-stopped
+    container_name: ainrf-gatus
+    network_mode: host
+    environment:
+      GATUS_WEB_ADDRESS: "127.0.0.1"
+      GATUS_WEB_PORT: "8080"
+      GATUS_PRODUCTION_HEALTH_URL: ${GATUS_PRODUCTION_HEALTH_URL:-http://127.0.0.1:8192/api/health}
+      GATUS_STAGING_HEALTH_URL: ${GATUS_STAGING_HEALTH_URL:-http://127.0.0.1:7192/api/health}
+      GATUS_DEVELOPMENT_ENABLED: ${GATUS_DEVELOPMENT_ENABLED:-false}
+      GATUS_DEVELOPMENT_HEALTH_URL: ${GATUS_DEVELOPMENT_HEALTH_URL:-http://127.0.0.1:41001/api/health}
+    volumes:
+      - gatus-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     image: ${OPENSCIENCE_WEB_IMAGE:?Set OPENSCIENCE_WEB_IMAGE to an immutable release image}
     restart: unless-stopped
@@ -262,9 +282,12 @@ services:
       AINRF_GRAFANA_PORT: "3000"
       AINRF_PROMETHEUS_PORT: "9091"
       AINRF_LITEFUSE_PORT: "13000"
+      AINRF_GATUS_PORT: "8080"
     depends_on:
       ainrf:
         condition: service_healthy
+      gatus:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/api/health"]
       interval: 30s
@@ -283,4 +306,5 @@ volumes:
   ainrf-tenants:
   prometheus-data:
   grafana-data:
+  gatus-data:
   literature-redis-data:

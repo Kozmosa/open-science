@@ -65,6 +65,12 @@ FROM docker.1ms.run/grafana/grafana:11.6.1 AS grafana
 COPY deploy/config/grafana/provisioning-host /etc/grafana/provisioning
 COPY deploy/config/grafana/dashboards /var/lib/grafana/dashboards
 
+# Gatus does not natively support a URL base path. The pinned image is paired
+# with the nginx /uptime compatibility proxy in this release, so upgrades must
+# re-run the path-routing smoke tests before changing this version.
+FROM docker.1ms.run/twinproduction/gatus:v5.36.0 AS gatus
+COPY deploy/config/gatus.yaml /config/config.yaml
+
 # ── Stage 2: Backend build ────────────────────────────────────────
 FROM docker.1ms.run/python:3.13-slim AS backend-build
 

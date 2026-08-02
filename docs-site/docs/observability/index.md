@@ -3,13 +3,13 @@ title: 可观测性概览
 description: OpenScience 审计日志架构、审计事件目录与请求 ID 关联机制。
 ---
 
-OpenScience 提供完整的可观测性能力：结构化审计日志、Prometheus 指标和 Grafana 监控栈。
+OpenScience 提供完整的可观测性能力：结构化审计日志、Prometheus 指标、Grafana 监控栈和 Gatus uptime 状态页。
 
 | 文档 | 说明 |
 | --- | --- |
 | [审计日志](/observability/audit-logs) | structlog JSON 审计事件、事件目录与日志格式。 |
 | [Prometheus 指标](/observability/metrics) | 计数器、直方图、仪表盘指标参考与 PromQL 查询。 |
-| [监控栈](/observability/monitoring-stack) | Prometheus + Grafana 部署架构、Dashboard 与告警规则。 |
+| [监控栈](/observability/monitoring-stack) | Prometheus、Grafana 与 Gatus 部署架构、Dashboard、主动探测与告警规则。 |
 
 ## 审计日志架构
 

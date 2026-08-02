@@ -153,6 +153,8 @@ services:
     depends_on:
       ainrf:
         condition: service_healthy
+      gatus:
+        condition: service_started
     logging:
       driver: json-file
       options:
@@ -216,6 +218,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── Gatus (Public Uptime Dashboard) ───────────────────────────
+  gatus:
+    image: docker.1ms.run/twinproduction/gatus:v5.36.0
+    restart: unless-stopped
+    container_name: ainrf-gatus
+    environment:
+      GATUS_WEB_ADDRESS: "0.0.0.0"
+      GATUS_WEB_PORT: "8080"
+      GATUS_PRODUCTION_HEALTH_URL: ${GATUS_PRODUCTION_HEALTH_URL:-http://nginx/api/health}
+      GATUS_STAGING_HEALTH_URL: ${GATUS_STAGING_HEALTH_URL:-http://host.docker.internal:7192/api/health}
+      GATUS_DEVELOPMENT_ENABLED: ${GATUS_DEVELOPMENT_ENABLED:-false}
+      GATUS_DEVELOPMENT_HEALTH_URL: ${GATUS_DEVELOPMENT_HEALTH_URL:-http://host.docker.internal:41001/api/health}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config/gatus.yaml:/config/config.yaml:ro
+      - gatus-data:/data
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ── Loki (Log Aggregation) ──────────────────────────────────────
   loki:
     image: docker.1ms.run/grafana/loki:3.5.0
@@ -240,4 +267,5 @@ volumes:
   frontend-dist:
   prometheus-data:
   grafana-data:
+  gatus-data:
   loki-data:

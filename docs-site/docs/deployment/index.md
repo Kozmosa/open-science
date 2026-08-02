@@ -70,7 +70,9 @@ description: OpenScience 生产部署前置条件、首次登录、安全检查�
 
 ### Docker 部署监控栈
 
-Docker Compose 部署自带 Prometheus + Grafana 监控栈。详见 [监控栈](/observability/monitoring-stack)。
+Docker Compose 部署自带 Prometheus、Grafana 和 Gatus 监控栈。Gatus 状态页通过
+`/uptime/` 公开，主动探测 production、staging 和可选的固定 development 实例。
+详见 [监控栈](/observability/monitoring-stack)。
 
 ## 三种环境各自负责什么
 

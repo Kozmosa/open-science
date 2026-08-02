@@ -1,16 +1,17 @@
 ---
 title: 监控栈
-description: Prometheus + Grafana 监控栈部署架构、预置 Dashboard、告警规则与配置文件结构。
+description: Prometheus、Grafana 与 Gatus 监控栈部署架构、预置 Dashboard、主动探测、告警规则与配置文件结构。
 ---
 
-OpenScience 的 Docker 部署自带完整的 Prometheus + Grafana 监控栈，无需额外安装。
+OpenScience 的 Docker 部署自带完整的 Prometheus、Grafana 与 Gatus 监控栈，无需额外安装。
 
 ## 组件
 
 | 组件 | 镜像 | 说明 |
 |------|------|------|
-| Prometheus | `prom/prometheus:v3.3.1` | 抓取 `/metrics`，30 天数据保留 |
+| Prometheus | `prom/prometheus:v3.3.1` | 抓取应用与 Gatus 指标，30 天数据保留 |
 | Grafana | `grafana/grafana:11.6.1` | 自动配置数据源和预置 Dashboard |
+| Gatus | `twinproduction/gatus:v5.36.0` | 主动探测 production、staging 和可选 development，提供公开状态页 |
 
 ## 部署架构
 
@@ -22,6 +23,11 @@ Browser -> :8192/grafana -> Grafana 127.0.0.1:3000
                               |
                               v
                     Backend 127.0.0.1:18000/metrics
+
+Browser -> :8192/uptime -> Gatus 127.0.0.1:8080
+                              |-> production /api/health
+                              |-> staging /api/health
+                              `-> optional development /api/health
 ```
 
 ### 网络模式
@@ -57,6 +63,15 @@ CPU-only production 的 `3000`（Grafana）与 `9091`（Prometheus）只监听 l
 对应为 `2300` 与 `9092`，同样只监听 loopback。日常浏览器访问统一经 nginx 的认证路径，
 避免绕过 OpenScience session 边界。
 
+Gatus 本身同样只监听 production loopback `127.0.0.1:8080`，由 nginx 通过公开的
+`/uptime/` 前缀提供状态页。OpenScience 的 `/api/*` 和 `/assets/*` 仍由原服务处理；
+nginx 将 Gatus 的绝对资源与 API 地址限制改写到 `/uptime/*`，避免路由冲突。Gatus 固定
+使用 v5.36.0；升级时必须重新执行子路径 smoke，因为上游尚未原生支持 base path。
+
+默认启用 production `:8192/api/health` 与 staging `:7192/api/health` 探测。worktree
+development 端口是派生值，因此默认关闭；要监控一套稳定 dev 实例，设置
+`GATUS_DEVELOPMENT_ENABLED=true` 和对应的 `GATUS_DEVELOPMENT_HEALTH_URL`。
+
 :::caution
 默认密码 `ainrf-grafana` 仅用于初次登录。生产环境请在 `.env` 中设置 `GRAFANA_ADMIN_PASSWORD` 为强密码。
 :::
@@ -85,6 +100,7 @@ Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.jso
 
 ```
 deploy/config/
+├── gatus.yaml                 # uptime 探测、状态页与 SQLite 保留配置
 ├── prometheus.yml              # Bridge 网络抓取配置
 ├── prometheus-host.yml         # Host 网络抓取配置
 ├── prometheus-rules.yml        # 告警规则（→ symlink 到 examples/）

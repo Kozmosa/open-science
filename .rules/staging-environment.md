@@ -1,9 +1,12 @@
 # Staging Environment
 
-Staging mirrors the production stack (nginx + Prometheus + Grafana + backend)
+Staging mirrors the application and internal monitoring stack (nginx + Prometheus + Grafana + backend)
 with offset ports and isolated volumes. Backend source is bind-mounted for
 hot-reload. Read this when developing against staging or verifying changes
 before production deploy.
+
+The single production Gatus service actively probes this staging entry at
+`127.0.0.1:7192/api/health`; staging does not start a second Gatus instance.
 
 Production deployment details: [deployment.md](deployment.md)
 
@@ -61,6 +64,7 @@ The shipped staging nginx explicitly listens on `127.0.0.1:7192`; `http://<host>
 | sshd | `:2223` | `:2222` |
 | prometheus | `:9092` | `:9091` |
 | grafana | `:2300` | `:3000` |
+| gatus | production instance probes `:7192` | `:8080` |
 
 ## Backend Hot-Reload Workflow
 

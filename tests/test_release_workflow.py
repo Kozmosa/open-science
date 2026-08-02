@@ -46,6 +46,7 @@ def test_release_staging_reuses_production_images_without_builds_or_source_mount
         for value in services["init"]["command"]
     )
     assert services["web"]["environment"]["AINRF_WEB_PORT"] == "7192"
+    assert services["web"]["environment"]["AINRF_GATUS_PORT"] == "8080"
     mounted_sources = str(compose)
     assert "src/" not in mounted_sources
     assert "frontend/" not in mounted_sources
@@ -63,7 +64,7 @@ def test_release_manifest_binds_each_image_to_its_local_image_id() -> None:
     build = (root / "deploy/build-production.sh").read_text(encoding="utf-8")
     verifier = (root / "deploy/verify-release-manifest.sh").read_text(encoding="utf-8")
     production = (root / "deploy/release-production.sh").read_text(encoding="utf-8")
-    for name in ("API", "WEB", "PROMETHEUS", "GRAFANA"):
+    for name in ("API", "WEB", "PROMETHEUS", "GRAFANA", "GATUS"):
         assert f"OPENSCIENCE_{name}_IMAGE_ID" in build
         assert f"OPENSCIENCE_{name}_IMAGE_ID" in verifier
     assert "docker image inspect" in verifier
@@ -101,9 +102,7 @@ def test_web_image_uses_one_port_parameterized_nginx_template() -> None:
 def test_production_monitoring_services_use_runtime_ports_and_readable_config() -> None:
     root = Path(__file__).resolve().parents[1]
     dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
-    compose = yaml.safe_load(
-        (root / "deploy/docker-compose.cpu.yml").read_text(encoding="utf-8")
-    )
+    compose = yaml.safe_load((root / "deploy/docker-compose.cpu.yml").read_text(encoding="utf-8"))
 
     redis = compose["services"]["literature-redis"]
     domain_worker = compose["services"]["domain-worker"]
@@ -127,3 +126,47 @@ def test_development_and_mutable_staging_remain_separate_paths() -> None:
     assert "--build" in staging
     assert "Hot-reload is active" in staging
     assert "--no-build" in release_staging
+
+
+def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    compose = yaml.safe_load((root / "deploy/docker-compose.cpu.yml").read_text(encoding="utf-8"))
+    services = compose["services"]
+    gatus = services["gatus"]
+    nginx = services["nginx"]
+    config = yaml.safe_load((root / "deploy/config/gatus.yaml").read_text(encoding="utf-8"))
+
+    assert gatus["image"].startswith("${OPENSCIENCE_GATUS_IMAGE")
+    assert gatus["network_mode"] == "host"
+    assert gatus["environment"]["GATUS_WEB_ADDRESS"] == "127.0.0.1"
+    assert gatus["environment"]["GATUS_WEB_PORT"] == "8080"
+    assert "ports" not in gatus
+    assert "gatus-data:/data" in gatus["volumes"]
+    assert nginx["environment"]["AINRF_GATUS_PORT"] == "8080"
+    assert nginx["depends_on"]["gatus"]["condition"] == "service_started"
+
+    assert config["metrics"] is True
+    assert config["storage"]["type"] == "sqlite"
+    assert [endpoint["group"] for endpoint in config["endpoints"]] == [
+        "Production",
+        "Staging",
+        "Development",
+    ]
+    assert config["endpoints"][2]["enabled"] == "${GATUS_DEVELOPMENT_ENABLED}"
+    dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
+    assert "twinproduction/gatus:v5.36.0 AS gatus" in dockerfile
+
+    for relative_path in (
+        "deploy/config/nginx-release.conf.template",
+        "deploy/config/nginx-host.conf",
+        "deploy/config/nginx-staging.conf",
+        "deploy/config/nginx-bridge.conf",
+        "deploy/nginx-docker.conf",
+    ):
+        nginx_config = (root / relative_path).read_text(encoding="utf-8")
+        assert "location = /uptime" in nginx_config
+        assert "location /uptime/" in nginx_config
+        assert "sub_filter '\"/api/v1' '\"/uptime/api/v1';" in nginx_config
+        assert "sub_filter '`/api/v1' '`/uptime/api/v1';" in nginx_config
+        assert "'(0,i.PO)(\"/\")' '(0,i.PO)(\"/uptime/\")'" in nginx_config
+        assert nginx_config.index("location /uptime/") < nginx_config.index("location /api/")

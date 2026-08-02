@@ -25,3 +25,10 @@ scrape_configs:
       - targets: ["ainrf:8000"]
         labels:
           env: "production"
+
+  - job_name: "gatus"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gatus:8080"]
+        labels:
+          env: "monitoring"

@@ -1,0 +1,67 @@
+metrics: true
+
+web:
+  address: ${GATUS_WEB_ADDRESS}
+  port: ${GATUS_WEB_PORT}
+
+storage:
+  type: sqlite
+  path: /data/gatus.db
+  caching: true
+  maximum-number-of-results: 1000
+  maximum-number-of-events: 100
+
+ui:
+  title: OpenScience Status
+  header: OpenScience
+  dashboard-heading: Service Status
+  dashboard-subheading: Active health checks for OpenScience environments
+  dark-mode: true
+  default-sort-by: group
+
+endpoints:
+  - name: API
+    group: Production
+    url: ${GATUS_PRODUCTION_HEALTH_URL}
+    interval: 30s
+    client:
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"
+      - "[RESPONSE_TIME] < 5000"
+    ui:
+      hide-url: true
+    extra-labels:
+      environment: production
+
+  - name: API
+    group: Staging
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    client:
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"
+      - "[RESPONSE_TIME] < 5000"
+    ui:
+      hide-url: true
+    extra-labels:
+      environment: staging
+
+  - name: API
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_ENABLED}
+    url: ${GATUS_DEVELOPMENT_HEALTH_URL}
+    interval: 30s
+    client:
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"
+      - "[RESPONSE_TIME] < 5000"
+    ui:
+      hide-url: true
+    extra-labels:
+      environment: development

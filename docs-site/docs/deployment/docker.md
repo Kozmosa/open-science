@@ -158,7 +158,10 @@ bash deploy/release-staging.sh smoke
 
 ## 监控栈
 
-三种 Docker Compose 文件均已内置 Prometheus + Grafana，详见 [监控栈](/observability/monitoring-stack)。
+三种 Docker Compose 文件均已内置 Prometheus、Grafana 与 Gatus，详见 [监控栈](/observability/monitoring-stack)。
+
+公开 uptime 状态页统一由 nginx 暴露在 `http(s)://<host>/uptime/`。Gatus 默认主动
+探测 production 与 staging 的 `/api/health`；固定 development 实例可以通过环境变量启用。
 
 | 部署方式 | Grafana 地址 | 默认账号 |
 |---------|-------------|---------|
@@ -166,7 +169,7 @@ bash deploy/release-staging.sh smoke
 | CPU-only（host 网络） | `http://<host>:8192/grafana` | OpenScience auth proxy |
 | GPU 版 | `http://<host>:8192/grafana` | OpenScience auth proxy |
 
-CPU-only 的后端 `18000`、Prometheus `9091` 和 Grafana `3000` 默认只监听
+CPU-only 的后端 `18000`、Prometheus `9091`、Grafana `3000` 和 Gatus `8080` 默认只监听
 `127.0.0.1`；外部浏览器只使用 `8192`。staging 使用不重叠的 loopback 端口
 `7192/17000/9092/2300`，因此可以与 production 同时运行。
 

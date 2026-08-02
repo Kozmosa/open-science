@@ -272,7 +272,7 @@ def test_production_release_builds_all_artifacts_before_compose_up() -> None:
     release = (repo_root / "deploy" / "release-production.sh").read_text(encoding="utf-8")
     dockerfile = (repo_root / "deploy" / "Dockerfile").read_text(encoding="utf-8")
 
-    for target in ("runtime", "web", "prometheus", "grafana"):
+    for target in ("runtime", "web", "prometheus", "grafana", "gatus"):
         assert f"build_target {target}" in build
     assert 'chmod 600 "${MANIFEST_PATH}"' in build
     assert '"${REPO_ROOT}/deploy/build-production.sh"' in release

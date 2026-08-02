@@ -187,6 +187,30 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  gatus:
+    image: docker.1ms.run/twinproduction/gatus:v5.36.0
+    restart: unless-stopped
+    container_name: ainrf-gatus
+    environment:
+      GATUS_WEB_ADDRESS: "0.0.0.0"
+      GATUS_WEB_PORT: "8080"
+      GATUS_PRODUCTION_HEALTH_URL: ${GATUS_PRODUCTION_HEALTH_URL:-http://nginx:8192/api/health}
+      GATUS_STAGING_HEALTH_URL: ${GATUS_STAGING_HEALTH_URL:-http://host.docker.internal:7192/api/health}
+      GATUS_DEVELOPMENT_ENABLED: ${GATUS_DEVELOPMENT_ENABLED:-false}
+      GATUS_DEVELOPMENT_HEALTH_URL: ${GATUS_DEVELOPMENT_HEALTH_URL:-http://host.docker.internal:41001/api/health}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config/gatus.yaml:/config/config.yaml:ro
+      - gatus-data:/data
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     image: docker.1ms.run/nginx:1.27-alpine
     restart: unless-stopped
@@ -200,6 +224,8 @@ services:
       ainrf:
         condition: service_healthy
       grafana:
+        condition: service_started
+      gatus:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8192/api/health"]
@@ -219,3 +245,4 @@ volumes:
   ainrf-tenants:
   prometheus-data:
   grafana-data:
+  gatus-data:
