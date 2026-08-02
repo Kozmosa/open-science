@@ -226,10 +226,31 @@ services:
     environment:
       GATUS_WEB_ADDRESS: "0.0.0.0"
       GATUS_WEB_PORT: "8080"
+      GATUS_PRODUCTION_WEB_URL: ${GATUS_PRODUCTION_WEB_URL:-http://nginx/}
       GATUS_PRODUCTION_HEALTH_URL: ${GATUS_PRODUCTION_HEALTH_URL:-http://nginx/api/health}
+      GATUS_PRODUCTION_SSH_ENABLED: ${GATUS_PRODUCTION_SSH_ENABLED:-true}
+      GATUS_PRODUCTION_MONITORING_ENABLED: ${GATUS_PRODUCTION_MONITORING_ENABLED:-true}
+      GATUS_PRODUCTION_WORKER_ENABLED: ${GATUS_PRODUCTION_WORKER_ENABLED:-true}
+      GATUS_PRODUCTION_PROMETHEUS_READY_URL: ${GATUS_PRODUCTION_PROMETHEUS_READY_URL:-http://prometheus:9090/-/ready}
+      GATUS_PRODUCTION_GRAFANA_HEALTH_URL: ${GATUS_PRODUCTION_GRAFANA_HEALTH_URL:-http://grafana:3000/api/health}
+      GATUS_PRODUCTION_WORKER_QUERY_URL: ${GATUS_PRODUCTION_WORKER_QUERY_URL:-http://prometheus:9090/api/v1/query?query=%28up%7Bjob%3D%22ainrf%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_dispatch_outbox_oldest_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
+      GATUS_STAGING_WEB_URL: ${GATUS_STAGING_WEB_URL:-http://host.docker.internal:7192/}
       GATUS_STAGING_HEALTH_URL: ${GATUS_STAGING_HEALTH_URL:-http://host.docker.internal:7192/api/health}
+      GATUS_STAGING_SSH_ENABLED: ${GATUS_STAGING_SSH_ENABLED:-false}
+      GATUS_STAGING_MONITORING_ENABLED: ${GATUS_STAGING_MONITORING_ENABLED:-true}
+      GATUS_STAGING_WORKER_ENABLED: ${GATUS_STAGING_WORKER_ENABLED:-true}
+      GATUS_STAGING_PROMETHEUS_READY_URL: ${GATUS_STAGING_PROMETHEUS_READY_URL:-http://host.docker.internal:9092/prometheus/-/ready}
+      GATUS_STAGING_GRAFANA_HEALTH_URL: ${GATUS_STAGING_GRAFANA_HEALTH_URL:-http://host.docker.internal:2300/grafana/api/health}
+      GATUS_STAGING_WORKER_QUERY_URL: ${GATUS_STAGING_WORKER_QUERY_URL:-http://host.docker.internal:9092/prometheus/api/v1/query?query=%28up%7Bjob%3D%22ainrf-staging%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_dispatch_outbox_oldest_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
       GATUS_DEVELOPMENT_ENABLED: ${GATUS_DEVELOPMENT_ENABLED:-false}
+      GATUS_DEVELOPMENT_WEB_URL: ${GATUS_DEVELOPMENT_WEB_URL:-http://host.docker.internal:41000/}
       GATUS_DEVELOPMENT_HEALTH_URL: ${GATUS_DEVELOPMENT_HEALTH_URL:-http://host.docker.internal:41001/api/health}
+      GATUS_DEVELOPMENT_SSH_ENABLED: ${GATUS_DEVELOPMENT_SSH_ENABLED:-false}
+      GATUS_DEVELOPMENT_MONITORING_ENABLED: ${GATUS_DEVELOPMENT_MONITORING_ENABLED:-false}
+      GATUS_DEVELOPMENT_WORKER_ENABLED: ${GATUS_DEVELOPMENT_WORKER_ENABLED:-false}
+      GATUS_DEVELOPMENT_PROMETHEUS_READY_URL: ${GATUS_DEVELOPMENT_PROMETHEUS_READY_URL:-http://host.docker.internal:41991/-/ready}
+      GATUS_DEVELOPMENT_GRAFANA_HEALTH_URL: ${GATUS_DEVELOPMENT_GRAFANA_HEALTH_URL:-http://host.docker.internal:41992/api/health}
+      GATUS_DEVELOPMENT_WORKER_QUERY_URL: ${GATUS_DEVELOPMENT_WORKER_QUERY_URL:-http://host.docker.internal:41991/api/v1/query?query=vector%281%29}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

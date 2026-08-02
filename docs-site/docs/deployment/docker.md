@@ -160,8 +160,10 @@ bash deploy/release-staging.sh smoke
 
 三种 Docker Compose 文件均已内置 Prometheus、Grafana 与 Gatus，详见 [监控栈](/observability/monitoring-stack)。
 
-公开 uptime 状态页统一由 nginx 暴露在 `http(s)://<host>/uptime/`。Gatus 默认主动
-探测 production 与 staging 的 `/api/health`；固定 development 实例可以通过环境变量启用。
+公开 uptime 状态页统一由 nginx 暴露在 `http(s)://<host>/uptime/`。Gatus 将 production、
+staging 和可选 development 拆成 Web、API、Database、Filesystem、Runtime、SSH、Worker、
+Prometheus 与 Grafana 组件探针。开发环境的 monitoring/worker/SSH 探针使用独立开关；所有
+公开卡片隐藏内部 URL、hostname 和错误信息，且 `/uptime/metrics` 不对公网开放。
 
 | 部署方式 | Grafana 地址 | 默认账号 |
 |---------|-------------|---------|

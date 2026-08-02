@@ -52,7 +52,7 @@ The CPU-only deployment includes Prometheus, Grafana, and Gatus with pre-configu
 
 - **Grafana dashboard**: `http://<host>:8192/grafana` — pre-provisioned `ainrf-overview` dashboard shows HTTP request rates, auth events, SSH connections, terminal exec denials, and DB query latency. Auth proxy is enabled (login via AINRF session).
 - **Prometheus**: scrapes `http://localhost:18000/metrics` every 15s; alert rules in `deploy/examples/prometheus-rules.example.yml` cover login failure rate, account lockouts, terminal exec denials, sensitive file access, high request/error rate. Copy to `deploy/config/prometheus/rules/ainrf.yml` and adjust thresholds.
-- **Gatus**: `http://<host>:8192/uptime/` is the public active-check dashboard. It probes production and staging `/api/health` by default; a stable worktree development URL is opt-in. Gatus metrics are scraped by Prometheus.
+- **Gatus**: `http://<host>:8192/uptime/` is the public active-check dashboard. Each environment is split into web, API, database, filesystem, runtime, SSH, task execution, Prometheus, and Grafana endpoints. Health subcomponents reuse `/api/health`; task execution uses a read-only Prometheus query covering scrape heartbeat, outbox age, and known telemetry state. Stable worktree development and its optional monitoring components are opt-in. Public endpoint cards hide URLs, hostnames, and errors. Gatus metrics remain available only on the direct loopback service for Prometheus; nginx returns 404 for `/uptime/metrics`.
 - **Alert routing**: Prometheus evaluates rules; to receive notifications, configure Alertmanager or Grafana alert channels (not included by default — add a Grafana contact point for email/Slack/webhook).
 
 ### LLM Observability (optional overlay)

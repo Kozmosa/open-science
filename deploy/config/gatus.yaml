@@ -305,7 +305,25 @@ ui:
     }
 
 endpoints:
-  - name: API
+  - name: Web App
+    group: Production
+    url: ${GATUS_PRODUCTION_WEB_URL}
+    interval: 30s
+    client:
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*OpenScience*)"
+      - "[RESPONSE_TIME] < 5000"
+    ui:
+      hide-url: true
+      hide-hostname: true
+      hide-errors: true
+    extra-labels:
+      environment: production
+      component: web
+
+  - name: Backend API
     group: Production
     url: ${GATUS_PRODUCTION_HEALTH_URL}
     interval: 30s
@@ -318,38 +336,337 @@ endpoints:
     ui:
       hide-url: true
       hide-hostname: true
+      hide-errors: true
     extra-labels:
       environment: production
+      component: api
 
-  - name: API
-    group: Staging
-    url: ${GATUS_STAGING_HEALTH_URL}
+  - name: Database
+    group: Production
+    url: ${GATUS_PRODUCTION_HEALTH_URL}
     interval: 30s
     client:
       timeout: 10s
     conditions:
       - "[STATUS] == 200"
-      - "[BODY].status == ok"
+      - "[BODY].checks.database.status == ok"
       - "[RESPONSE_TIME] < 5000"
     ui:
       hide-url: true
       hide-hostname: true
+      hide-errors: true
+    extra-labels:
+      environment: production
+      component: database
+
+  - name: Filesystem
+    group: Production
+    url: ${GATUS_PRODUCTION_HEALTH_URL}
+    interval: 30s
+    client:
+      timeout: 10s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.filesystem.status == ok"
+    ui: &private-ui
+      hide-url: true
+      hide-hostname: true
+      hide-errors: true
+    extra-labels:
+      environment: production
+      component: filesystem
+
+  - name: Runtime
+    group: Production
+    url: ${GATUS_PRODUCTION_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.runtime.status != unhealthy"
+    ui: *private-ui
+    extra-labels:
+      environment: production
+      component: runtime
+
+  - name: SSH
+    group: Production
+    enabled: ${GATUS_PRODUCTION_SSH_ENABLED}
+    url: ${GATUS_PRODUCTION_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].container_health.ssh_ok == true"
+    ui: *private-ui
+    extra-labels:
+      environment: production
+      component: ssh
+
+  - name: Task Execution / Worker
+    group: Production
+    enabled: ${GATUS_PRODUCTION_WORKER_ENABLED}
+    url: ${GATUS_PRODUCTION_WORKER_QUERY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == success"
+      - "len([BODY].data.result) > 0"
+    ui: *private-ui
+    extra-labels:
+      environment: production
+      component: task-execution
+
+  - name: Prometheus
+    group: Production
+    enabled: ${GATUS_PRODUCTION_MONITORING_ENABLED}
+    url: ${GATUS_PRODUCTION_PROMETHEUS_READY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+    ui: *private-ui
+    extra-labels:
+      environment: production
+      component: prometheus
+
+  - name: Grafana
+    group: Production
+    enabled: ${GATUS_PRODUCTION_MONITORING_ENABLED}
+    url: ${GATUS_PRODUCTION_GRAFANA_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].database == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: production
+      component: grafana
+
+  - name: Web App
+    group: Staging
+    url: ${GATUS_STAGING_WEB_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*OpenScience*)"
+      - "[RESPONSE_TIME] < 5000"
+    ui: *private-ui
     extra-labels:
       environment: staging
+      component: web
 
-  - name: API
+  - name: Backend API
+    group: Staging
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: api
+
+  - name: Database
+    group: Staging
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.database.status == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: database
+
+  - name: Filesystem
+    group: Staging
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.filesystem.status == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: filesystem
+
+  - name: Runtime
+    group: Staging
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.runtime.status != unhealthy"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: runtime
+
+  - name: SSH
+    group: Staging
+    enabled: ${GATUS_STAGING_SSH_ENABLED}
+    url: ${GATUS_STAGING_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].container_health.ssh_ok == true"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: ssh
+
+  - name: Task Execution / Worker
+    group: Staging
+    enabled: ${GATUS_STAGING_WORKER_ENABLED}
+    url: ${GATUS_STAGING_WORKER_QUERY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == success"
+      - "len([BODY].data.result) > 0"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: task-execution
+
+  - name: Prometheus
+    group: Staging
+    enabled: ${GATUS_STAGING_MONITORING_ENABLED}
+    url: ${GATUS_STAGING_PROMETHEUS_READY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: prometheus
+
+  - name: Grafana
+    group: Staging
+    enabled: ${GATUS_STAGING_MONITORING_ENABLED}
+    url: ${GATUS_STAGING_GRAFANA_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].database == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: staging
+      component: grafana
+
+  - name: Web App
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_ENABLED}
+    url: ${GATUS_DEVELOPMENT_WEB_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY] == pat(*OpenScience*)"
+      - "[RESPONSE_TIME] < 5000"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: web
+
+  - name: Backend API
     group: Development
     enabled: ${GATUS_DEVELOPMENT_ENABLED}
     url: ${GATUS_DEVELOPMENT_HEALTH_URL}
     interval: 30s
-    client:
-      timeout: 10s
     conditions:
       - "[STATUS] == 200"
       - "[BODY].status == ok"
-      - "[RESPONSE_TIME] < 5000"
-    ui:
-      hide-url: true
-      hide-hostname: true
+    ui: *private-ui
     extra-labels:
       environment: development
+      component: api
+
+  - name: Database
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_ENABLED}
+    url: ${GATUS_DEVELOPMENT_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.database.status == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: database
+
+  - name: Filesystem
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_ENABLED}
+    url: ${GATUS_DEVELOPMENT_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.filesystem.status == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: filesystem
+
+  - name: Runtime
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_ENABLED}
+    url: ${GATUS_DEVELOPMENT_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].checks.runtime.status != unhealthy"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: runtime
+
+  - name: SSH
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_SSH_ENABLED}
+    url: ${GATUS_DEVELOPMENT_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].container_health.ssh_ok == true"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: ssh
+
+  - name: Task Execution / Worker
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_WORKER_ENABLED}
+    url: ${GATUS_DEVELOPMENT_WORKER_QUERY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == success"
+      - "len([BODY].data.result) > 0"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: task-execution
+
+  - name: Prometheus
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_MONITORING_ENABLED}
+    url: ${GATUS_DEVELOPMENT_PROMETHEUS_READY_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: prometheus
+
+  - name: Grafana
+    group: Development
+    enabled: ${GATUS_DEVELOPMENT_MONITORING_ENABLED}
+    url: ${GATUS_DEVELOPMENT_GRAFANA_HEALTH_URL}
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].database == ok"
+    ui: *private-ui
+    extra-labels:
+      environment: development
+      component: grafana

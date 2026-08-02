@@ -152,13 +152,47 @@ def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> N
     assert config["ui"]["buttons"] == [{"name": "OpenScience", "link": "/"}]
     assert "--osci-shadow-card" in config["ui"]["custom-css"]
     assert ".endpoint-group" in config["ui"]["custom-css"]
-    assert [endpoint["group"] for endpoint in config["endpoints"]] == [
+    endpoints = config["endpoints"]
+    expected_components = {
+        "web",
+        "api",
+        "database",
+        "filesystem",
+        "runtime",
+        "ssh",
+        "task-execution",
+        "prometheus",
+        "grafana",
+    }
+    assert {endpoint["group"] for endpoint in endpoints} == {
         "Production",
         "Staging",
         "Development",
-    ]
-    assert config["endpoints"][2]["enabled"] == "${GATUS_DEVELOPMENT_ENABLED}"
-    assert all(endpoint["ui"]["hide-hostname"] for endpoint in config["endpoints"])
+    }
+    for environment, group in (
+        ("production", "Production"),
+        ("staging", "Staging"),
+        ("development", "Development"),
+    ):
+        grouped = [endpoint for endpoint in endpoints if endpoint["group"] == group]
+        assert {endpoint["extra-labels"]["component"] for endpoint in grouped} == (
+            expected_components
+        )
+        assert all(endpoint["extra-labels"]["environment"] == environment for endpoint in grouped)
+    assert all(endpoint["ui"]["hide-url"] for endpoint in endpoints)
+    assert all(endpoint["ui"]["hide-hostname"] for endpoint in endpoints)
+    assert all(endpoint["ui"]["hide-errors"] for endpoint in endpoints)
+    assert (
+        next(endpoint for endpoint in endpoints if endpoint["name"] == "Web App")["conditions"][1]
+        == "[BODY] == pat(*OpenScience*)"
+    )
+    worker = next(
+        endpoint
+        for endpoint in endpoints
+        if endpoint["group"] == "Production"
+        and endpoint["extra-labels"]["component"] == "task-execution"
+    )
+    assert "len([BODY].data.result) > 0" in worker["conditions"]
     dockerfile = (root / "deploy/Dockerfile").read_text(encoding="utf-8")
     assert "twinproduction/gatus:v5.36.0 AS gatus" in dockerfile
 
@@ -171,8 +205,13 @@ def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> N
     ):
         nginx_config = (root / relative_path).read_text(encoding="utf-8")
         assert "location = /uptime" in nginx_config
+        assert "location = /uptime/metrics" in nginx_config
+        assert "return 404;" in nginx_config
         assert "location /uptime/" in nginx_config
         assert "sub_filter '\"/api/v1' '\"/uptime/api/v1';" in nginx_config
         assert "sub_filter '`/api/v1' '`/uptime/api/v1';" in nginx_config
         assert "'(0,i.PO)(\"/\")' '(0,i.PO)(\"/uptime/\")'" in nginx_config
+        assert nginx_config.index("location = /uptime/metrics") < nginx_config.index(
+            "location /uptime/"
+        )
         assert nginx_config.index("location /uptime/") < nginx_config.index("location /api/")

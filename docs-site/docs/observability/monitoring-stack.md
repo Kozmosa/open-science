@@ -67,12 +67,30 @@ Gatus 本身同样只监听 production loopback `127.0.0.1:8080`，由 nginx 通
 `/uptime/` 前缀提供状态页。OpenScience 的 `/api/*` 和 `/assets/*` 仍由原服务处理；
 nginx 将 Gatus 的绝对资源与 API 地址限制改写到 `/uptime/*`，避免路由冲突。Gatus 固定
 使用 v5.36.0；升级时必须重新执行子路径 smoke，因为上游尚未原生支持 base path。
-状态页通过 Gatus `ui.custom-css` 使用 OpenScience 标记、配色、字体、间距、圆角和卡片层级；
-endpoint 内部 hostname 默认隐藏，避免公开状态页暴露内部网络命名。
+状态页通过 Gatus `ui.custom-css` 使用 OpenScience 标记、配色、字体、间距、圆角和卡片层级。
+所有 endpoint 都隐藏 URL、hostname 和错误详情，避免公开内部拓扑或失败响应。
 
-默认启用 production `:8192/api/health` 与 staging `:7192/api/health` 探测。worktree
-development 端口是派生值，因此默认关闭；要监控一套稳定 dev 实例，设置
-`GATUS_DEVELOPMENT_ENABLED=true` 和对应的 `GATUS_DEVELOPMENT_HEALTH_URL`。
+每个环境按稳定 `component` 标签拆成独立探针：
+
+| 组件 | 探测契约 |
+|------|----------|
+| Web App | 从 nginx 用户入口请求 `/`，要求 200 且页面包含 `OpenScience` 标记 |
+| Backend API | 请求 `/api/health`，要求整体状态 `ok` |
+| Database / Filesystem | 复用 `/api/health`，分别检查对应 `checks.*.status == ok` |
+| Runtime | 复用 `/api/health`，允许可解释的 `degraded`，拒绝 `unhealthy` |
+| SSH | 复用 `/api/health` 的 `container_health.ssh_ok`；仅在对应环境启用 runtime reconciliation 时开启 |
+| Task Execution / Worker | 通过 Prometheus HTTP query API 检查 API scrape heartbeat、domain telemetry scrape、outbox 最老消息小于 300 秒及 risk state 已知 |
+| Prometheus | 请求直接服务的 `/-/ready`（带当前 route prefix） |
+| Grafana | 请求直接服务的 `/api/health`（带当前 subpath）并检查数据库状态 |
+
+production 与 staging 默认启用核心和监控探针；staging SSH 默认关闭。worktree development
+端口是派生值且默认没有 Prometheus/Grafana，因此 `GATUS_DEVELOPMENT_ENABLED`、
+`GATUS_DEVELOPMENT_MONITORING_ENABLED`、`GATUS_DEVELOPMENT_WORKER_ENABLED` 和 SSH 开关均需
+指向稳定实例后显式启用。
+
+自定义状态页可读取 `/uptime/api/v1/endpoints/statuses`，以及单 endpoint 的
+`statuses`、`uptimes/{duration}` 和 `response-times/{duration}/history` API。公网
+`/uptime/metrics` 明确返回 404；Prometheus 仍通过 loopback 上的 Gatus 原生 `/metrics` 抓取。
 
 :::caution
 默认密码 `ainrf-grafana` 仅用于初次登录。生产环境请在 `.env` 中设置 `GRAFANA_ADMIN_PASSWORD` 为强密码。
