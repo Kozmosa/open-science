@@ -130,6 +130,8 @@ services:
         soft: 65536
         hard: 65536
     command: ["openscience", "domain-worker", "--state-root", "/opt/ainrf/state"]
+    healthcheck:
+      disable: true
     depends_on:
       ainrf:
         condition: service_healthy
@@ -191,7 +193,9 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
     volumes:
       - ainrf-state:/opt/ainrf/state
-    command: ["dramatiq", "ainrf.literature.tasks", "--processes", "1", "--threads", "2"]
+    command: ["python", "-m", "dramatiq", "ainrf.literature.tasks", "--processes", "1", "--threads", "2"]
+    healthcheck:
+      disable: true
     depends_on:
       ainrf:
         condition: service_healthy

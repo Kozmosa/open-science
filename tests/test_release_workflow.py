@@ -106,8 +106,13 @@ def test_production_monitoring_services_use_runtime_ports_and_readable_config() 
     )
 
     redis = compose["services"]["literature-redis"]
+    domain_worker = compose["services"]["domain-worker"]
+    literature_worker = compose["services"]["literature-worker"]
     assert redis["command"][redis["command"].index("--port") + 1] == "16379"
     assert "redis-cli -p 16379" in redis["healthcheck"]["test"][1]
+    assert domain_worker["healthcheck"] == {"disable": True}
+    assert literature_worker["command"][:3] == ["python", "-m", "dramatiq"]
+    assert literature_worker["healthcheck"] == {"disable": True}
     assert "FROM docker.1ms.run/prom/prometheus:v3.3.1 AS prometheus\nUSER root" in dockerfile
     assert "RUN chmod -R a+rX /etc/prometheus" in dockerfile
     assert "RUN chmod -R a+rX /etc/prometheus\nUSER nobody" in dockerfile
