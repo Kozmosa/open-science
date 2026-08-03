@@ -32,6 +32,10 @@ const config = defineConfig({
     // manifest and asset budgets run after every production build.
     chunkSizeWarningLimit: 3700,
     rollupOptions: {
+      input: {
+        app: resolve(__dirname, 'index.html'),
+        status: resolve(__dirname, 'status/index.html'),
+      },
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) {

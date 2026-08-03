@@ -208,6 +208,8 @@ def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> N
         assert "location = /uptime/metrics" in nginx_config
         assert "return 404;" in nginx_config
         assert "location /uptime/" in nginx_config
+        assert "location = /status {" in nginx_config
+        assert "return 301 /status/;" in nginx_config
         assert "sub_filter '\"/api/v1' '\"/uptime/api/v1';" in nginx_config
         assert "sub_filter '`/api/v1' '`/uptime/api/v1';" in nginx_config
         assert "'(0,i.PO)(\"/\")' '(0,i.PO)(\"/uptime/\")'" in nginx_config
