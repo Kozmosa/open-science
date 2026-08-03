@@ -21,7 +21,7 @@ from urllib.request import urlopen
 import pytest
 import yaml
 
-pytestmark = [pytest.mark.cli]
+pytestmark = [pytest.mark.cli, pytest.mark.concurrent]
 
 
 def _free_port() -> int:
