@@ -21,6 +21,7 @@ import {
   getTasks,
   listCanonicalTaskItems,
   retryTask,
+  updateTask,
 } from '@features/tasks/api';
 import { getCodexDefaults, getSkills } from '@features/settings/api';
 import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
@@ -233,6 +234,7 @@ vi.mock('@features/tasks/api', () => ({
   getTasks: vi.fn(),
   listCanonicalTaskItems: vi.fn(),
   retryTask: vi.fn(),
+  updateTask: vi.fn(),
 }));
 vi.mock('@features/settings/api', () => ({
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
@@ -358,6 +360,7 @@ vi.mock('@features/auth', async (importOriginal) => {
 });
 
 const mockCreateTask = vi.mocked(createTask);
+const mockUpdateTask = vi.mocked(updateTask);
 const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
@@ -381,6 +384,7 @@ beforeEach(() => {
   window.localStorage.clear();
 
   mockCreateTask.mockReset();
+  mockUpdateTask.mockReset();
   mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
@@ -433,6 +437,11 @@ beforeEach(() => {
     submission_id: 'retry-submission', task_id: 'task-1', reserved_turn_id: 'retry-turn',
     status: 'queued', disposition: 'queued',
   });
+  mockUpdateTask.mockImplementation(async (taskId, data) => ({
+    ...taskSummary,
+    task_id: taskId,
+    title: data.title ?? taskSummary.title,
+  }));
 });
 
 describe('task output helpers', () => {
@@ -524,6 +533,48 @@ describe('task output helpers', () => {
 });
 
 describe('TasksPage', () => {
+  it('hides failed and cancelled Tasks by default and reveals them on request', async () => {
+    const failedTask = { ...taskSummary, task_id: 'task-failed', title: 'Failed task', status: 'failed' as const };
+    const cancelledTask = { ...taskSummary, task_id: 'task-cancelled', title: 'Cancelled task', status: 'cancelled' as const };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, failedTask, cancelledTask] });
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?drawer=closed' });
+
+    expect(await screen.findByRole('button', { name: 'Train model' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Failed task' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancelled task' })).not.toBeInTheDocument();
+    expect(screen.getByText('1 total · canonical Item polling')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Show failed/cancelled'));
+
+    expect(await screen.findByRole('button', { name: 'Failed task' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelled task' })).toBeInTheDocument();
+    expect(screen.getByText('3 total · canonical Item polling')).toBeInTheDocument();
+  });
+
+  it('renames a Task inline from its title and exposes the AI rename placeholder', async () => {
+    const renamedTask = { ...taskSummary, title: 'Renamed task' };
+    mockUpdateTask.mockResolvedValue(renamedTask);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?drawer=closed' });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Task name' }));
+    const input = screen.getByRole('textbox', { name: 'Task name' });
+    fireEvent.change(input, { target: { value: '  Renamed task  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(mockUpdateTask).toHaveBeenCalledWith(
+      'task-1',
+      { title: 'Renamed task' },
+      expect.stringMatching(/^task\.rename/),
+    ));
+    expect(await screen.findByText('Renamed task')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh task name with AI' })).toHaveAttribute(
+      'title',
+      'AI task naming is coming soon',
+    );
+  });
+
   it('keeps a newly forked Task selected after the Task list refreshes', async () => {
     const user = userEvent.setup();
     const forkedTask = {
@@ -581,6 +632,7 @@ describe('TasksPage', () => {
 
     renderWithProviders(<TasksPage />, { client, route: '/tasks?task=task-1' });
 
+    await user.click(await screen.findByLabelText('Show failed/cancelled'));
     await screen.findByRole('heading', { name: 'Train model' });
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Retry as new Turn' }));

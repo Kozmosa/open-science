@@ -11,6 +11,7 @@ import {
   moveTask,
   retryTask,
   unarchiveTask,
+  updateTask,
 } from '../api';
 import { Button, Checkbox, Dialog, FormField, NativeSelect, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
@@ -70,6 +71,7 @@ function TasksPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
+  const [showFailedOrCancelled, setShowFailedOrCancelled] = useState(false);
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const pageVisible = usePageVisibility();
   const isNarrow = useMediaQuery(NARROW_TASKS_QUERY);
@@ -80,7 +82,13 @@ function TasksPage() {
     refetchInterval: pageVisible && !streamConnected ? 15_000 : false,
   });
 
-  const tasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
+  const fetchedTasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
+  const tasks = useMemo(
+    () => showFailedOrCancelled
+      ? fetchedTasks
+      : fetchedTasks.filter((task) => task.status !== 'failed' && task.status !== 'cancelled'),
+    [fetchedTasks, showFailedOrCancelled],
+  );
 
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
@@ -98,6 +106,7 @@ function TasksPage() {
   const retryKeyManager = useRef(new IdempotencyKeyManager('task.retry')).current;
   const moveKeyManager = useRef(new IdempotencyKeyManager('task.move')).current;
   const forkKeyManager = useRef(new IdempotencyKeyManager('task.fork')).current;
+  const renameKeyManager = useRef(new IdempotencyKeyManager('task.rename')).current;
 
   const requestedTaskId = searchParams.get('task');
   const effectiveSelectedTaskId = useMemo(() => {
@@ -253,6 +262,27 @@ function TasksPage() {
     },
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
+      const key = renameKeyManager.keyFor(semanticMutationValue({ taskId, title }));
+      return { task: await updateTask(taskId, { title }, key), key };
+    },
+    onSuccess: ({ task, key }) => {
+      renameKeyManager.markSucceeded(key);
+      queryClient.setQueriesData<TaskListResponse>(
+        { queryKey: queryKeys.tasks.all },
+        (current) => current ? {
+          ...current,
+          items: current.items.map((item) => item.task_id === task.task_id ? { ...item, ...task } : item),
+        } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(task.task_id) });
+    },
+    onError: () => {
+      showToast(t('pages.tasks.renameFailed'), 'error');
+    },
+  });
+
   const targetContextQuery = useQuery({
     queryKey: queryKeys.domain.projectContext(targetProjectId || null),
     queryFn: () => getDomainProjectContext(targetProjectId),
@@ -392,14 +422,24 @@ function TasksPage() {
             <option value="created">{t('pages.tasks.sort.created')}</option>
             <option value="name">{t('pages.tasks.sort.name')}</option>
           </NativeSelect>
-          <label htmlFor="tasks-show-archived" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--osci-color-text-muted)]">
-            <Checkbox
-              id="tasks-show-archived"
-              checked={showArchived}
-              onCheckedChange={(checked) => setShowArchived(checked === true)}
-            />
-            {t('pages.tasks.actions.showArchived')}
-          </label>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            <label htmlFor="tasks-show-failed-cancelled" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--osci-color-text-muted)]">
+              <Checkbox
+                id="tasks-show-failed-cancelled"
+                checked={showFailedOrCancelled}
+                onCheckedChange={(checked) => setShowFailedOrCancelled(checked === true)}
+              />
+              {t('pages.tasks.actions.showFailedOrCancelled')}
+            </label>
+            <label htmlFor="tasks-show-archived" className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[var(--osci-color-text-muted)]">
+              <Checkbox
+                id="tasks-show-archived"
+                checked={showArchived}
+                onCheckedChange={(checked) => setShowArchived(checked === true)}
+              />
+              {t('pages.tasks.actions.showArchived')}
+            </label>
+          </div>
         </div>
       </div>
 
@@ -410,6 +450,15 @@ function TasksPage() {
         searchQuery={taskSearchQuery}
         onSearchQueryChange={setTaskSearchQuery}
         onSelectTask={selectTask}
+        canRenameTask={(task) => Boolean(
+          user
+          && (user.role === 'admin' || task.owner_user_id === user.id)
+          && domainProjectsQuery.data?.items.some(
+            (project) => project.project_id === task.project_id && project.status === 'active',
+          )
+        )}
+        onRenameTask={(taskId, title) => renameMutation.mutate({ taskId, title })}
+        renamingTaskId={renameMutation.isPending ? renameMutation.variables?.taskId ?? null : null}
       />
     </div>
   );
