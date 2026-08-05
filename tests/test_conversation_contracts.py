@@ -8,7 +8,6 @@ from ainrf.domain.conversation_contracts import (
     CapabilityDeclaration,
     CapabilitySupport,
     CompatibilityBehavior,
-    ConversationAuthority,
     ConversationContractError,
     ConversationErrorCode,
     ControlKind,
@@ -36,7 +35,6 @@ from ainrf.domain.conversation_contracts import (
     require_submission_transition,
     require_task_work_transition,
     require_turn_transition,
-    require_v3_write_authority,
     translate_codex_active_flag,
     translate_codex_runtime_state,
     translate_codex_turn_status,
@@ -169,15 +167,6 @@ def test_runtime_projection_keeps_flags_orthogonal_to_work_status() -> None:
             state=RuntimeProjectionState.IDLE,
             active_flags=(RuntimeActiveFlag.WAITING_ON_USER_INPUT,),
         )
-
-
-def test_legacy_task_rejects_new_conversation_writes() -> None:
-    require_v3_write_authority(ConversationAuthority.CONVERSATION_V3)
-
-    with pytest.raises(ConversationContractError) as caught:
-        require_v3_write_authority(ConversationAuthority.LEGACY_ATTEMPT)
-
-    assert caught.value.code is ConversationErrorCode.MIGRATION_REQUIRED
 
 
 def test_capability_contract_distinguishes_provider_from_adapter() -> None:

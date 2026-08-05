@@ -464,39 +464,10 @@ class ClaudeCodeEngine(HarnessEngine):
     ) -> str:
         """Build the prompt for a fresh (non-resume) session.
 
-        When *pending* messages exist (retry / continue) and
-        ``context.prior_messages`` is available, we inject the prior
-        conversation as a degraded context prefix so the model has
-        awareness of earlier turns even though the fresh session lacks
-        tool-execution history.
+        When *pending* messages exist (retry / continue), use the queued
+        message; otherwise use the current rendered prompt.
         """
-        if pending:
-            message = pending[0]
-        else:
-            message = context.rendered_prompt
-
-        if not context.prior_messages:
-            return message
-
-        prior = context.prior_messages
-        if len(prior) > 100:
-            prior = prior[-100:]
-
-        lines: list[str] = []
-        lines.append(
-            "[Previous conversation — recovered from task history. "
-            "You are continuing a prior session whose state was lost. "
-            "You do NOT remember the exact tool calls or file edits "
-            "from the prior session, but the messages below summarize "
-            "what was discussed. Resume from the last checkpoint and "
-            "use Read / Bash to re-discover the current file state.]"
-        )
-        for msg in prior:
-            role_label = "User" if msg["role"] == "user" else "Assistant"
-            lines.append(f"{role_label}: {msg['content']}")
-        lines.append("---")
-        lines.append(message)
-        return "\n\n".join(lines)
+        return pending[0] if pending else context.rendered_prompt
 
     @staticmethod
     def _mount_skills(context: ExecutionContext) -> list[Path]:

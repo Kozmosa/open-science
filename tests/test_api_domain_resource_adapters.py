@@ -20,21 +20,20 @@ from ainrf.environments.models import (
 )
 from ainrf.environments.probing import EnvironmentProbeOutcome
 from ainrf.monitor.service import ResourceMonitorService
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-from tests.testutil import seed_user
+from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state, seed_user
 
 pytestmark = [pytest.mark.api]
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    """Create a v2 application behind the real committed-cutover fuse."""
+    """Create a current application behind the real release-artifact fence."""
 
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("resource-adapter-key")}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
     return app
@@ -567,14 +566,14 @@ async def test_domain_project_write_requires_a_stable_idempotency_transport(
 
 
 @pytest.mark.anyio
-async def test_domain_routes_fail_closed_when_cutover_readiness_is_lost(
+async def test_domain_routes_fail_closed_when_current_readiness_is_lost(
     state_root: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     headers = _headers(app, "readiness-owner", "readiness-owner", "member")
-    monkeypatch.setattr(app.state.project_module, "v2_ready", lambda: False)
+    monkeypatch.setattr(app.state.project_module, "ready", lambda: False)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"

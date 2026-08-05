@@ -14,7 +14,7 @@ export function capabilityAvailability(
   if (capabilities[capability]) {
     return { available: true, reason: null };
   }
-  if (capability === 'standard_task_create' || capability === 'task_attempts') {
+  if (capability === 'standard_task_create') {
     if (capabilities.task_dispatcher.maintenance_active) {
       return { available: false, reason: 'Task execution is paused for maintenance.' };
     }
@@ -32,7 +32,6 @@ export function capabilityAvailability(
     standard_task_create: 'Standard task creation',
     project_context: 'Project Context',
     workspace_links: 'Workspace linking',
-    task_attempts: 'Task Attempt history',
     literature_research_task: 'Literature research tasks',
     overview_snapshot: 'Today overview',
   };

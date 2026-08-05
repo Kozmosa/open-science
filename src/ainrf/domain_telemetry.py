@@ -33,16 +33,14 @@ import structlog
 
 _LOG = structlog.get_logger("domain_telemetry")
 
-_DOMAIN_MODES = ("legacy", "prepared", "v2", "unknown")
-_RUNTIME_MODES = ("legacy", "validate", "v2", "unknown")
-_OUTBOX_BACKLOG_STATES = (
-    "pending",
-    "expired_claimed",
-    "expired_dispatched",
-    "launch_unknown",
+_SUBMISSION_BACKLOG_STATES = (
+    "queued",
+    "stale_claimed",
+    "stale_delivering",
+    "delivery_unknown",
 )
+_SUBMISSION_STALE_AFTER_SECONDS = 30.0
 _IDEMPOTENCY_OUTCOMES = ("accepted", "missing", "invalid", "conflict", "reused", "stored", "other")
-_LEGACY_WRITE_SOURCES = ("legacy_json", "other")
 _PERMISSION_RESOURCES = (
     "project",
     "workspace",
@@ -83,11 +81,6 @@ _SQLITE_ERROR_TYPES = (
     "other",
 )
 _SQLITE_ERROR_KINDS = ("busy_or_locked", "readonly", "corrupt", "other")
-_ORPHAN_REASONS = (
-    "missing_task",
-    "missing_context_snapshot",
-    "queued_without_recoverable_dispatch",
-)
 _SAGA_STATUSES = (
     "pending",
     "creating_task",
@@ -138,7 +131,6 @@ _SENSITIVE_FIELD_PARTS = (
 _PATH_FIELD_PARTS = ("path", "directory", "cwd", "root")
 _SAFE_STRING_FIELD_NAMES = frozenset(
     {
-        "attempt_id",
         "component",
         "environment_id",
         "error_type",
@@ -155,13 +147,14 @@ _SAFE_STRING_FIELD_NAMES = frozenset(
         "replacement",
         "resource",
         "route",
-        "run_id",
-        "runtime_session_id",
+        "runtime_execution_id",
         "scope",
         "source",
         "status",
+        "submission_id",
         "task_id",
         "trigger",
+        "turn_id",
         "user_id",
         "workspace_id",
     }
@@ -169,10 +162,9 @@ _SAFE_STRING_FIELD_NAMES = frozenset(
 _TELEMETRY_STORE_FILENAME = "domain_telemetry.sqlite3"
 _TELEMETRY_ANCHOR_FILENAME = "domain_telemetry_anchor.json"
 _TELEMETRY_DELIVERY_FAILURE_LATCH_FILENAME = "domain_telemetry_delivery_failure.json"
-_TELEMETRY_STORE_SCHEMA_VERSION = 2
+_TELEMETRY_STORE_SCHEMA_VERSION = 3
 _DURABLE_COUNTER_LABEL_VALUES: dict[str, dict[str, tuple[str, ...]]] = {
     "ainrf_domain_idempotency_requests_total": {"outcome": _IDEMPOTENCY_OUTCOMES},
-    "ainrf_domain_legacy_write_attempts_total": {"source": _LEGACY_WRITE_SOURCES},
     "ainrf_domain_literature_saga_events_total": {"outcome": _SAGA_EVENT_OUTCOMES},
     "ainrf_domain_overview_refresh_events_total": {
         "outcome": _OVERVIEW_EVENT_OUTCOMES,
@@ -192,52 +184,30 @@ _DURABLE_COUNTER_LABELS: dict[str, tuple[str, ...]] = {
     name: tuple(values) for name, values in _DURABLE_COUNTER_LABEL_VALUES.items()
 }
 
-_V2_DOMAIN_CONTRACT_VERSION = 2
-_V2_MIN_SOURCE_SCHEMA_VERSION: dict[str, int] = {
-    "agentic_researcher": 25,
+_CURRENT_MIN_SOURCE_SCHEMA_VERSION: dict[str, int] = {
+    "agentic_researcher": 33,
     "auth": 7,
-    "literature": 6,
+    "literature": 7,
 }
-_V2_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+_CURRENT_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "_schema_version": ("database", "version"),
-    "domain_cutover_state": (
-        "singleton",
-        "state",
-        "contract_version",
-        "schema_version",
-        "cutover_epoch",
-        "constraints_ready",
-        "cutover_ready",
-        "committed_at",
-        "cutover_run_id",
-        "artifact_sha",
-        "artifact_contract_min",
-        "artifact_contract_max",
-        "artifact_schema_min",
-        "artifact_schema_max",
-        "backup_manifest_sha256",
-        "backup_tree_sha256",
-        "restore_evidence_sha256",
-        "source_inventory_sha256",
-        "preparation_digest",
-    ),
-    "tasks": ("task_id",),
-    "agent_task_attempts": ("attempt_id", "task_id", "status", "context_snapshot_id"),
-    "context_snapshots": ("context_snapshot_id",),
-    "task_dispatch_outbox": (
+    "tasks": ("task_id", "status", "updated_at"),
+    "conversation_task_authorities": ("task_id", "authority"),
+    "task_turns": ("turn_id", "task_id", "status", "updated_at"),
+    "turn_submissions": (
+        "submission_id",
         "task_id",
-        "attempt_id",
         "status",
         "created_at",
-        "next_attempt_at",
-        "claim_expires_at",
-        "claim_heartbeat_at",
+        "claimed_at",
+        "delivering_at",
         "updated_at",
-        "launch_unknown_at",
     ),
+    "next_turn_submissions": ("submission_id", "task_id", "status"),
+    "runtime_executions": ("runtime_execution_id", "task_id", "turn_id", "status", "updated_at"),
     "domain_idempotency_requests": ("actor_user_id", "scope", "idempotency_key"),
 }
-_V2_AUTH_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+_CURRENT_AUTH_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "_schema_version": ("database", "version"),
     "users": ("id", "status"),
     "environment_access": (
@@ -249,7 +219,7 @@ _V2_AUTH_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "revoked_at",
     ),
 }
-_V2_LITERATURE_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+_CURRENT_LITERATURE_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "_schema_version": ("database", "version"),
     "literature_research_task_intents": (
         "intent_id",
@@ -262,7 +232,7 @@ _V2_LITERATURE_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "updated_at",
     ),
 }
-_V2_OVERVIEW_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+_CURRENT_OVERVIEW_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "overview_snapshots": (
         "snapshot_id",
         "owner_user_id",
@@ -294,11 +264,8 @@ _LAST_SUCCESS_TIMESTAMPS: dict[Path, float] = {}
 class DomainTelemetrySnapshot:
     """The durable values emitted during one Prometheus scrape."""
 
-    mode: str
-    contract_version: int
-    outbox_oldest_age_seconds: float
-    outbox_backlog_count: int
-    orphan_attempt_count: int
+    submission_oldest_pending_age_seconds: float
+    submission_backlog_count: int
     idempotency_record_count: int
     literature_pending_age_seconds: float
     overview_oldest_age_seconds: float
@@ -311,8 +278,7 @@ class _CollectedDomainMetrics:
     """One complete, internally consistent durable scrape result."""
 
     snapshot: DomainTelemetrySnapshot
-    outbox_backlog: Mapping[str, int]
-    orphan_attempts: Mapping[str, int]
+    submission_backlog: Mapping[str, int]
     saga_counts: Mapping[str, int]
     overview_job_counts: Mapping[str, int]
     overview_card_states: Mapping[str, int]
@@ -324,7 +290,7 @@ class _TelemetryStoreError(RuntimeError):
 
 
 class _TelemetrySourceReadinessError(_TelemetryStoreError):
-    """A v2 scrape lacks a required authoritative telemetry source."""
+    """A current-product scrape lacks a required authoritative source."""
 
     def __init__(self, source: str, state: str) -> None:
         super().__init__(f"domain telemetry source {source} is {state}")
@@ -358,19 +324,6 @@ def domain_telemetry_state_root_for_database(db_path: str | Path) -> Path | None
     except (OSError, ValueError):
         return None
     return path.parent.parent if path.parent.name == "runtime" else None
-
-
-def domain_telemetry_state_root_for_path(path: str | Path) -> Path | None:
-    """Resolve a state root for a runtime artifact without logging its path."""
-
-    try:
-        resolved = Path(path).resolve()
-    except (OSError, ValueError):
-        return None
-    for candidate in (resolved, *resolved.parents):
-        if candidate.name == "runtime":
-            return candidate.parent
-    return None
 
 
 def _counter(
@@ -747,27 +700,6 @@ def log_domain_event(event: str, /, **fields: object) -> None:
     _LOG.info(event, **_redacted_fields(fields))
 
 
-def record_legacy_write_attempt(
-    *,
-    source: str,
-    path: str | Path | None = None,
-    state_root: Path | None = None,
-) -> None:
-    """Record a blocked attempt to alter a sealed legacy source."""
-
-    normalized_source = _bounded_label(source, _LEGACY_WRITE_SOURCES)
-    inferred_root = state_root or (
-        domain_telemetry_state_root_for_path(path) if path is not None else None
-    )
-    _counter(
-        "ainrf_domain_legacy_write_attempts_total",
-        {"source": normalized_source},
-        durable=True,
-        state_root=inferred_root,
-    )
-    log_domain_event("domain_legacy_write_blocked", source=normalized_source, path=path)
-
-
 def record_idempotency_event(
     outcome: str,
     *,
@@ -777,9 +709,9 @@ def record_idempotency_event(
     project_id: str | None = None,
     workspace_id: str | None = None,
     task_id: str | None = None,
-    attempt_id: str | None = None,
-    runtime_session_id: str | None = None,
-    run_id: str | None = None,
+    turn_id: str | None = None,
+    submission_id: str | None = None,
+    runtime_execution_id: str | None = None,
     state_root: Path | None = None,
 ) -> None:
     """Record transport or durable idempotency acceptance and reuse safely."""
@@ -800,9 +732,9 @@ def record_idempotency_event(
         project_id=project_id,
         workspace_id=workspace_id,
         task_id=task_id,
-        attempt_id=attempt_id,
-        runtime_session_id=runtime_session_id,
-        run_id=run_id,
+        turn_id=turn_id,
+        submission_id=submission_id,
+        runtime_execution_id=runtime_execution_id,
     )
 
 
@@ -845,9 +777,9 @@ def record_durable_idempotency_event(
         project_id=_correlation_id(request, response, "project_id"),
         workspace_id=_correlation_id(request, response, "workspace_id"),
         task_id=_correlation_id(request, response, "task_id"),
-        attempt_id=_correlation_id(request, response, "attempt_id"),
-        runtime_session_id=_correlation_id(request, response, "runtime_session_id", "runtime_id"),
-        run_id=_correlation_id(request, response, "run_id", "migration_run_id"),
+        turn_id=_correlation_id(request, response, "turn_id", "reserved_turn_id"),
+        submission_id=_correlation_id(request, response, "submission_id"),
+        runtime_execution_id=_correlation_id(request, response, "runtime_execution_id"),
         state_root=state_root,
     )
 
@@ -981,9 +913,6 @@ def record_sqlite_error(
     project_id: str | None = None,
     workspace_id: str | None = None,
     task_id: str | None = None,
-    attempt_id: str | None = None,
-    runtime_session_id: str | None = None,
-    run_id: str | None = None,
     state_root: Path | None = None,
 ) -> None:
     """Record a SQLite failure using only bounded error-class labels."""
@@ -1010,9 +939,6 @@ def record_sqlite_error(
         project_id=project_id,
         workspace_id=workspace_id,
         task_id=task_id,
-        attempt_id=attempt_id,
-        runtime_session_id=runtime_session_id,
-        run_id=run_id,
     )
 
 
@@ -1021,24 +947,19 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
     payload = {
         "schema_version": _TELEMETRY_STORE_SCHEMA_VERSION,
         "snapshot": {
-            "mode": snapshot.mode,
-            "contract_version": snapshot.contract_version,
-            "outbox_oldest_age_seconds": snapshot.outbox_oldest_age_seconds,
-            "outbox_backlog_count": snapshot.outbox_backlog_count,
-            "orphan_attempt_count": snapshot.orphan_attempt_count,
+            "submission_oldest_pending_age_seconds": (
+                snapshot.submission_oldest_pending_age_seconds
+            ),
+            "submission_backlog_count": snapshot.submission_backlog_count,
             "idempotency_record_count": snapshot.idempotency_record_count,
             "literature_pending_age_seconds": snapshot.literature_pending_age_seconds,
             "overview_oldest_age_seconds": snapshot.overview_oldest_age_seconds,
             "overview_missing_active_user_count": snapshot.overview_missing_active_user_count,
             "overview_attention_required_count": snapshot.overview_attention_required_count,
         },
-        "outbox_backlog": [
+        "submission_backlog": [
             {"status": status, "value": value}
-            for status, value in sorted(collected.outbox_backlog.items())
-        ],
-        "orphan_attempts": [
-            {"reason": reason, "value": value}
-            for reason, value in sorted(collected.orphan_attempts.items())
+            for status, value in sorted(collected.submission_backlog.items())
         ],
         "saga_counts": [
             {"status": status, "value": value}
@@ -1126,22 +1047,13 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
     ):
         raise _TelemetryStoreError("invalid snapshot values")
     typed_snapshot = cast(dict[str, object], snapshot_raw)
-    mode = typed_snapshot.get("mode")
-    if not isinstance(mode, str) or mode not in _DOMAIN_MODES:
-        raise _TelemetryStoreError("invalid snapshot mode")
     snapshot = DomainTelemetrySnapshot(
-        mode=mode,
-        contract_version=_non_negative_int(
-            typed_snapshot.get("contract_version"), name="contract_version"
+        submission_oldest_pending_age_seconds=_non_negative_float(
+            typed_snapshot.get("submission_oldest_pending_age_seconds"),
+            name="submission_oldest_pending_age_seconds",
         ),
-        outbox_oldest_age_seconds=_non_negative_float(
-            typed_snapshot.get("outbox_oldest_age_seconds"), name="outbox_oldest_age_seconds"
-        ),
-        outbox_backlog_count=_non_negative_int(
-            typed_snapshot.get("outbox_backlog_count"), name="outbox_backlog_count"
-        ),
-        orphan_attempt_count=_non_negative_int(
-            typed_snapshot.get("orphan_attempt_count"), name="orphan_attempt_count"
+        submission_backlog_count=_non_negative_int(
+            typed_snapshot.get("submission_backlog_count"), name="submission_backlog_count"
         ),
         idempotency_record_count=_non_negative_int(
             typed_snapshot.get("idempotency_record_count"), name="idempotency_record_count"
@@ -1191,17 +1103,11 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
         )
     return _CollectedDomainMetrics(
         snapshot=snapshot,
-        outbox_backlog=_bounded_count_records(
+        submission_backlog=_bounded_count_records(
             typed_payload,
-            key="outbox_backlog",
+            key="submission_backlog",
             label_name="status",
-            allowed=_OUTBOX_BACKLOG_STATES,
-        ),
-        orphan_attempts=_bounded_count_records(
-            typed_payload,
-            key="orphan_attempts",
-            label_name="reason",
-            allowed=_ORPHAN_REASONS,
+            allowed=_SUBMISSION_BACKLOG_STATES,
         ),
         saga_counts=_bounded_count_records(
             typed_payload,
@@ -1289,7 +1195,6 @@ def _load_persisted_snapshot(
 def refresh_domain_metrics(
     state_root: Path,
     *,
-    runtime_mode: str | None = None,
     read_only: bool = False,
 ) -> DomainTelemetrySnapshot:
     """Publish durable domain health without turning a failed scrape green.
@@ -1330,42 +1235,37 @@ def refresh_domain_metrics(
                 source_states["control"] = _schema_state(
                     conn,
                     tables,
-                    _V2_CONTROL_SOURCE_REQUIREMENTS,
+                    _CURRENT_CONTROL_SOURCE_REQUIREMENTS,
                     database_name="agentic_researcher",
-                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
+                    minimum_version=_CURRENT_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
                 )
                 source_states["overview"] = _schema_state(
                     conn,
                     tables,
-                    _V2_OVERVIEW_SOURCE_REQUIREMENTS,
+                    _CURRENT_OVERVIEW_SOURCE_REQUIREMENTS,
                     database_name="agentic_researcher",
-                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
+                    minimum_version=_CURRENT_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"],
                 )
-                mode, contract_version = _cutover_state(conn, tables)
                 source_states["auth"] = _external_source_state(
                     root / "runtime" / "auth.sqlite3",
-                    _V2_AUTH_SOURCE_REQUIREMENTS,
+                    _CURRENT_AUTH_SOURCE_REQUIREMENTS,
                     source="auth",
                     database_name="auth",
-                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["auth"],
+                    minimum_version=_CURRENT_MIN_SOURCE_SCHEMA_VERSION["auth"],
                     maintenance_read_only=effective_read_only,
                 )
                 source_states["literature"] = _external_source_state(
                     root / "runtime" / "literature.sqlite3",
-                    _V2_LITERATURE_SOURCE_REQUIREMENTS,
+                    _CURRENT_LITERATURE_SOURCE_REQUIREMENTS,
                     source="literature",
                     database_name="literature",
-                    minimum_version=_V2_MIN_SOURCE_SCHEMA_VERSION["literature"],
+                    minimum_version=_CURRENT_MIN_SOURCE_SCHEMA_VERSION["literature"],
                     maintenance_read_only=effective_read_only,
                 )
-                if effective_read_only or runtime_mode == "v2" or mode == "v2":
-                    if mode == "v2" and not _committed_v2_control_fuse_ready(conn):
-                        source_states["control"] = "schema_invalid"
-                    not_ready = _first_not_ready_source(source_states)
-                    if not_ready is not None:
-                        raise _TelemetrySourceReadinessError(*not_ready)
-                outbox_age, outbox_backlog = _outbox_metrics(conn, tables, now)
-                orphan_attempts = _orphan_attempt_count(conn, tables)
+                not_ready = _first_not_ready_source(source_states)
+                if not_ready is not None:
+                    raise _TelemetrySourceReadinessError(*not_ready)
+                submission_age, submission_backlog = _submission_metrics(conn, now)
                 idempotency_records = _idempotency_record_count(conn, tables)
                 (
                     overview_age,
@@ -1380,13 +1280,11 @@ def refresh_domain_metrics(
                     maintenance_read_only=effective_read_only,
                 )
                 overview_job_counts = _overview_job_counts(conn, tables)
-        except (OSError, sqlite3.Error) as exc:
-            # A v2 API cannot use cached risk gauges when the authoritative
-            # control source itself is unreadable.  The source-state gauge is
-            # deliberately bounded and contains no filesystem or SQLite detail.
+        except (OSError, sqlite3.Error):
+            # Preserve last-known-good risk gauges across a transient read
+            # failure, while source readiness and scrape-success remain red.
+            # The bounded source-state gauge contains no path or SQLite detail.
             source_states["control"] = "unavailable"
-            if runtime_mode == "v2":
-                raise _TelemetrySourceReadinessError("control", "unavailable") from exc
             raise
         literature_age, saga_counts = _literature_saga_metrics(
             root / "runtime" / "literature.sqlite3",
@@ -1395,11 +1293,8 @@ def refresh_domain_metrics(
         )
         durable_counters = {} if effective_read_only else _load_durable_counters(root)
         snapshot = DomainTelemetrySnapshot(
-            mode=mode,
-            contract_version=contract_version,
-            outbox_oldest_age_seconds=outbox_age,
-            outbox_backlog_count=sum(outbox_backlog.values()),
-            orphan_attempt_count=sum(orphan_attempts.values()),
+            submission_oldest_pending_age_seconds=submission_age,
+            submission_backlog_count=sum(submission_backlog.values()),
             idempotency_record_count=idempotency_records,
             literature_pending_age_seconds=literature_age,
             overview_oldest_age_seconds=overview_age,
@@ -1408,8 +1303,7 @@ def refresh_domain_metrics(
         )
         collected = _CollectedDomainMetrics(
             snapshot=snapshot,
-            outbox_backlog=outbox_backlog,
-            orphan_attempts=orphan_attempts,
+            submission_backlog=submission_backlog,
             saga_counts=saga_counts,
             overview_job_counts=overview_job_counts,
             overview_card_states=overview_card_states,
@@ -1420,10 +1314,9 @@ def refresh_domain_metrics(
     except Exception as exc:
         if not effective_read_only:
             record_sqlite_error(operation="domain_metrics_refresh", error=exc, state_root=root)
-        if isinstance(exc, _TelemetrySourceReadinessError):
+        if isinstance(exc, _TelemetrySourceReadinessError) and exc.state != "unavailable":
             _publish_collected_metrics(
                 empty,
-                runtime_mode=runtime_mode,
                 scrape_success=False,
                 last_success_timestamp=math.nan,
                 risk_state_known=False,
@@ -1453,7 +1346,6 @@ def refresh_domain_metrics(
         if effective_read_only or collected is None:
             _publish_collected_metrics(
                 empty,
-                runtime_mode=runtime_mode,
                 scrape_success=False,
                 last_success_timestamp=math.nan,
                 risk_state_known=False,
@@ -1463,7 +1355,6 @@ def refresh_domain_metrics(
             return empty.snapshot
         _publish_collected_metrics(
             collected,
-            runtime_mode=runtime_mode,
             scrape_success=False,
             last_success_timestamp=last_success_timestamp or math.nan,
             risk_state_known=True,
@@ -1476,7 +1367,6 @@ def refresh_domain_metrics(
         _LAST_SUCCESS_TIMESTAMPS[root] = now.timestamp()
     _publish_collected_metrics(
         collected,
-        runtime_mode=runtime_mode,
         scrape_success=True,
         last_success_timestamp=now.timestamp(),
         risk_state_known=True,
@@ -1488,11 +1378,8 @@ def refresh_domain_metrics(
 
 def _empty_collected_metrics() -> _CollectedDomainMetrics:
     snapshot = DomainTelemetrySnapshot(
-        mode="unknown",
-        contract_version=0,
-        outbox_oldest_age_seconds=0.0,
-        outbox_backlog_count=0,
-        orphan_attempt_count=0,
+        submission_oldest_pending_age_seconds=0.0,
+        submission_backlog_count=0,
         idempotency_record_count=0,
         literature_pending_age_seconds=0.0,
         overview_oldest_age_seconds=0.0,
@@ -1501,8 +1388,7 @@ def _empty_collected_metrics() -> _CollectedDomainMetrics:
     )
     return _CollectedDomainMetrics(
         snapshot=snapshot,
-        outbox_backlog={status: 0 for status in _OUTBOX_BACKLOG_STATES},
-        orphan_attempts={reason: 0 for reason in _ORPHAN_REASONS},
+        submission_backlog={status: 0 for status in _SUBMISSION_BACKLOG_STATES},
         saga_counts={status: 0 for status in _SAGA_STATUSES},
         overview_job_counts={status: 0 for status in _OVERVIEW_JOB_STATUSES},
         overview_card_states={status: 0 for status in _OVERVIEW_CARD_STATUSES},
@@ -1636,261 +1522,65 @@ def _first_not_ready_source(source_states: Mapping[str, str]) -> tuple[str, str]
     return None
 
 
-def _committed_v2_control_fuse_ready(conn: sqlite3.Connection) -> bool:
-    """Validate the durable v2 fuse before calling its source telemetry ready.
-
-    The normal cutover controller enforces these invariants transactionally.
-    Telemetry repeats only the bounded, local facts needed to reject a stale
-    or manually damaged control row instead of letting a v2 scrape claim a
-    healthy source from table shape alone.
-    """
-
-    row = conn.execute(
-        """
-        SELECT state, contract_version, schema_version, constraints_ready, cutover_ready,
-               committed_at, cutover_run_id, artifact_sha, artifact_contract_min,
-               artifact_contract_max, artifact_schema_min, artifact_schema_max,
-               backup_manifest_sha256, backup_tree_sha256, restore_evidence_sha256,
-               source_inventory_sha256, preparation_digest
-        FROM domain_cutover_state
-        WHERE singleton = 1
-        """
-    ).fetchone()
-    if row is None or row["state"] != "v2":
-        return False
-
-    integers = (
-        "contract_version",
-        "schema_version",
-        "constraints_ready",
-        "cutover_ready",
-        "artifact_contract_min",
-        "artifact_contract_max",
-        "artifact_schema_min",
-        "artifact_schema_max",
-    )
-    if any(not isinstance(row[name], int) or isinstance(row[name], bool) for name in integers):
-        return False
-    if row["contract_version"] != _V2_DOMAIN_CONTRACT_VERSION:
-        return False
-    if row["constraints_ready"] != 1 or row["cutover_ready"] != 1:
-        return False
-    current_schema = conn.execute(
-        "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
-    ).fetchone()
-    if (
-        current_schema is None
-        or not isinstance(current_schema["version"], int)
-        or isinstance(current_schema["version"], bool)
-        or row["schema_version"] != current_schema["version"]
-        or row["schema_version"] < _V2_MIN_SOURCE_SCHEMA_VERSION["agentic_researcher"]
-    ):
-        return False
-    if not (
-        row["artifact_contract_min"] <= row["contract_version"] <= row["artifact_contract_max"]
-        and row["artifact_schema_min"] <= row["schema_version"] <= row["artifact_schema_max"]
-    ):
-        return False
-
-    return all(
-        isinstance(row[name], str) and bool(row[name])
-        for name in (
-            "committed_at",
-            "cutover_run_id",
-            "artifact_sha",
-            "backup_manifest_sha256",
-            "backup_tree_sha256",
-            "restore_evidence_sha256",
-            "source_inventory_sha256",
-            "preparation_digest",
-        )
-    )
-
-
-def _cutover_state(conn: sqlite3.Connection, tables: set[str]) -> tuple[str, int]:
-    if "domain_cutover_state" not in tables:
-        return "unknown", 0
-    columns = _columns(conn, "domain_cutover_state")
-    selected = ["state" if "state" in columns else "'legacy' AS state"]
-    selected.append(
-        "contract_version" if "contract_version" in columns else "1 AS contract_version"
-    )
-    row = conn.execute(
-        f"SELECT {', '.join(selected)} FROM domain_cutover_state WHERE singleton = 1"
-    ).fetchone()
-    value = str(row["state"]) if row is not None and row["state"] is not None else "legacy"
-    mode = value if value in _DOMAIN_MODES else "unknown"
-    raw_contract_version = row["contract_version"] if row is not None else None
-    contract_version = (
-        raw_contract_version
-        if isinstance(raw_contract_version, int)
-        and not isinstance(raw_contract_version, bool)
-        and raw_contract_version >= 0
-        else 0
-    )
-    return mode, contract_version
-
-
-def _outbox_metrics(
+def _submission_metrics(
     conn: sqlite3.Connection,
-    tables: set[str],
     now: datetime,
 ) -> tuple[float, dict[str, int]]:
-    """Return only recoverable or uncertain dispatches, never normal runs.
+    """Mirror the private worker Interface's recoverable submission states.
 
-    A ``dispatched`` row represents a running runtime until its lease expires.
-    Counting it from ``created_at`` makes every legitimate long task fire the
-    five-minute outbox alert.  Mirror dispatcher recovery eligibility instead:
-    pending due work, expired claims, expired dispatch leases, and explicitly
-    uncertain launches are backlog.
+    A queued next Turn remains intentionally blocked while its predecessor is
+    active, so it is excluded until ``next_turn_submissions`` marks it ready.
+    Claimed and delivering rows become risk backlog only after the same
+    bounded recovery interval used by ``ConversationExecutionService``.
+    ``delivery_unknown`` is always operator-visible because replay is fenced.
     """
 
-    counts = {state: 0 for state in _OUTBOX_BACKLOG_STATES}
-    if "task_dispatch_outbox" not in tables:
-        return 0.0, counts
-    columns = _columns(conn, "task_dispatch_outbox")
-    selected = ["status", "created_at"]
-    for column in (
-        "next_attempt_at",
-        "claim_expires_at",
-        "claim_heartbeat_at",
-        "updated_at",
-        "launch_unknown_at",
-    ):
-        if column in columns:
-            selected.append(column)
-    rows = conn.execute(f"SELECT {', '.join(selected)} FROM task_dispatch_outbox").fetchall()
+    counts = {state: 0 for state in _SUBMISSION_BACKLOG_STATES}
+    rows = conn.execute(
+        """
+        SELECT submission.status, submission.created_at, submission.claimed_at,
+               submission.delivering_at, submission.updated_at,
+               next_turn.status AS next_turn_status
+        FROM turn_submissions AS submission
+        LEFT JOIN next_turn_submissions AS next_turn
+          ON next_turn.submission_id = submission.submission_id
+        WHERE submission.status IN ('queued', 'claimed', 'delivering', 'delivery_unknown')
+        """
+    ).fetchall()
     ages: list[float] = []
     for row in rows:
         status = str(row["status"])
         state: str | None = None
-        anchor: object = row["created_at"]
-        if status == "pending" and _is_due(_row_value(row, "next_attempt_at"), now):
-            state = "pending"
-        elif status == "claimed" and _outbox_lease_is_stale(row, now):
-            state = "expired_claimed"
-            anchor = _outbox_staleness_anchor(row)
-        elif status == "dispatched" and _outbox_lease_is_stale(row, now):
-            state = "expired_dispatched"
-            anchor = _outbox_staleness_anchor(row)
-        elif status == "launch_unknown":
-            state = "launch_unknown"
-            anchor = _row_value(row, "launch_unknown_at") or _outbox_staleness_anchor(row)
+        anchor: object | None = row["created_at"]
+        if status == "queued" and row["next_turn_status"] in (None, "ready"):
+            state = "queued"
+        elif status == "claimed" and _submission_timestamp_is_stale(row["claimed_at"], now):
+            state = "stale_claimed"
+            anchor = row["claimed_at"] or row["updated_at"]
+        elif status == "delivering" and _submission_timestamp_is_stale(row["delivering_at"], now):
+            state = "stale_delivering"
+            anchor = row["delivering_at"] or row["updated_at"]
+        elif status == "delivery_unknown":
+            state = "delivery_unknown"
+            anchor = row["updated_at"]
         if state is not None:
             counts[state] += 1
-            ages.append(_age_seconds(anchor, now))
+            ages.append(_risk_age_seconds(anchor, now))
     return max(ages, default=0.0), counts
 
 
-def _row_value(row: sqlite3.Row, name: str) -> object | None:
-    return row[name] if name in row.keys() else None
-
-
-def _is_due(value: object | None, now: datetime) -> bool:
-    if value is None:
+def _submission_timestamp_is_stale(value: object | None, now: datetime) -> bool:
+    timestamp = _parse_timestamp(value)
+    if timestamp is None or timestamp > now:
         return True
-    parsed = _parse_timestamp(value)
-    return parsed is None or parsed <= now
+    return (now - timestamp).total_seconds() >= _SUBMISSION_STALE_AFTER_SECONDS
 
 
-def _outbox_lease_is_stale(row: sqlite3.Row, now: datetime) -> bool:
-    expires_at = _row_value(row, "claim_expires_at")
-    if expires_at is not None:
-        return _is_due(expires_at, now)
-    for field in ("claim_heartbeat_at", "updated_at", "created_at"):
-        timestamp = _parse_timestamp(_row_value(row, field))
-        if timestamp is not None:
-            return (now - timestamp).total_seconds() >= 300
-    return True
-
-
-def _outbox_staleness_anchor(row: sqlite3.Row) -> object | None:
-    for field in ("claim_expires_at", "claim_heartbeat_at", "updated_at", "created_at"):
-        value = _row_value(row, field)
-        if value is not None:
-            return value
-    return None
-
-
-def _orphan_attempt_count(conn: sqlite3.Connection, tables: set[str]) -> dict[str, int]:
-    values = {reason: 0 for reason in _ORPHAN_REASONS}
-    if "agent_task_attempts" not in tables:
-        return values
-    if "tasks" in tables:
-        row = conn.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM agent_task_attempts AS attempt
-            LEFT JOIN tasks AS task ON task.task_id = attempt.task_id
-            WHERE task.task_id IS NULL
-            """
-        ).fetchone()
-        values["missing_task"] = int(row["count"]) if row is not None else 0
-    if "context_snapshots" in tables and "context_snapshot_id" in _columns(
-        conn, "agent_task_attempts"
-    ):
-        row = conn.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM agent_task_attempts AS attempt
-            LEFT JOIN context_snapshots AS snapshot
-              ON snapshot.context_snapshot_id = attempt.context_snapshot_id
-            WHERE attempt.context_snapshot_id IS NOT NULL
-              AND snapshot.context_snapshot_id IS NULL
-            """
-        ).fetchone()
-        values["missing_context_snapshot"] = int(row["count"]) if row is not None else 0
-    values["queued_without_recoverable_dispatch"] = (
-        _queued_attempts_without_recoverable_dispatch_count(conn, tables)
-    )
-    return values
-
-
-def _queued_attempts_without_recoverable_dispatch_count(
-    conn: sqlite3.Connection, tables: set[str]
-) -> int:
-    """Count queued Attempts whose durable dispatch cannot make progress.
-
-    A queued Attempt must retain a ``pending``, ``claimed``, or ``dispatched``
-    outbox row.  Claims can expire and dispatched runtimes can be reconciled,
-    so each remains recoverable.  A terminal row, a ``launch_unknown`` row,
-    or no row at all leaves a queued Attempt stranded and needs operator
-    remediation rather than a second blind Task launch.
-    """
-
-    attempt_columns = _columns(conn, "agent_task_attempts")
-    if "status" not in attempt_columns:
-        return 0
-    if "task_dispatch_outbox" not in tables:
-        row = conn.execute(
-            "SELECT COUNT(*) AS count FROM agent_task_attempts WHERE status = 'queued'"
-        ).fetchone()
-        return int(row["count"]) if row is not None else 0
-
-    dispatch_columns = _columns(conn, "task_dispatch_outbox")
-    if not {"attempt_id", "status"} <= dispatch_columns:
-        row = conn.execute(
-            "SELECT COUNT(*) AS count FROM agent_task_attempts WHERE status = 'queued'"
-        ).fetchone()
-        return int(row["count"]) if row is not None else 0
-
-    task_match = ""
-    if "task_id" in dispatch_columns and "task_id" in attempt_columns:
-        task_match = " AND dispatch.task_id = attempt.task_id"
-    row = conn.execute(
-        f"""
-        SELECT COUNT(*) AS count
-        FROM agent_task_attempts AS attempt
-        WHERE attempt.status = 'queued'
-          AND NOT EXISTS (
-              SELECT 1
-              FROM task_dispatch_outbox AS dispatch
-              WHERE dispatch.attempt_id = attempt.attempt_id{task_match}
-                AND dispatch.status IN ('pending', 'claimed', 'dispatched')
-          )
-        """
-    ).fetchone()
-    return int(row["count"]) if row is not None else 0
+def _risk_age_seconds(value: object | None, now: datetime) -> float:
+    timestamp = _parse_timestamp(value)
+    if timestamp is None or timestamp > now:
+        return float(_OVERVIEW_UNTRUSTED_SNAPSHOT_AGE_SECONDS)
+    return (now - timestamp).total_seconds()
 
 
 def _idempotency_record_count(conn: sqlite3.Connection, tables: set[str]) -> int:
@@ -2072,7 +1762,6 @@ def _parse_timestamp(value: object | None) -> datetime | None:
 def _publish_collected_metrics(
     collected: _CollectedDomainMetrics,
     *,
-    runtime_mode: str | None,
     scrape_success: bool,
     last_success_timestamp: float,
     risk_state_known: bool,
@@ -2085,20 +1774,6 @@ def _publish_collected_metrics(
     def risk(value: float) -> float:
         return value if risk_state_known else risk_value
 
-    for mode in _DOMAIN_MODES:
-        _gauge(
-            "ainrf_domain_mode_info",
-            risk(1.0 if snapshot.mode == mode else 0.0),
-            {"mode": mode},
-        )
-    normalized_runtime_mode = _bounded_label(runtime_mode or "unknown", _RUNTIME_MODES)
-    for mode in _RUNTIME_MODES:
-        _gauge(
-            "ainrf_domain_runtime_mode_info",
-            1.0 if normalized_runtime_mode == mode else 0.0,
-            {"mode": mode},
-        )
-    _gauge("ainrf_domain_contract_version", risk(float(snapshot.contract_version)))
     _gauge("ainrf_domain_metrics_scrape_success", 1.0 if scrape_success else 0.0)
     _gauge("ainrf_domain_metrics_last_success_timestamp_seconds", last_success_timestamp)
     _gauge("ainrf_domain_metrics_risk_state_known", 1.0 if risk_state_known else 0.0)
@@ -2114,17 +1789,11 @@ def _publish_collected_metrics(
                 1.0 if current_state == state else 0.0,
                 {"source": source, "state": state},
             )
-    for state in _OUTBOX_BACKLOG_STATES:
+    for state in _SUBMISSION_BACKLOG_STATES:
         _gauge(
-            "ainrf_domain_dispatch_outbox_entries",
-            risk(float(collected.outbox_backlog.get(state, 0))),
+            "ainrf_domain_turn_submission_entries",
+            risk(float(collected.submission_backlog.get(state, 0))),
             {"state": state},
-        )
-    for reason in _ORPHAN_REASONS:
-        _gauge(
-            "ainrf_domain_orphan_attempts",
-            risk(float(collected.orphan_attempts.get(reason, 0))),
-            {"reason": reason},
         )
     for status in _SAGA_STATUSES:
         _gauge(
@@ -2145,12 +1814,12 @@ def _publish_collected_metrics(
             {"status": status},
         )
     _gauge(
-        "ainrf_domain_dispatch_outbox_oldest_age_seconds",
-        risk(snapshot.outbox_oldest_age_seconds),
+        "ainrf_domain_turn_submission_oldest_pending_age_seconds",
+        risk(snapshot.submission_oldest_pending_age_seconds),
     )
     _gauge(
-        "ainrf_domain_dispatch_outbox_backlog",
-        risk(float(snapshot.outbox_backlog_count)),
+        "ainrf_domain_turn_submission_backlog",
+        risk(float(snapshot.submission_backlog_count)),
     )
     _gauge(
         "ainrf_domain_idempotency_records",

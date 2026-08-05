@@ -1,10 +1,10 @@
-"""Viewer-safe redaction for durable Task output projections.
+"""Viewer-safe redaction for durable Conversation item projections.
 
-Task output is retained verbatim as execution evidence so an owner or an
+Conversation item payload is retained verbatim as execution evidence so an owner or an
 administrator can diagnose a runtime after the fact.  A Project collaborator,
 however, is entitled to the shared dialogue rather than credentials or any
 tenant filesystem detail that a tool happened to print.  This module is a
-read-side policy only: it never changes the durable ``task_outputs`` rows.
+read-side policy only: it never changes the durable ``turn_items`` rows.
 """
 
 from __future__ import annotations

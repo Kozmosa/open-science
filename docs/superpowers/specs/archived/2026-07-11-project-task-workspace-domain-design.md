@@ -1,11 +1,15 @@
 ---
-doc_state: current
-status: accepted
+doc_state: historical
+status: superseded
 last_reviewed: 2026-07-30
 review_by: 2026-08-29
+superseded_by: 2026-07-17-codex-aligned-conversation-domain-design.md
 ---
 
-# Project、Task 与 Workspace 领域设计
+# Project、Task 与 Workspace 领域设计（历史）
+
+> [!warning] Superseded
+> 本文保留 Project、Workspace、Environment、Context 关系的历史决策，但其中 TaskAttempt、RuntimeSession、migration chain 和旧 Task lifecycle 章节已被 Conversation Domain 与 Issue #76 的 current baseline 取代。当前事实以 `PROJECT_BASIS.md`、公开架构文档、代码和测试为准。
 
 > [!important] Conversation authority overlay
 > 本文的 Project、Workspace、Environment、Context、权限、关系、移动与归档规则继续有效；其中旧 `TaskAttempt`、`RuntimeSession`、pause/resume/continue 和扁平 output 叙述仅保留为历史设计上下文。当前 Task 执行 authority 是 Conversation Domain 的 Task、Turn、Item、TurnSubmission、RuntimeExecution 与 EngineConversationBinding，Retry 创建带 `retry_of_turn_id` 的新 Turn，停止 active execution 使用 interrupt。当前事实以 `PROJECT_BASIS.md`、公开架构文档、代码和测试为准。

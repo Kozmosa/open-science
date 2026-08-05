@@ -2174,10 +2174,6 @@ export type ProjectContextCandidateCreateRequest = {
      */
     content: string;
     /**
-     * Source Attempt Id
-     */
-    source_attempt_id?: string | null;
-    /**
      * Source Message End Seq
      */
     source_message_end_seq?: number | null;

@@ -280,13 +280,6 @@ def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
     assert "fixture-model" in str(task["token_usage_json"])
     assert health["engine_alive"] is True
     assert usage["total_tokens"] == 10
-    with closing(connect(_db_path(state_root))) as conn:
-        assert (
-            conn.execute(
-                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = 'task-1'"
-            ).fetchone()[0]
-            == 0
-        )
 
 
 def test_task_metadata_and_cancel_stay_inside_conversation_interface(
@@ -445,12 +438,6 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
                 "SELECT COUNT(*) FROM turn_submissions WHERE task_id = ?", (created["task_id"],)
             ).fetchone()[0]
             == 1
-        )
-        assert (
-            conn.execute(
-                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = ?", (created["task_id"],)
-            ).fetchone()[0]
-            == 0
         )
 
 
@@ -1002,13 +989,6 @@ def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(
             "SELECT task_id, status FROM turn_submissions WHERE submission_id = ?",
             (confirmed["submission_id"],),
         ).fetchone()
-        assert (
-            conn.execute(
-                "SELECT COUNT(*) FROM agent_task_attempts WHERE task_id = ?",
-                (confirmed["target_task_id"],),
-            ).fetchone()[0]
-            == 0
-        )
     assert target["harness_engine"] == "agent-sdk"
     assert target["status"] == "queued"
     assert submission["task_id"] == confirmed["target_task_id"]

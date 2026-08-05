@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
-import tempfile
 import threading
 import time
 from collections.abc import Awaitable, Callable
@@ -25,7 +23,7 @@ from ainrf.agentic_researcher.models import (
 from ainrf.api.app import _maintenance_is_active_read_only, create_app as _create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.db import connect
+from ainrf.db import connect, run_pending
 from ainrf.domain.environment_identity import (
     canonical_connection_json,
     environment_connection_fingerprint,
@@ -40,14 +38,11 @@ from ainrf.harness_engine import (
 )
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+
+CURRENT_ARTIFACT_SHA = "b" * 64
 
 
-_V2_STATE_TEMPLATE_LOCK = threading.Lock()
-_V2_STATE_TEMPLATE: Path | None = None
-
-
-def prepare_v2_test_state(state_root: Path) -> str:
+def prepare_current_test_state(state_root: Path) -> str:
     """Copy a process-local committed-cutover template into ``state_root``.
 
     Building the immutable cutover evidence is intentionally realistic but
@@ -55,24 +50,9 @@ def prepare_v2_test_state(state_root: Path) -> str:
     isolated copy and still exercise the production startup fuse.
     """
 
-    global _V2_STATE_TEMPLATE
-    with _V2_STATE_TEMPLATE_LOCK:
-        if _V2_STATE_TEMPLATE is None:
-            template_parent = Path(tempfile.mkdtemp(prefix="openscience-v2-test-state-"))
-            template_root = template_parent / "state"
-            template_root.mkdir()
-            artifact_root = template_parent / "artifacts"
-            artifact_root.mkdir()
-            prepare_committed_v2_cutover(template_root, artifact_root)
-            _V2_STATE_TEMPLATE = template_root
-        template = _V2_STATE_TEMPLATE
-    shutil.copytree(template, state_root, dirs_exist_ok=True, copy_function=shutil.copy2)
-    seal_path = state_root / "runtime" / "domain-legacy-source-seal.json"
-    seal = json.loads(seal_path.read_text(encoding="utf-8"))
-    if not isinstance(seal, dict):
-        raise AssertionError("v2 test state has an invalid legacy-source seal")
-    seal["state_root"] = state_root.resolve().name
-    seal_path.write_text(json.dumps(seal, indent=2) + "\n", encoding="utf-8")
+    (state_root / "runtime").mkdir(parents=True, exist_ok=True)
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        run_pending(conn, "agentic_researcher")
     connection = {
         "host": "localhost",
         "user": "root",
@@ -102,7 +82,7 @@ def prepare_v2_test_state(state_root: Path) -> str:
             ),
         )
         conn.commit()
-    return V2_ARTIFACT_SHA
+    return CURRENT_ARTIFACT_SHA
 
 
 def create_v2_test_app(
@@ -110,13 +90,13 @@ def create_v2_test_app(
     *,
     max_file_size_bytes: int | None = None,
 ) -> FastAPI:
-    """Create an app through the production fuse using isolated v2 evidence."""
+    """Create an app using an isolated current-schema state."""
 
     api_config = config or ApiConfig.from_env()
     if api_config.domain_artifact_sha is None and not _maintenance_is_active_read_only(
         api_config.state_root
     ):
-        artifact_sha = prepare_v2_test_state(api_config.state_root)
+        artifact_sha = prepare_current_test_state(api_config.state_root)
         api_config.domain_artifact_sha = artifact_sha
     return _create_app(api_config, max_file_size_bytes=max_file_size_bytes)
 
@@ -177,7 +157,7 @@ def get_jwt_headers(
 
 def make_client(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> httpx.AsyncClient:
     """Create an authenticated test client with an admin JWT token."""
-    artifact_sha = prepare_v2_test_state(tmp_path)
+    artifact_sha = prepare_current_test_state(tmp_path)
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),
         state_root=tmp_path,
@@ -195,7 +175,7 @@ def make_client(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> ht
 
 def make_client_and_app(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> tuple:
     """Create an authenticated test client with admin JWT, returning (app, client, headers)."""
-    artifact_sha = prepare_v2_test_state(tmp_path)
+    artifact_sha = prepare_current_test_state(tmp_path)
     api_config = ApiConfig(
         api_key_hashes=frozenset({hash_api_key("secret-key")}),
         state_root=tmp_path,
@@ -447,7 +427,7 @@ def make_terminal_manager(
 
 def make_terminal_app(tmp_path: Path) -> FastAPI:
     """Return a FastAPI app with terminal support enabled."""
-    artifact_sha = prepare_v2_test_state(tmp_path)
+    artifact_sha = prepare_current_test_state(tmp_path)
     return _create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),

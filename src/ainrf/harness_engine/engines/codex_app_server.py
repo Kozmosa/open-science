@@ -321,28 +321,6 @@ class CodexAppServerEngine(HarnessEngine):
         else:
             prompt = context.rendered_prompt
 
-        # Layer 2 fallback: if the thread was lost and we have prior
-        # user/assistant messages from task_outputs, inject them as a
-        # degraded context prefix so the model is aware of prior turns.
-        if session.thread_id is None and context.prior_messages:
-            prior = context.prior_messages
-            if len(prior) > 100:
-                prior = prior[-100:]
-            lines: list[str] = []
-            lines.append(
-                "[Previous conversation — recovered from task history. "
-                "You are continuing a prior session whose state was lost. "
-                "You do NOT remember the exact tool calls or file edits "
-                "from the prior session, but the user/assistant messages "
-                "below summarize what was discussed.]"
-            )
-            for msg in prior:
-                role_label = "User" if msg["role"] == "user" else "Assistant"
-                lines.append(f"{role_label}: {msg['content']}")
-            lines.append("---")
-            lines.append(prompt)
-            return "\n\n".join(lines)
-
         return prompt
 
     async def _ensure_connection(

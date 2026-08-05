@@ -88,47 +88,32 @@ groups:
 
   - name: ainrf.domain-control-plane
     rules:
-      - alert: AINRFLegacyDomainWriteAttempt
-        # This is a durable cumulative violation counter.  A no-port worker
-        # can create its first API-visible sample at a non-zero value, so a
-        # short `increase()` window would miss the event forever.
-        expr: sum(ainrf_domain_legacy_write_attempts_total) > 0
-        labels:
-          severity: critical
-          component: domain
-        annotations:
-          summary: "A sealed legacy domain source was targeted for write"
-          description: >
-            A legacy Project, Workspace, Environment, Task, or Session source
-            write was blocked after domain cutover. This is a cutover-safety
-            violation and must be investigated before any release action.
-
-      - alert: AINRFDomainOutboxAgeWarning
-        expr: ainrf_domain_dispatch_outbox_oldest_age_seconds > 300
+      - alert: AINRFTurnSubmissionBacklogAgeWarning
+        expr: ainrf_domain_turn_submission_oldest_pending_age_seconds > 300
         for: 5m
         labels:
           severity: warning
           component: domain-dispatch
         annotations:
-          summary: "Domain dispatch outbox is older than five minutes"
+          summary: "A ready or recoverable Turn submission is older than five minutes"
           description: >
-            The oldest recoverable pending/expired-lease dispatch or
-            launch-unknown domain dispatch has exceeded five minutes. Normal
-            running dispatched runtimes are excluded. Check dispatcher
-            readiness and recovery state before retrying work.
+            The oldest ready queued submission, stale claim, stale delivery,
+            or delivery-unknown submission has exceeded five minutes. Blocked
+            next Turns and accepted running executions are excluded. Check the
+            Conversation worker and reconciliation state before retrying work.
 
-      - alert: AINRFDomainOutboxAgeCritical
-        expr: ainrf_domain_dispatch_outbox_oldest_age_seconds > 900
+      - alert: AINRFTurnSubmissionBacklogAgeCritical
+        expr: ainrf_domain_turn_submission_oldest_pending_age_seconds > 900
         for: 5m
         labels:
           severity: critical
           component: domain-dispatch
         annotations:
-          summary: "Domain dispatch outbox is older than fifteen minutes"
+          summary: "A Turn submission backlog entry is older than fifteen minutes"
           description: >
-            A recoverable or launch-unknown domain dispatch has exceeded the
-            fifteen-minute recovery bound. New release or cutover actions must
-            stop until the backlog is reconciled.
+            A ready, stale, or delivery-unknown Turn submission has exceeded
+            the fifteen-minute recovery bound. New release actions must stop
+            until the backlog is reconciled.
 
       - alert: AINRFDomainMetricScrapeFailed
         expr: ainrf_domain_metrics_scrape_success == 0
@@ -141,8 +126,8 @@ groups:
           description: >
             Domain control-plane gauges retain their last known good values,
             but the current SQLite scrape is unavailable. Investigate the
-            bounded SQLite error telemetry before any release or cutover gate
-            is treated as healthy.
+            bounded SQLite error telemetry before any release gate is treated
+            as healthy.
 
       - alert: AINRFDomainMetricRiskStateUnknown
         expr: ainrf_domain_metrics_risk_state_known != 1
@@ -155,24 +140,22 @@ groups:
           description: >
             Neither a current durable scrape nor a persisted last-known-good
             snapshot could be read. Domain risk gauges are exported as NaN,
-            never zero. Block release, cutover, and cleanup decisions until
-            the shared telemetry store and control-plane reads recover.
+            never zero. Block release and cleanup decisions until the shared
+            telemetry store and control-plane reads recover.
 
       - alert: AINRFDomainTelemetrySourceNotReady
-        expr: |
-          (ainrf_domain_telemetry_source_status{state="ready"} != 1)
-          and on(job, instance) (ainrf_domain_runtime_mode_info{mode="v2"} == 1)
+        expr: ainrf_domain_telemetry_source_status{state="ready"} != 1
         for: 1m
         labels:
           severity: critical
           component: domain-observability
         annotations:
-          summary: "A required v2 domain telemetry source is not ready"
+          summary: "A required domain telemetry source is not ready"
           description: >
             The control, auth, Literature, or Overview source is missing,
             unavailable, or schema-incompatible. The current source state is
-            exported as a bounded label; do not treat cached gauges as v2
-            release or cutover evidence.
+            exported as a bounded label; do not treat cached gauges as current
+            release evidence.
 
       - alert: AINRFDomainTelemetryReleaseGateBlocked
         expr: |
@@ -190,8 +173,8 @@ groups:
         annotations:
           summary: "Domain telemetry cannot satisfy a release gate"
           description: >
-            Release B cutover requires a current successful durable scrape
-            and a known risk state. A cached snapshot remains observable
+            Release gate B requires a current successful durable scrape and a
+            known risk state. A cached snapshot remains observable
             during a transient source failure, but it is not release evidence.
 
       - alert: AINRFDomainTelemetryEventDeliveryFailure
@@ -206,8 +189,8 @@ groups:
           description: >
             An immutable delivery-failure latch was written outside the
             telemetry sidecar. Do not clear it automatically: investigate and
-            establish new release observation evidence before any cutover or
-            compatibility cleanup decision.
+            establish new release observation evidence before any cleanup or
+            release decision.
 
       - alert: AINRFLiteratureResearchTaskPending
         expr: ainrf_domain_literature_saga_oldest_pending_age_seconds > 900
@@ -260,17 +243,18 @@ groups:
             stale, unavailable, failed, or unknown card state. A fresh
             snapshot timestamp does not make that degraded data healthy.
 
-      - alert: AINRFDomainOrphanAttempt
-        expr: sum(ainrf_domain_orphan_attempts) > 0
+      - alert: AINRFTurnSubmissionDeliveryUnknown
+        expr: ainrf_domain_turn_submission_entries{state="delivery_unknown"} > 0
         for: 5m
         labels:
           severity: critical
-          component: domain-attempt
+          component: domain-dispatch
         annotations:
-          summary: "Domain Attempt has a missing durable reference"
+          summary: "A Turn submission has unknown delivery outcome"
           description: >
-            An Attempt points to a missing Task or ContextSnapshot. Treat this
-            as control-plane integrity damage and stop cutover progression.
+            The worker crossed the external delivery seam without durable
+            acceptance evidence. Replay is fenced; reconcile the provider
+            outcome before permitting release or manual retry.
 
       - alert: AINRFDomainIdempotencyConflict
         expr: increase(ainrf_domain_idempotency_requests_total{outcome="conflict"}[5m]) > 0

@@ -15,11 +15,11 @@ import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, cast
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain import TaskApplicationService
+from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.service import DomainAuthorizationService
 from ainrf.domain.service import (
     DomainConflictError,
@@ -32,11 +32,10 @@ from ainrf.domain_telemetry import (
     record_permission_denied,
 )
 from ainrf.domain_control import (
-    DomainCutoverController,
-    DomainCutoverError,
     DomainMaintenanceService,
     MaintenanceModeError,
 )
+from ainrf.domain.write_fence import DomainWriteFenceError
 
 
 _DEFAULT_PRESET = "structured-research-default"
@@ -98,8 +97,7 @@ class LiteratureTaskSagaService:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(self._db_path)) as conn:
             run_pending(conn, "literature")
-        self._tasks = TaskApplicationService(state_root, artifact_sha=artifact_sha)
-        self._cutover = DomainCutoverController(state_root)
+        self._conversation = ConversationApplicationService(state_root, artifact_sha=artifact_sha)
 
     @property
     def state_root(self) -> Path:
@@ -130,18 +128,17 @@ class LiteratureTaskSagaService:
             state_root=self._state_root,
         )
 
-    def v2_ready(self) -> bool:
-        """Whether this exact saga instance can safely create v2 Tasks.
+    def ready(self) -> bool:
+        """Whether this saga instance can safely create current Tasks.
 
         A constructed object alone is not a capability: it must carry the
-        immutable artifact SHA, observe a committed cutover fuse, and retain
-        the durable Literature intent/work/outbox schema that recovery needs.
+        immutable artifact SHA and retain the durable Literature
+        intent/work/outbox schema that recovery needs.
         """
 
         if not self._artifact_sha:
             return False
         try:
-            self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
             with closing(self._connect()) as conn:
                 rows = conn.execute(
                     """
@@ -153,7 +150,7 @@ class LiteratureTaskSagaService:
                     )
                     """
                 ).fetchall()
-        except (DomainCutoverError, sqlite3.Error):
+        except sqlite3.Error:
             return False
         return {str(row["name"]) for row in rows} == {
             "literature_research_task_intents",
@@ -161,22 +158,20 @@ class LiteratureTaskSagaService:
             "literature_outbox",
         }
 
-    def _require_v2_writable(self) -> None:
+    def _require_writable(self) -> None:
         """Fail closed before a saga can cross into the Task write model.
 
         HTTP routes are not the only callers: durable Literature work may be
         recovered by a process that imports this service directly.  The
-        cutover fuse therefore belongs at the saga boundary as well, with the
-        exact immutable artifact binding used by the domain worker.
+        immutable artifact binding therefore belongs at the saga seam as well.
         """
 
         if self._maintenance.status().is_active:
             raise MaintenanceModeError("Literature research Tasks are paused for maintenance")
         if not self._artifact_sha:
-            raise DomainCutoverError(
-                "Literature research Tasks require the committed v2 artifact SHA"
+            raise DomainWriteFenceError(
+                "Literature research Tasks require the immutable current artifact SHA"
             )
-        self._cutover.assert_v2_writable(artifact_sha=self._artifact_sha)
 
     def _assert_maintenance_unchanged(self) -> None:
         """Reject a Literature-side commit that crossed into maintenance.
@@ -213,7 +208,7 @@ class LiteratureTaskSagaService:
         retries safe across the database boundary.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         actor = self._actor(user)
         normalized_project_id = project_id.strip()
         normalized_workspace_id = workspace_id.strip() if workspace_id is not None else None
@@ -458,7 +453,7 @@ class LiteratureTaskSagaService:
         lease and the underlying Task writer has its own idempotency fence.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         if limit <= 0:
             raise ValueError("limit must be positive")
         now = _now()
@@ -497,7 +492,7 @@ class LiteratureTaskSagaService:
     def recover_work_item(self, work_item_id: str, *, worker_id: str) -> dict[str, object] | None:
         """Recover the intent named by a durable Literature work item."""
 
-        self._require_v2_writable()
+        self._require_writable()
         with closing(self._connect()) as conn:
             row = conn.execute(
                 """
@@ -524,7 +519,7 @@ class LiteratureTaskSagaService:
         because it has no HTTP caller to present that synchronous outcome to.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         claimed = self._claim_intent(intent_id, worker_id)
         if claimed is None:
             return self._intent_by_id(intent_id)
@@ -545,8 +540,10 @@ class LiteratureTaskSagaService:
                 self._record_task_created(intent_id, worker_id, recovered_task_id)
                 self._persist_completed_link(intent_id, worker_id, recovered_task_id)
                 return self._intent_by_id(intent_id)
-            current_actor = self._current_active_actor(str(claimed["user_id"]))
-            task = self._tasks.create_task(
+            current_actor = cast(
+                dict[str, object], self._current_active_actor(str(claimed["user_id"]))
+            )
+            task = self._conversation.create_task(
                 current_actor,
                 project_id=str(request["project_id"]),
                 workspace_id=str(request["workspace_id"]),
@@ -558,7 +555,7 @@ class LiteratureTaskSagaService:
             )
             task_id = task.get("task_id")
             if not isinstance(task_id, str) or not task_id:
-                raise RuntimeError("Task application service returned no task_id")
+                raise RuntimeError("Conversation application service returned no task_id")
             self._record_task_created(intent_id, worker_id, task_id)
             self._persist_completed_link(intent_id, worker_id, task_id)
         except Exception as exc:
@@ -569,7 +566,7 @@ class LiteratureTaskSagaService:
                     DomainConflictError,
                     DomainNotFoundError,
                     DomainPermissionError,
-                    DomainCutoverError,
+                    DomainWriteFenceError,
                     MaintenanceModeError,
                 ),
             ):
@@ -608,7 +605,7 @@ class LiteratureTaskSagaService:
             # principal rather than as a row in auth.sqlite3.  There is no
             # persisted admin capability to replay here: this fixed role can
             # only act through the Project membership/ownership and
-            # Environment grant already checked by TaskApplicationService.
+            # Environment grant already checked by the Conversation Module.
             # Keep it aligned with the Project Module's explicit API-key principal
             # exception instead of treating an absent auth row as a bypass.
             return {"id": user_id, "role": "user"}
@@ -1205,7 +1202,7 @@ class LiteratureTaskSagaService:
     def _task_id_from_domain_idempotency(self, intent: sqlite3.Row) -> str | None:
         """Find a Task created before a process died before Literature checkpoint.
 
-        ``TaskApplicationService.create_task`` checks current authorization
+        ``ConversationApplicationService.create_task`` checks current authorization
         before its idempotency record.  That is correct for a new request, but
         a saga recovery must be able to finish a pre-existing Task link after a
         later grant/project change.  This is a read-only lookup scoped to the

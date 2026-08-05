@@ -14,7 +14,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
 
-from ainrf.domain.attempt_projection import AttemptProjectionService, TOKEN_TOTAL_FIELDS
+TOKEN_TOTAL_FIELDS: tuple[str, ...] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
 
 
 def _mapping(value: object) -> Mapping[str, object]:
@@ -258,4 +263,159 @@ class ConversationProjectionService:
 
     @staticmethod
     def usage_json(projection: ConversationTaskProjection) -> str | None:
-        return AttemptProjectionService.usage_json(projection.turns)
+        total: dict[str, int | float] = {field: 0 for field in TOKEN_TOTAL_FIELDS}
+        total["cost_usd"] = 0.0
+        by_model: dict[str, dict[str, int | float]] = {}
+        has_usage = False
+        for turn in projection.turns:
+            raw = turn.get("token_usage_json")
+            if not isinstance(raw, str):
+                continue
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            usage = _mapping(payload)
+            raw_total = _mapping(usage.get("total"))
+            if not raw_total:
+                continue
+            has_usage = True
+            for field in TOKEN_TOTAL_FIELDS:
+                total[field] = _integer(total[field]) + _integer(raw_total.get(field))
+            total["cost_usd"] = _number(total["cost_usd"]) + _number(raw_total.get("cost_usd"))
+            for model, raw_model in _mapping(usage.get("by_model")).items():
+                model_usage = _mapping(raw_model)
+                aggregate = by_model.setdefault(
+                    str(model),
+                    {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
+                )
+                for field in TOKEN_TOTAL_FIELDS:
+                    aggregate[field] = _integer(aggregate[field]) + _integer(model_usage.get(field))
+                aggregate["cost_usd"] = _number(aggregate["cost_usd"]) + _number(
+                    model_usage.get("cost_usd")
+                )
+                aggregate["tokens"] = sum(
+                    _integer(aggregate[field]) for field in TOKEN_TOTAL_FIELDS
+                )
+        if not has_usage:
+            return None
+        return json.dumps(
+            {"total": total, "by_model": by_model},
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def usage_summary_for_tasks(
+        task_rows: Sequence[sqlite3.Row],
+        projections: Mapping[str, ConversationTaskProjection],
+    ) -> dict[str, object]:
+        """Aggregate usage and duration from canonical Turn/Item projections."""
+
+        summary: dict[str, object] = {
+            "task_count": len(task_rows),
+            "tasks_with_usage": 0,
+            "total_tokens": 0,
+            "total_cost_usd": 0.0,
+            "total_duration_ms": 0,
+            "median_duration_ms": None,
+            "top_tasks": [],
+            "total": {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0},
+            "by_model": {},
+            "by_engine": {},
+        }
+        durations: list[int] = []
+        top_tasks: list[dict[str, int | float | str | None]] = []
+        total_tokens = 0
+        total_cost = 0.0
+        by_engine: dict[str, dict[str, int | float]] = {}
+        by_model: dict[str, dict[str, int | float]] = {}
+        total_usage = {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0}
+
+        for row in task_rows:
+            task_id = str(row["task_id"])
+            projection = projections.get(task_id)
+            turns = () if projection is None else projection.turns
+            duration = sum(
+                duration_ms
+                for turn in turns
+                if isinstance(duration_ms := turn.get("duration_ms"), int)
+            )
+            if duration:
+                durations.append(duration)
+            usage_json = (
+                None if projection is None else ConversationProjectionService.usage_json(projection)
+            )
+            has_usage = usage_json is not None
+            task_tokens = 0
+            task_cost = 0.0
+            if usage_json is not None:
+                try:
+                    usage = _mapping(json.loads(usage_json))
+                except json.JSONDecodeError:
+                    usage = {}
+                raw_total = _mapping(usage.get("total"))
+                for field in TOKEN_TOTAL_FIELDS:
+                    value = _integer(raw_total.get(field))
+                    total_usage[field] = _integer(total_usage[field]) + value
+                    task_tokens += value
+                task_cost = _number(raw_total.get("cost_usd"))
+                total_usage["cost_usd"] = _number(total_usage["cost_usd"]) + task_cost
+                for model, raw_model in _mapping(usage.get("by_model")).items():
+                    model_usage = _mapping(raw_model)
+                    aggregate = by_model.setdefault(
+                        str(model),
+                        {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
+                    )
+                    for field in TOKEN_TOTAL_FIELDS:
+                        aggregate[field] = _integer(aggregate[field]) + _integer(
+                            model_usage.get(field)
+                        )
+                    aggregate["cost_usd"] = _number(aggregate["cost_usd"]) + _number(
+                        model_usage.get("cost_usd")
+                    )
+                    aggregate["tokens"] = sum(
+                        _integer(aggregate[field]) for field in TOKEN_TOTAL_FIELDS
+                    )
+            engine = str(row["harness_engine"])
+            engine_summary = by_engine.setdefault(
+                engine,
+                {"task_count": 0, "tasks_with_usage": 0, "tokens": 0, "cost_usd": 0.0},
+            )
+            engine_summary["task_count"] = _integer(engine_summary["task_count"]) + 1
+            engine_summary["tokens"] = _integer(engine_summary["tokens"]) + task_tokens
+            engine_summary["cost_usd"] = _number(engine_summary["cost_usd"]) + task_cost
+            if has_usage:
+                summary["tasks_with_usage"] = int(summary["tasks_with_usage"]) + 1
+                engine_summary["tasks_with_usage"] = (
+                    _integer(engine_summary["tasks_with_usage"]) + 1
+                )
+            total_tokens += task_tokens
+            total_cost += task_cost
+            if task_tokens:
+                top_tasks.append(
+                    {
+                        "task_id": task_id,
+                        "title": str(row["title"]),
+                        "status": str(row["status"]),
+                        "harness_engine": engine,
+                        "total_tokens": task_tokens,
+                        "cost_usd": task_cost,
+                        "duration_ms": duration or None,
+                    }
+                )
+
+        summary["total_tokens"] = total_tokens
+        summary["total_cost_usd"] = total_cost
+        summary["total_duration_ms"] = sum(durations)
+        summary["median_duration_ms"] = (
+            int(sorted(durations)[len(durations) // 2]) if durations else None
+        )
+        summary["top_tasks"] = sorted(
+            top_tasks, key=lambda item: (-int(item["total_tokens"] or 0), str(item["task_id"]))
+        )[:5]
+        summary["total"] = total_usage
+        summary["by_model"] = by_model
+        summary["by_engine"] = by_engine
+        return summary

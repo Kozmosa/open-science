@@ -14,8 +14,7 @@ from ainrf.api.transport_schema import build_transport_openapi
 from ainrf.auth.service import AuthService
 from ainrf.domain import ProjectContextService, ProjectModule
 from ainrf.literature.tracking import DiscoveredPaper
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-from tests.testutil import get_jwt_headers, prepare_v2_test_state
+from tests.testutil import CURRENT_ARTIFACT_SHA, get_jwt_headers, prepare_current_test_state
 
 pytestmark = [pytest.mark.api]
 
@@ -27,7 +26,7 @@ def _body(response: httpx.Response) -> dict[str, object]:
 
 
 def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
-    artifact_sha = prepare_v2_test_state(tmp_path)
+    artifact_sha = prepare_current_test_state(tmp_path)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
@@ -205,12 +204,12 @@ async def test_tracking_api_uses_topics_user_states_and_durable_checks(tmp_path:
 
 def _v2_literature_app(state_root: Path, tmp_path: Path) -> tuple[FastAPI, str]:
     api_key = "literature-v2-key"
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(api_key)}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
     owner: dict[str, object] = {"id": "api-key-user", "role": "user"}

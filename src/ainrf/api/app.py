@@ -52,11 +52,7 @@ from ainrf.skills.registry_config_service import SkillRegistryConfigService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
-from ainrf.domain_control import (
-    DomainCutoverController,
-    DomainMaintenanceService,
-    DomainWriteParticipant,
-)
+from ainrf.domain_control import DomainMaintenanceService, DomainWriteParticipant
 from ainrf.domain import (
     ConversationApplicationService,
     build_domain_modules,
@@ -64,7 +60,6 @@ from ainrf.domain import (
     PersistentEnvironmentFacade,
     PersistentWorkspaceFacade,
     ProjectContextService,
-    TaskApplicationService,
     TaskProjectionService,
 )
 from ainrf.domain.environment_observations import PersistentEnvironmentObservationService
@@ -126,20 +121,6 @@ def _maintenance_is_active_read_only(state_root: Path) -> bool:
             "persisted domain maintenance state is malformed; refusing writable API startup"
         )
     return bool(row[0])
-
-
-def _assert_domain_runtime_fuse(config: ApiConfig, controller: DomainCutoverController) -> None:
-    """Reject binaries whose configured mode disagrees with the DB fuse.
-
-    This deliberately runs before construction of writable runtime Modules.
-    Every process needs the exact immutable artifact prepared for the committed
-    cutover.
-    """
-
-    artifact_sha = config.domain_artifact_sha
-    if not artifact_sha:
-        raise ValueError("AINRF_DOMAIN_ARTIFACT_SHA is required")
-    controller.assert_v2_writable(artifact_sha=artifact_sha)
 
 
 ROUTERS: tuple[APIRouter, ...] = (
@@ -350,8 +331,8 @@ def create_app(
 ) -> FastAPI:
     api_config = config or ApiConfig.from_env()
     runtime_paths = api_config.runtime_paths
-    # This must happen before DomainCutoverController, v2 facades, the legacy
-    # default Workspace helper, or the saga.  Several of those constructors
+    # This must happen before v2 facades, the legacy default Workspace helper,
+    # or the saga.  Several of those constructors
     # otherwise create directories or run migrations as a side effect.
     maintenance_startup_read_only = _maintenance_is_active_read_only(api_config.state_root)
     default_workspace_dir = runtime_paths.default_workspace_dir
@@ -413,13 +394,11 @@ def create_app(
         # whose construction might create a source file, run a migration, or
         # initialize an external runtime is attached.  Exiting maintenance
         # therefore requires a clean restart to regain the writable graph.
-        app.state.domain_cutover_controller = None
         app.state.project_module = None
         app.state.workspace_module = None
         app.state.environment_module = None
         app.state.project_context_service = None
         app.state.persistent_environment_facade = None
-        app.state.task_application_service = None
         app.state.conversation_application_service = None
         app.state.task_projection_service = None
         app.state.project_task_projection_service = None
@@ -441,10 +420,6 @@ def create_app(
         app.state.literature_tracking_service = None
         app.state.literature_task_saga_service = None
     else:
-        domain_cutover_controller = DomainCutoverController(api_config.state_root)
-        _assert_domain_runtime_fuse(api_config, domain_cutover_controller)
-        app.state.domain_cutover_controller = domain_cutover_controller
-
         environment_service = PersistentEnvironmentFacade(api_config.state_root)
         workspace_service = PersistentWorkspaceFacade(api_config.state_root)
         domain_modules = build_domain_modules(api_config.state_root, artifact_sha=artifact_sha)
@@ -455,9 +430,6 @@ def create_app(
             api_config.state_root, artifact_sha=artifact_sha
         )
         app.state.persistent_environment_facade = PersistentEnvironmentFacade(api_config.state_root)
-        app.state.task_application_service = TaskApplicationService(
-            api_config.state_root, artifact_sha=artifact_sha
-        )
         app.state.conversation_application_service = ConversationApplicationService(
             api_config.state_root, artifact_sha=artifact_sha
         )

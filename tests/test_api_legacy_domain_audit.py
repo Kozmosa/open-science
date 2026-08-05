@@ -32,19 +32,11 @@ def _seed_legacy_record(state_root: Path) -> None:
     with closing(connect(db_path)) as conn:
         conn.execute(
             """
-            INSERT INTO domain_migration_runs
-                (run_id, mode, source_manifest_json, code_version, status, started_at)
-            VALUES ('audit-run', 'apply', '{}', 'test', 'finished',
-                '2026-07-12T00:00:00+00:00')
-            """
-        )
-        conn.execute(
-            """
             INSERT INTO legacy_domain_records (
                 legacy_record_id, run_id, record_type, payload_json, created_at,
                 source_path, source_record_id, source_payload_sha256, reason
             ) VALUES (?, 'audit-run', 'session', ?, '2026-07-12T00:00:00+00:00',
-                'runtime/sessions.sqlite3', 'legacy-session-1', ?, 'no Task mapping')
+                'legacy-export.json', 'legacy-session-1', ?, 'no Task mapping')
             """,
             (
                 "legacy-session-1",
@@ -85,7 +77,7 @@ async def test_admin_can_list_and_inspect_redacted_unmapped_legacy_records(
                 "legacy_record_id": "legacy-session-1",
                 "run_id": "audit-run",
                 "record_type": "session",
-                "source_path": "runtime/sessions.sqlite3",
+                "source_path": "legacy-export.json",
                 "source_record_id": "legacy-session-1",
                 "source_payload_sha256": "a" * 64,
                 "reason": "no Task mapping",

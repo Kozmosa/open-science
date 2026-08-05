@@ -73,9 +73,6 @@ class ExecutionContext:
     session_state_path: str | None = None
     tenant_user: str | None = None
     skill_load_dir: str | None = None
-    # Prior user/assistant messages from task_outputs for context recovery.
-    # Each dict is {"role": "user"|"assistant", "content": "..."}.
-    prior_messages: list[dict[str, str]] | None = None
     # Maximum allowed seconds without any engine event while the engine is
     # supposed to be alive.  When exceeded and the engine is not alive, the
     # service watchdog marks the task FAILED.

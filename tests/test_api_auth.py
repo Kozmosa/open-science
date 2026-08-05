@@ -8,8 +8,7 @@ import pytest
 
 from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-from tests.testutil import get_jwt_headers
+from tests.testutil import CURRENT_ARTIFACT_SHA, get_jwt_headers, prepare_current_test_state
 
 pytestmark = [pytest.mark.api]
 
@@ -261,12 +260,12 @@ def test_api_config_uses_login_shell_by_default(
 async def test_v2_registration_uses_durable_default_project_provisioning(
     tmp_path: Path,
 ) -> None:
-    prepare_committed_v2_cutover(tmp_path, tmp_path)
+    prepare_current_test_state(tmp_path)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("secret-key")}),
             state_root=tmp_path,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
             public_registration_enabled=True,
         )
     )

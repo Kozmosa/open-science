@@ -1382,82 +1382,19 @@ def _is_supported_member_path(relative_path: str) -> bool:
     return root not in _ARCHIVE_RESERVED_ROOTS
 
 
-def _staged_domain_reconciliation_target(candidate_root: Path) -> tuple[str | None, str | None]:
-    """Read the restored domain fuse and latest run without mutating it.
+def validate_staged_domain_restore(candidate_root: Path, manifest: BackupManifest) -> None:
+    """Validate a staged restore without mutating or importing legacy state."""
 
-    Legacy S0 archives legitimately predate the domain tables.  Those still
-    receive the SQLite and member-level verifier, while a candidate containing
-    migration state gets the full reconciliation pass below.
-    """
-
+    del manifest
     database_path = candidate_root / "runtime" / "agentic_researcher.sqlite3"
     if not database_path.is_file():
-        return None, None
-    database_uri = f"{database_path.resolve().as_uri()}?mode=ro"
-    with closing(sqlite3.connect(database_uri, uri=True)) as conn:
-        tables = {
-            str(row[0])
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-        }
-        if "domain_migration_runs" not in tables:
-            return None, None
-
-        run_row = conn.execute(
-            "SELECT run_id FROM domain_migration_runs ORDER BY started_at DESC LIMIT 1"
-        ).fetchone()
-        latest_run_id = str(run_row[0]) if run_row is not None else None
-        if "domain_cutover_state" not in tables:
-            return "legacy", latest_run_id
-
-        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(domain_cutover_state)")}
-        if "state" not in columns:
-            return "legacy", latest_run_id
-        if "cutover_run_id" not in columns:
-            raise ValueError("domain cutover state is missing cutover_run_id")
-        row = conn.execute(
-            "SELECT state, cutover_run_id FROM domain_cutover_state WHERE singleton = 1"
-        ).fetchone()
-        if row is None:
-            raise ValueError("domain cutover state is missing its singleton row")
-        state = str(row[0])
-        if state not in {"legacy", "prepared", "v2"}:
-            raise ValueError(f"invalid restored domain cutover state: {state}")
-        bound_run_id = row[1]
-        if bound_run_id is not None and not isinstance(bound_run_id, str):
-            raise ValueError("domain cutover state has an invalid cutover_run_id")
-        if state in {"prepared", "v2"} and not bound_run_id:
-            raise ValueError(f"{state} domain cutover is missing its migration run")
-        return state, bound_run_id or latest_run_id
-
-
-def validate_staged_domain_restore(candidate_root: Path, manifest: BackupManifest) -> None:
-    """Run the domain reconciliation gate without mutating the candidate root.
-
-    ``DomainReconciliationService.reconcile`` writes its report heartbeat and
-    cutover eligibility.  Promotion must retain the exact verified archive
-    generation, so reconciliation runs against a disposable copy of the
-    candidate.  Legacy archives without a migration run remain supported; a
-    prepared or committed v2 candidate must have a clean, cutover-ready report.
-    """
-
-    del manifest  # The service signature matches StagedRestoreValidator.
-    state, run_id = _staged_domain_reconciliation_target(candidate_root)
-    if run_id is None:
         return
-
-    with tempfile.TemporaryDirectory(prefix="ainrf-restore-reconciliation-") as temporary:
-        reconciliation_root = Path(temporary) / "state"
-        shutil.copytree(candidate_root, reconciliation_root)
-        from ainrf.domain_migration import DomainReconciliationService
-
-        try:
-            report = DomainReconciliationService(reconciliation_root).reconcile(run_id)
-        except (OSError, ValueError, sqlite3.Error) as exc:
-            raise ValueError("domain reconciliation rejected staged restore") from exc
-
-    if state in {"prepared", "v2"} and (report.blocking_issues or not report.cutover_allowed):
-        detail = ", ".join(report.blocking_issues) or "cutover is not ready"
-        raise ValueError(f"domain reconciliation rejected staged restore: {detail}")
+    with closing(sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)) as conn:
+        row = conn.execute(
+            "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
+        ).fetchone()
+    if row is None:
+        raise ValueError("staged restore is missing the current domain schema version")
 
 
 def _restored_member_path(
@@ -2042,9 +1979,6 @@ class BackupService:
                 )
                 for validator in validators:
                     validator(candidate_root, manifest)
-                candidate_domain_state, _candidate_run_id = _staged_domain_reconciliation_target(
-                    candidate_root
-                )
                 _write_high_risk_restore_report(
                     candidate_root,
                     workspace_root=(
@@ -2058,7 +1992,7 @@ class BackupService:
                         if candidate_tenant_root is not None and candidate_tenant_root.is_dir()
                         else None
                     ),
-                    control_plane_v2=candidate_domain_state == "v2",
+                    control_plane_v2=True,
                 )
                 _write_restore_generation_attestation(candidate_root, manifest)
 

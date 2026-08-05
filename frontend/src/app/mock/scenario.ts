@@ -119,7 +119,6 @@ function makeCapabilities(): DomainCapabilities {
     standard_task_create: true,
     project_context: true,
     workspace_links: true,
-    task_attempts: true,
     task_dispatcher: {
       participant_type: 'task-dispatcher',
       ready: true,
@@ -469,7 +468,6 @@ function createState(): FrontendV2MockState {
         created_by_user_id: OWNER_ID,
         source_metadata: { source: 'task-seed' },
         source_task_id: 'task-seed',
-        source_attempt_id: 'attempt-task-seed-1',
         accepted_by_user_id: null,
         accepted_at: null,
         rejected_by_user_id: null,

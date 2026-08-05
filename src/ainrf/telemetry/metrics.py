@@ -42,11 +42,6 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_task_completed_total", [], "Tasks completed"),
     ("ainrf_task_failed_total", [], "Tasks failed"),
     (
-        "ainrf_domain_legacy_write_attempts_total",
-        ["source"],
-        "Blocked attempts to mutate sealed legacy domain state",
-    ),
-    (
         "ainrf_domain_idempotency_requests_total",
         ["outcome"],
         "Domain idempotency transport and durable replay outcomes",
@@ -155,21 +150,6 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
         "Unix timestamp of the last literature fetch by privacy-safe aggregate scope",
     ),
     (
-        "ainrf_domain_mode_info",
-        ["mode"],
-        "One for the durable domain cutover mode currently in effect",
-    ),
-    (
-        "ainrf_domain_runtime_mode_info",
-        ["mode"],
-        "One for the authoritative domain runtime mode currently in effect",
-    ),
-    (
-        "ainrf_domain_contract_version",
-        [],
-        "Durable domain cutover contract version",
-    ),
-    (
         "ainrf_domain_metrics_scrape_success",
         [],
         "Whether the most recent durable domain metric scrape completed",
@@ -195,24 +175,19 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
         "One when the current domain telemetry source is in the bounded state",
     ),
     (
-        "ainrf_domain_dispatch_outbox_oldest_age_seconds",
+        "ainrf_domain_turn_submission_oldest_pending_age_seconds",
         [],
-        "Age of the oldest recoverable or launch-unknown durable task dispatch",
+        "Age of the oldest ready, stale, or delivery-unknown Turn submission",
     ),
     (
-        "ainrf_domain_dispatch_outbox_backlog",
+        "ainrf_domain_turn_submission_backlog",
         [],
-        "Count of recoverable or launch-unknown durable task dispatches",
+        "Count of ready, stale, or delivery-unknown Turn submissions",
     ),
     (
-        "ainrf_domain_dispatch_outbox_entries",
+        "ainrf_domain_turn_submission_entries",
         ["state"],
-        "Recoverable durable task dispatch count by bounded backlog state",
-    ),
-    (
-        "ainrf_domain_orphan_attempts",
-        ["reason"],
-        "Attempt rows whose required durable reference is missing",
+        "Turn submission backlog count by bounded recovery state",
     ),
     (
         "ainrf_domain_idempotency_records",

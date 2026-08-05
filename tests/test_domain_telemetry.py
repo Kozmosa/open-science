@@ -72,24 +72,26 @@ def _seed_control_plane(state_root: Path) -> None:
                 task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine,
                 status, title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('telemetry-task', 'telemetry-project', 'telemetry-workspace',
-                      'telemetry-environment', 'research', 'test', 'queued', 'Telemetry',
+                      'telemetry-environment', 'general', 'codex-app-server', 'queued', 'Telemetry',
                       'collect telemetry', ?, ?, 'telemetry-user')
             """,
             (_timestamp(minutes_ago=12), _timestamp(minutes_ago=12)),
         )
         conn.execute(
             """
-            INSERT INTO agent_task_attempts (
-                attempt_id, task_id, attempt_seq, trigger, status, created_at
-            ) VALUES ('telemetry-attempt', 'telemetry-task', 1, 'create', 'queued', ?)
+            INSERT INTO conversation_task_authorities (task_id, authority, created_at)
+            VALUES ('telemetry-task', 'conversation_v3', ?)
             """,
             (_timestamp(minutes_ago=12),),
         )
         conn.execute(
             """
-            INSERT INTO task_dispatch_outbox (
-                dispatch_id, task_id, attempt_id, status, created_at, updated_at
-            ) VALUES ('telemetry-dispatch', 'telemetry-task', 'telemetry-attempt', 'pending', ?, ?)
+            INSERT INTO turn_submissions (
+                submission_id, task_id, reserved_turn_id, actor_user_id,
+                idempotency_key, request_hash, status, input_json, created_at, updated_at
+            ) VALUES ('telemetry-submission', 'telemetry-task', 'telemetry-turn',
+                      'telemetry-user', 'telemetry-submission-key', 'submission-hash',
+                      'queued', '{"text":"collect telemetry"}', ?, ?)
             """,
             (_timestamp(minutes_ago=12), _timestamp(minutes_ago=12)),
         )
@@ -155,26 +157,22 @@ def _seed_control_plane(state_root: Path) -> None:
         conn.commit()
 
 
-def test_refresh_reads_migrated_durable_control_plane_state(tmp_path: Path) -> None:
+def test_refresh_reads_current_durable_control_plane_state(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
 
     snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.mode == "legacy"
-    assert snapshot.contract_version == 2
-    assert snapshot.outbox_oldest_age_seconds >= 11 * 60
-    assert snapshot.outbox_backlog_count == 1
+    assert snapshot.submission_oldest_pending_age_seconds >= 11 * 60
+    assert snapshot.submission_backlog_count == 1
     assert snapshot.idempotency_record_count == 1
     assert snapshot.literature_pending_age_seconds >= 17 * 60
     assert snapshot.overview_oldest_age_seconds >= 5 * 60
     assert snapshot.overview_missing_active_user_count == 0
 
     text = get_metrics_text()
-    assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
-    assert "ainrf_domain_contract_version 2.0" in text
     assert "ainrf_domain_metrics_scrape_success 1.0" in text
     assert 'ainrf_domain_telemetry_source_status{source="control",state="ready"} 1.0' in text
-    assert "ainrf_domain_dispatch_outbox_oldest_age_seconds" in text
+    assert "ainrf_domain_turn_submission_oldest_pending_age_seconds" in text
     assert 'ainrf_domain_literature_saga_intents{status="pending"} 1.0' in text
     assert 'ainrf_domain_overview_refresh_jobs{status="queued"} 1.0' in text
 
@@ -206,7 +204,7 @@ def test_active_maintenance_telemetry_scrape_does_not_initialize_sidecar(
     before = _sqlite_source_digest(sources)
     snapshot = refresh_domain_metrics(tmp_path, read_only=True)
 
-    assert snapshot.outbox_backlog_count == 1
+    assert snapshot.submission_backlog_count == 1
     assert _sqlite_source_digest(sources) == before
 
 
@@ -224,7 +222,7 @@ def test_read_only_telemetry_defers_a_wal_source_without_changing_it(tmp_path: P
 
     snapshot = refresh_domain_metrics(tmp_path, read_only=True)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     assert _sqlite_source_digest(sources) == before
     text = get_metrics_text()
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
@@ -248,7 +246,7 @@ def test_read_only_telemetry_failure_never_records_a_durable_sqlite_error(
 
     snapshot = refresh_domain_metrics(tmp_path, read_only=True)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     assert "ainrf_domain_metrics_risk_state_known 0.0" in get_metrics_text()
 
 
@@ -261,7 +259,7 @@ def test_read_only_telemetry_failure_never_records_a_durable_sqlite_error(
         ("overview", "schema_invalid"),
     ),
 )
-def test_v2_missing_required_telemetry_source_fails_closed(
+def test_current_missing_required_telemetry_source_fails_closed(
     tmp_path: Path,
     source: str,
     expected_state: str,
@@ -275,48 +273,50 @@ def test_v2_missing_required_telemetry_source_fails_closed(
         (runtime_root / "literature.sqlite3").unlink()
     elif source == "control":
         with closing(sqlite3.connect(control_path)) as conn:
-            conn.execute("DROP TABLE task_dispatch_outbox")
+            conn.execute("DROP TABLE turn_submissions")
             conn.commit()
     else:
         with closing(sqlite3.connect(control_path)) as conn:
             conn.execute("DROP TABLE overview_snapshots")
             conn.commit()
 
-    snapshot = refresh_domain_metrics(tmp_path, runtime_mode="v2")
+    snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
-    assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
+    assert "ainrf_domain_turn_submission_backlog NaN" in text
     assert (
         f'ainrf_domain_telemetry_source_status{{source="{source}",state="{expected_state}"}} 1.0'
         in text
     )
 
 
-def test_v2_source_readiness_failure_never_reuses_cached_risk_gauges(tmp_path: Path) -> None:
+def test_current_source_readiness_failure_never_reuses_cached_risk_gauges(
+    tmp_path: Path,
+) -> None:
     _seed_control_plane(tmp_path)
-    expected = refresh_domain_metrics(tmp_path, runtime_mode="v2")
-    assert expected.outbox_backlog_count == 1
+    expected = refresh_domain_metrics(tmp_path)
+    assert expected.submission_backlog_count == 1
     (tmp_path / "runtime" / "auth.sqlite3").unlink()
 
-    actual = refresh_domain_metrics(tmp_path, runtime_mode="v2")
+    actual = refresh_domain_metrics(tmp_path)
 
-    assert actual.mode == "unknown"
+    assert actual.submission_backlog_count == 0
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
-    assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
+    assert "ainrf_domain_turn_submission_backlog NaN" in text
     assert 'ainrf_domain_telemetry_source_status{source="auth",state="missing"} 1.0' in text
 
 
-def test_v2_unavailable_control_source_never_reuses_cached_risk_gauges(
+def test_unavailable_control_source_retains_cached_risk_with_red_readiness(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_control_plane(tmp_path)
-    expected = refresh_domain_metrics(tmp_path, runtime_mode="v2")
-    assert expected.outbox_backlog_count == 1
+    expected = refresh_domain_metrics(tmp_path)
+    assert expected.submission_backlog_count == 1
     control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
     original_read_only = domain_telemetry._read_only
 
@@ -327,45 +327,70 @@ def test_v2_unavailable_control_source_never_reuses_cached_risk_gauges(
 
     monkeypatch.setattr(domain_telemetry, "_read_only", _raise_control_locked)
 
-    actual = refresh_domain_metrics(tmp_path, runtime_mode="v2")
+    actual = refresh_domain_metrics(tmp_path)
 
-    assert actual.mode == "unknown"
+    assert actual == expected
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
-    assert "ainrf_domain_metrics_risk_state_known 0.0" in text
-    assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
+    assert "ainrf_domain_metrics_risk_state_known 1.0" in text
+    assert "ainrf_domain_turn_submission_backlog 1.0" in text
     assert 'ainrf_domain_telemetry_source_status{source="control",state="unavailable"} 1.0' in text
 
 
-def test_v2_schema_readiness_rejects_an_old_auth_source(tmp_path: Path) -> None:
+def test_unavailable_external_source_retains_cached_risk_with_red_readiness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_control_plane(tmp_path)
+    expected = refresh_domain_metrics(tmp_path)
+    assert expected.submission_backlog_count == 1
+    auth_path = tmp_path / "runtime" / "auth.sqlite3"
+    original_read_only = domain_telemetry._read_only
+
+    def _raise_auth_locked(path: Path) -> sqlite3.Connection:
+        if path == auth_path:
+            raise sqlite3.OperationalError("database is locked")
+        return original_read_only(path)
+
+    monkeypatch.setattr(domain_telemetry, "_read_only", _raise_auth_locked)
+
+    actual = refresh_domain_metrics(tmp_path)
+
+    assert actual == expected
+    text = get_metrics_text()
+    assert "ainrf_domain_metrics_scrape_success 0.0" in text
+    assert "ainrf_domain_metrics_risk_state_known 1.0" in text
+    assert "ainrf_domain_turn_submission_backlog 1.0" in text
+    assert 'ainrf_domain_telemetry_source_status{source="auth",state="unavailable"} 1.0' in text
+
+
+def test_current_schema_readiness_rejects_an_old_auth_source(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
     auth_path = tmp_path / "runtime" / "auth.sqlite3"
     with closing(sqlite3.connect(auth_path)) as conn:
         conn.execute("UPDATE _schema_version SET version = 1 WHERE database = 'auth'")
         conn.commit()
 
-    snapshot = refresh_domain_metrics(tmp_path, runtime_mode="v2")
+    snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
     assert 'ainrf_domain_telemetry_source_status{source="auth",state="schema_invalid"} 1.0' in text
 
 
-def test_durable_v2_mode_requires_a_committed_control_fuse(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_current_control_source_rejects_pre_retirement_schema(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
-
-    def _invalid_v2_mode(_conn: sqlite3.Connection, _tables: set[str]) -> tuple[str, int]:
-        return "v2", 1
-
-    monkeypatch.setattr(domain_telemetry, "_cutover_state", _invalid_v2_mode)
+    control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
+    with closing(sqlite3.connect(control_path)) as conn:
+        conn.execute(
+            "UPDATE _schema_version SET version = 32 WHERE database = 'agentic_researcher'"
+        )
+        conn.commit()
 
     snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
@@ -449,7 +474,7 @@ def test_truncated_persisted_snapshot_never_becomes_a_known_risk_state(
         ).fetchone()
         assert row is not None
         payload = json.loads(str(row[0]))
-        payload["outbox_backlog"].pop()
+        payload["submission_backlog"].pop()
         conn.execute(
             "UPDATE domain_telemetry_snapshots SET payload_json = ? WHERE singleton = 1",
             (json.dumps(payload),),
@@ -469,17 +494,17 @@ def test_truncated_persisted_snapshot_never_becomes_a_known_risk_state(
         return original_read_only(path)
 
     monkeypatch.setattr(domain_telemetry, "_read_only", _raise_locked)
-    refresh_domain_metrics(tmp_path, runtime_mode="validate")
+    refresh_domain_metrics(tmp_path)
 
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
-    assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
+    assert "ainrf_domain_turn_submission_backlog NaN" in text
 
 
 def test_duplicate_persisted_dynamic_counter_is_rejected(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
-    domain_telemetry.record_legacy_write_attempt(source="legacy_json", state_root=tmp_path)
+    domain_telemetry.record_idempotency_event("accepted", state_root=tmp_path)
     refresh_domain_metrics(tmp_path)
     sidecar = tmp_path / "runtime" / "domain_telemetry.sqlite3"
     with closing(sqlite3.connect(sidecar)) as conn:
@@ -491,7 +516,7 @@ def test_duplicate_persisted_dynamic_counter_is_rejected(tmp_path: Path) -> None
     counter = next(
         item
         for item in payload["durable_counters"]
-        if item["metric_name"] == "ainrf_domain_legacy_write_attempts_total"
+        if item["metric_name"] == "ainrf_domain_idempotency_requests_total"
     )
     payload["durable_counters"].append(counter)
 
@@ -519,6 +544,39 @@ def test_idempotency_telemetry_redacts_raw_key_from_structured_logs() -> None:
     assert 'ainrf_domain_idempotency_requests_total{outcome="accepted"} 1.0' in get_metrics_text()
 
 
+def test_durable_idempotency_logs_only_current_conversation_correlations() -> None:
+    request = {
+        "task_id": "task-current",
+        "attempt_id": "attempt-retired",
+        "runtime_session_id": "session-retired",
+        "migration_run_id": "migration-retired",
+    }
+    response = {
+        "reserved_turn_id": "turn-current",
+        "submission_id": "submission-current",
+        "runtime_execution_id": "execution-current",
+    }
+
+    with structlog.testing.capture_logs() as logs:
+        domain_telemetry.record_durable_idempotency_event(
+            "reused",
+            actor_user_id="telemetry-user",
+            scope="task.turn.retry",
+            idempotency_key="current-key",
+            request=request,
+            response=response,
+        )
+
+    entry = logs[0]
+    assert entry["task_id"] == "task-current"
+    assert entry["turn_id"] == "turn-current"
+    assert entry["submission_id"] == "submission-current"
+    assert entry["runtime_execution_id"] == "execution-current"
+    assert "attempt_id" not in entry
+    assert "runtime_session_id" not in entry
+    assert "run_id" not in entry
+
+
 def test_redaction_handles_camel_case_secrets_and_unknown_details() -> None:
     with structlog.testing.capture_logs() as logs:
         domain_telemetry.log_domain_event(
@@ -541,7 +599,7 @@ def test_failed_scrape_retains_last_known_good_gauges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_control_plane(tmp_path)
-    expected = refresh_domain_metrics(tmp_path, runtime_mode="validate")
+    expected = refresh_domain_metrics(tmp_path)
 
     control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
     original_read_only = domain_telemetry._read_only
@@ -552,13 +610,12 @@ def test_failed_scrape_retains_last_known_good_gauges(
         return original_read_only(path)
 
     monkeypatch.setattr(domain_telemetry, "_read_only", _raise_locked)
-    actual = refresh_domain_metrics(tmp_path, runtime_mode="validate")
+    actual = refresh_domain_metrics(tmp_path)
 
     assert actual == expected
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
-    assert 'ainrf_domain_runtime_mode_info{mode="validate"} 1.0' in text
-    assert "ainrf_domain_dispatch_outbox_backlog 1.0" in text
+    assert "ainrf_domain_turn_submission_backlog 1.0" in text
     assert "ainrf_domain_metrics_last_success_timestamp_seconds" in text
 
 
@@ -579,10 +636,6 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         job_id="telemetry-overview-job",
         state_root=tmp_path,
     )
-    domain_telemetry.record_legacy_write_attempt(
-        source="legacy_json",
-        state_root=tmp_path,
-    )
     domain_telemetry.record_sqlite_error(
         operation="connection_execute",
         error=sqlite3.OperationalError("database is locked"),
@@ -596,7 +649,6 @@ def test_no_port_worker_events_are_hydrated_from_the_durable_store(tmp_path: Pat
         'ainrf_domain_overview_refresh_events_total{outcome="succeeded",trigger="scheduled"} 1.0'
         in text
     )
-    assert 'ainrf_domain_legacy_write_attempts_total{source="legacy_json"} 1.0' in text
     assert (
         'ainrf_domain_sqlite_errors_total{error_type="OperationalError",kind="busy_or_locked",operation="connection_execute"} 1.0'
         in text
@@ -607,7 +659,7 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_control_plane(tmp_path)
-    expected = refresh_domain_metrics(tmp_path, runtime_mode="validate")
+    expected = refresh_domain_metrics(tmp_path)
 
     # Simulate a separate API worker after the first process exited: its
     # process-local cache is empty, while the durable telemetry sidecar stays.
@@ -624,13 +676,13 @@ def test_restart_uses_persisted_snapshot_when_source_scrape_fails(
         return original_read_only(path)
 
     monkeypatch.setattr(domain_telemetry, "_read_only", _raise_locked)
-    actual = refresh_domain_metrics(tmp_path, runtime_mode="validate")
+    actual = refresh_domain_metrics(tmp_path)
 
     assert actual == expected
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 1.0" in text
-    assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
+    assert "ainrf_domain_turn_submission_backlog 1.0" in text
 
 
 def test_uncached_scrape_failure_exports_unknown_risk_not_zero(
@@ -647,7 +699,7 @@ def test_uncached_scrape_failure_exports_unknown_risk_not_zero(
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
-    assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
+    assert "ainrf_domain_turn_submission_backlog NaN" in text
 
 
 def test_lost_durable_event_latches_release_telemetry_until_operator_review(
@@ -663,7 +715,7 @@ def test_lost_durable_event_latches_release_telemetry_until_operator_review(
         return original_open(state_root, create=create)
 
     monkeypatch.setattr(domain_telemetry, "_open_telemetry_store", _fail_counter_store)
-    domain_telemetry.record_legacy_write_attempt(source="legacy_json", state_root=tmp_path)
+    domain_telemetry.record_idempotency_event("accepted", state_root=tmp_path)
     assert (tmp_path / "runtime" / "domain_telemetry_delivery_failure.json").is_file()
 
     monkeypatch.setattr(domain_telemetry, "_open_telemetry_store", original_open)
@@ -698,14 +750,16 @@ def test_unexpected_domain_metric_exception_is_exported_as_failed_scrape(
 ) -> None:
     _seed_control_plane(tmp_path)
 
-    def _unexpected_cutover_state(conn: sqlite3.Connection, tables: set[str]) -> tuple[str, int]:
-        _ = conn, tables
+    def _unexpected_submission_metrics(
+        conn: sqlite3.Connection, now: datetime
+    ) -> tuple[float, dict[str, int]]:
+        _ = conn, now
         raise RuntimeError("unexpected telemetry collector failure")
 
-    monkeypatch.setattr(domain_telemetry, "_cutover_state", _unexpected_cutover_state)
+    monkeypatch.setattr(domain_telemetry, "_submission_metrics", _unexpected_submission_metrics)
     snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.mode == "unknown"
+    assert snapshot.submission_backlog_count == 0
     text = get_metrics_text()
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
@@ -735,7 +789,7 @@ def test_telemetry_store_closes_connection_when_its_bootstrap_pragma_fails(
     assert connection.closed is True
 
 
-def test_normal_dispatched_runtime_is_not_counted_as_outbox_backlog(tmp_path: Path) -> None:
+def test_accepted_running_execution_is_not_counted_as_submission_backlog(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
     control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(control_path)) as conn:
@@ -745,55 +799,146 @@ def test_normal_dispatched_runtime_is_not_counted_as_outbox_backlog(tmp_path: Pa
                 task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine,
                 status, title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('normal-runtime-task', 'telemetry-project', 'telemetry-workspace',
-                      'telemetry-environment', 'research', 'test', 'running', 'Normal runtime',
+                      'telemetry-environment', 'general', 'codex-app-server', 'running',
+                      'Normal runtime',
                       'do not alert', ?, ?, 'telemetry-user')
             """,
             (_timestamp(minutes_ago=30), _timestamp()),
         )
         conn.execute(
             """
-            INSERT INTO agent_task_attempts (
-                attempt_id, task_id, attempt_seq, trigger, status, created_at
-            ) VALUES ('normal-runtime-attempt', 'normal-runtime-task', 1, 'create', 'running', ?)
+            INSERT INTO conversation_task_authorities (task_id, authority, created_at)
+            VALUES ('normal-runtime-task', 'conversation_v3', ?)
             """,
             (_timestamp(minutes_ago=30),),
         )
         conn.execute(
             """
-            INSERT INTO task_dispatch_outbox (
-                dispatch_id, task_id, attempt_id, status, created_at, claim_token, dispatcher_id,
-                claim_expires_at, runtime_launch_key, launch_state, updated_at
-            ) VALUES ('normal-runtime-dispatch', 'normal-runtime-task', 'normal-runtime-attempt',
-                      'dispatched', ?, 'claim-token', 'dispatcher', ?, 'launch-key', 'launched', ?)
+            INSERT INTO turn_submissions (
+                submission_id, task_id, reserved_turn_id, actor_user_id,
+                idempotency_key, request_hash, status, input_json,
+                native_turn_kind, native_turn_ref, created_at, claimed_at,
+                delivering_at, accepted_at, finished_at, updated_at
+            ) VALUES ('normal-runtime-submission', 'normal-runtime-task', 'normal-runtime-turn',
+                      'telemetry-user', 'normal-runtime-key', 'normal-runtime-hash', 'delivered',
+                      '{"text":"run normally"}', 'codex-thread', 'thread-normal', ?, ?, ?, ?, ?, ?)
             """,
-            (_timestamp(minutes_ago=30), _timestamp(minutes_ago=-10), _timestamp()),
+            (
+                _timestamp(minutes_ago=30),
+                _timestamp(minutes_ago=30),
+                _timestamp(minutes_ago=30),
+                _timestamp(minutes_ago=30),
+                _timestamp(minutes_ago=30),
+                _timestamp(),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO task_turns (
+                turn_id, task_id, turn_seq, status, engine_family, engine_driver,
+                contract_version, native_turn_kind, native_turn_ref,
+                accepted_at, started_at, updated_at
+            ) VALUES ('normal-runtime-turn', 'normal-runtime-task', 1, 'in_progress',
+                      'codex', 'codex-app-server', 1, 'codex-thread', 'thread-normal', ?, ?, ?)
+            """,
+            (_timestamp(minutes_ago=30), _timestamp(minutes_ago=30), _timestamp()),
+        )
+        conn.execute(
+            """
+            INSERT INTO runtime_executions (
+                runtime_execution_id, task_id, turn_id, execution_seq, runtime_generation,
+                status, native_runtime_kind, native_runtime_ref, native_turn_kind,
+                native_turn_ref, created_at, started_at, updated_at
+            ) VALUES ('normal-runtime-execution', 'normal-runtime-task', 'normal-runtime-turn',
+                      1, 1, 'running', 'codex-process', 'runtime-normal',
+                      'codex-thread', 'thread-normal', ?, ?, ?)
+            """,
+            (_timestamp(minutes_ago=30), _timestamp(minutes_ago=30), _timestamp()),
         )
         conn.commit()
 
     snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.outbox_backlog_count == 1
+    assert snapshot.submission_backlog_count == 1
     assert (
-        'ainrf_domain_dispatch_outbox_entries{state="expired_dispatched"} 0.0' in get_metrics_text()
+        'ainrf_domain_turn_submission_entries{state="stale_delivering"} 0.0' in get_metrics_text()
     )
 
 
-def test_queued_attempt_without_a_recoverable_dispatch_is_an_orphan(tmp_path: Path) -> None:
+def test_delivery_unknown_submission_remains_operator_visible(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
     control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(control_path)) as conn:
         conn.execute(
-            "UPDATE task_dispatch_outbox SET status = 'failed' WHERE dispatch_id = 'telemetry-dispatch'"
+            """
+            INSERT INTO turn_submissions (
+                submission_id, task_id, reserved_turn_id, actor_user_id,
+                idempotency_key, request_hash, status, input_json,
+                failure_code, created_at, updated_at
+            ) VALUES ('unknown-submission', 'telemetry-task', 'unknown-turn',
+                      'telemetry-user', 'unknown-key', 'unknown-hash', 'delivery_unknown',
+                      '{"text":"uncertain delivery"}', 'worker_lost_during_delivery', ?, ?)
+            """,
+            (_timestamp(minutes_ago=10), _timestamp(minutes_ago=9)),
         )
         conn.commit()
 
     snapshot = refresh_domain_metrics(tmp_path)
 
-    assert snapshot.orphan_attempt_count == 1
+    assert snapshot.submission_backlog_count == 2
     assert (
-        'ainrf_domain_orphan_attempts{reason="queued_without_recoverable_dispatch"} 1.0'
-        in get_metrics_text()
+        'ainrf_domain_turn_submission_entries{state="delivery_unknown"} 1.0' in get_metrics_text()
     )
+
+
+def test_blocked_next_turn_is_not_counted_as_ready_submission_backlog(tmp_path: Path) -> None:
+    _seed_control_plane(tmp_path)
+    control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(control_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO task_turns (
+                turn_id, task_id, turn_seq, status, engine_family, engine_driver,
+                contract_version, accepted_at, started_at, updated_at
+            ) VALUES ('blocking-turn', 'telemetry-task', 1, 'in_progress',
+                      'codex', 'codex-app-server', 1, ?, ?, ?)
+            """,
+            (_timestamp(minutes_ago=30), _timestamp(minutes_ago=30), _timestamp()),
+        )
+        conn.execute(
+            """
+            INSERT INTO turn_submissions (
+                submission_id, task_id, reserved_turn_id, actor_user_id,
+                idempotency_key, request_hash, status, input_json, created_at, updated_at
+            ) VALUES ('blocked-submission', 'telemetry-task', 'blocked-turn',
+                      'telemetry-user', 'blocked-key', 'blocked-hash', 'queued',
+                      '{"text":"wait for prior turn"}', ?, ?)
+            """,
+            (_timestamp(minutes_ago=20), _timestamp(minutes_ago=20)),
+        )
+        conn.execute(
+            """
+            INSERT INTO conversation_submission_intents (
+                submission_id, task_id, kind, retry_of_turn_id, created_at
+            ) VALUES ('blocked-submission', 'telemetry-task', 'next_turn', NULL, ?)
+            """,
+            (_timestamp(minutes_ago=20),),
+        )
+        conn.execute(
+            """
+            INSERT INTO next_turn_submissions (
+                submission_id, task_id, blocking_turn_id, status, created_at, updated_at
+            ) VALUES ('blocked-submission', 'telemetry-task', 'blocking-turn',
+                      'waiting', ?, ?)
+            """,
+            (_timestamp(minutes_ago=20), _timestamp(minutes_ago=20)),
+        )
+        conn.commit()
+
+    snapshot = refresh_domain_metrics(tmp_path)
+
+    assert snapshot.submission_backlog_count == 1
+    assert 'ainrf_domain_turn_submission_entries{state="queued"} 1.0' in get_metrics_text()
 
 
 def test_durable_counter_labels_reject_unbounded_values_and_tampering(tmp_path: Path) -> None:
@@ -894,11 +1039,11 @@ def test_domain_alert_baseline_has_required_release_gates() -> None:
         if isinstance(rule, dict) and isinstance(rule.get("alert"), str)
     }
 
-    assert "ainrf_domain_legacy_write_attempts_total" in str(
-        rules["AINRFLegacyDomainWriteAttempt"]["expr"]
+    assert "ainrf_domain_turn_submission_oldest_pending_age_seconds" in str(
+        rules["AINRFTurnSubmissionBacklogAgeWarning"]["expr"]
     )
-    assert "> 300" in str(rules["AINRFDomainOutboxAgeWarning"]["expr"])
-    assert "> 900" in str(rules["AINRFDomainOutboxAgeCritical"]["expr"])
+    assert "> 300" in str(rules["AINRFTurnSubmissionBacklogAgeWarning"]["expr"])
+    assert "> 900" in str(rules["AINRFTurnSubmissionBacklogAgeCritical"]["expr"])
     assert "> 900" in str(rules["AINRFLiteratureResearchTaskPending"]["expr"])
     assert "> 108000" in str(rules["AINRFOverviewSnapshotStale"]["expr"])
     assert "ainrf_domain_metrics_scrape_success" in str(
@@ -911,8 +1056,6 @@ def test_domain_alert_baseline_has_required_release_gates() -> None:
     assert rules["AINRFDomainMetricRiskStateUnknown"]["labels"]["severity"] == "critical"
     source_not_ready_expr = str(rules["AINRFDomainTelemetrySourceNotReady"]["expr"])
     assert "ainrf_domain_telemetry_source_status" in source_not_ready_expr
-    assert 'mode="v2"' in source_not_ready_expr
-    assert "on(job, instance)" in source_not_ready_expr
     assert rules["AINRFDomainTelemetrySourceNotReady"]["labels"]["severity"] == "critical"
     release_gate_expr = str(rules["AINRFDomainTelemetryReleaseGateBlocked"]["expr"])
     assert "ainrf_domain_metrics_scrape_success" in release_gate_expr
@@ -921,8 +1064,8 @@ def test_domain_alert_baseline_has_required_release_gates() -> None:
     assert "absent(" in release_gate_expr
     assert "up{" in release_gate_expr
     assert rules["AINRFDomainTelemetryReleaseGateBlocked"]["labels"]["release_gate"] == "B"
-    assert "increase(" not in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
-    assert "sum(" in str(rules["AINRFLegacyDomainWriteAttempt"]["expr"])
+    assert "delivery_unknown" in str(rules["AINRFTurnSubmissionDeliveryUnknown"]["expr"])
+    assert rules["AINRFTurnSubmissionDeliveryUnknown"]["labels"]["severity"] == "critical"
     assert rules["AINRFDomainTelemetryEventDeliveryFailure"]["labels"]["release_gate"] == "B"
     assert "ainrf_domain_overview_attention_required" in str(
         rules["AINRFOverviewAttentionRequired"]["expr"]

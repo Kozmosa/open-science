@@ -18,7 +18,8 @@ from ainrf.domain.overview_jobs import (
     OverviewSnapshotService,
     _CardResult,
 )
-from ainrf.domain_control import DomainCutoverError, DomainMaintenanceService, MaintenanceModeError
+from ainrf.domain_control import DomainMaintenanceService, MaintenanceModeError
+from ainrf.domain.write_fence import DomainWriteFenceError
 
 pytestmark = [pytest.mark.unit]
 
@@ -476,10 +477,10 @@ def test_overview_retry_wait_is_due_only_after_backoff_and_survives_planner_rest
     assert int(slot_count[0]) == 1
 
 
-def test_overview_planner_state_write_requires_committed_v2_fuse(state_root: Path) -> None:
+def test_overview_planner_state_write_requires_current_artifact(state_root: Path) -> None:
     planner = OverviewSnapshotPlanner(state_root, planner_id="uncommitted-overview-planner")
 
-    with pytest.raises(DomainCutoverError):
+    with pytest.raises(DomainWriteFenceError):
         planner.start(now=_instant(1))
 
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
@@ -768,7 +769,10 @@ def test_overview_builder_does_not_call_external_or_action_services(
 
     monkeypatch.setattr("ainrf.environments.probing.build_detection_snapshot", forbidden)
     monkeypatch.setattr("ainrf.literature.fetcher.fetch_for_subscription", forbidden)
-    monkeypatch.setattr("ainrf.domain.tasks.TaskApplicationService.create_task", forbidden)
+    monkeypatch.setattr(
+        "ainrf.domain.conversation_service.ConversationApplicationService.create_task",
+        forbidden,
+    )
 
     job = service.request_refresh("owner", now=_instant(1))
     result = service.run_job(str(job["job_id"]), "overview-test", now=_instant(1))

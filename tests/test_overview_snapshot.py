@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 
-from ainrf.domain import OverviewSnapshotService
+from ainrf.domain import OverviewSnapshotService, build_domain_modules
 
 pytestmark = [pytest.mark.unit]
 
@@ -16,6 +16,12 @@ pytestmark = [pytest.mark.unit]
 def test_overview_snapshot_reads_only_persisted_control_plane(
     state_root: Path, committed_v2_state: str
 ) -> None:
+    projects = build_domain_modules(state_root, artifact_sha=committed_v2_state).projects
+    projects.create_project(
+        {"id": "owner-ready", "role": "member"},
+        name="Ready project",
+        idempotency_key="overview-ready-project",
+    )
     snapshots = OverviewSnapshotService(state_root, artifact_sha=committed_v2_state)
     refreshed_job = snapshots.request_refresh(
         "owner-ready", now=datetime(2026, 7, 12, 1, tzinfo=UTC)

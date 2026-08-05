@@ -52,7 +52,6 @@ from ainrf.domain import (
     EnvironmentModule,
     ProjectModule,
     ProjectContextService,
-    TaskApplicationService,
     TaskProjectionService,
     WorkspaceModule,
 )
@@ -77,16 +76,15 @@ async def capabilities(request: Request) -> dict[str, object]:
     workspace_module = getattr(request.app.state, "workspace_module", None)
     ready = (
         isinstance(project_module, ProjectModule)
-        and project_module.v2_ready()
+        and project_module.ready()
         and isinstance(workspace_module, WorkspaceModule)
-        and workspace_module.v2_ready()
+        and workspace_module.ready()
     )
     context_ready = ready and isinstance(
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
-    task_service_ready = ready and isinstance(
-        getattr(request.app.state, "task_application_service", None), TaskApplicationService
-    )
+    conversation_service = getattr(request.app.state, "conversation_application_service", None)
+    task_service_ready = ready and conversation_service is not None and conversation_service.ready()
     maintenance = getattr(request.app.state, "domain_maintenance_service", None)
     dispatcher_readiness: dict[str, object] = {
         "participant_type": "task-dispatcher",
@@ -124,7 +122,7 @@ async def capabilities(request: Request) -> dict[str, object]:
         ready
         and task_ready
         and isinstance(literature_saga, LiteratureTaskSagaService)
-        and literature_saga.v2_ready()
+        and literature_saga.ready()
     )
     return {
         "domain_contract_version": 2 if ready else 1,
@@ -132,7 +130,6 @@ async def capabilities(request: Request) -> dict[str, object]:
         "standard_task_create": task_ready,
         "project_context": context_ready,
         "workspace_links": workspace_links_ready,
-        "task_attempts": task_ready,
         "task_dispatcher": dispatcher_readiness,
         # Each capability reports its own runtime evidence rather than being
         # inferred from the common contract version alone.
@@ -194,8 +191,8 @@ def _project_module(request: Request) -> ProjectModule:
     service = getattr(request.app.state, "project_module", None)
     if not isinstance(service, ProjectModule):
         raise HTTPException(status_code=404, detail="Domain is unavailable")
-    if not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    if not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
@@ -203,15 +200,15 @@ def _workspace_module(request: Request) -> WorkspaceModule:
     service = getattr(request.app.state, "workspace_module", None)
     if not isinstance(service, WorkspaceModule):
         raise HTTPException(status_code=404, detail="Domain is unavailable")
-    if not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    if not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
 def _environment_module(request: Request) -> EnvironmentModule:
     service = getattr(request.app.state, "environment_module", None)
-    if not isinstance(service, EnvironmentModule) or not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain cutover is not ready")
+    if not isinstance(service, EnvironmentModule) or not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
@@ -227,15 +224,8 @@ def _overview_service(request: Request) -> OverviewSnapshotService:
 
 def _context_service(request: Request) -> ProjectContextService:
     service = getattr(request.app.state, "project_context_service", None)
-    if service is None or not service.v2_ready():
+    if service is None or not service.ready():
         raise HTTPException(status_code=503, detail="Project Context service is not initialized")
-    return service
-
-
-def _task_application_service(request: Request) -> TaskApplicationService:
-    service = getattr(request.app.state, "task_application_service", None)
-    if not isinstance(service, TaskApplicationService) or not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Task application service is not initialized")
     return service
 
 
@@ -403,7 +393,7 @@ async def archive_domain_project(project_id: str, request: Request) -> None:
     try:
         user = get_current_user(request)
         _project_module(request).require_project_owner(project_id, user)
-        _task_application_service(request).archive_project(
+        _project_module(request).archive_project(
             project_id,
             user,
             reason="user archived project",
@@ -418,7 +408,7 @@ async def unarchive_domain_project(project_id: str, request: Request) -> None:
     try:
         user = get_current_user(request)
         _project_module(request).require_project_owner(project_id, user)
-        _task_application_service(request).unarchive_project(
+        _project_module(request).unarchive_project(
             project_id, user, idempotency_key=require_idempotency_key(request)
         )
     except Exception as exc:
@@ -995,7 +985,6 @@ async def create_project_context_candidate(
             get_current_user(request),
             source_metadata=payload.source_metadata,
             source_task_id=payload.source_task_id,
-            source_attempt_id=payload.source_attempt_id,
             source_message_start_seq=payload.source_message_start_seq,
             source_message_end_seq=payload.source_message_end_seq,
             source_output_start_seq=payload.source_output_start_seq,
@@ -1086,7 +1075,7 @@ async def preview_task_context_update(task_id: str, request: Request) -> dict[st
     if not project_id:
         raise HTTPException(status_code=422, detail="project_id is required")
     try:
-        return _task_application_service(request).preview_task_context_update(
+        return _context_service(request).preview_task_context_update(
             task_id, project_id, get_current_user(request)
         )
     except Exception as exc:
@@ -1103,7 +1092,7 @@ async def confirm_task_context_update(
     if not project_id:
         raise HTTPException(status_code=422, detail="project_id is required")
     try:
-        return _task_application_service(request).confirm_task_context_update(
+        return _context_service(request).confirm_task_context_update(
             task_id,
             project_id,
             payload.preview_id,

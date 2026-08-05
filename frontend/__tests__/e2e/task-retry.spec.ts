@@ -74,9 +74,8 @@ const RUNNING_TASK_SUMMARY = {
   error_summary: null,
 }
 
-const NEW_TASK_SUMMARY = {
+const RETRIED_TASK_SUMMARY = {
   ...FAILED_TASK_SUMMARY,
-  task_id: 'task-new-001',
   status: 'queued',
   created_at: '2026-06-03T10:10:00Z',
   updated_at: '2026-06-03T10:10:00Z',
@@ -87,21 +86,29 @@ const NEW_TASK_SUMMARY = {
 }
 
 const RETRY_RESPONSE = {
-  task: NEW_TASK_SUMMARY,
-  attempt: {
-    attempt_id: 'attempt-002',
-    task_id: 'task-new-001',
-    attempt_seq: 2,
-    trigger: 'retry',
-    status: 'queued',
-  },
-  dispatch: {
-    dispatch_id: 'dispatch-002',
-    task_id: 'task-new-001',
-    attempt_id: 'attempt-002',
-    status: 'pending',
-    launch_state: 'pending',
-  },
+  intent: 'retry',
+  reserved_turn_id: 'turn-retry-002',
+  status: 'queued',
+  submission_id: 'submission-retry-002',
+  task_id: 'task-failed-001',
+}
+
+const TERMINAL_TURN = {
+  task_id: 'task-failed-001',
+  turn_id: 'turn-failed-001',
+  turn_seq: 1,
+  status: 'failed',
+}
+
+const USER_TURN_ITEM = {
+  actor: 'user',
+  item_id: 'item-user-001',
+  item_type: 'user_message',
+  payload: { text: 'Failed prompt' },
+  task_id: 'task-failed-001',
+  task_item_seq: 1,
+  turn_id: 'turn-failed-001',
+  turn_item_seq: 1,
 }
 
 const MOCK_USER = {
@@ -192,6 +199,23 @@ async function setupTasksMock(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false, next_seq: 0 }) })
   })
 
+  await page.route(/\/api\/tasks\/[^/?]+\/turns$/, async (route) => {
+    if (route.request().method() !== 'GET') { await route.continue(); return }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [TERMINAL_TURN] }),
+    })
+  })
+  await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/items$/, async (route) => {
+    if (route.request().method() !== 'GET') { await route.continue(); return }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [USER_TURN_ITEM] }),
+    })
+  })
+
   // Tasks list: GET /tasks?* — must come after more-specific patterns
   await page.route(/\/api\/tasks\?/, async (route) => {
     if (route.request().method() !== 'GET') { await route.continue(); return }
@@ -203,11 +227,11 @@ async function setupTasksMock(
   })
 
   if (options.retryStatus !== undefined) {
-    await page.route(/\/api\/tasks\/[^/?]+\/retry/, (route) => {
+    await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/retry$/, (route) => {
       void route.fulfill({
         status: options.retryStatus!,
         contentType: 'application/json',
-        body: options.retryStatus === 200
+        body: options.retryStatus === 202
           ? JSON.stringify(options.retryResponse)
           : JSON.stringify({ detail: 'Internal server error' }),
       })
@@ -259,13 +283,12 @@ test.describe('Task Retry', () => {
       })
     }
 
-    // Single task detail — both original and new task must resolve correctly
+    // Single task detail remains the same Task; retry creates a new Turn.
     await page.route(/\/api\/tasks\/[^/?]+$/, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
       const taskId = route.request().url().split('/api/tasks/')[1]
       const taskMap: Record<string, object> = {
         'task-failed-001': FAILED_TASK_RECORD,
-        'task-new-001': { ...NEW_TASK_SUMMARY, binding: null, prompt_detail: null, runtime: null, result: TASK_RESULT },
       }
       const record = taskMap[taskId]
       await route.fulfill({ status: record ? 200 : 404, contentType: 'application/json', body: JSON.stringify(record ?? { detail: 'Not found' }) })
@@ -274,11 +297,19 @@ test.describe('Task Retry', () => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], has_more: false, next_seq: 0 }) })
     })
+    await page.route(/\/api\/tasks\/[^/?]+\/turns$/, async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [TERMINAL_TURN] }) })
+    })
+    await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/items$/, async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [USER_TURN_ITEM] }) })
+    })
 
     // Tasks list: return failed task until retry fires, then switch to new task
     await page.route(/\/api\/tasks\?/, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
-      const tasks = retryDone ? [NEW_TASK_SUMMARY] : [FAILED_TASK_SUMMARY]
+      const tasks = retryDone ? [RETRIED_TASK_SUMMARY] : [FAILED_TASK_SUMMARY]
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -287,10 +318,10 @@ test.describe('Task Retry', () => {
     })
 
     let retryCalled = false
-    await page.route(/\/api\/tasks\/[^/?]+\/retry/, async (route) => {
+    await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/retry$/, async (route) => {
       retryCalled = true
       retryDone = true
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(RETRY_RESPONSE) })
+      await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify(RETRY_RESPONSE) })
     })
 
     await page.goto('/tasks')
@@ -305,13 +336,13 @@ test.describe('Task Retry', () => {
 
     await expect.poll(() => retryCalled).toBe(true)
     await expect(page.getByText('Task retried successfully')).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('[data-task-id="task-new-001"]')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('[data-task-id="task-failed-001"]')).toBeVisible({ timeout: 5000 })
   })
 
   test('Retry API failure shows error toast', async ({ page }) => {
     await setupTasksMock(page, [FAILED_TASK_SUMMARY])
 
-    await page.route(/\/api\/tasks\/[^/?]+\/retry/, (route) => {
+    await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/retry$/, (route) => {
       void route.fulfill({
         status: 500,
         contentType: 'application/json',
@@ -336,15 +367,15 @@ test.describe('Task Retry', () => {
     let retryDone = false
     await setupTasksMock(page, [FAILED_TASK_SUMMARY])
 
-    await page.route(/\/api\/tasks\/[^/?]+\/retry/, async (route) => {
+    await page.route(/\/api\/tasks\/[^/?]+\/turns\/[^/?]+\/retry$/, async (route) => {
       retryDone = true
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(RETRY_RESPONSE) })
+      await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify(RETRY_RESPONSE) })
     })
 
     // Override tasks list to return new task after retry
     await page.route(/\/api\/tasks\?/, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return }
-      const tasks = retryDone ? [NEW_TASK_SUMMARY] : [FAILED_TASK_SUMMARY]
+      const tasks = retryDone ? [RETRIED_TASK_SUMMARY] : [FAILED_TASK_SUMMARY]
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: tasks, total: tasks.length, has_more: false }) })
     })
 

@@ -18,7 +18,6 @@ from ainrf.auth.service import AuthService
 from ainrf.api.cli import app
 from ainrf.db import connect
 from ainrf.domain import build_domain_modules
-from ainrf.domain_control import DomainCutoverController
 
 
 pytestmark = [pytest.mark.cli]
@@ -64,16 +63,13 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     assert all(user["password"] for user in credentials["users"].values())
     assert all(user["password"] not in first.stdout for user in credentials["users"].values())
     assert first_payload["counts"] == {
-        "attempts": 5,
+        "turns": 4,
         "papers": 8,
         "projects": 2,
         "tasks": 5,
         "workspaces": 2,
     }
 
-    status = DomainCutoverController(state_root).status()
-    assert status.state == "v2"
-    assert status.artifact_sha == artifact_sha
     config = json.loads((state_root / "config.json").read_text(encoding="utf-8"))
     assert config == {"api_key_hashes": [hash_api_key(api_key)]}
 
@@ -163,20 +159,20 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     [
         (
             "empty",
-            {"attempts": 0, "papers": 0, "projects": 0, "tasks": 0, "workspaces": 0},
+            {"turns": 0, "papers": 0, "projects": 0, "tasks": 0, "workspaces": 0},
         ),
         (
             "permissions",
-            {"attempts": 5, "papers": 8, "projects": 5, "tasks": 5, "workspaces": 2},
+            {"turns": 4, "papers": 8, "projects": 5, "tasks": 5, "workspaces": 2},
         ),
         (
             "failures",
-            {"attempts": 7, "papers": 8, "projects": 2, "tasks": 7, "workspaces": 2},
+            {"turns": 6, "papers": 8, "projects": 2, "tasks": 7, "workspaces": 2},
         ),
         (
             "large",
             {
-                "attempts": 0,
+                "turns": 0,
                 "papers": 250,
                 "projects": 40,
                 "tasks": 500,
@@ -212,7 +208,8 @@ def test_frontend_dev_profiles_seed_deterministic_bounded_states(
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         assert (
             conn.execute(
-                "SELECT COUNT(*) FROM task_dispatch_outbox WHERE status IN ('pending', 'claimed')"
+                "SELECT COUNT(*) FROM turn_submissions "
+                "WHERE status IN ('queued', 'claimed', 'delivering')"
             ).fetchone()[0]
             == 0
         )
@@ -267,13 +264,8 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
         task_statuses = {
             str(row["status"]) for row in conn.execute("SELECT status FROM tasks").fetchall()
         }
-        attempt_statuses = {
-            str(row["status"])
-            for row in conn.execute("SELECT status FROM agent_task_attempts").fetchall()
-        }
-        runtime_statuses = {
-            str(row["status"])
-            for row in conn.execute("SELECT status FROM agent_runtime_sessions").fetchall()
+        turn_statuses = {
+            str(row["status"]) for row in conn.execute("SELECT status FROM task_turns").fetchall()
         }
         snapshot = conn.execute(
             "SELECT source_status, payload_json FROM overview_snapshots"
@@ -287,14 +279,7 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
             "stopped_by_project_archive",
             "stopped_permission_revoked",
         }
-        assert attempt_statuses == task_statuses
-        assert runtime_statuses == {
-            "completed",
-            "failed",
-            "cancelled",
-            "stopped",
-            "launch_unknown",
-        }
+        assert turn_statuses == {"completed", "failed", "interrupted"}
         assert snapshot["source_status"] == "partial"
         overview_payload = json.loads(snapshot["payload_json"])
         assert overview_payload["tasks_by_status"] == {"failed": 1, "succeeded": 1}

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
 
 pytestmark = [pytest.mark.api]
 
@@ -20,12 +20,12 @@ _API_KEY = "overview-api-key"
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     return create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
 
@@ -44,7 +44,7 @@ async def test_today_overview_uses_durable_refresh_jobs_and_real_planner_readine
     planner = OverviewSnapshotPlanner(
         state_root,
         planner_id="overview-api-test-planner",
-        artifact_sha=V2_ARTIFACT_SHA,
+        artifact_sha=CURRENT_ARTIFACT_SHA,
         active_user_ids=lambda: (),
     )
     try:

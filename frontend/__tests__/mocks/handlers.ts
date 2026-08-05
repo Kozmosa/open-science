@@ -32,7 +32,6 @@ export const handlers = [
       standard_task_create: true,
       project_context: true,
       workspace_links: true,
-      task_attempts: true,
       task_dispatcher: {
         participant_type: 'task-dispatcher',
         ready: true,

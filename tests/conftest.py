@@ -69,19 +69,12 @@ def state_root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def committed_v2_state(state_root: Path, tmp_path: Path) -> str:
-    """Commit an isolated v2 cutover through the production controller.
+    """Create a fresh current-schema state bound to a test artifact."""
 
-    Direct domain-service tests must exercise the same immutable artifact,
-    backup, reconciliation, constraint-finalization, and cutover fuse that a
-    deployed v2 process requires.  This fixture intentionally does not flip
-    database flags or monkeypatch the write fence; consumers pass its returned
-    artifact SHA to their application service or dispatcher.
-    """
+    _ = tmp_path
+    from tests.testutil import prepare_current_test_state
 
-    from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-
-    prepare_committed_v2_cutover(state_root, tmp_path)
-    return V2_ARTIFACT_SHA
+    return prepare_current_test_state(state_root)
 
 
 @pytest.fixture

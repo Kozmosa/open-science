@@ -48,7 +48,6 @@ describe('frontend v2 mock contract', () => {
       standard_task_create: true,
       project_context: true,
       workspace_links: true,
-      task_attempts: true,
       literature_research_task: true,
       overview_snapshot: true,
     });

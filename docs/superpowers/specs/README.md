@@ -12,6 +12,5 @@
 | `2026-07-11-literature-tracking-service-redesign-design.md` | accepted | 文献追踪产品和服务重设计 |
 | `2026-07-11-openscience-console-design.md` | accepted | OpenScience WebUI 品牌、导航和外壳 |
 | `2026-07-11-osci-design-system-design.md` | accepted | 前端设计系统；`osci` 不替代内部 `ainrf` 身份 |
-| `2026-07-11-project-task-workspace-domain-design.md` | accepted | 当前核心领域关系设计 |
 
 已实现、被替代、退役或与当前 contract 冲突的设计位于 [`archived/`](archived/README.md)。

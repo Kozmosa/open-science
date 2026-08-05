@@ -12,7 +12,6 @@ from typing import Annotated
 import typer
 
 from ainrf import __version__
-from ainrf.auth.service import AuthService
 from ainrf.onboarding import (
     load_runtime_config,
     run_onboarding,
@@ -26,22 +25,19 @@ from ainrf.runtime.container_profile import (
 )
 from ainrf.state import default_state_root
 from ainrf.backup.service import BackupService
+from ainrf.db.retire_legacy import migrate as retire_legacy_migrate
+from ainrf.db.retire_legacy import preflight as retire_legacy_preflight
+from ainrf.db.retire_legacy import verify as retire_legacy_verify
 from ainrf.domain_control import (
-    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
-    DomainCutoverController,
-    DomainCutoverError,
+    REQUIRED_PARTICIPANT_TYPES,
     DomainMaintenanceService,
     DomainWriteParticipant,
     MaintenanceLease,
     MaintenanceModeError,
 )
-from ainrf.domain_migration import (
-    ConversationV3Migration,
-    DomainImporter,
-    DomainReconciliationService,
-    capture_source_manifest,
-)
-from ainrf.domain import OverviewSnapshotPlanner, TaskApplicationService, TaskDispatcher
+from ainrf.domain_migration import LegacyDomainRecordAuditService
+from ainrf.domain import OverviewSnapshotPlanner
+from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.development import (
     DEFAULT_FRONTEND_DEV_API_KEY,
     DEFAULT_FRONTEND_DEV_ARTIFACT_SHA,
@@ -68,21 +64,12 @@ app.add_typer(backup_app, name="backup")
 domain_maintenance_app = typer.Typer(help="Manage the persistent domain migration write barrier.")
 app.add_typer(domain_maintenance_app, name="domain-maintenance")
 
-domain_migration_app = typer.Typer(help="Inspect legacy sources before domain-model migration.")
+domain_migration_app = typer.Typer(help="Inspect retired domain records (read-only audit).")
 app.add_typer(domain_migration_app, name="domain-migration")
 
-migration_app = typer.Typer(help="Run explicit standalone generation migrations.")
-conversation_v3_migration_app = typer.Typer(
-    help="Migrate an immutable legacy snapshot to a Conversation v3 generation."
-)
-migration_app.add_typer(conversation_v3_migration_app, name="conversation-v3")
+migration_app = typer.Typer(help="Run explicit one-time schema migrations.")
 app.add_typer(migration_app, name="migration")
 
-domain_cutover_app = typer.Typer(help="Prepare and commit the durable domain v2 cutover fuse.")
-app.add_typer(domain_cutover_app, name="domain-cutover")
-
-domain_runtime_app = typer.Typer(help="Reconcile durable runtime boundaries without relaunching.")
-app.add_typer(domain_runtime_app, name="domain-runtime")
 
 overview_snapshot_app = typer.Typer(help="Refresh persisted control-plane overview snapshots.")
 app.add_typer(overview_snapshot_app, name="overview-snapshot")
@@ -137,31 +124,35 @@ def domain_worker(
         typer.Option(help="Claim and dispatch at most one durable Task, then exit."),
     ] = False,
 ) -> None:
-    """Run the no-port durable Task dispatcher."""
+    """Run the no-port durable Conversation dispatcher."""
+    from ainrf.domain.conversation_worker import ConversationDispatcher
+
     try:
         artifact_sha = _domain_worker_artifact_sha(state_root)
-    except DomainCutoverError as exc:
+    except DomainWriteFenceError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     if artifact_sha is None:
         typer.echo(
-            "domain worker is unavailable until the domain v2 cutover is committed",
+            "domain worker is unavailable until an immutable domain artifact is configured",
             err=True,
         )
         raise typer.Exit(code=2)
-    dispatcher = TaskDispatcher(
+    dispatcher = ConversationDispatcher(
         state_root,
         artifact_sha=artifact_sha,
-        conversation_only=True,
     )
-    try:
-        if once:
-            result = asyncio.run(dispatcher.run_once())
-            typer.echo(json_mod.dumps(asdict(result), indent=2))
-            return
-        asyncio.run(dispatcher.run_forever())
-    finally:
-        dispatcher.stop()
+    if once:
+        processed = asyncio.run(dispatcher.run_once())
+        typer.echo(json_mod.dumps({"outcome": "completed" if processed else "idle"}, indent=2))
+        return
+
+    async def run_forever() -> None:
+        while True:
+            await dispatcher.run_once()
+            await asyncio.sleep(0.1)
+
+    asyncio.run(run_forever())
 
 
 @frontend_dev_app.command("prepare")
@@ -202,7 +193,7 @@ def frontend_dev_prepare(
             credentials_path=credentials_path,
             fault_profile=fault_profile,
         )
-    except (DomainCutoverError, OSError, ValueError) as exc:
+    except (DomainWriteFenceError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(fixture.as_dict(), indent=2, sort_keys=True))
@@ -237,26 +228,20 @@ def frontend_dev_worker(
             typer.echo(json_mod.dumps(result.as_dict(), indent=2, sort_keys=True))
             return
         asyncio.run(worker.run_forever(poll_seconds=poll_seconds))
-    except (DomainCutoverError, OSError, ValueError) as exc:
+    except (DomainWriteFenceError, OSError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
 
 
 def _domain_worker_artifact_sha(state_root: Path) -> str:
-    """Return the exact artifact only when the committed v2 fuse agrees."""
+    """Return the immutable artifact identity for a current worker."""
 
-    controller = _cutover_controller(state_root)
-    status = controller.status()
-    if status.state == "legacy":
-        raise DomainCutoverError("domain worker cannot start before cutover commit")
-    if status.state != "v2":
-        raise DomainCutoverError("domain worker cannot start while cutover is prepared")
+    _ = state_root
     artifact_sha = os.environ.get(
         "AINRF_DOMAIN_ARTIFACT_SHA", os.environ.get("OPENSCIENCE_DOMAIN_ARTIFACT_SHA", "")
     ).strip()
     if not artifact_sha:
-        raise DomainCutoverError("AINRF_DOMAIN_ARTIFACT_SHA is required for domain worker")
-    controller.assert_v2_writable(artifact_sha=artifact_sha)
+        raise DomainWriteFenceError("AINRF_DOMAIN_ARTIFACT_SHA is required for domain worker")
     return artifact_sha
 
 
@@ -535,19 +520,6 @@ def _maintenance_service(
     return service
 
 
-def _cutover_controller(
-    state_root: Path,
-    *,
-    workspace_root: Path | None = None,
-    tenant_root: Path | None = None,
-) -> DomainCutoverController:
-    return DomainCutoverController(
-        state_root,
-        workspace_root=workspace_root,
-        tenant_root=tenant_root,
-    )
-
-
 def _admin_cli_participant(
     state_root: Path,
     command: str,
@@ -593,301 +565,6 @@ def _admin_cli_mutation(
         if lease is not None:
             participant.finish_mutation(lease)
         participant.stop()
-
-
-@domain_cutover_app.command("status")
-def domain_cutover_status(
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing the authoritative cutover fuse.")
-    ] = default_state_root(),
-) -> None:
-    """Report persisted cutover evidence and the legacy-source monitor."""
-
-    try:
-        typer.echo(json_mod.dumps(_cutover_controller(state_root).status().as_dict(), indent=2))
-    except DomainCutoverError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-
-
-@domain_cutover_app.command("finalize-constraints")
-def domain_cutover_finalize_constraints(
-    run_id: Annotated[
-        str, typer.Argument(help="Completed migration run whose Task references will be finalized.")
-    ],
-    actor_id: Annotated[
-        str, typer.Option(help="Operator ID recorded in the constraints finalization audit.")
-    ],
-    stability_window_seconds: Annotated[
-        float,
-        typer.Option(
-            min=0.0,
-            help="Required stable source window while the maintenance epoch owns writes.",
-        ),
-    ] = 5.0,
-    workspace_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
-    ] = None,
-    tenant_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
-    ] = None,
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing migration and maintenance state.")
-    ] = default_state_root(),
-) -> None:
-    """Install and attest the final Task reference guards during maintenance."""
-
-    maintenance = _maintenance_service(
-        state_root,
-        workspace_root=workspace_root,
-        tenant_root=tenant_root,
-    )
-    participant = _admin_cli_participant(
-        state_root,
-        "domain-cutover.finalize-constraints",
-        maintenance=maintenance,
-    )
-    try:
-        result = _cutover_controller(
-            state_root,
-            workspace_root=workspace_root,
-            tenant_root=tenant_root,
-        ).finalize_constraints(
-            actor_id=actor_id,
-            run_id=run_id,
-            stability_window_seconds=stability_window_seconds,
-            maintenance_participant_id=participant.participant_id,
-        )
-    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    finally:
-        participant.stop()
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_cutover_app.command("prepare")
-def domain_cutover_prepare(
-    run_id: Annotated[str, typer.Argument(help="Finalized migration run to bind to cutover.")],
-    backup_archive: Annotated[Path, typer.Argument(help="Verified v3 backup archive.")],
-    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
-    artifact_sha: Annotated[str, typer.Option(help="Exact immutable backend artifact SHA-256.")],
-    artifact_contract_min: Annotated[
-        int, typer.Option(help="Lowest domain contract version supported by the artifact.")
-    ],
-    artifact_contract_max: Annotated[
-        int, typer.Option(help="Highest domain contract version supported by the artifact.")
-    ],
-    artifact_schema_min: Annotated[
-        int, typer.Option(help="Lowest domain schema migration version supported by the artifact.")
-    ],
-    artifact_schema_max: Annotated[
-        int, typer.Option(help="Highest domain schema migration version supported by the artifact.")
-    ],
-    stability_window_seconds: Annotated[
-        float, typer.Option(min=0.0, help="Required stable source window before preparing.")
-    ] = 5.0,
-    workspace_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
-    ] = None,
-    tenant_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
-    ] = None,
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing migration and maintenance state.")
-    ] = default_state_root(),
-) -> None:
-    """Prepare but do not yet enable the irreversible v2 cutover."""
-
-    maintenance = _maintenance_service(
-        state_root,
-        workspace_root=workspace_root,
-        tenant_root=tenant_root,
-    )
-    participant = _admin_cli_participant(
-        state_root,
-        "domain-cutover.prepare",
-        maintenance=maintenance,
-    )
-    try:
-        result = _cutover_controller(
-            state_root,
-            workspace_root=workspace_root,
-            tenant_root=tenant_root,
-        ).prepare(
-            actor_id=actor_id,
-            run_id=run_id,
-            backup_archive=backup_archive,
-            artifact_sha=artifact_sha,
-            artifact_contract_min=artifact_contract_min,
-            artifact_contract_max=artifact_contract_max,
-            artifact_schema_min=artifact_schema_min,
-            artifact_schema_max=artifact_schema_max,
-            stability_window_seconds=stability_window_seconds,
-            maintenance_participant_id=participant.participant_id,
-        )
-    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    finally:
-        participant.stop()
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_cutover_app.command("commit")
-def domain_cutover_commit(
-    run_id: Annotated[str, typer.Argument(help="Prepared migration run ID.")],
-    backup_archive: Annotated[Path, typer.Argument(help="Verified v3 backup archive.")],
-    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
-    artifact_sha: Annotated[str, typer.Option(help="Exact immutable backend artifact SHA-256.")],
-    artifact_contract_min: Annotated[
-        int, typer.Option(help="Lowest domain contract version supported by the artifact.")
-    ],
-    artifact_contract_max: Annotated[
-        int, typer.Option(help="Highest domain contract version supported by the artifact.")
-    ],
-    artifact_schema_min: Annotated[
-        int, typer.Option(help="Lowest domain schema migration version supported by the artifact.")
-    ],
-    artifact_schema_max: Annotated[
-        int, typer.Option(help="Highest domain schema migration version supported by the artifact.")
-    ],
-    stability_window_seconds: Annotated[
-        float, typer.Option(min=0.0, help="Required stable source window before committing.")
-    ] = 5.0,
-    workspace_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit Workspace tree selected for backup/cutover stability proof."),
-    ] = None,
-    tenant_root: Annotated[
-        Path | None,
-        typer.Option(help="Explicit tenant tree selected for backup/cutover stability proof."),
-    ] = None,
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing migration and maintenance state.")
-    ] = default_state_root(),
-) -> None:
-    """Commit the prepared v2 fuse after repeating all safety gates."""
-
-    maintenance = _maintenance_service(
-        state_root,
-        workspace_root=workspace_root,
-        tenant_root=tenant_root,
-    )
-    participant = _admin_cli_participant(
-        state_root,
-        "domain-cutover.commit",
-        maintenance=maintenance,
-    )
-    try:
-        result = _cutover_controller(
-            state_root,
-            workspace_root=workspace_root,
-            tenant_root=tenant_root,
-        ).commit(
-            actor_id=actor_id,
-            run_id=run_id,
-            backup_archive=backup_archive,
-            artifact_sha=artifact_sha,
-            artifact_contract_min=artifact_contract_min,
-            artifact_contract_max=artifact_contract_max,
-            artifact_schema_min=artifact_schema_min,
-            artifact_schema_max=artifact_schema_max,
-            stability_window_seconds=stability_window_seconds,
-            maintenance_participant_id=participant.participant_id,
-        )
-    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    finally:
-        participant.stop()
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_cutover_app.command("abort")
-def domain_cutover_abort(
-    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in cutover audit events.")],
-    reason: Annotated[str, typer.Option(help="Required reason for abandoning prepared cutover.")],
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing the authoritative cutover fuse.")
-    ] = default_state_root(),
-) -> None:
-    """Abort only a prepared cutover before the first v2 write exists."""
-
-    participant = _admin_cli_participant(state_root, "domain-cutover.abort")
-    try:
-        result = _cutover_controller(state_root).abort(
-            actor_id=actor_id,
-            reason=reason,
-            maintenance_participant_id=participant.participant_id,
-        )
-    except (DomainCutoverError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    finally:
-        participant.stop()
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_runtime_app.command("resolve-launch-unknown")
-def domain_runtime_resolve_launch_unknown(
-    task_id: Annotated[str, typer.Argument(help="Task containing the unknown runtime launch.")],
-    attempt_id: Annotated[
-        str, typer.Argument(help="Attempt whose launch was manually investigated.")
-    ],
-    actor_id: Annotated[
-        str,
-        typer.Option(help="Existing active Task owner or admin user ID recorded in the audit."),
-    ],
-    reason: Annotated[
-        str,
-        typer.Option(help="Required evidence explaining why the unknown runtime is terminal."),
-    ],
-    idempotency_key: Annotated[
-        str | None,
-        typer.Option(help="Stable key reused if this manual resolution command is retried."),
-    ] = None,
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing the committed domain v2 control plane.")
-    ] = default_state_root(),
-) -> None:
-    """Close a manually investigated unknown launch; never retry or relaunch it."""
-
-    try:
-        with _admin_cli_mutation(
-            state_root,
-            "domain-runtime.resolve-launch-unknown",
-        ) as (maintenance, lease):
-            artifact_sha = _domain_worker_artifact_sha(state_root)
-            if artifact_sha is None:
-                raise DomainCutoverError(
-                    "runtime launch reconciliation requires a committed domain v2 artifact"
-                )
-            auth = AuthService(state_root=state_root)
-            auth.initialize()
-            maintenance.check_lease(lease)
-            actor = auth.get_user(actor_id)
-            if actor.status.value != "active":
-                raise DomainCutoverError("runtime launch reconciliation actor is not active")
-            result = TaskApplicationService(
-                state_root,
-                artifact_sha=artifact_sha,
-            ).resolve_launch_unknown(
-                task_id,
-                attempt_id,
-                {"id": actor.id, "role": actor.role.value},
-                reason=reason,
-                idempotency_key=idempotency_key or f"launch-unknown-resolution:{attempt_id}",
-            )
-            maintenance.check_lease(lease)
-    except (DomainCutoverError, LookupError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
 
 
 @domain_maintenance_app.command("status")
@@ -982,7 +659,7 @@ def domain_maintenance_preflight(
     )
     try:
         required_types = tuple(
-            dict.fromkeys(CUTOVER_REQUIRED_PARTICIPANT_TYPES + tuple(required_participant_type))
+            dict.fromkeys(REQUIRED_PARTICIPANT_TYPES + tuple(required_participant_type))
         )
         report = service.preflight(
             required_participant_types=required_types,
@@ -996,310 +673,92 @@ def domain_maintenance_preflight(
         raise typer.Exit(code=2)
 
 
-@domain_migration_app.command("dry-run")
-def domain_migration_dry_run(
-    state_root: Annotated[
-        Path, typer.Option(help="Legacy state root to inspect.")
-    ] = default_state_root(),
-) -> None:
-    """Print an immutable source manifest without modifying legacy state."""
-    typer.echo(json_mod.dumps(capture_source_manifest(state_root).as_dict(), indent=2))
-
-
-@conversation_v3_migration_app.command("inspect")
-def conversation_v3_migration_inspect(
-    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
-) -> None:
-    """Inspect the source manifest and active/unknown cutover blockers."""
-    try:
-        result = ConversationV3Migration().inspect(source)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
-
-
-@conversation_v3_migration_app.command("dry-run")
-def conversation_v3_migration_dry_run(
-    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
-) -> None:
-    """Infer Turn boundaries without writing a destination generation."""
-    try:
-        result = ConversationV3Migration().dry_run(source)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
-
-
-@conversation_v3_migration_app.command("execute")
-def conversation_v3_migration_execute(
-    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
-    destination: Annotated[Path, typer.Option(help="New shadow generation SQLite path.")],
-    artifact_sha: Annotated[str, typer.Option(help="Immutable migration artifact SHA.")],
-) -> None:
-    """Build a new shadow generation; never overwrite the source snapshot."""
-    try:
-        result = ConversationV3Migration().execute(source, destination, artifact_sha=artifact_sha)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
-
-
-@conversation_v3_migration_app.command("verify")
-def conversation_v3_migration_verify(
-    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
-    destination: Annotated[Path, typer.Option(help="Shadow generation SQLite path.")],
-) -> None:
-    """Verify reconciliation, integrity, authority coverage, and secret removal."""
-    try:
-        result = ConversationV3Migration().verify(source, destination)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
-    if not result["ready"]:
-        raise typer.Exit(code=2)
-
-
-@conversation_v3_migration_app.command("cutover")
-def conversation_v3_migration_cutover(
-    source: Annotated[Path, typer.Option(help="Immutable legacy SQLite snapshot.")],
-    destination: Annotated[Path, typer.Option(help="Verified shadow generation SQLite path.")],
-    pointer: Annotated[Path, typer.Option(help="Active-generation pointer file.")],
-) -> None:
-    """Atomically switch the explicit active-generation pointer after verify."""
-    try:
-        result = ConversationV3Migration().cutover(source, destination, pointer)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result, indent=2))
-
-
-@domain_migration_app.command("apply")
-def domain_migration_apply(
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing legacy sources and v2 shadow tables.")
-    ] = default_state_root(),
-    mode: Annotated[str, typer.Option(help="Importer mode: validate or apply.")] = "validate",
-    artifact_sha: Annotated[
-        str | None,
-        typer.Option(help="Immutable artifact SHA recorded with this migration run."),
-    ] = None,
-) -> None:
-    """Run the application-level shadow importer; this never performs cutover."""
-    try:
-        result = DomainImporter(state_root).run(mode=mode, artifact_sha=artifact_sha)
-    except (MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_migration_app.command("resume")
-def domain_migration_resume(
-    run_id: Annotated[str, typer.Argument(help="Interrupted migration run ID to resume.")],
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing the fixed legacy sources and v2 tables.")
-    ] = default_state_root(),
-    artifact_sha: Annotated[
-        str | None,
-        typer.Option(help="Artifact SHA; it must equal the interrupted run's artifact."),
-    ] = None,
-) -> None:
-    """Resume an interrupted or maintenance-paused run with matching source evidence."""
-    try:
-        result = DomainImporter(state_root).resume(run_id, artifact_sha=artifact_sha)
-    except (MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_migration_app.command("inspect")
-def domain_migration_inspect(
-    run_id: Annotated[str, typer.Argument(help="Migration run ID to inspect.")],
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
-    ] = default_state_root(),
-) -> None:
-    """Inspect persisted phase, checkpoint, heartbeat, and resume metadata."""
-    typer.echo(json_mod.dumps(DomainImporter(state_root).inspect(run_id).as_dict(), indent=2))
-
-
 @domain_migration_app.command("records")
 def domain_migration_records(
-    run_id: Annotated[str, typer.Argument(help="Migration run ID whose source outcomes to list.")],
+    run_id: Annotated[
+        str | None, typer.Option(help="Optional historical migration run ID.")
+    ] = None,
+    record_type: Annotated[
+        str | None, typer.Option(help="Optional historical record type.")
+    ] = None,
+    cursor: Annotated[str | None, typer.Option(help="Opaque pagination cursor.")] = None,
+    limit: Annotated[int, typer.Option(min=1, max=200)] = 50,
     state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
+        Path, typer.Option(help="State root containing read-only legacy audit evidence.")
     ] = default_state_root(),
 ) -> None:
-    """List the durable imported/skipped/attention-needed result for each source record."""
-    results = [item.as_dict() for item in DomainImporter(state_root).record_results(run_id)]
-    typer.echo(json_mod.dumps(results, indent=2))
-
-
-@domain_migration_app.command("issues")
-def domain_migration_issues(
-    run_id: Annotated[str, typer.Argument(help="Migration run ID whose issues to list.")],
-    include_resolved: Annotated[
-        bool,
-        typer.Option(help="Include issues with a verified, applied typed resolution."),
-    ] = False,
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
-    ] = default_state_root(),
-) -> None:
-    """List unresolved remediation work without changing cutover state."""
-    service = DomainReconciliationService(state_root)
-    issues = [
-        issue.as_dict() for issue in service.list_issues(run_id, include_resolved=include_resolved)
-    ]
-    typer.echo(json_mod.dumps(issues, indent=2))
-
-
-@domain_migration_app.command("issue")
-def domain_migration_issue(
-    issue_id: Annotated[str, typer.Argument(help="Migration issue ID to inspect.")],
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
-    ] = default_state_root(),
-) -> None:
-    """Inspect one migration issue and its explicit resolution state."""
+    """List immutable historical records; this command cannot mutate migration state."""
+    service = LegacyDomainRecordAuditService(state_root)
+    records, has_more, next_cursor = service.list_records(
+        run_id=run_id,
+        record_type=record_type,
+        cursor=cursor,
+        limit=limit,
+    )
     typer.echo(
         json_mod.dumps(
-            DomainReconciliationService(state_root).inspect_issue(issue_id).as_dict(), indent=2
+            {"items": records, "has_more": has_more, "next_cursor": next_cursor}, indent=2
         )
     )
 
 
-@domain_migration_app.command("resolve")
-def domain_migration_resolve(
-    run_id: Annotated[str, typer.Argument(help="Migration run ID containing the issue.")],
-    issue_id: Annotated[str, typer.Argument(help="Migration issue ID to resolve.")],
-    resolution_type: Annotated[
-        str,
-        typer.Option(
-            help=(
-                "Explicit resolution: assign_project_owner, assign_workspace_owner, "
-                "assign_task_owner, assign_workspace_environment, set_primary_workspace, "
-                "or map_runtime_session."
-            )
-        ),
-    ],
-    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in the audit event.")],
-    payload_json: Annotated[
-        str,
-        typer.Option("--payload", help="JSON object required by the selected typed resolution."),
-    ] = "{}",
+@domain_migration_app.command("record")
+def domain_migration_record(
+    legacy_record_id: Annotated[str, typer.Argument(help="Historical record ID to inspect.")],
     state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
+        Path, typer.Option(help="State root containing read-only legacy audit evidence.")
     ] = default_state_root(),
 ) -> None:
-    """Apply a narrowly typed, audited migration remediation."""
+    """Inspect one immutable historical record with credential redaction."""
     try:
-        parsed = json_mod.loads(payload_json)
-    except json_mod.JSONDecodeError as exc:
-        raise typer.BadParameter("--payload must be a JSON object") from exc
-    if not isinstance(parsed, dict):
-        raise typer.BadParameter("--payload must be a JSON object")
-    payload = {str(key): value for key, value in parsed.items()}
-    try:
-        with _admin_cli_mutation(state_root, "domain-migration.resolve") as (
-            maintenance,
-            lease,
-        ):
-            result = DomainReconciliationService(
-                state_root,
-                maintenance=maintenance,
-                maintenance_lease=lease,
-                initialize_schema=False,
-            ).resolve_issue(
-                run_id,
-                issue_id,
-                resolution_type,
-                payload,
-                actor_id=actor_id,
-            )
-    except (LookupError, MaintenanceModeError, ValueError) as exc:
+        result = LegacyDomainRecordAuditService(state_root).inspect_record(legacy_record_id)
+    except LookupError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+    typer.echo(json_mod.dumps(result, indent=2))
 
 
-@domain_migration_app.command("finalize")
-def domain_migration_finalize(
-    run_id: Annotated[
-        str, typer.Argument(help="Completed migration run to finalize for cutover prepare.")
-    ],
-    actor_id: Annotated[str, typer.Option(help="Operator ID recorded in the audit event.")],
-    artifact_sha: Annotated[
-        str,
-        typer.Option(help="SHA-256 of the immutable artifact that performed the migration."),
-    ],
-    restore_evidence_json: Annotated[
-        str,
-        typer.Option("--restore-evidence", help="Validated restore evidence as a JSON object."),
-    ],
+retire_legacy_app = typer.Typer(help="Run the one-time pre-baseline schema retirement.")
+migration_app.add_typer(retire_legacy_app, name="retire-legacy")
+
+
+@retire_legacy_app.command("preflight")
+def retire_legacy_preflight_command(
+    state_root: Annotated[Path, typer.Option(help="State root to inspect.")] = default_state_root(),
+) -> None:
+    """Report whether the explicit retirement migration is safe to run."""
+    report = retire_legacy_preflight(state_root)
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
+
+
+@retire_legacy_app.command("apply")
+def retire_legacy_apply_command(
+    state_root: Annotated[Path, typer.Option(help="State root to migrate.")] = default_state_root(),
+) -> None:
+    """Apply the one-time retirement after the operator has verified the preflight."""
+    try:
+        report = retire_legacy_migrate(state_root)
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
+
+
+@retire_legacy_app.command("verify")
+def retire_legacy_verify_command(
     state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
+        Path, typer.Option(help="State root to validate.")
     ] = default_state_root(),
 ) -> None:
-    """Freeze reconciliation evidence; this does not prepare or commit cutover."""
-    try:
-        parsed = json_mod.loads(restore_evidence_json)
-    except json_mod.JSONDecodeError as exc:
-        raise typer.BadParameter("--restore-evidence must be a JSON object") from exc
-    if not isinstance(parsed, dict):
-        raise typer.BadParameter("--restore-evidence must be a JSON object")
-    evidence = {str(key): value for key, value in parsed.items()}
-    try:
-        with _admin_cli_mutation(state_root, "domain-migration.finalize") as (
-            maintenance,
-            lease,
-        ):
-            result = DomainReconciliationService(
-                state_root,
-                maintenance=maintenance,
-                maintenance_lease=lease,
-                initialize_schema=False,
-            ).finalize_run(
-                run_id,
-                actor_id,
-                artifact_sha,
-                evidence,
-            )
-    except (LookupError, MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
-
-
-@domain_migration_app.command("reconcile")
-def domain_migration_reconcile(
-    state_root: Annotated[
-        Path, typer.Option(help="State root containing v2 shadow tables.")
-    ] = default_state_root(),
-    run_id: Annotated[str | None, typer.Option(help="Optional migration run ID.")] = None,
-) -> None:
-    """Report migration counts and blocking issues without cutover."""
-    try:
-        with _admin_cli_mutation(state_root, "domain-migration.reconcile") as (
-            maintenance,
-            lease,
-        ):
-            result = DomainReconciliationService(
-                state_root,
-                maintenance=maintenance,
-                maintenance_lease=lease,
-                initialize_schema=False,
-            ).reconcile(run_id)
-    except (MaintenanceModeError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
-    typer.echo(json_mod.dumps(result.as_dict(), indent=2))
+    """Validate the current baseline and absence of retired tables."""
+    report = retire_legacy_verify(state_root)
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
 
 
 @overview_snapshot_app.command("refresh")
@@ -1315,7 +774,7 @@ def overview_snapshot_refresh(
     try:
         artifact_sha = _domain_worker_artifact_sha(state_root)
         if artifact_sha is None:
-            raise DomainCutoverError(
+            raise DomainWriteFenceError(
                 "overview snapshot refresh requires a committed domain v2 artifact"
             )
         planner = OverviewSnapshotPlanner(
@@ -1331,7 +790,7 @@ def overview_snapshot_refresh(
             typer.echo(detail, err=True)
             raise typer.Exit(code=2)
         typer.echo(json_mod.dumps(snapshot, indent=2))
-    except (DomainCutoverError, MaintenanceModeError) as exc:
+    except (DomainWriteFenceError, MaintenanceModeError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
     finally:

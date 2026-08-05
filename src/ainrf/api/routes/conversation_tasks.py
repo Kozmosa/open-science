@@ -33,7 +33,7 @@ def _conversation(request: Request) -> ConversationApplicationService:
     module = getattr(request.app.state, "conversation_application_service", None)
     if module is None or not isinstance(module, ConversationApplicationService):
         raise HTTPException(status_code=503, detail="Conversation Module is unavailable")
-    if not module.v2_ready():
+    if not module.ready():
         raise HTTPException(status_code=503, detail="Conversation Module is not ready")
     return module
 

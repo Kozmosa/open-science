@@ -11,7 +11,7 @@ from threading import Barrier
 import pytest
 
 from ainrf.db import connect
-from ainrf.domain_control import CUTOVER_REQUIRED_PARTICIPANT_TYPES, DomainMaintenanceService
+from ainrf.domain_control import REQUIRED_PARTICIPANT_TYPES, DomainMaintenanceService
 
 pytestmark = [pytest.mark.unit, pytest.mark.concurrent]
 
@@ -26,7 +26,7 @@ def _participant_service_in_maintenance(state_root: Path) -> DomainMaintenanceSe
 
 def _drain_required_cutover_participants(service: DomainMaintenanceService) -> None:
     existing_types = {participant.participant_type for participant in service.participants()}
-    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+    for participant_type in REQUIRED_PARTICIPANT_TYPES:
         if participant_type not in existing_types:
             service.register_participant(f"required:{participant_type}", participant_type)
         matching = [
@@ -39,11 +39,11 @@ def _drain_required_cutover_participants(service: DomainMaintenanceService) -> N
             service.drain_participant(participant_id)
 
 
-def _insert_active_attempt_and_claimed_launch(state_root: Path) -> tuple[str, str]:
-    """Seed only the durable facts preflight must inspect, without an engine."""
+def _insert_active_turn_and_pending_submission(state_root: Path) -> tuple[str, str]:
+    """Seed only the current durable facts preflight must inspect."""
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     task_id = "task-preflight"
-    attempt_id = "attempt-preflight"
+    turn_id = "turn-preflight"
     with closing(connect(db_path)) as conn:
         conn.execute(
             """
@@ -59,22 +59,38 @@ def _insert_active_attempt_and_claimed_launch(state_root: Path) -> tuple[str, st
         )
         conn.execute(
             """
-            INSERT INTO agent_task_attempts (
-                attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id, created_at
-            ) VALUES (?, ?, 1, 'initial', 'running', NULL, '2026-07-12T00:00:00+00:00')
+            INSERT INTO conversation_task_authorities (task_id, authority, created_at)
+            VALUES (?, 'conversation_v3', ?)
             """,
-            (attempt_id, task_id),
+            (task_id, "2026-07-12T00:00:00+00:00"),
         )
         conn.execute(
             """
-            INSERT INTO task_dispatch_outbox (
-                dispatch_id, task_id, attempt_id, status, created_at
-            ) VALUES ('dispatch-preflight', ?, ?, 'claimed', '2026-07-12T00:00:00+00:00')
+            INSERT INTO conversation_task_states (task_id, created_at, updated_at)
+            VALUES (?, ?, ?)
             """,
-            (task_id, attempt_id),
+            (task_id, "2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO task_turns (
+                turn_id, task_id, turn_seq, status, engine_family, engine_driver,
+                contract_version, accepted_at, updated_at
+            ) VALUES (?, ?, 1, 'in_progress', 'codex', 'codex-app-server', 1, ?, ?)
+            """,
+            (turn_id, task_id, "2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO turn_submissions (
+                submission_id, task_id, reserved_turn_id, actor_user_id, idempotency_key,
+                request_hash, status, input_json, created_at, updated_at
+            ) VALUES ('submission-preflight', ?, ?, 'user-1', 'preflight', 'hash', 'queued', '{}', ?, ?)
+            """,
+            (task_id, turn_id, "2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00"),
         )
         conn.commit()
-    return task_id, attempt_id
+    return task_id, turn_id
 
 
 def test_participant_registration_heartbeat_and_lifecycle_are_persistent(
@@ -182,7 +198,7 @@ def test_default_cutover_preflight_fails_closed_when_writer_types_are_missing(
     assert not missing.ready
     assert missing.missing_participant_types == tuple(
         participant_type
-        for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES
+        for participant_type in REQUIRED_PARTICIPANT_TYPES
         if participant_type != "api"
     )
 
@@ -192,30 +208,32 @@ def test_default_cutover_preflight_fails_closed_when_writer_types_are_missing(
     assert ready.missing_participant_types == ()
 
 
-def test_preflight_blocks_active_attempts_pending_launches_and_unflushed_output(
+def test_preflight_blocks_active_turns_pending_submissions_and_unflushed_output(
     state_root: Path,
 ) -> None:
     service = _participant_service_in_maintenance(state_root)
-    task_id, attempt_id = _insert_active_attempt_and_claimed_launch(state_root)
+    task_id, turn_id = _insert_active_turn_and_pending_submission(state_root)
     service.heartbeat_participant("api-1", unflushed_output_count=4)
 
     blocked = service.preflight(stability_window_seconds=0.0)
     assert not blocked.ready
     assert blocked.maintenance_active
     assert not blocked.participants_drained
-    assert blocked.active_attempt_count == 1
-    assert blocked.pending_runtime_launch_count == 1
+    assert blocked.active_turn_count == 1
+    assert blocked.pending_submission_count == 1
     assert blocked.unflushed_output_count == 4
 
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
         conn.execute(
-            "UPDATE agent_task_attempts SET status = 'succeeded' WHERE attempt_id = ?",
-            (attempt_id,),
+            "UPDATE task_turns SET status = 'completed', finished_at = ?, updated_at = ? "
+            "WHERE turn_id = ?",
+            ("2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00", turn_id),
         )
         conn.execute(
-            "UPDATE task_dispatch_outbox SET status = 'cancelled' WHERE task_id = ?",
-            (task_id,),
+            "UPDATE turn_submissions SET status = 'cancelled', finished_at = ?, "
+            "failure_code = 'cancelled', updated_at = ? WHERE task_id = ?",
+            ("2026-07-12T00:00:00+00:00", "2026-07-12T00:00:00+00:00", task_id),
         )
         conn.commit()
     service.heartbeat_participant("api-1", unflushed_output_count=0)
@@ -223,8 +241,8 @@ def test_preflight_blocks_active_attempts_pending_launches_and_unflushed_output(
 
     ready = service.preflight(stability_window_seconds=0.0)
     assert ready.ready
-    assert ready.active_attempt_count == 0
-    assert ready.pending_runtime_launch_count == 0
+    assert ready.active_turn_count == 0
+    assert ready.pending_submission_count == 0
     assert ready.unflushed_output_count == 0
 
 

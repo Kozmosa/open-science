@@ -15,7 +15,7 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
 
 pytestmark = [pytest.mark.api]
 
@@ -26,12 +26,12 @@ _OWNER: dict[str, object] = {"id": "context-owner", "role": "member"}
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     app = create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
     return app
@@ -207,12 +207,33 @@ async def test_api_key_context_publish_candidate_and_task_confirmation(
         task_id = str(_nested(_payload(task_response), "task")["task_id"])
 
         with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+            now = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 """
-                INSERT INTO task_outputs(task_id, seq, kind, content, created_at)
-                VALUES (?, 1, 'result', ?, ?)
+                INSERT INTO task_turns(
+                    turn_id, task_id, turn_seq, status, engine_family, engine_driver,
+                    contract_version, accepted_at, updated_at
+                ) VALUES (?, ?, 1, 'in_progress', 'claude', 'claude-code', 1, ?, ?)
                 """,
-                (task_id, "candidate source", datetime.now(timezone.utc).isoformat()),
+                ("context-api-source-turn", task_id, now, now),
+            )
+            conn.execute(
+                """
+                INSERT INTO turn_items(
+                    item_id, task_id, turn_id, task_item_seq, turn_item_seq,
+                    envelope_type, envelope_version, item_type, actor, payload_json,
+                    native_provenance_json, occurred_at, ingested_at, persisted_at
+                ) VALUES (?, ?, ?, 1, 1, 'canonical_item', 1, 'agent_message', 'agent', ?, '{}', ?, ?, ?)
+                """,
+                (
+                    "context-api-source-item",
+                    task_id,
+                    "context-api-source-turn",
+                    '{"content":"candidate source"}',
+                    now,
+                    now,
+                    now,
+                ),
             )
             conn.commit()
 

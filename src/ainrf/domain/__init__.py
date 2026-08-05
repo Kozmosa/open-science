@@ -1,4 +1,4 @@
-"""Lazy compatibility exports for v2 application Modules."""
+"""Lazy exports for current domain application Modules."""
 
 from typing import Any
 
@@ -13,7 +13,6 @@ _EXPORTS = {
     "WorkspaceModule": ("ainrf.domain.interfaces", "WorkspaceModule"),
     "EnvironmentModule": ("ainrf.domain.interfaces", "EnvironmentModule"),
     "ContextModule": ("ainrf.domain.interfaces", "ContextModule"),
-    "TaskLifecycleModule": ("ainrf.domain.interfaces", "TaskLifecycleModule"),
     "ConversationModule": ("ainrf.domain.interfaces", "ConversationModule"),
     "PersistentEnvironmentFacade": (
         "ainrf.domain.environment_facade",
@@ -25,11 +24,6 @@ _EXPORTS = {
     "ContextFragment": ("ainrf.domain.context", "ContextFragment"),
     "ContextSource": ("ainrf.domain.context", "ContextSource"),
     "ProjectContextService": ("ainrf.domain.context", "ProjectContextService"),
-    "AttemptProjectionService": ("ainrf.domain.attempt_projection", "AttemptProjectionService"),
-    "DispatchClaim": ("ainrf.domain.attempts", "DispatchClaim"),
-    "DispatchRunResult": ("ainrf.domain.worker", "DispatchRunResult"),
-    "TaskDispatcher": ("ainrf.domain.worker", "TaskDispatcher"),
-    "TaskApplicationService": ("ainrf.domain.tasks", "TaskApplicationService"),
     "ConversationApplicationService": (
         "ainrf.domain.conversation_service",
         "ConversationApplicationService",

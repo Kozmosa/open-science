@@ -398,17 +398,17 @@ class ProjectContextService:
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
-    def v2_ready(self) -> bool:
-        """Return readiness for this Module's committed authoritative writer."""
+    def ready(self) -> bool:
+        """Return readiness for this Module's current authoritative writer."""
 
-        return self._write_fence.v2_ready()
+        return self._write_fence.ready()
 
     @staticmethod
     def _begin_domain_write(conn: sqlite3.Connection) -> None:
         """Serialize a Context mutation with the persistent maintenance barrier.
 
         Context has public writers that are also called independently of
-        :class:`TaskApplicationService`.  Acquiring the SQLite writer before
+        :class:`ConversationApplicationService`.  Acquiring the SQLite writer before
         reading the epoch ensures a maintenance transition cannot race a
         snapshot, preview, or draft mutation through a separate connection.
         """
@@ -695,7 +695,6 @@ class ProjectContextService:
         *,
         source_metadata: Mapping[str, object] | None = None,
         source_task_id: str | None = None,
-        source_attempt_id: str | None = None,
         source_message_start_seq: int | None = None,
         source_message_end_seq: int | None = None,
         source_output_start_seq: int | None = None,
@@ -721,7 +720,6 @@ class ProjectContextService:
                 conn,
                 project_id=project_id,
                 source_task_id=source_task_id,
-                source_attempt_id=source_attempt_id,
             )
             # A Candidate is a proposal from the author of the selected Task
             # material, not another direct Project Context write path.  The
@@ -745,7 +743,6 @@ class ProjectContextService:
                 "content": content,
                 "source_metadata": canonical_source_metadata,
                 "source_task_id": source_task_id,
-                "source_attempt_id": source_attempt_id,
                 "source_message_start_seq": source_message_start_seq,
                 "source_message_end_seq": source_message_end_seq,
                 "source_output_start_seq": source_output_start_seq,
@@ -767,9 +764,9 @@ class ProjectContextService:
                 """INSERT INTO project_context_candidates (
                        candidate_id, project_id, content, status, created_at,
                        created_by_user_id, source_metadata_json, source_task_id,
-                       source_attempt_id, source_message_start_seq, source_message_end_seq,
+                       source_message_start_seq, source_message_end_seq,
                        source_output_start_seq, source_output_end_seq
-                   ) VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   ) VALUES (?, ?, ?, 'proposed', ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     candidate_id,
                     project_id,
@@ -778,7 +775,6 @@ class ProjectContextService:
                     actor_user_id,
                     _canonical_json(canonical_source_metadata),
                     source_task_id,
-                    source_attempt_id,
                     source_message_start_seq,
                     source_message_end_seq,
                     source_output_start_seq,
@@ -870,7 +866,7 @@ class ProjectContextService:
                         request,
                         result,
                     )
-                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    self._write_fence.validate_write(conn, actor_id=actor_user_id)
                     conn.commit()
                 return result
             proposed = self._append_candidate(current, str(candidate["content"]))
@@ -954,7 +950,7 @@ class ProjectContextService:
                         request,
                         result,
                     )
-                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    self._write_fence.validate_write(conn, actor_id=actor_user_id)
                     conn.commit()
                 return result
             now = _now()
@@ -1117,7 +1113,7 @@ class ProjectContextService:
             # a domain audit event.  It must still cross the exact same v2
             # fuse in the caller-owned transaction as normal lifecycle
             # writes, so an unsafe source drift rolls back the new pin.
-            self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
+            self._write_fence.validate_write(conn, actor_id=str(task["owner_user_id"]))
             conn.commit()
             return snapshot_id
 
@@ -1228,9 +1224,9 @@ class ProjectContextService:
             (version_id, snapshot_id, _now(), task_id),
         )
         # This helper is reachable from compatibility services as well as
-        # TaskApplicationService.  Record the first v2 write before control
+        # ConversationApplicationService.  Record the first v2 write before control
         # returns to either caller so every persisted Task pin is fuse-bound.
-        self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
+        self._write_fence.validate_write(conn, actor_id=str(task["owner_user_id"]))
         return snapshot_id
 
     def _preview_task_context_update(
@@ -1277,7 +1273,7 @@ class ProjectContextService:
             # audit row.  Bind it to the committed v2 fuse in this same
             # transaction instead of allowing it to become an unguarded first
             # domain write.
-            self._write_fence.record_first_v2_write(conn, actor_id=self._user_id(user))
+            self._write_fence.validate_write(conn, actor_id=self._user_id(user))
             current = self._task_snapshot_payload(conn, task)
             conn.commit()
             proposed = self._assembly_payload(
@@ -1347,14 +1343,13 @@ class ProjectContextService:
                    WHERE task_id = ?""",
                 (context_version_id, snapshot_id, now, task_id),
             )
-            # A queued Attempt has not crossed the runtime boundary and must
-            # follow the newly confirmed Task pin.  The migration trigger
-            # protects started Attempts from any snapshot drift.
+            # A queued Turn submission has not crossed the runtime boundary
+            # and must follow the newly confirmed Task pin.
             conn.execute(
-                """UPDATE agent_task_attempts
-                   SET context_snapshot_id = ?
+                """UPDATE turn_submissions
+                   SET context_snapshot_ref = ?, updated_at = ?
                    WHERE task_id = ? AND status = 'queued'""",
-                (snapshot_id, task_id),
+                (snapshot_id, now, task_id),
             )
             conn.execute(
                 """UPDATE task_context_update_previews
@@ -1381,6 +1376,32 @@ class ProjectContextService:
             conn.commit()
             return result
 
+    def preview_task_context_update(
+        self, task_id: str, project_id: str, user: Mapping[str, object]
+    ) -> dict[str, object]:
+        """Render a current Task Context diff through this Context Module."""
+
+        return self._preview_task_context_update(task_id, project_id, user)
+
+    def confirm_task_context_update(
+        self,
+        task_id: str,
+        project_id: str,
+        preview_id: str,
+        user: Mapping[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Persist a reviewed Context diff through the Context Module."""
+
+        return self._confirm_task_context_update(
+            task_id,
+            project_id,
+            preview_id,
+            user,
+            idempotency_key=idempotency_key,
+        )
+
     def _update_task_context(
         self,
         task_id: str,
@@ -1392,14 +1413,14 @@ class ProjectContextService:
         """Retire the direct Task Context write facade.
 
         A caller must render a diff and submit it through
-        :class:`TaskApplicationService`; generating an internal random key
+        :class:`ConversationApplicationService`; generating an internal random key
         here used to bypass both the lifecycle transaction boundary and the
         formal idempotency contract.
         """
 
         _ = task_id, project_id, user, idempotency_key
         raise DomainConflictError(
-            "Task Context mutations must be submitted through TaskApplicationService"
+            "Task Context mutations must be submitted through ConversationApplicationService"
         )
 
     def task_context(self, task_id: str, user: Mapping[str, object]) -> dict[str, object]:
@@ -1757,19 +1778,8 @@ class ProjectContextService:
         *,
         project_id: str,
         source_task_id: str,
-        source_attempt_id: str | None,
     ) -> str:
         task_id = source_task_id
-        if source_attempt_id is not None:
-            attempt = conn.execute(
-                "SELECT task_id FROM agent_task_attempts WHERE attempt_id = ?", (source_attempt_id,)
-            ).fetchone()
-            if attempt is None:
-                raise DomainNotFoundError("source Task Attempt")
-            attempt_task_id = str(attempt["task_id"])
-            if task_id is not None and task_id != attempt_task_id:
-                raise DomainConflictError("Candidate Task and Attempt provenance do not match")
-            task_id = attempt_task_id
         task = conn.execute("SELECT project_id FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
         if task is None or task["project_id"] != project_id:
             raise DomainNotFoundError("source Task")
@@ -1802,8 +1812,8 @@ class ProjectContextService:
                 continue
             row = conn.execute(
                 """SELECT COUNT(*) AS selected_count
-                   FROM task_outputs
-                   WHERE task_id = ? AND seq BETWEEN ? AND ?""",
+                   FROM turn_items
+                   WHERE task_id = ? AND task_item_seq BETWEEN ? AND ?""",
                 (task_id, start, end),
             ).fetchone()
             selected_count = int(row["selected_count"]) if row is not None else 0
@@ -1931,7 +1941,6 @@ class ProjectContextService:
             "created_by_user_id": row["created_by_user_id"],
             "source_metadata": _load_json_object(row["source_metadata_json"]),
             "source_task_id": row["source_task_id"],
-            "source_attempt_id": row["source_attempt_id"],
             "source_message_start_seq": row["source_message_start_seq"],
             "source_message_end_seq": row["source_message_end_seq"],
             "source_output_start_seq": row["source_output_start_seq"],
@@ -2082,7 +2091,7 @@ class ProjectContextService:
         subject_type: str,
         subject_id: str,
     ) -> None:
-        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
+        self._write_fence.validate_write(conn, actor_id=actor_id)
         conn.execute(
             """INSERT INTO domain_audit_events
                (event_id, actor_id, event_type, subject_type, subject_id, created_at)

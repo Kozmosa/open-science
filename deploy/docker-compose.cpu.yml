@@ -39,7 +39,7 @@ services:
       AINRF_PRODUCTION: "1"
       AINRF_HOST: "127.0.0.1"
       AINRF_PORT: "18000"
-      # The committed cutover fuse requires the immutable artifact SHA.
+      # Current domain writes require the immutable artifact SHA.
       AINRF_DOMAIN_ARTIFACT_SHA: ${AINRF_DOMAIN_ARTIFACT_SHA:-}
       # ── 必填：在 .env 文件中设置（见 deploy/examples/ainrf.env.example）──
       AINRF_JWT_SECRET: ${AINRF_JWT_SECRET:?在 .env 中设置 AINRF_JWT_SECRET}
@@ -94,7 +94,7 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # Enabled explicitly only for a committed v2 cutover:
+  # The historical profile name is retained for the current domain worker:
   #   docker compose --profile domain-v2 -f deploy/docker-compose.cpu.yml up -d
   # It has no HTTP port and shares every durable state/tenant mount with the
   # API process.  Host networking uses the API container's sshd, so its own
@@ -266,7 +266,7 @@ services:
       GATUS_PRODUCTION_WORKER_ENABLED: ${GATUS_PRODUCTION_WORKER_ENABLED:-true}
       GATUS_PRODUCTION_PROMETHEUS_READY_URL: ${GATUS_PRODUCTION_PROMETHEUS_READY_URL:-http://127.0.0.1:9091/prometheus/-/ready}
       GATUS_PRODUCTION_GRAFANA_HEALTH_URL: ${GATUS_PRODUCTION_GRAFANA_HEALTH_URL:-http://127.0.0.1:3000/grafana/api/health}
-      GATUS_PRODUCTION_WORKER_QUERY_URL: ${GATUS_PRODUCTION_WORKER_QUERY_URL:-http://127.0.0.1:9091/prometheus/api/v1/query?query=%28up%7Bjob%3D%22ainrf%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_dispatch_outbox_oldest_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
+      GATUS_PRODUCTION_WORKER_QUERY_URL: ${GATUS_PRODUCTION_WORKER_QUERY_URL:-http://127.0.0.1:9091/prometheus/api/v1/query?query=%28up%7Bjob%3D%22ainrf%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_turn_submission_oldest_pending_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
       GATUS_STAGING_WEB_URL: ${GATUS_STAGING_WEB_URL:-http://127.0.0.1:7192/}
       GATUS_STAGING_HEALTH_URL: ${GATUS_STAGING_HEALTH_URL:-http://127.0.0.1:7192/api/health}
       GATUS_STAGING_SSH_ENABLED: ${GATUS_STAGING_SSH_ENABLED:-false}
@@ -274,7 +274,7 @@ services:
       GATUS_STAGING_WORKER_ENABLED: ${GATUS_STAGING_WORKER_ENABLED:-true}
       GATUS_STAGING_PROMETHEUS_READY_URL: ${GATUS_STAGING_PROMETHEUS_READY_URL:-http://127.0.0.1:9092/prometheus/-/ready}
       GATUS_STAGING_GRAFANA_HEALTH_URL: ${GATUS_STAGING_GRAFANA_HEALTH_URL:-http://127.0.0.1:2300/grafana/api/health}
-      GATUS_STAGING_WORKER_QUERY_URL: ${GATUS_STAGING_WORKER_QUERY_URL:-http://127.0.0.1:9092/prometheus/api/v1/query?query=%28up%7Bjob%3D%22ainrf-staging%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_dispatch_outbox_oldest_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
+      GATUS_STAGING_WORKER_QUERY_URL: ${GATUS_STAGING_WORKER_QUERY_URL:-http://127.0.0.1:9092/prometheus/api/v1/query?query=%28up%7Bjob%3D%22ainrf-staging%22%7D%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_scrape_success%20%3D%3D%201%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_turn_submission_oldest_pending_age_seconds%20%3C%20300%29%20and%20on%28job%2Cinstance%29%20%28ainrf_domain_metrics_risk_state_known%20%3D%3D%201%29}
       GATUS_DEVELOPMENT_ENABLED: ${GATUS_DEVELOPMENT_ENABLED:-false}
       GATUS_DEVELOPMENT_WEB_URL: ${GATUS_DEVELOPMENT_WEB_URL:-http://127.0.0.1:41000/}
       GATUS_DEVELOPMENT_HEALTH_URL: ${GATUS_DEVELOPMENT_HEALTH_URL:-http://127.0.0.1:41001/api/health}

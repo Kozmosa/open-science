@@ -17,11 +17,10 @@ from uuid import uuid4
 from ainrf.db import connect, run_pending
 
 
-# A cutover is safe only after every independently deployable domain writer
-# has observed the maintenance epoch.  Keep the identifiers here rather than
-# scattering ad-hoc strings across the CLI, controller, and services: a
-# missing writer must fail the same way everywhere.
-CUTOVER_REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
+# Every independently deployable domain writer must observe the maintenance
+# epoch. Keep the identifiers here so maintenance preflight and all callers
+# share one bounded participant vocabulary.
+REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
     "api",
     "task-dispatcher",
     "literature-worker",
@@ -32,12 +31,10 @@ CUTOVER_REQUIRED_PARTICIPANT_TYPES: tuple[str, ...] = (
 
 # Prometheus scrape state is a write-only observability sidecar.  It has no
 # domain authority and may legitimately be refreshed while an operator is
-# reading maintenance status.  The legacy-source seal is created *after* the
-# stability gate as part of commit.  Every other regular state-root member is
-# included in the preflight fingerprint, not merely the importer subset.
+# reading maintenance status.  Every other regular state-root member is
+# included in the preflight fingerprint.
 _MAINTENANCE_VOLATILE_SOURCE_NAMES = frozenset(
     {
-        "domain-legacy-source-seal.json",
         "domain_telemetry.sqlite3",
         "domain_telemetry.sqlite3-wal",
         "domain_telemetry.sqlite3-shm",
@@ -98,8 +95,8 @@ class MaintenancePreflight:
 
     ready: bool
     maintenance_active: bool
-    active_attempt_count: int
-    pending_runtime_launch_count: int
+    active_turn_count: int
+    pending_submission_count: int
     unflushed_output_count: int
     source_stable: bool
     participants_drained: bool
@@ -807,11 +804,11 @@ class DomainMaintenanceService:
     def preflight(
         self,
         *,
-        required_participant_types: tuple[str, ...] = CUTOVER_REQUIRED_PARTICIPANT_TYPES,
+        required_participant_types: tuple[str, ...] = REQUIRED_PARTICIPANT_TYPES,
         stability_window_seconds: float = 5.0,
         stale_after_seconds: float = 30.0,
     ) -> MaintenancePreflight:
-        """Collect the hard safety facts required before migration/cutover.
+        """Collect the hard safety facts required before a maintenance migration.
 
         The method is deliberately read-only.  A caller must first enter
         maintenance, then use this report to decide whether it may proceed.
@@ -847,57 +844,27 @@ class DomainMaintenanceService:
             and all(item.status == "drained" for item in active_participants)
         )
         with closing(self._read_connection()) as conn:
-            active_attempt_count = self._count_optional(
+            active_turn_count = self._count_optional(
                 conn,
                 """
-                SELECT COUNT(*) FROM agent_task_attempts
-                WHERE status IN (
-                    'starting', 'running', 'pausing', 'cancelling', 'launch_unknown'
-                )
+                SELECT COUNT(*) FROM task_turns
+                WHERE status = 'in_progress'
                 """,
             )
-            pending_runtime_launch_count = self._count_optional(
+            pending_submission_count = self._count_optional(
                 conn,
                 """
-                SELECT COUNT(*) FROM task_dispatch_outbox
-                WHERE status IN ('pending', 'claimed', 'dispatched', 'launch_unknown')
+                SELECT COUNT(*) FROM turn_submissions
+                WHERE status IN ('queued', 'claimed', 'delivering', 'delivery_unknown')
                 """,
             )
-            # Before v2 cutover, the in-process legacy scheduler owns no
-            # Attempt/outbox rows.  Count its queued and active Task records
-            # explicitly so a background runtime cannot become invisible just
-            # because the HTTP request that scheduled it already returned.
-            legacy_active_task_count = self._count_optional(
-                conn,
-                """
-                SELECT COUNT(*) FROM tasks AS task
-                WHERE task.status IN ('starting', 'running', 'paused')
-                  AND NOT EXISTS (
-                      SELECT 1 FROM agent_task_attempts AS attempt
-                      WHERE attempt.task_id = task.task_id
-                  )
-                """,
-            )
-            legacy_queued_task_count = self._count_optional(
-                conn,
-                """
-                SELECT COUNT(*) FROM tasks AS task
-                WHERE task.status = 'queued'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM agent_task_attempts AS attempt
-                      WHERE attempt.task_id = task.task_id
-                  )
-                """,
-            )
-            active_attempt_count += legacy_active_task_count
-            pending_runtime_launch_count += legacy_queued_task_count
         unflushed_output_count = sum(item.unflushed_output_count for item in active_participants)
         source_stable = self._sources_are_stable(stability_window_seconds)
         ready = (
             status.is_active
             and status.in_flight_mutations == 0
-            and active_attempt_count == 0
-            and pending_runtime_launch_count == 0
+            and active_turn_count == 0
+            and pending_submission_count == 0
             and unflushed_output_count == 0
             and source_stable
             and participants_drained
@@ -905,8 +872,8 @@ class DomainMaintenanceService:
         return MaintenancePreflight(
             ready=ready,
             maintenance_active=status.is_active,
-            active_attempt_count=active_attempt_count,
-            pending_runtime_launch_count=pending_runtime_launch_count,
+            active_turn_count=active_turn_count,
+            pending_submission_count=pending_submission_count,
             unflushed_output_count=unflushed_output_count,
             source_stable=source_stable,
             participants_drained=participants_drained,

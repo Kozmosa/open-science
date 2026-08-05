@@ -416,41 +416,10 @@ class AgentSdkEngine(HarnessEngine):
         Unlike ``_resolve_prompt``, this never falls back to "Continue from
         where you left off" because we no longer have a session to continue.
         If no pending prompt exists, use the original rendered prompt.
-
-        When prior conversation messages are available from task_outputs
-        (last-resort context recovery), prepend them as a formatted context
-        block so the model has awareness of prior turns even though tool
-        execution history is lost.
         """
         if session.pending_prompts:
-            prompt = session.pending_prompts.popleft()
-        else:
-            prompt = context.rendered_prompt
-
-        # Layer 2 fallback: if the session was lost and we have prior
-        # user/assistant messages from task_outputs, inject them as
-        # a degraded context prefix.
-        if context.prior_messages:
-            prior = context.prior_messages
-            # Limit to last 50 turns to keep the prompt manageable.
-            if len(prior) > 100:
-                prior = prior[-100:]
-            lines: list[str] = []
-            lines.append(
-                "[Previous conversation — recovered from task history. "
-                "You are continuing a prior session whose state was lost. "
-                "You do NOT remember the exact tool calls or file edits "
-                "from the prior session, but the user/assistant messages "
-                "below summarize what was discussed.]"
-            )
-            for msg in prior:
-                role_label = "User" if msg["role"] == "user" else "Assistant"
-                lines.append(f"{role_label}: {msg['content']}")
-            lines.append("---")
-            lines.append(prompt)
-            return "\n\n".join(lines)
-
-        return prompt
+            return session.pending_prompts.popleft()
+        return context.rendered_prompt
 
     async def _run_query(
         self,
