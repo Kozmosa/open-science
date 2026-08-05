@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { DefaultRoute, WebUiSettingsDocument } from '@features/settings';
-import { clampEditorFontSize, clampTerminalFontSize, maxEditorFontSize, maxTerminalFontSize, minEditorFontSize, minTerminalFontSize } from '@features/settings';
+import type { DefaultRoute, WebUiSettingsDocument } from '../types';
+import { clampEditorFontSize, clampTerminalFontSize, maxEditorFontSize, maxTerminalFontSize, minEditorFontSize, minTerminalFontSize } from '../utils/defaults';
 
 export interface GeneralDraftState {
   defaultRoute: DefaultRoute;

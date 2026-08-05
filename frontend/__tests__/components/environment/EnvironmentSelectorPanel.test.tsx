@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
 import { renderWithProviders } from '@/test-support/render';
 import type { EnvironmentRecord } from '@/shared/types';
-import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
+import {
+  createDefaultWebUiSettings,
+  settingsStorageKey,
+  useEnvironmentSelectionPreferences,
+} from '@/features/settings';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@features/environments';
 
 vi.mock('@features/environments/api', () => ({
@@ -65,7 +69,8 @@ const defaultEnvironment: EnvironmentRecord = {
 };
 
 function EnvironmentSelectionHarness() {
-  const selection = useEnvironmentSelection();
+  const preferences = useEnvironmentSelectionPreferences();
+  const selection = useEnvironmentSelection(undefined, preferences);
 
   return <EnvironmentSelectorPanel {...selection} />;
 }

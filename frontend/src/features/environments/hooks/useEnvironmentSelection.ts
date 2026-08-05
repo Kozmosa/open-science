@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getEnvironments, getProjectEnvironmentReferences } from '../api';
 import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
-import { useSettings } from '@features/settings';
 import { getDomainProjects } from '@features/domain';
 import { queryKeys } from '@/shared/api/queryKeys';
 
@@ -61,8 +60,11 @@ export interface EnvironmentSelectionState {
   onSelectEnvironment: (environmentId: string) => void;
 }
 
-export function useEnvironmentSelection(projectId?: string | null): EnvironmentSelectionState {
-  const { settings, rememberSelectedEnvironment } = useSettings();
+export function useEnvironmentSelection(
+  projectId: string | null | undefined,
+  preferences: EnvironmentSelectionPreferences,
+): EnvironmentSelectionState {
+  const { getProjectSelection, rememberSelectedEnvironment } = preferences;
   const projectsQuery = useQuery({
     queryKey: queryKeys.domain.projects(false),
     queryFn: () => getDomainProjects(false),
@@ -84,11 +86,9 @@ export function useEnvironmentSelection(projectId?: string | null): EnvironmentS
   const environments = environmentsQuery.data?.items ?? EMPTY_ENVIRONMENTS;
   const projectReferences = projectReferencesQuery.data?.items ?? EMPTY_PROJECT_REFERENCES;
 
-  const projectSettings = resolvedProjectId
-    ? settings.projectDefaults[resolvedProjectId] ?? settings.projectDefaults.default
-    : settings.projectDefaults.default;
-  const storedEnvironmentId = projectSettings?.selection.lastEnvironmentId ?? null;
-  const projectDefaultEnvironmentId = projectSettings?.defaultEnvironmentId ?? null;
+  const projectSelection = resolvedProjectId ? getProjectSelection(resolvedProjectId) : null;
+  const storedEnvironmentId = projectSelection?.rememberedEnvironmentId ?? null;
+  const projectDefaultEnvironmentId = projectSelection?.defaultEnvironmentId ?? null;
 
   const selectedEnvironmentId = useMemo(
     () =>
@@ -154,4 +154,11 @@ export function useEnvironmentSelection(projectId?: string | null): EnvironmentS
     hasEnvironments: environments.length > 0,
     onSelectEnvironment,
   };
+}
+export interface EnvironmentSelectionPreferences {
+  getProjectSelection: (projectId: string) => {
+    defaultEnvironmentId: string | null;
+    rememberedEnvironmentId: string | null;
+  };
+  rememberSelectedEnvironment: (projectId: string, environmentId: string | null) => void;
 }

@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FolderOpen, RefreshCw } from 'lucide-react';
 import { buildFileStreamUrl, listFiles, readFile } from '../api';
 import { getDomainWorkspaces } from '@features/domain';
-import { useEnvironmentSelection } from '@features/environments';
+import { useEnvironmentSelection, type EnvironmentSelectionPreferences } from '@features/environments';
 import FileTree from '../components/file-browser/FileTree';
 import FileViewer from '../components/file-browser/FileViewer';
 import { useEditorSettings } from '@features/settings';
@@ -23,14 +23,18 @@ function normalizeRoutePath(path: string | null): string | null {
   return path.replace(/^\/+/, '');
 }
 
-export default function FileBrowserPage() {
+export interface FileBrowserPageProps {
+  preferences: EnvironmentSelectionPreferences;
+}
+
+export default function FileBrowserPage({ preferences }: FileBrowserPageProps) {
   const t = useT();
   const [searchParams] = useSearchParams();
   const routeWorkspaceId = searchParams.get('workspace_id') ?? '';
   const routeEnvironmentId = searchParams.get('environment_id');
   const routePath = useMemo(() => normalizeRoutePath(searchParams.get('path')), [searchParams]);
   const queryClient = useQueryClient();
-  const environmentSelection = useEnvironmentSelection();
+  const environmentSelection = useEnvironmentSelection(undefined, preferences);
   const editorSettings = useEditorSettings();
   const colorScheme = useResolvedOsciTheme();
   const selectedEnvironment = environmentSelection.selectedEnvironment;

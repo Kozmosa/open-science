@@ -19,6 +19,7 @@ export {
 } from './utils/defaults';
 export {
   SettingsProvider,
+  useEnvironmentSelectionPreferences,
   useEditorSettings,
   useProjectEnvironmentDefaults,
   useSettings,

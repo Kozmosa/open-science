@@ -33,7 +33,7 @@ import type { ProjectEnvironmentReferenceUpdateRequest } from '@/shared/api/tran
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import EnvironmentDetectionModal from '../components/EnvironmentDetectionModal';
-import { useEnvironmentSelection } from '../hooks/useEnvironmentSelection';
+import { useEnvironmentSelection, type EnvironmentSelectionPreferences } from '../hooks/useEnvironmentSelection';
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
@@ -316,12 +316,16 @@ function EnvironmentEditor({
   );
 }
 
-function EnvironmentsPage() {
+export interface EnvironmentsPageProps {
+  preferences: EnvironmentSelectionPreferences;
+}
+
+function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
   const t = useT();
   const locale = useLocale();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const environmentSelection = useEnvironmentSelection();
+  const environmentSelection = useEnvironmentSelection(undefined, preferences);
   const defaultProjectId = environmentSelection.projectId;
   const [editorMode, setEditorMode] = useState<EnvironmentEditorMode>('create');
   const [editorEnvironmentId, setEditorEnvironmentId] = useState<string | null>(null);

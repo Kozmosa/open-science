@@ -5,7 +5,7 @@ import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@features/env
 import { getEnvironments } from '@features/environments';
 import { getDomainWorkspaces } from '@features/domain';
 import { getSkills } from '../api';
-import { useSettings } from '../contexts/SettingsProvider';
+import { useEnvironmentSelectionPreferences, useSettings } from '../contexts/SettingsProvider';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { UsersTab } from './settings/UsersTab';
@@ -56,7 +56,8 @@ function SettingsPage() {
     saveAppearanceSettings,
     resetAppearanceSettings,
   } = useSettings();
-  const environmentSelection = useEnvironmentSelection();
+  const environmentSelectionPreferences = useEnvironmentSelectionPreferences();
+  const environmentSelection = useEnvironmentSelection(undefined, environmentSelectionPreferences);
   const defaultProjectId = environmentSelection.projectId;
   const defaultProjectSettings = defaultProjectId
     ? settings.projectDefaults[defaultProjectId] ?? settings.projectDefaults.default
