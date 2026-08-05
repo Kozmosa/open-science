@@ -195,26 +195,6 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
         "One when the current domain telemetry source is in the bounded state",
     ),
     (
-        "ainrf_domain_migration_issues",
-        ["severity", "resolution_status"],
-        "Current durable domain migration issue count",
-    ),
-    (
-        "ainrf_domain_migration_runs",
-        ["status"],
-        "Current durable domain migration run count by bounded status",
-    ),
-    (
-        "ainrf_domain_migration_record_results",
-        ["status"],
-        "Current durable source record migration result count by bounded status",
-    ),
-    (
-        "ainrf_domain_migration_attention_needed_issues",
-        ["record_type", "category"],
-        "Open attention-needed migration issues by bounded type and remediation category",
-    ),
-    (
         "ainrf_domain_dispatch_outbox_oldest_age_seconds",
         [],
         "Age of the oldest recoverable or launch-unknown durable task dispatch",

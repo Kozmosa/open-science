@@ -60,33 +60,6 @@ def _seed_control_plane(state_root: Path) -> None:
         run_pending(conn, "agentic_researcher")
         conn.execute(
             """
-            INSERT INTO domain_migration_runs (
-                run_id, mode, source_manifest_json, code_version, status, started_at
-            ) VALUES ('telemetry-run', 'validate', '{}', 'test', 'completed', ?)
-            """,
-            (_timestamp(minutes_ago=30),),
-        )
-        conn.execute(
-            """
-            INSERT INTO domain_migration_issues (
-                issue_id, run_id, category, record_type, record_id, severity, detail, created_at
-            ) VALUES ('telemetry-issue', 'telemetry-run', 'mapping', 'project', 'legacy-1',
-                      'blocking', 'requires resolution', ?)
-            """,
-            (_timestamp(minutes_ago=25),),
-        )
-        conn.execute(
-            """
-            INSERT INTO domain_migration_record_results (
-                record_result_id, run_id, source_path, record_type, source_record_id,
-                source_payload_sha256, status, detail, created_at, updated_at
-            ) VALUES ('telemetry-record-result', 'telemetry-run', 'legacy/projects.json',
-                      'project', 'legacy-1', ?, 'attention_needed', 'requires resolution', ?, ?)
-            """,
-            ("a" * 64, _timestamp(minutes_ago=25), _timestamp(minutes_ago=25)),
-        )
-        conn.execute(
-            """
             INSERT INTO domain_idempotency_requests (
                 actor_user_id, scope, idempotency_key, request_hash, response_json, created_at
             ) VALUES ('telemetry-user', 'task.create', 'telemetry-key', 'hash', '{}', ?)
@@ -189,8 +162,6 @@ def test_refresh_reads_migrated_durable_control_plane_state(tmp_path: Path) -> N
 
     assert snapshot.mode == "legacy"
     assert snapshot.contract_version == 2
-    assert snapshot.migration_issue_count == 1
-    assert snapshot.migration_attention_needed_count == 1
     assert snapshot.outbox_oldest_age_seconds >= 11 * 60
     assert snapshot.outbox_backlog_count == 1
     assert snapshot.idempotency_record_count == 1
@@ -200,13 +171,6 @@ def test_refresh_reads_migrated_durable_control_plane_state(tmp_path: Path) -> N
 
     text = get_metrics_text()
     assert 'ainrf_domain_mode_info{mode="legacy"} 1.0' in text
-    assert 'ainrf_domain_migration_issues{resolution_status="open",severity="blocking"} 1.0' in text
-    assert 'ainrf_domain_migration_runs{status="completed"} 1.0' in text
-    assert 'ainrf_domain_migration_record_results{status="attention_needed"} 1.0' in text
-    assert (
-        'ainrf_domain_migration_attention_needed_issues{category="other",record_type="project"} 1.0'
-        in text
-    )
     assert "ainrf_domain_contract_version 2.0" in text
     assert "ainrf_domain_metrics_scrape_success 1.0" in text
     assert 'ainrf_domain_telemetry_source_status{source="control",state="ready"} 1.0' in text
@@ -311,7 +275,7 @@ def test_v2_missing_required_telemetry_source_fails_closed(
         (runtime_root / "literature.sqlite3").unlink()
     elif source == "control":
         with closing(sqlite3.connect(control_path)) as conn:
-            conn.execute("DROP TABLE domain_migration_issues")
+            conn.execute("DROP TABLE task_dispatch_outbox")
             conn.commit()
     else:
         with closing(sqlite3.connect(control_path)) as conn:
@@ -410,82 +374,6 @@ def test_durable_v2_mode_requires_a_committed_control_fuse(
     )
 
 
-def test_migration_attention_issue_metric_is_bounded_and_clears_resolved_work(
-    tmp_path: Path,
-) -> None:
-    _seed_control_plane(tmp_path)
-    control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
-    with closing(connect(control_path)) as conn:
-        conn.execute(
-            """
-            INSERT INTO domain_migration_issues (
-                issue_id, run_id, category, record_type, record_id, severity, detail,
-                resolution_status, created_at
-            ) VALUES ('attention-canonical', 'telemetry-run', 'owner_unmapped', 'project',
-                      'legacy-2', 'blocking', 'requires owner resolution', 'open', ?)
-            """,
-            (_timestamp(minutes_ago=10),),
-        )
-        conn.execute(
-            """
-            INSERT INTO domain_migration_issues (
-                issue_id, run_id, category, record_type, record_id, severity, detail,
-                resolution_status, created_at
-            ) VALUES ('attention-private', 'telemetry-run', 'tenant-private-category',
-                      'tenant-private-record', 'legacy-3', 'blocking', 'private', 'open', ?)
-            """,
-            (_timestamp(minutes_ago=10),),
-        )
-        conn.commit()
-
-    refresh_domain_metrics(tmp_path)
-    text = get_metrics_text()
-    assert (
-        'ainrf_domain_migration_attention_needed_issues{category="owner_unmapped",record_type="project"} 1.0'
-        in text
-    )
-    assert (
-        'ainrf_domain_migration_attention_needed_issues{category="other",record_type="other"} 1.0'
-        in text
-    )
-    assert "tenant-private-category" not in text
-    assert "tenant-private-record" not in text
-
-    with closing(connect(control_path)) as conn:
-        resolved_at = _timestamp()
-        for issue_id in ("telemetry-issue", "attention-canonical", "attention-private"):
-            conn.execute(
-                """
-                INSERT INTO domain_migration_resolutions (
-                    resolution_id, run_id, issue_id, resolution_type, actor_user_id, payload_json,
-                    created_at, updated_at, applied_at
-                ) VALUES (?, 'telemetry-run', ?, 'owner_mapping', 'telemetry-user', '{}', ?, ?, ?)
-                """,
-                (f"resolution-{issue_id}", issue_id, resolved_at, resolved_at, resolved_at),
-            )
-            conn.execute(
-                """
-                UPDATE domain_migration_issues
-                SET resolution_type = 'owner_mapping', resolution_status = 'resolved'
-                WHERE issue_id = ?
-                """,
-                (issue_id,),
-            )
-        conn.commit()
-
-    refresh_domain_metrics(tmp_path)
-    text = get_metrics_text()
-    assert (
-        'ainrf_domain_migration_attention_needed_issues{category="owner_unmapped",record_type="project"} 0.0'
-        in text
-    )
-    assert (
-        'ainrf_domain_migration_attention_needed_issues{category="other",record_type="other"} 0.0'
-        in text
-    )
-    assert 'ainrf_domain_migration_record_results{status="attention_needed"} 1.0' in text
-
-
 def test_overview_attention_survives_a_fresh_partial_snapshot(tmp_path: Path) -> None:
     _seed_control_plane(tmp_path)
     control_path = tmp_path / "runtime" / "agentic_researcher.sqlite3"
@@ -561,7 +449,7 @@ def test_truncated_persisted_snapshot_never_becomes_a_known_risk_state(
         ).fetchone()
         assert row is not None
         payload = json.loads(str(row[0]))
-        payload["migration_issues"].pop()
+        payload["outbox_backlog"].pop()
         conn.execute(
             "UPDATE domain_telemetry_snapshots SET payload_json = ? WHERE singleton = 1",
             (json.dumps(payload),),
@@ -760,7 +648,6 @@ def test_uncached_scrape_failure_exports_unknown_risk_not_zero(
     assert "ainrf_domain_metrics_scrape_success 0.0" in text
     assert "ainrf_domain_metrics_risk_state_known 0.0" in text
     assert "ainrf_domain_dispatch_outbox_backlog NaN" in text
-    assert 'ainrf_domain_migration_issues{resolution_status="open",severity="blocking"} NaN' in text
 
 
 def test_lost_durable_event_latches_release_telemetry_until_operator_review(

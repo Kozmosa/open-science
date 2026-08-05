@@ -35,18 +35,6 @@ _LOG = logging.getLogger(__name__)
 
 _BACKUP_VERSION = 3
 
-# Known SQLite databases relative to <state_root>/runtime/.  These names keep
-# the original manifest layout stable, while v3 also discovers any future
-# ``*.sqlite3`` file below ``runtime/``.
-_SQLITE_DATABASES: tuple[str, ...] = (
-    "auth.sqlite3",
-    "sessions.sqlite3",
-    "agentic_researcher.sqlite3",
-    "literature.sqlite3",
-    "terminal_state.sqlite3",
-    "task_harness.sqlite3",  # legacy
-)
-
 # Top-level config files relative to <state_root>/
 _TOPLEVEL_CONFIGS: tuple[str, ...] = (
     "config.json",
