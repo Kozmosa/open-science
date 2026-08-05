@@ -168,9 +168,10 @@ const environmentAlt = {
     renderWithProviders(<ProjectsPage />, { route: '/projects' })
     fireEvent.click(await screen.findByRole('button', { name: /new task/i }))
 
-    await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'))
+    await waitFor(() => expect(screen.getByLabelText('Project')).toHaveTextContent('Default Project'))
     expect(screen.getByLabelText('Project')).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'workspace-alt' } })
+    fireEvent.click(screen.getByLabelText('Workspace'))
+    fireEvent.click(screen.getByRole('option', { name: 'Alternate Workspace' }))
     expect(screen.getByLabelText('Environment')).toHaveValue('CPU Lab (cpu-lab)')
     expect(screen.getByLabelText('Environment')).toHaveAttribute('readonly')
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run from project canvas.' } })
