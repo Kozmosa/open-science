@@ -9,7 +9,11 @@ import socket
 from pathlib import Path
 from threading import Lock
 
-from ainrf.domain_control import DomainMaintenanceService, DomainWriteParticipant, MaintenanceModeError
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceModeError,
+)
 from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.literature.models import LiteraturePaper
 from ainrf.literature.limits import ArxivRequestLimiter

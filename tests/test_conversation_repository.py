@@ -590,10 +590,13 @@ def test_queued_submission_context_can_be_rebound_but_started_context_cannot(
             "WHERE submission_id = ?",
             ("snapshot-new", _NOW, "submission-context"),
         )
-        assert conn.execute(
-            "SELECT context_snapshot_ref FROM turn_submissions WHERE submission_id = ?",
-            ("submission-context",),
-        ).fetchone()[0] == "snapshot-new"
+        assert (
+            conn.execute(
+                "SELECT context_snapshot_ref FROM turn_submissions WHERE submission_id = ?",
+                ("submission-context",),
+            ).fetchone()[0]
+            == "snapshot-new"
+        )
         conn.execute(
             "UPDATE turn_submissions SET status = 'claimed', claimed_at = ?, updated_at = ? "
             "WHERE submission_id = ?",
@@ -601,8 +604,7 @@ def test_queued_submission_context_can_be_rebound_but_started_context_cannot(
         )
         with pytest.raises(sqlite3.IntegrityError, match="started Turn Submission context"):
             conn.execute(
-                "UPDATE turn_submissions SET context_snapshot_ref = ? "
-                "WHERE submission_id = ?",
+                "UPDATE turn_submissions SET context_snapshot_ref = ? WHERE submission_id = ?",
                 ("snapshot-too-late", "submission-context"),
             )
 

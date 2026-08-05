@@ -280,6 +280,8 @@ def test_ordinary_task_projection_uses_turn_item_and_execution_authority(
     assert "fixture-model" in str(task["token_usage_json"])
     assert health["engine_alive"] is True
     assert usage["total_tokens"] == 10
+
+
 def test_task_metadata_and_cancel_stay_inside_conversation_interface(
     state_root: Path,
 ) -> None:
@@ -437,6 +439,8 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
             ).fetchone()[0]
             == 1
         )
+
+
 def test_replay_requires_current_authorization(state_root: Path) -> None:
     service = _service(state_root)
     service.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")

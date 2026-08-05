@@ -22,9 +22,7 @@ def _connect(path: Path) -> sqlite3.Connection:
     ("database", "version"),
     [("auth", 7), ("agentic_researcher", 33), ("literature", 7), ("terminal", 1)],
 )
-def test_fresh_install_uses_current_baseline(
-    tmp_path: Path, database: str, version: int
-) -> None:
+def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
     with _connect(path) as connection:
         assert run_pending(connection, database) >= 1
@@ -38,9 +36,7 @@ def test_fresh_domain_baseline_contains_current_authority_only(tmp_path: Path) -
         run_pending(connection, "agentic_researcher")
         tables = {
             str(row["name"])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
     assert {"tasks", "task_turns", "turn_items", "runtime_executions"} <= tables
     assert not tables & {
@@ -102,12 +98,20 @@ def _make_retiring_state(state_root: Path, *, active_runtime: bool = False) -> P
             """
         )
         if active_runtime:
-            connection.execute(
-                "INSERT INTO agent_runtime_sessions VALUES ('runtime-1', 'running')"
-            )
+            connection.execute("INSERT INTO agent_runtime_sessions VALUES ('runtime-1', 'running')")
         connection.execute(
             "INSERT INTO legacy_domain_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("legacy-1", "run-1", "task", "{}", "2026-08-05T00:00:00+00:00", None, None, None, "audit"),
+            (
+                "legacy-1",
+                "run-1",
+                "task",
+                "{}",
+                "2026-08-05T00:00:00+00:00",
+                None,
+                None,
+                None,
+                "audit",
+            ),
         )
         connection.commit()
     return database
@@ -121,15 +125,14 @@ def test_retirement_migration_drops_legacy_tables_and_keeps_audit(tmp_path: Path
     with _connect(database) as connection:
         tables = {
             str(row["name"])
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
         assert "legacy_domain_records" in tables
         assert "agent_task_attempts" not in tables
-        assert connection.execute(
-            "SELECT legacy_record_id FROM legacy_domain_records"
-        ).fetchone()[0] == "legacy-1"
+        assert (
+            connection.execute("SELECT legacy_record_id FROM legacy_domain_records").fetchone()[0]
+            == "legacy-1"
+        )
 
 
 def test_retirement_preflight_blocks_active_runtime(tmp_path: Path) -> None:

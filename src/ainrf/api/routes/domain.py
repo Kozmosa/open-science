@@ -84,7 +84,9 @@ async def capabilities(request: Request) -> dict[str, object]:
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
     conversation_service = getattr(request.app.state, "conversation_application_service", None)
-    task_service_ready = ready and conversation_service is not None and conversation_service.v2_ready()
+    task_service_ready = (
+        ready and conversation_service is not None and conversation_service.v2_ready()
+    )
     maintenance = getattr(request.app.state, "domain_maintenance_service", None)
     dispatcher_readiness: dict[str, object] = {
         "participant_type": "task-dispatcher",

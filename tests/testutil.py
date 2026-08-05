@@ -38,6 +38,7 @@ from ainrf.harness_engine import (
 )
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
+
 CURRENT_ARTIFACT_SHA = "b" * 64
 
 

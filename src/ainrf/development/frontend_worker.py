@@ -134,7 +134,9 @@ class FrontendFixtureWorker:
         if not isinstance(payload, dict):
             raise DomainWriteFenceError("frontend fixture marker is malformed")
         if payload.get("fixture_version") != FRONTEND_DEV_FIXTURE_VERSION:
-            raise DomainWriteFenceError("frontend fixture version changed; reset the managed fixture")
+            raise DomainWriteFenceError(
+                "frontend fixture version changed; reset the managed fixture"
+            )
         if payload.get("artifact_sha") != self.artifact_sha:
             raise DomainWriteFenceError("frontend fixture artifact SHA does not match the worker")
 

@@ -282,9 +282,7 @@ class ConversationProjectionService:
             has_usage = True
             for field in TOKEN_TOTAL_FIELDS:
                 total[field] = _integer(total[field]) + _integer(raw_total.get(field))
-            total["cost_usd"] = _number(total["cost_usd"]) + _number(
-                raw_total.get("cost_usd")
-            )
+            total["cost_usd"] = _number(total["cost_usd"]) + _number(raw_total.get("cost_usd"))
             for model, raw_model in _mapping(usage.get("by_model")).items():
                 model_usage = _mapping(raw_model)
                 aggregate = by_model.setdefault(
@@ -292,9 +290,7 @@ class ConversationProjectionService:
                     {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
                 )
                 for field in TOKEN_TOTAL_FIELDS:
-                    aggregate[field] = _integer(aggregate[field]) + _integer(
-                        model_usage.get(field)
-                    )
+                    aggregate[field] = _integer(aggregate[field]) + _integer(model_usage.get(field))
                 aggregate["cost_usd"] = _number(aggregate["cost_usd"]) + _number(
                     model_usage.get("cost_usd")
                 )
@@ -348,7 +344,9 @@ class ConversationProjectionService:
             )
             if duration:
                 durations.append(duration)
-            usage_json = None if projection is None else ConversationProjectionService.usage_json(projection)
+            usage_json = (
+                None if projection is None else ConversationProjectionService.usage_json(projection)
+            )
             has_usage = usage_json is not None
             task_tokens = 0
             task_cost = 0.0
@@ -368,8 +366,7 @@ class ConversationProjectionService:
                     model_usage = _mapping(raw_model)
                     aggregate = by_model.setdefault(
                         str(model),
-                        {field: 0 for field in TOKEN_TOTAL_FIELDS}
-                        | {"cost_usd": 0.0, "tokens": 0},
+                        {field: 0 for field in TOKEN_TOTAL_FIELDS} | {"cost_usd": 0.0, "tokens": 0},
                     )
                     for field in TOKEN_TOTAL_FIELDS:
                         aggregate[field] = _integer(aggregate[field]) + _integer(
@@ -391,9 +388,9 @@ class ConversationProjectionService:
             engine_summary["cost_usd"] = _number(engine_summary["cost_usd"]) + task_cost
             if has_usage:
                 summary["tasks_with_usage"] = int(summary["tasks_with_usage"]) + 1
-                engine_summary["tasks_with_usage"] = _integer(
-                    engine_summary["tasks_with_usage"]
-                ) + 1
+                engine_summary["tasks_with_usage"] = (
+                    _integer(engine_summary["tasks_with_usage"]) + 1
+                )
             total_tokens += task_tokens
             total_cost += task_cost
             if task_tokens:
@@ -412,7 +409,9 @@ class ConversationProjectionService:
         summary["total_tokens"] = total_tokens
         summary["total_cost_usd"] = total_cost
         summary["total_duration_ms"] = sum(durations)
-        summary["median_duration_ms"] = int(sorted(durations)[len(durations) // 2]) if durations else None
+        summary["median_duration_ms"] = (
+            int(sorted(durations)[len(durations) // 2]) if durations else None
+        )
         summary["top_tasks"] = sorted(
             top_tasks, key=lambda item: (-int(item["total_tokens"] or 0), str(item["task_id"]))
         )[:5]

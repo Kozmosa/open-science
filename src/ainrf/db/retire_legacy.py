@@ -69,7 +69,9 @@ def _table_names(conn: sqlite3.Connection) -> set[str]:
     }
 
 
-def _report(conn: sqlite3.Connection, *, integrity_check: str | None = None) -> LegacyRetirementReport:
+def _report(
+    conn: sqlite3.Connection, *, integrity_check: str | None = None
+) -> LegacyRetirementReport:
     tables = _table_names(conn)
     version_row = conn.execute(
         "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
@@ -144,7 +146,9 @@ def _rebuild_context_candidates_without_attempt_fk(conn: sqlite3.Connection) -> 
         if name.startswith("sqlite_autoindex_"):
             continue
         conn.execute(f'DROP {str(row["type"]).upper()} IF EXISTS "{name}"')
-    conn.execute("ALTER TABLE project_context_candidates RENAME TO project_context_candidates_retiring")
+    conn.execute(
+        "ALTER TABLE project_context_candidates RENAME TO project_context_candidates_retiring"
+    )
     conn.execute(
         """
         CREATE TABLE project_context_candidates (
@@ -288,9 +292,7 @@ def verify(state_root: Path) -> LegacyRetirementReport:
         report = _report(conn, integrity_check=integrity)
     blockers = list(report.blockers)
     if report.schema_version == CURRENT_SCHEMA_VERSION:
-        blockers.extend(
-            f"legacy table remains: {table}" for table in report.legacy_tables
-        )
+        blockers.extend(f"legacy table remains: {table}" for table in report.legacy_tables)
     if integrity != "ok":
         blockers.append(f"integrity check returned {integrity}")
     return LegacyRetirementReport(

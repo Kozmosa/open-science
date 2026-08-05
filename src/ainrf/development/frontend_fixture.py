@@ -180,12 +180,16 @@ def _validated_login_users(payload: dict[str, object]) -> dict[str, dict[str, st
     for label, expected in _LOGIN_IDENTITY_SPECS.items():
         raw_user = normalized_raw_users.get(label)
         if not isinstance(raw_user, dict):
-            raise DomainWriteFenceError("frontend login credentials are malformed; reset the fixture")
+            raise DomainWriteFenceError(
+                "frontend login credentials are malformed; reset the fixture"
+            )
         user = {str(key): str(value) for key, value in raw_user.items()}
         if any(user.get(key) != value for key, value in expected.items()):
             raise DomainWriteFenceError("frontend login identity changed; reset the fixture")
         if not user.get("password"):
-            raise DomainWriteFenceError("frontend login credentials are malformed; reset the fixture")
+            raise DomainWriteFenceError(
+                "frontend login credentials are malformed; reset the fixture"
+            )
         users[label] = user
     return users
 

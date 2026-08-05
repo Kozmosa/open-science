@@ -662,7 +662,9 @@ class _DomainWriteKernel:
         request = {"project_id": project_id, "reason": reason}
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            cached = self._idempotent_result(conn, actor, "project.archive", idempotency_key, request)
+            cached = self._idempotent_result(
+                conn, actor, "project.archive", idempotency_key, request
+            )
             if cached is not None:
                 return cached
             auth = DomainAuthorizationService(conn)
@@ -684,7 +686,9 @@ class _DomainWriteKernel:
                 (now, reason, now, project_id),
             )
             result: dict[str, object] = {"project_id": project_id, "archived": True}
-            self._store_idempotency(conn, actor, "project.archive", idempotency_key, request, result)
+            self._store_idempotency(
+                conn, actor, "project.archive", idempotency_key, request, result
+            )
             self._audit(conn, actor, "project.archived", "project", project_id)
             conn.commit()
         return result
@@ -702,7 +706,9 @@ class _DomainWriteKernel:
         request = {"project_id": project_id}
         with closing(self._connect()) as conn:
             self._begin_write(conn)
-            cached = self._idempotent_result(conn, actor, "project.unarchive", idempotency_key, request)
+            cached = self._idempotent_result(
+                conn, actor, "project.unarchive", idempotency_key, request
+            )
             if cached is not None:
                 return cached
             DomainAuthorizationService(conn).require_project_owner(project_id, user)
@@ -715,7 +721,9 @@ class _DomainWriteKernel:
             if updated.rowcount != 1:
                 raise DomainConflictError("Project is not archived")
             result: dict[str, object] = {"project_id": project_id, "unarchived": True}
-            self._store_idempotency(conn, actor, "project.unarchive", idempotency_key, request, result)
+            self._store_idempotency(
+                conn, actor, "project.unarchive", idempotency_key, request, result
+            )
             self._audit(conn, actor, "project.unarchived", "project", project_id)
             conn.commit()
         return result

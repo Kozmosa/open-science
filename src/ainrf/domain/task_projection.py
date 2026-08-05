@@ -201,9 +201,7 @@ class TaskProjectionService:
         DomainAuthorizationService(conn).require_task_viewer(task_id, dict(user))
 
     @staticmethod
-    def _can_view_unredacted_output(
-        task: sqlite3.Row, user: Mapping[str, object]
-    ) -> bool:
+    def _can_view_unredacted_output(task: sqlite3.Row, user: Mapping[str, object]) -> bool:
         return user.get("role") == "admin" or user.get("id") == task["owner_user_id"]
 
     @staticmethod
@@ -272,8 +270,7 @@ class TaskProjectionService:
                 if conversation is not None and include_private_task_diagnostics
                 else (
                     row["error_summary"]
-                    if include_private_task_diagnostics
-                    and isinstance(row["error_summary"], str)
+                    if include_private_task_diagnostics and isinstance(row["error_summary"], str)
                     else None
                 )
             ),

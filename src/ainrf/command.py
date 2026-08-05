@@ -675,8 +675,12 @@ def domain_maintenance_preflight(
 
 @domain_migration_app.command("records")
 def domain_migration_records(
-    run_id: Annotated[str | None, typer.Option(help="Optional historical migration run ID.")] = None,
-    record_type: Annotated[str | None, typer.Option(help="Optional historical record type.")] = None,
+    run_id: Annotated[
+        str | None, typer.Option(help="Optional historical migration run ID.")
+    ] = None,
+    record_type: Annotated[
+        str | None, typer.Option(help="Optional historical record type.")
+    ] = None,
     cursor: Annotated[str | None, typer.Option(help="Opaque pagination cursor.")] = None,
     limit: Annotated[int, typer.Option(min=1, max=200)] = 50,
     state_root: Annotated[
@@ -691,7 +695,11 @@ def domain_migration_records(
         cursor=cursor,
         limit=limit,
     )
-    typer.echo(json_mod.dumps({"items": records, "has_more": has_more, "next_cursor": next_cursor}, indent=2))
+    typer.echo(
+        json_mod.dumps(
+            {"items": records, "has_more": has_more, "next_cursor": next_cursor}, indent=2
+        )
+    )
 
 
 @domain_migration_app.command("record")
@@ -742,7 +750,9 @@ def retire_legacy_apply_command(
 
 @retire_legacy_app.command("verify")
 def retire_legacy_verify_command(
-    state_root: Annotated[Path, typer.Option(help="State root to validate.")] = default_state_root(),
+    state_root: Annotated[
+        Path, typer.Option(help="State root to validate.")
+    ] = default_state_root(),
 ) -> None:
     """Validate the current baseline and absence of retired tables."""
     report = retire_legacy_verify(state_root)

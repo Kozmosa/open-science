@@ -45,9 +45,7 @@ class MigrationRegistry:
         def decorator(fn: MigrationFn) -> MigrationFn:
             match = re.match(r"migration_(\d+)(?:_|$)", fn.__name__)
             if match is None:
-                raise ValueError(
-                    f"migration function {fn.__name__!r} must use migration_NNN_name"
-                )
+                raise ValueError(f"migration function {fn.__name__!r} must use migration_NNN_name")
             version = int(match.group(1))
             migrations = self._migrations.setdefault(database_name, {})
             if version in migrations:
@@ -59,11 +57,7 @@ class MigrationRegistry:
 
     def get_pending(self, database_name: str, current_version: int) -> list[MigrationFn]:
         migrations = self._migrations.get(database_name, {})
-        return [
-            migrations[version]
-            for version in sorted(migrations)
-            if version > current_version
-        ]
+        return [migrations[version] for version in sorted(migrations) if version > current_version]
 
     def baseline(self, database_name: str) -> tuple[int, MigrationFn] | None:
         return self._baselines.get(database_name)
@@ -187,8 +181,7 @@ def _current_version_without_creating(conn: sqlite3.Connection, database_name: s
 def _has_user_tables(conn: sqlite3.Connection) -> bool:
     return (
         conn.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'table' AND name != '_schema_version' LIMIT 1"
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name != '_schema_version' LIMIT 1"
         ).fetchone()
         is not None
     )
