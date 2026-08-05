@@ -114,9 +114,9 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
   const summaryKeyManager = useRef(
     new IdempotencyKeyManager("literature.summary.request"),
   ).current;
-  const researchTaskKeyManager = useRef(
-    new IdempotencyKeyManager("literature.research-task"),
-  ).current;
+  const [researchTaskKeyManager] = useState(
+    () => new IdempotencyKeyManager("literature.research-task"),
+  );
 
   const updateSearch = (changes: Record<string, string | null>) =>
     setSearchParams((current) => {
