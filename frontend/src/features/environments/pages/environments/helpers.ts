@@ -9,9 +9,6 @@ import type {
   ProjectEnvironmentReferenceUpdateInput,
 } from '../../types';
 
-export const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
-export const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];
-
 export type EnvironmentEditorMode = 'create' | 'edit';
 
 export interface EnvironmentFormValues {
@@ -73,24 +70,6 @@ export function valuesFromEnvironment(environment: EnvironmentRecord): Environme
     preferred_env_manager: environment.preferred_env_manager ?? '',
     preferred_runtime_notes: environment.preferred_runtime_notes ?? '',
     task_harness_profile: environment.task_harness_profile ?? '',
-  };
-}
-
-export interface ProjectRefFormValues {
-  override_workdir: string;
-  override_env_name: string;
-  override_env_manager: string;
-  override_runtime_notes: string;
-}
-
-export function valuesFromProjectReference(
-  reference: ProjectEnvironmentReference | null
-): ProjectRefFormValues {
-  return {
-    override_workdir: reference?.override_workdir ?? '',
-    override_env_name: reference?.override_env_name ?? '',
-    override_env_manager: reference?.override_env_manager ?? '',
-    override_runtime_notes: reference?.override_runtime_notes ?? '',
   };
 }
 
@@ -169,17 +148,6 @@ export function buildEnvironmentRequest(
   }
 
   return request;
-}
-
-export function buildProjectReferenceUpdateRequest(
-  values: ProjectRefFormValues
-): ProjectEnvironmentReferenceUpdateInput {
-  return {
-    overrideWorkdir: values.override_workdir.trim() || null,
-    overrideEnvName: values.override_env_name.trim() || null,
-    overrideEnvManager: values.override_env_manager.trim() || null,
-    overrideRuntimeNotes: values.override_runtime_notes.trim() || null,
-  };
 }
 
 export function buildProjectReferenceCreateRequest(

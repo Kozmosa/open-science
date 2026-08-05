@@ -26,7 +26,6 @@ import {
 import TaskActionsMenu from '../components/TaskActionsMenu';
 import TaskCreateFlow from '../components/TaskCreateFlow';
 import TaskInspectorPanel, { type TaskDrawerView } from '../components/TaskInspectorPanel';
-import { useTaskStream } from '../hooks/useTaskStream';
 import TaskDetailPage from './TaskDetailPage';
 import TaskList from './TaskList';
 import { queryKeys } from '@/shared/api/queryKeys';
@@ -75,11 +74,12 @@ function TasksPage() {
   const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
   const pageVisible = usePageVisibility();
   const isNarrow = useMediaQuery(NARROW_TASKS_QUERY);
-  const [streamConnected, setStreamConnected] = useState(false);
+  const requestedTaskId = searchParams.get('task');
+  const hasRequestedTask = requestedTaskId !== null;
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks.list(showArchived, taskSort),
     queryFn: () => getTasks({ includeArchived: showArchived, limit: 200, sort: taskSort }),
-    refetchInterval: pageVisible && !streamConnected ? 15_000 : false,
+    refetchInterval: pageVisible && !hasRequestedTask ? 15_000 : false,
   });
 
   const fetchedTasks = useMemo(() => tasksQuery.data?.items ?? [], [tasksQuery.data]);
@@ -108,7 +108,6 @@ function TasksPage() {
   const forkKeyManager = useRef(new IdempotencyKeyManager('task.fork')).current;
   const renameKeyManager = useRef(new IdempotencyKeyManager('task.rename')).current;
 
-  const requestedTaskId = searchParams.get('task');
   const effectiveSelectedTaskId = useMemo(() => {
     if (requestedTaskId && tasks.some((task) => task.task_id === requestedTaskId)) {
       return requestedTaskId;
@@ -120,16 +119,14 @@ function TasksPage() {
   }, [isNarrow, requestedTaskId, tasks]);
 
   const rawDrawer = searchParams.get('drawer');
-  const legacySidebar = searchParams.get('sidebar');
   const drawerView: TaskDrawerView = rawDrawer && DRAWER_VIEWS.has(rawDrawer as TaskDrawerView)
     ? rawDrawer as TaskDrawerView
-    : legacySidebar === 'closed' || isNarrow ? 'closed' : 'details';
+    : isNarrow ? 'closed' : 'details';
 
   const setDrawerView = useCallback((view: TaskDrawerView) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set('drawer', view);
-      next.delete('sidebar');
       return next;
     });
   }, [setSearchParams]);
@@ -154,7 +151,6 @@ function TasksPage() {
       const next = new URLSearchParams(current);
       next.delete('task');
       next.set('drawer', 'closed');
-      next.delete('sidebar');
       return next;
     });
   }, [setSearchParams]);
@@ -174,31 +170,39 @@ function TasksPage() {
   }, [effectiveSelectedTaskId, isNarrow, requestedTaskId, selectTask]);
 
   useEffect(() => {
-    if (rawDrawer !== drawerView || legacySidebar !== null) {
+    if (rawDrawer !== drawerView) {
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set('drawer', drawerView);
-        next.delete('sidebar');
         return next;
       }, { replace: true });
     }
-  }, [drawerView, legacySidebar, rawDrawer, setSearchParams]);
+  }, [drawerView, rawDrawer, setSearchParams]);
 
   const selectedTaskQuery = useQuery({
     queryKey: queryKeys.tasks.detail(effectiveSelectedTaskId),
     queryFn: () => getTask(effectiveSelectedTaskId ?? ''),
     enabled: effectiveSelectedTaskId !== null,
-    refetchInterval: pageVisible && !streamConnected ? 15_000 : false,
+    refetchInterval: pageVisible && !hasRequestedTask ? 15_000 : false,
   });
 
   const selectedTask = selectedTaskQuery.data ?? null;
-  const handleStreamState = useCallback((state: 'idle' | 'connecting' | 'connected' | 'disconnected') => {
-    setStreamConnected(state === 'connected');
-  }, []);
-  const { outputItems, outputError, hasMore, loadMore, isLoadingMore, connectionState } = useTaskStream(
-    effectiveSelectedTaskId,
-    handleStreamState,
-  );
+
+  useEffect(() => {
+    if (!effectiveSelectedTaskId || !pageVisible) {
+      return undefined;
+    }
+
+    const refreshSelectedTask = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.messages(effectiveSelectedTaskId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(effectiveSelectedTaskId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    };
+
+    refreshSelectedTask();
+    const interval = window.setInterval(refreshSelectedTask, 1_000);
+    return () => window.clearInterval(interval);
+  }, [effectiveSelectedTaskId, pageVisible, queryClient]);
 
   const domainProjectsQuery = useQuery({
     queryKey: queryKeys.domain.projects(true),
@@ -474,11 +478,6 @@ function TasksPage() {
               taskId={effectiveSelectedTaskId}
               selectedTask={selectedTask}
               detailError={detailError}
-              outputItems={outputItems}
-              outputError={outputError}
-              hasMore={hasMore}
-              loadMore={loadMore}
-              isLoadingMore={isLoadingMore}
               metadataSidebarOpen={drawerView !== 'closed'}
               onBackToList={returnToTaskList}
               onToggleMetadataSidebar={toggleMetadataSidebar}
@@ -536,11 +535,6 @@ function TasksPage() {
             taskId={effectiveSelectedTaskId}
             selectedTask={selectedTask}
             detailError={detailError}
-            outputItems={outputItems}
-            outputError={outputError}
-            hasMore={hasMore}
-            loadMore={loadMore}
-            isLoadingMore={isLoadingMore}
             taskSidebarCollapsed={taskSidebarCollapsed}
             metadataSidebarOpen={drawerView !== 'closed'}
             onToggleTaskSidebar={toggleTaskSidebar}
@@ -572,11 +566,6 @@ function TasksPage() {
         </SplitPane>
         )}
         </div>
-        {connectionState !== 'connected' && effectiveSelectedTaskId ? (
-          <p className="text-xs text-[var(--osci-color-text-muted)]">
-            Task stream {connectionState}; visible-page metadata fallback refreshes every 15 seconds.
-          </p>
-        ) : null}
       </PageShell>
 
       <TaskCreateFlow

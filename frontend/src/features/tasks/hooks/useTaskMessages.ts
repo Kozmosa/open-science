@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTaskHistory } from './useTaskHistory';
 import type { MessageItem, TaskOutputEvent } from '../types';
 
+const EMPTY_OUTPUT_ITEMS: TaskOutputEvent[] = [];
 const SUPPRESSED_SYSTEM_SUBTYPES = new Set(['status', 'thinking_tokens']);
 
 function shouldSuppressSystemPayload(payload: Record<string, unknown>): boolean {
@@ -186,8 +187,8 @@ export function mergeMessages(messages: MessageItem[]): MessageItem[] {
 
 export function useTaskMessages(
   taskId: string | null,
-  outputItems: TaskOutputEvent[],
-  initialPrompt?: string | null
+  initialPrompt?: string | null,
+  outputItems: TaskOutputEvent[] = EMPTY_OUTPUT_ITEMS,
 ) {
   const { data: history, isLoading, error } = useTaskHistory(taskId);
   const [streamMessages, setStreamMessages] = useState<MessageItem[]>([]);

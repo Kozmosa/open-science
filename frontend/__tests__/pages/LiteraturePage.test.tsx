@@ -13,8 +13,6 @@ import {
 
 vi.mock('@features/literature/api', () => ({
   createLiteratureCheck: vi.fn(() => Promise.resolve({ check_id: 'check-1', status: 'planned' })),
-  createLiteratureTopic: vi.fn(),
-  deleteLiteratureTopic: vi.fn(),
   getLiteratureOverview: vi.fn(() => Promise.resolve({
     last_successful_check_at: null,
     next_scheduled_check_at: null,
@@ -25,15 +23,11 @@ vi.mock('@features/literature/api', () => ({
   getLiteratureTopics: vi.fn(() => Promise.resolve({ items: [] })),
   getLiteraturePaper: vi.fn(),
   getLiteratureSummary: vi.fn(),
-  getLiteratureResearchTask: vi.fn(),
   getLiteratureResearchTasks: vi.fn(),
   createLiteratureResearchTask: vi.fn(),
   requestLiteratureSummary: vi.fn(),
   updateLiteraturePaperState: vi.fn(),
-  previewLiteratureTopic: vi.fn(),
-  updateLiteratureTopic: vi.fn(),
 }));
-
 describe('LiteraturePage', () => {
   it('renders the canvas inbox with a single source-check action and persistent URL filters', async () => {
     const user = userEvent.setup();

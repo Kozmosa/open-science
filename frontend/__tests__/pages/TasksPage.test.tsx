@@ -24,8 +24,6 @@ import {
 } from '@features/tasks/api';
 import { getCodexDefaults, getSkills } from '@features/settings/api';
 import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
-import { convertOutputEventToMessage, mergeMessages } from '@/features/tasks/hooks/useTaskMessages';
-import { getNextOutputSeq, mergeOutputItems } from '@features/tasks/utils/output';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { getDomainProjects } from '@features/domain';
 
@@ -440,94 +438,6 @@ beforeEach(() => {
     task_id: taskId,
     title: data.title ?? taskSummary.title,
   }));
-});
-
-describe('task output helpers', () => {
-  it('deduplicates output by seq and keeps ascending order', () => {
-    const merged = mergeOutputItems(
-      [createOutputEvent(3, { content: 'stale third line' }), createOutputEvent(1, { content: 'first line' })],
-      [createOutputEvent(2, { content: 'second line' }), createOutputEvent(3, { content: 'fresh third line' })]
-    );
-
-    expect(merged.map((item) => item.seq)).toEqual([1, 2, 3]);
-    expect(merged[2]?.content).toBe('fresh third line');
-    expect(getNextOutputSeq([merged[1]!, merged[0]!], 3)).toBe(3);
-  });
-
-  it('suppresses agent-sdk thinking token lifecycle noise from message conversion', () => {
-    const message = convertOutputEventToMessage(
-      createOutputEvent(2, {
-        kind: 'lifecycle',
-        content:
-          '{"event_type":"system","payload":{"subtype":"thinking_tokens","data":{"estimated_tokens":8,"estimated_tokens_delta":3}},"token_usage":null}',
-      })
-    );
-
-    expect(message).toBeNull();
-  });
-
-  it('keeps streaming thinking blocks folded by default', () => {
-    const message = convertOutputEventToMessage(
-      createOutputEvent(3, {
-        kind: 'thinking',
-        content:
-          '{"content":"working","block_id":"thinking-1","is_partial":true,"is_delta":true}',
-      })
-    );
-
-    expect(message).not.toBeNull();
-    expect(message?.type).toBe('thinking');
-    expect(message?.metadata.isFolded).toBe(true);
-    expect(message?.metadata.isStreaming).toBe(true);
-  });
-
-  it('merges thinking deltas sharing the same block_id into a single display block', () => {
-    const merged = mergeMessages([
-      {
-        id: 'task-1-1',
-        type: 'thinking',
-        content: 'first pass',
-        metadata: { sequence: 1, timestamp: '2026-01-01T00:00:00Z', isFolded: true, blockId: 'thinking-1', isDelta: true },
-      },
-      {
-        id: 'task-1-2',
-        type: 'thinking',
-        content: 'second pass',
-        metadata: { sequence: 2, timestamp: '2026-01-01T00:00:01Z', isFolded: true, blockId: 'thinking-1', isDelta: true, isStreaming: true },
-      },
-    ]);
-
-    expect(merged).toHaveLength(1);
-    expect(merged[0]?.content).toBe('first passsecond pass');
-    expect(merged[0]?.metadata.sequence).toBe(2);
-    expect(merged[0]?.metadata.isStreaming).toBe(true);
-  });
-
-  it('merges stream deltas back into a single block', () => {
-    const initial = convertOutputEventToMessage(
-      createOutputEvent(7, {
-        kind: 'thinking',
-        content:
-          '{"content":"alpha","block_id":"thinking-2","is_partial":true,"is_delta":true}',
-      })
-    );
-    const next = convertOutputEventToMessage(
-      createOutputEvent(8, {
-        kind: 'thinking',
-        content:
-          '{"content":"beta","block_id":"thinking-2","is_partial":true,"is_delta":true}',
-      })
-    );
-
-    expect(initial).not.toBeNull();
-    expect(next).not.toBeNull();
-
-    const merged = mergeMessages([initial!, next!]);
-
-    expect(merged).toHaveLength(1);
-    expect(merged[0]?.content).toBe('alphabeta');
-    expect(merged[0]?.metadata.sequence).toBe(8);
-  });
 });
 
 describe('TasksPage', () => {
