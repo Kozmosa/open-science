@@ -34,7 +34,7 @@ Fresh install 直接执行 `src/ainrf/db/migrations/current.py` 注册的 SQL ba
 | --- | --- | --- |
 | Historical migration/import | `db/migrations/{agentic_researcher,auth,literature,sessions,terminal}.py` 的长期 importer chain；`domain_migration/{conversation_v3,importer,reconciliation,sources}.py` | `db/migrations/current.py` 是唯一 startup registry；旧模块无静态、动态或字符串 caller |
 | Cutover/control | `domain_control/cutover.py`、`legacy_source_guard.py`；cutover/reconciliation/importer 专属测试和 fixture | current writer 只检查当前 Conversation authority；旧 CLI/HTTP write path 已无入口 |
-| Legacy Task runtime | `domain/{attempts,attempt_projection,tasks,worker}.py` 及专属 tests | `/api/tasks`、`domain-worker`、fixture worker 均使用 Conversation Task/Turn/Item/Submission/RuntimeExecution |
+| Legacy Task runtime | `domain/{attempts,attempt_projection,tasks,worker,dispatch_wakeup}.py` 及专属 tests | `/api/tasks`、`domain-worker`、fixture worker 均使用 Conversation Task/Turn/Item/Submission/RuntimeExecution；`DispatchWakeup` 无 caller |
 | HTTP/Pydantic | Attempt、RuntimeSession、Dispatch projection schemas/routes、`task_attempts` capability | generated transport 由当前 OpenAPI 重新生成；无 frontend operation 或 mock caller |
 | Frontend/mock | `task_attempts` capability/type/mock/test 字段；Candidate `source_attempt_id` | MSW、feature type、generated schema 与 current Candidate provenance 一致 |
 | Engine fallback | `ExecutionContext.prior_messages` 及三个 engine 的 `task_outputs` context-reconstruction fallback 和专属 tests | 全仓 caller 扫描显示没有生产构造点；Conversation runtime 以 canonical Turn/Item/Context snapshot 为 authority |
