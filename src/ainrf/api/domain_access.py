@@ -18,10 +18,10 @@ from ainrf.domain_telemetry import record_permission_denied
 
 def _environment_module(request: HTTPConnection) -> EnvironmentReader:
     service = getattr(request.app.state, "environment_module", None)
-    if not isinstance(service, EnvironmentReader) or not service.v2_ready():
+    if not isinstance(service, EnvironmentReader) or not service.ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Domain v2 cutover is not ready",
+            detail="Domain is not ready for current reads",
         )
     return service
 
@@ -34,10 +34,10 @@ def v2_environment_module(request: HTTPConnection) -> EnvironmentReader:
 
 def _workspace_module(request: HTTPConnection) -> WorkspaceReader:
     service = getattr(request.app.state, "workspace_module", None)
-    if not isinstance(service, WorkspaceReader) or not service.v2_ready():
+    if not isinstance(service, WorkspaceReader) or not service.ready():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Domain v2 cutover is not ready",
+            detail="Domain is not ready for current reads",
         )
     return service
 

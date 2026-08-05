@@ -135,6 +135,73 @@ def test_retirement_migration_drops_legacy_tables_and_keeps_audit(tmp_path: Path
         )
 
 
+def test_retirement_migration_removes_retired_telemetry_payloads(tmp_path: Path) -> None:
+    _make_retiring_state(tmp_path)
+    runtime_root = tmp_path / "runtime"
+    telemetry_path = runtime_root / "domain_telemetry.sqlite3"
+    with _connect(telemetry_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE domain_telemetry_counter_totals (
+                metric_name TEXT NOT NULL,
+                labels_json TEXT NOT NULL,
+                value REAL NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY(metric_name, labels_json)
+            );
+            CREATE TABLE domain_telemetry_snapshots (
+                singleton INTEGER PRIMARY KEY,
+                schema_version INTEGER NOT NULL,
+                collected_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            INSERT INTO domain_telemetry_counter_totals VALUES (
+                'ainrf_domain_legacy_write_attempts_total', '{"source":"legacy_json"}',
+                1, '2026-08-05T00:00:00+00:00'
+            );
+            INSERT INTO domain_telemetry_counter_totals VALUES (
+                'ainrf_domain_idempotency_requests_total', '{"outcome":"accepted"}',
+                2, '2026-08-05T00:00:00+00:00'
+            );
+            INSERT INTO domain_telemetry_snapshots VALUES (
+                1, 2, '2026-08-05T00:00:00+00:00', '{"schema_version":2}'
+            );
+            """
+        )
+        connection.commit()
+    anchor_path = runtime_root / "domain_telemetry_anchor.json"
+    anchor_path.write_text('{"schema_version":2}\n', encoding="utf-8")
+
+    assert migrate(tmp_path).ready
+
+    with _connect(telemetry_path) as connection:
+        metric_names = {
+            str(row[0])
+            for row in connection.execute("SELECT metric_name FROM domain_telemetry_counter_totals")
+        }
+        snapshot_count = int(
+            connection.execute("SELECT COUNT(*) FROM domain_telemetry_snapshots").fetchone()[0]
+        )
+    assert metric_names == {"ainrf_domain_idempotency_requests_total"}
+    assert snapshot_count == 0
+    assert not anchor_path.exists()
+
+    with _connect(telemetry_path) as connection:
+        connection.execute(
+            "INSERT INTO domain_telemetry_counter_totals VALUES (?, ?, ?, ?)",
+            (
+                "ainrf_domain_legacy_write_attempts_total",
+                '{"source":"legacy_json"}',
+                1,
+                "2026-08-05T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+    report = verify(tmp_path)
+    assert not report.ready
+    assert "retired telemetry counter remains" in report.blockers
+
+
 def test_retirement_preflight_blocks_active_runtime(tmp_path: Path) -> None:
     _make_retiring_state(tmp_path, active_runtime=True)
     report = preflight(tmp_path)

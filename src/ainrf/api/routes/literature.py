@@ -73,7 +73,7 @@ def _get_research_task_saga(request: Request) -> LiteratureTaskSagaService:
     """Return the formal saga only after the committed v2 fuse is live."""
 
     service = getattr(request.app.state, "literature_task_saga_service", None)
-    if not isinstance(service, LiteratureTaskSagaService) or not service.v2_ready():
+    if not isinstance(service, LiteratureTaskSagaService) or not service.ready():
         raise HTTPException(status_code=503, detail="Literature Task saga service is not ready")
     return service
 

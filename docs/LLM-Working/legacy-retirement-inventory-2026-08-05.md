@@ -33,8 +33,8 @@ Fresh install 直接执行 `src/ainrf/db/migrations/current.py` 注册的 SQL ba
 | Surface | 删除项 | 仓库证据 |
 | --- | --- | --- |
 | Historical migration/import | `db/migrations/{agentic_researcher,auth,literature,sessions,terminal}.py` 的长期 importer chain；`domain_migration/{conversation_v3,importer,reconciliation,sources}.py` | `db/migrations/current.py` 是唯一 startup registry；旧模块无静态、动态或字符串 caller |
-| Cutover/control | `domain_control/cutover.py`、`legacy_source_guard.py`；cutover/reconciliation/importer 专属测试和 fixture | current writer 只检查当前 Conversation authority；旧 CLI/HTTP write path 已无入口 |
-| Legacy Task runtime | `domain/{attempts,attempt_projection,tasks,worker,dispatch_wakeup}.py` 及专属 tests | `/api/tasks`、`domain-worker`、fixture worker 均使用 Conversation Task/Turn/Item/Submission/RuntimeExecution；`DispatchWakeup` 无 caller |
+| Cutover/control | `domain_control/cutover.py`、`legacy_source_guard.py`；`v2_ready` / `record_first_v2_write` 历史 Interface 名称；cutover/reconciliation/importer 专属测试和 fixture | current writer 通过 `ready` / `validate_write` 检查当前 release artifact；旧 CLI/HTTP write path 已无入口 |
+| Legacy Task runtime | `domain/{attempts,attempt_projection,tasks,worker,dispatch_wakeup}.py`、无 caller 的 `TaskLifecycleModule` compatibility marker 及专属 tests | `/api/tasks`、`domain-worker`、fixture worker 均使用 Conversation Task/Turn/Item/Submission/RuntimeExecution；`DispatchWakeup` 与 marker 均无 caller |
 | HTTP/Pydantic | Attempt、RuntimeSession、Dispatch projection schemas/routes、`task_attempts` capability | generated transport 由当前 OpenAPI 重新生成；无 frontend operation 或 mock caller |
 | Frontend/mock | `task_attempts` capability/type/mock/test 字段；Candidate `source_attempt_id` | MSW、feature type、generated schema 与 current Candidate provenance 一致 |
 | Engine fallback | `ExecutionContext.prior_messages` 及三个 engine 的 `task_outputs` context-reconstruction fallback 和专属 tests | 全仓 caller 扫描显示没有生产构造点；Conversation runtime 以 canonical Turn/Item/Context snapshot 为 authority |
@@ -55,7 +55,7 @@ Fresh install 直接执行 `src/ainrf/db/migrations/current.py` 注册的 SQL ba
 ### 分类结论
 
 - 长期能力：Conversation domain、current Harness runtime、maintenance、backup/restore、admin read-only audit、`openscience`/`ainrf` CLI 和正式 HTTP/generated transport。
-- 下一次 Migration：唯一的 `version 32 -> 33` `retire-legacy` 操作；它只负责在人工维护窗口中删除已完成的旧 runtime/cutover 表并重建 Candidate provenance 表。
+- 下一次 Migration：唯一的 `version 32 -> 33` `retire-legacy` 操作；它只负责在人工维护窗口中删除已完成的旧 runtime/cutover 表、重建 Candidate provenance 表，并移除 telemetry sidecar 中依赖旧 cutover/Attempt 契约的 snapshot 与 legacy-write counter。
 - Admin audit：`legacy_domain_records` 和两个只读 admin endpoints；这是历史取证，不是 product fallback。
 - 已完成待退休：旧 migration chain、cutover fuse/source guard、Attempt/RuntimeSession repository/projection/worker、旧 task output history fallback、相关指标/fixture/mock/专属测试。
 - 无 caller：被删除的 importer/reconciliation/source modules、旧 control CLI、旧 Attempt API projection、旧 analyzer queries。静态/动态/字符串入口扫描没有发现仓库 caller。

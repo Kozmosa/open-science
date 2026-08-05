@@ -76,17 +76,15 @@ async def capabilities(request: Request) -> dict[str, object]:
     workspace_module = getattr(request.app.state, "workspace_module", None)
     ready = (
         isinstance(project_module, ProjectModule)
-        and project_module.v2_ready()
+        and project_module.ready()
         and isinstance(workspace_module, WorkspaceModule)
-        and workspace_module.v2_ready()
+        and workspace_module.ready()
     )
     context_ready = ready and isinstance(
         getattr(request.app.state, "project_context_service", None), ProjectContextService
     )
     conversation_service = getattr(request.app.state, "conversation_application_service", None)
-    task_service_ready = (
-        ready and conversation_service is not None and conversation_service.v2_ready()
-    )
+    task_service_ready = ready and conversation_service is not None and conversation_service.ready()
     maintenance = getattr(request.app.state, "domain_maintenance_service", None)
     dispatcher_readiness: dict[str, object] = {
         "participant_type": "task-dispatcher",
@@ -124,7 +122,7 @@ async def capabilities(request: Request) -> dict[str, object]:
         ready
         and task_ready
         and isinstance(literature_saga, LiteratureTaskSagaService)
-        and literature_saga.v2_ready()
+        and literature_saga.ready()
     )
     return {
         "domain_contract_version": 2 if ready else 1,
@@ -193,8 +191,8 @@ def _project_module(request: Request) -> ProjectModule:
     service = getattr(request.app.state, "project_module", None)
     if not isinstance(service, ProjectModule):
         raise HTTPException(status_code=404, detail="Domain is unavailable")
-    if not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    if not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
@@ -202,15 +200,15 @@ def _workspace_module(request: Request) -> WorkspaceModule:
     service = getattr(request.app.state, "workspace_module", None)
     if not isinstance(service, WorkspaceModule):
         raise HTTPException(status_code=404, detail="Domain is unavailable")
-    if not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain v2 cutover is not ready")
+    if not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
 def _environment_module(request: Request) -> EnvironmentModule:
     service = getattr(request.app.state, "environment_module", None)
-    if not isinstance(service, EnvironmentModule) or not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Domain cutover is not ready")
+    if not isinstance(service, EnvironmentModule) or not service.ready():
+        raise HTTPException(status_code=503, detail="Domain is not ready for current writes")
     return service
 
 
@@ -226,7 +224,7 @@ def _overview_service(request: Request) -> OverviewSnapshotService:
 
 def _context_service(request: Request) -> ProjectContextService:
     service = getattr(request.app.state, "project_context_service", None)
-    if service is None or not service.v2_ready():
+    if service is None or not service.ready():
         raise HTTPException(status_code=503, detail="Project Context service is not initialized")
     return service
 

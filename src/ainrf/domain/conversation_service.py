@@ -220,10 +220,10 @@ class ConversationApplicationService:
         self._context_service = ProjectContextService(state_root, artifact_sha=artifact_sha)
         self._dispatch_notifier = dispatch_notifier
 
-    def v2_ready(self) -> bool:
-        """Return whether committed-v2 state can host the Conversation Module."""
+    def ready(self) -> bool:
+        """Return whether current state can host the Conversation Module."""
 
-        return self._write_fence.v2_ready()
+        return self._write_fence.ready()
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)

@@ -47,7 +47,6 @@ def create_metrics_router(config: ApiConfig) -> APIRouter:
             return PlainTextResponse("metrics disabled\n", status_code=status.HTTP_404_NOT_FOUND)
         refresh_domain_metrics(
             app_config.state_root,
-            runtime_mode="v2",
             read_only=bool(getattr(request.app.state, "maintenance_startup_read_only", False)),
         )
         return PlainTextResponse(get_metrics_text())

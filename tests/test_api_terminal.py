@@ -72,7 +72,7 @@ def _maintenance_terminal_request(
     """
 
     domain_reader = SimpleNamespace(
-        v2_ready=lambda: True,
+        ready=lambda: True,
         environment=lambda environment_id, _user, include_disabled=False: {
             "environment_id": environment_service.get_environment(environment_id).id,
             "status": "active",

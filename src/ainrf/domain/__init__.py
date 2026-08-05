@@ -1,4 +1,4 @@
-"""Lazy compatibility exports for v2 application Modules."""
+"""Lazy exports for current domain application Modules."""
 
 from typing import Any
 
@@ -13,7 +13,6 @@ _EXPORTS = {
     "WorkspaceModule": ("ainrf.domain.interfaces", "WorkspaceModule"),
     "EnvironmentModule": ("ainrf.domain.interfaces", "EnvironmentModule"),
     "ContextModule": ("ainrf.domain.interfaces", "ContextModule"),
-    "TaskLifecycleModule": ("ainrf.domain.interfaces", "TaskLifecycleModule"),
     "ConversationModule": ("ainrf.domain.interfaces", "ConversationModule"),
     "PersistentEnvironmentFacade": (
         "ainrf.domain.environment_facade",

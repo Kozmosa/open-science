@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.api]
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    """Create a v2 application behind the real committed-cutover fuse."""
+    """Create a current application behind the real release-artifact fence."""
 
     prepare_current_test_state(state_root)
     app = create_app(
@@ -566,14 +566,14 @@ async def test_domain_project_write_requires_a_stable_idempotency_transport(
 
 
 @pytest.mark.anyio
-async def test_domain_routes_fail_closed_when_cutover_readiness_is_lost(
+async def test_domain_routes_fail_closed_when_current_readiness_is_lost(
     state_root: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = _v2_app(state_root, tmp_path)
     headers = _headers(app, "readiness-owner", "readiness-owner", "member")
-    monkeypatch.setattr(app.state.project_module, "v2_ready", lambda: False)
+    monkeypatch.setattr(app.state.project_module, "ready", lambda: False)
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://testserver"

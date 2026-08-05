@@ -24,7 +24,6 @@ WATCH_COLUMNS: dict[str, list[str]] = {
     "turn_items": ["task_id", "turn_id", "item_type", "occurred_at"],
     "turn_submissions": ["task_id", "status", "created_at", "updated_at"],
     "runtime_executions": ["turn_id", "status", "started_at", "updated_at"],
-    "task_terminal_bindings": ["status", "ownership_user_id", "agent_write_state"],
     # Auth database
     "users": ["username", "status"],
     "refresh_tokens": ["user_id", "expires_at"],
@@ -174,8 +173,7 @@ def main() -> None:
     for db_name in [
         "agentic_researcher.sqlite3",
         "auth.sqlite3",
-        "sessions.sqlite3",
-        "task_harness.sqlite3",
+        "literature.sqlite3",
         "terminal_state.sqlite3",
     ]:
         db_path = STATE_ROOT / db_name

@@ -456,8 +456,8 @@ class _DomainWriteKernel:
             return {}
         return {str(key): item for key, item in parsed.items()}
 
-    def v2_ready(self) -> bool:
-        return self._write_fence.v2_ready()
+    def ready(self) -> bool:
+        return self._write_fence.ready()
 
     def create_project(
         self,
@@ -2379,7 +2379,7 @@ class _DomainWriteKernel:
         *,
         metadata: dict[str, object] | None = None,
     ) -> None:
-        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
+        self._write_fence.validate_write(conn, actor_id=actor_id)
         self._repository(conn).insert_audit_event(
             event_id=uuid4().hex,
             actor_id=actor_id,

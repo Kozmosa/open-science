@@ -8,6 +8,7 @@ directly and never execute this historical conversion.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -31,6 +32,8 @@ LEGACY_TABLES = frozenset(
     }
 )
 _ACTIVE_RUNTIME_STATUSES = ("starting", "running", "paused", "launch_unknown")
+_TELEMETRY_STORE_SCHEMA_VERSION = 3
+_RETIRED_TELEMETRY_METRIC = "ainrf_domain_legacy_write_attempts_total"
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,6 +224,94 @@ def _rebuild_context_candidates_without_attempt_fk(conn: sqlite3.Connection) -> 
     )
 
 
+def _current_telemetry_payload(raw_payload: object) -> bool:
+    try:
+        payload = json.loads(str(raw_payload))
+    except json.JSONDecodeError:
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get("schema_version") == _TELEMETRY_STORE_SCHEMA_VERSION
+    )
+
+
+def _retire_legacy_telemetry(state_root: Path) -> None:
+    """Remove sidecar payloads that encode the retired cutover/Attempt model."""
+
+    runtime_root = state_root / "runtime"
+    telemetry_path = runtime_root / "domain_telemetry.sqlite3"
+    anchor_path = runtime_root / "domain_telemetry_anchor.json"
+    if telemetry_path.is_file():
+        with sqlite3.connect(telemetry_path, timeout=5.0) as conn:
+            tables = {
+                str(row[0])
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            }
+            if "domain_telemetry_counter_totals" in tables:
+                conn.execute(
+                    "DELETE FROM domain_telemetry_counter_totals WHERE metric_name = ?",
+                    (_RETIRED_TELEMETRY_METRIC,),
+                )
+            if "domain_telemetry_snapshots" in tables:
+                rows = conn.execute(
+                    "SELECT rowid, payload_json FROM domain_telemetry_snapshots"
+                ).fetchall()
+                for rowid, raw_payload in rows:
+                    if not _current_telemetry_payload(raw_payload):
+                        conn.execute(
+                            "DELETE FROM domain_telemetry_snapshots WHERE rowid = ?", (rowid,)
+                        )
+            conn.commit()
+    if anchor_path.is_file():
+        try:
+            anchor = json.loads(anchor_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            anchor = None
+        if (
+            not isinstance(anchor, dict)
+            or anchor.get("schema_version") != _TELEMETRY_STORE_SCHEMA_VERSION
+        ):
+            anchor_path.unlink()
+
+
+def _legacy_telemetry_blockers(state_root: Path) -> tuple[str, ...]:
+    runtime_root = state_root / "runtime"
+    telemetry_path = runtime_root / "domain_telemetry.sqlite3"
+    anchor_path = runtime_root / "domain_telemetry_anchor.json"
+    blockers: list[str] = []
+    if telemetry_path.is_file():
+        try:
+            with _connect_read_only(telemetry_path) as conn:
+                tables = _table_names(conn)
+                if "domain_telemetry_counter_totals" in tables:
+                    retired = conn.execute(
+                        "SELECT COUNT(*) FROM domain_telemetry_counter_totals "
+                        "WHERE metric_name = ?",
+                        (_RETIRED_TELEMETRY_METRIC,),
+                    ).fetchone()
+                    if retired is not None and int(retired[0]) > 0:
+                        blockers.append("retired telemetry counter remains")
+                if "domain_telemetry_snapshots" in tables:
+                    snapshots = conn.execute(
+                        "SELECT payload_json FROM domain_telemetry_snapshots"
+                    ).fetchall()
+                    if any(not _current_telemetry_payload(row[0]) for row in snapshots):
+                        blockers.append("retired telemetry snapshot remains")
+        except (OSError, sqlite3.Error) as exc:
+            blockers.append(f"telemetry sidecar verification failed: {type(exc).__name__}")
+    elif anchor_path.is_file():
+        blockers.append("telemetry sidecar is missing after initialization")
+    if anchor_path.is_file():
+        try:
+            anchor = anchor_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            blockers.append(f"telemetry anchor verification failed: {type(exc).__name__}")
+        else:
+            if not _current_telemetry_payload(anchor):
+                blockers.append("retired telemetry anchor remains")
+    return tuple(blockers)
+
+
 def migrate(state_root: Path) -> LegacyRetirementReport:
     """Drop completed legacy runtime/cutover state after a passing preflight."""
     path = _database_path(state_root)
@@ -228,6 +319,7 @@ def migrate(state_root: Path) -> LegacyRetirementReport:
         conn.row_factory = sqlite3.Row
         report = _report(conn)
         if report.schema_version == CURRENT_SCHEMA_VERSION:
+            _retire_legacy_telemetry(state_root)
             return verify(state_root)
         if not report.ready:
             raise RuntimeError("legacy retirement preflight failed: " + "; ".join(report.blockers))
@@ -282,6 +374,7 @@ def migrate(state_root: Path) -> LegacyRetirementReport:
         )
         conn.execute("PRAGMA foreign_keys = ON")
         conn.commit()
+    _retire_legacy_telemetry(state_root)
     return verify(state_root)
 
 
@@ -295,6 +388,7 @@ def verify(state_root: Path) -> LegacyRetirementReport:
         blockers.extend(f"legacy table remains: {table}" for table in report.legacy_tables)
     if integrity != "ok":
         blockers.append(f"integrity check returned {integrity}")
+    blockers.extend(_legacy_telemetry_blockers(state_root))
     return LegacyRetirementReport(
         ready=not blockers,
         schema_version=report.schema_version,

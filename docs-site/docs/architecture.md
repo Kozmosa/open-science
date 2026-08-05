@@ -35,7 +35,7 @@ flowchart TD
 - Project、Workspace、Environment、Task 等领域通过窄 application Interface 暴露能力；SQLite repository 与共享 write kernel 保持私有。
 - Release E 已完成 committed-v2 authority cutover。产品路径不得重新引入 legacy writer、legacy read fallback、双读或双写。
 - Issue #76 将已完成的 cutover、migration chain 和 legacy Attempt/RuntimeSession authority 退休。当前 fresh-install schema baseline 是 `agentic_researcher=33`、`auth=7`、`literature=7`、`terminal=1`；正常 startup 只注册 `src/ainrf/db/migrations/current.py` 和 `src/ainrf/db/baselines/*.sql`。
-- 历史 `agentic_researcher` version 32 到 current baseline 33 的删除动作只存在于一次性的 `openscience migration retire-legacy preflight|apply|verify`。它不属于正常 import graph，也不承诺从任意历史版本升级。
+- 历史 `agentic_researcher` version 32 到 current baseline 33 的删除动作只存在于一次性的 `openscience migration retire-legacy preflight|apply|verify`；`apply` 同时删除 sidecar 中依赖旧 cutover/Attempt 模型的 snapshot 与 legacy-write counter，保留仍属当前契约的 durable counters。它不属于正常 import graph，也不承诺从任意历史版本升级。
 - Frontend 依赖方向为 `app -> features -> shared/design-system`。`shared` 与 `design-system` 不依赖 feature，page 只负责 composition。
 - UI 不直接消费 raw generated payload；feature adapter 将 transport type 映射为 view model。
 
@@ -97,7 +97,7 @@ Literature 的正式 HTTP Interface 当前固定为 19 个 operation：overview 
 
 1. 已完成完整 backup，并在隔离 staged root 验证 restore、SQLite integrity 和只读 post-restore smoke。
 2. release manifest 中 API、Web、worker 和 schema artifact SHA 一致；已停止 writers、进入 maintenance，并确认 participant drain、active Turn/Submission 为零或符合窗口策略，workspace/tenant source 稳定。
-3. 已在生产 state root 运行 `openscience migration retire-legacy preflight`，人工核对 ready 后只运行一次 `apply`，再运行 `verify` 并保存 JSON/integrity evidence。
+3. 已在生产 state root 运行 `openscience migration retire-legacy preflight`，人工核对 ready 后只运行一次 `apply`，确认旧 telemetry snapshot/legacy-write counter 已清除，再运行 `verify` 并保存 JSON/integrity evidence。
 4. 已启动同一 manifest，完成只读 health/domain/Task/Turn/Item/admin-audit smoke；确认没有旧表访问、旧 writer 或 legacy fallback。
 5. 失败时使用已验证的上一份 release manifest 和完整 backup 人工 rollback。代码回滚不能恢复已删除表，数据恢复必须依赖 backup；在缺少证据时保持 fail-closed。
 

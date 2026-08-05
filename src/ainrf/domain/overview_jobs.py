@@ -350,7 +350,7 @@ class OverviewSnapshotService:
                     return result
             job_id = f"overview-refresh-{uuid4().hex}"
             try:
-                self._write_fence.record_first_v2_write(conn, actor_id=owner)
+                self._write_fence.validate_write(conn, actor_id=owner)
                 conn.execute(
                     """
                     INSERT INTO overview_refresh_jobs (
@@ -1189,7 +1189,7 @@ class OverviewSnapshotService:
         current: datetime,
     ) -> OverviewRefreshRunResult:
         current_iso = _iso(current)
-        self._write_fence.record_first_v2_write(conn, actor_id=claim.owner_user_id)
+        self._write_fence.validate_write(conn, actor_id=claim.owner_user_id)
         fresh_cards = [card for card in cards if card.source_status in _SUCCESS_CARD_STATUSES]
         if not fresh_cards:
             # Retain per-card error/staleness evidence even though the snapshot
@@ -1387,7 +1387,7 @@ class OverviewSnapshotService:
         with closing(self._connect()) as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._assert_maintenance_writable(conn)
-            self._write_fence.record_first_v2_write(conn, actor_id=claim.owner_user_id)
+            self._write_fence.validate_write(conn, actor_id=claim.owner_user_id)
             outcome = self._retry_or_fail_claim_in_transaction(
                 conn,
                 claim,
@@ -2073,7 +2073,7 @@ class OverviewSnapshotPlanner:
             # behind the same committed-v2 fuse as enqueue/claim/completion so
             # a legacy or prepared process cannot advertise a false-ready
             # Overview planner.
-            service._write_fence.record_first_v2_write(conn, actor_id=self.planner_id)
+            service._write_fence.validate_write(conn, actor_id=self.planner_id)
             conn.execute(
                 """
                 INSERT INTO overview_planner_state (

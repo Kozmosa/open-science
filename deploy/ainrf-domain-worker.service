@@ -12,10 +12,9 @@ Group=ainrf
 SupplementaryGroups=ainrf_tenants
 # The operator-managed environment file must contain the exact immutable
 # AINRF_DOMAIN_ARTIFACT_SHA. The CLI rejects an absent/mismatched SHA
-# and refuses to run before a committed v2 cutover.
+# and refuses to run without a current release binding.
 EnvironmentFile=-/etc/ainrf/domain-worker.env
-# The CLI verifies the DB fuse and immutable artifact SHA before the worker
-# can claim any work.
+# The CLI verifies the immutable artifact SHA before the worker claims work.
 ExecStart=/usr/local/bin/openscience domain-worker --state-root /opt/ainrf/state
 Restart=on-failure
 RestartSec=5

@@ -398,10 +398,10 @@ class ProjectContextService:
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
 
-    def v2_ready(self) -> bool:
-        """Return readiness for this Module's committed authoritative writer."""
+    def ready(self) -> bool:
+        """Return readiness for this Module's current authoritative writer."""
 
-        return self._write_fence.v2_ready()
+        return self._write_fence.ready()
 
     @staticmethod
     def _begin_domain_write(conn: sqlite3.Connection) -> None:
@@ -866,7 +866,7 @@ class ProjectContextService:
                         request,
                         result,
                     )
-                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    self._write_fence.validate_write(conn, actor_id=actor_user_id)
                     conn.commit()
                 return result
             proposed = self._append_candidate(current, str(candidate["content"]))
@@ -950,7 +950,7 @@ class ProjectContextService:
                         request,
                         result,
                     )
-                    self._write_fence.record_first_v2_write(conn, actor_id=actor_user_id)
+                    self._write_fence.validate_write(conn, actor_id=actor_user_id)
                     conn.commit()
                 return result
             now = _now()
@@ -1113,7 +1113,7 @@ class ProjectContextService:
             # a domain audit event.  It must still cross the exact same v2
             # fuse in the caller-owned transaction as normal lifecycle
             # writes, so an unsafe source drift rolls back the new pin.
-            self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
+            self._write_fence.validate_write(conn, actor_id=str(task["owner_user_id"]))
             conn.commit()
             return snapshot_id
 
@@ -1226,7 +1226,7 @@ class ProjectContextService:
         # This helper is reachable from compatibility services as well as
         # ConversationApplicationService.  Record the first v2 write before control
         # returns to either caller so every persisted Task pin is fuse-bound.
-        self._write_fence.record_first_v2_write(conn, actor_id=str(task["owner_user_id"]))
+        self._write_fence.validate_write(conn, actor_id=str(task["owner_user_id"]))
         return snapshot_id
 
     def _preview_task_context_update(
@@ -1273,7 +1273,7 @@ class ProjectContextService:
             # audit row.  Bind it to the committed v2 fuse in this same
             # transaction instead of allowing it to become an unguarded first
             # domain write.
-            self._write_fence.record_first_v2_write(conn, actor_id=self._user_id(user))
+            self._write_fence.validate_write(conn, actor_id=self._user_id(user))
             current = self._task_snapshot_payload(conn, task)
             conn.commit()
             proposed = self._assembly_payload(
@@ -2091,7 +2091,7 @@ class ProjectContextService:
         subject_type: str,
         subject_id: str,
     ) -> None:
-        self._write_fence.record_first_v2_write(conn, actor_id=actor_id)
+        self._write_fence.validate_write(conn, actor_id=actor_id)
         conn.execute(
             """INSERT INTO domain_audit_events
                (event_id, actor_id, event_type, subject_type, subject_id, created_at)

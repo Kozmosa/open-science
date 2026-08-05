@@ -79,7 +79,7 @@ nginx 将 Gatus 的绝对资源与 API 地址限制改写到 `/uptime/*`，避�
 | Database / Filesystem | 复用 `/api/health`，分别检查对应 `checks.*.status == ok` |
 | Runtime | 复用 `/api/health`，允许可解释的 `degraded`，拒绝 `unhealthy` |
 | SSH | 复用 `/api/health` 的 `container_health.ssh_ok`；仅在对应环境启用 runtime reconciliation 时开启 |
-| Task Execution / Worker | 通过 Prometheus HTTP query API 检查 API scrape heartbeat、domain telemetry scrape、outbox 最老消息小于 300 秒及 risk state 已知 |
+| Task Execution / Worker | 通过 Prometheus HTTP query API 检查 API scrape heartbeat、domain telemetry scrape、最老可执行或待对账 Turn submission 小于 300 秒及 risk state 已知 |
 | Prometheus | 请求直接服务的 `/-/ready`（带当前 route prefix） |
 | Grafana | 请求直接服务的 `/api/health`（带当前 subpath）并检查数据库状态 |
 

@@ -128,12 +128,12 @@ class LiteratureTaskSagaService:
             state_root=self._state_root,
         )
 
-    def v2_ready(self) -> bool:
-        """Whether this exact saga instance can safely create v2 Tasks.
+    def ready(self) -> bool:
+        """Whether this saga instance can safely create current Tasks.
 
         A constructed object alone is not a capability: it must carry the
-        immutable artifact SHA, observe a committed cutover fuse, and retain
-        the durable Literature intent/work/outbox schema that recovery needs.
+        immutable artifact SHA and retain the durable Literature
+        intent/work/outbox schema that recovery needs.
         """
 
         if not self._artifact_sha:
@@ -158,13 +158,12 @@ class LiteratureTaskSagaService:
             "literature_outbox",
         }
 
-    def _require_v2_writable(self) -> None:
+    def _require_writable(self) -> None:
         """Fail closed before a saga can cross into the Task write model.
 
         HTTP routes are not the only callers: durable Literature work may be
         recovered by a process that imports this service directly.  The
-        cutover fuse therefore belongs at the saga boundary as well, with the
-        exact immutable artifact binding used by the domain worker.
+        immutable artifact binding therefore belongs at the saga seam as well.
         """
 
         if self._maintenance.status().is_active:
@@ -209,7 +208,7 @@ class LiteratureTaskSagaService:
         retries safe across the database boundary.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         actor = self._actor(user)
         normalized_project_id = project_id.strip()
         normalized_workspace_id = workspace_id.strip() if workspace_id is not None else None
@@ -454,7 +453,7 @@ class LiteratureTaskSagaService:
         lease and the underlying Task writer has its own idempotency fence.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         if limit <= 0:
             raise ValueError("limit must be positive")
         now = _now()
@@ -493,7 +492,7 @@ class LiteratureTaskSagaService:
     def recover_work_item(self, work_item_id: str, *, worker_id: str) -> dict[str, object] | None:
         """Recover the intent named by a durable Literature work item."""
 
-        self._require_v2_writable()
+        self._require_writable()
         with closing(self._connect()) as conn:
             row = conn.execute(
                 """
@@ -520,7 +519,7 @@ class LiteratureTaskSagaService:
         because it has no HTTP caller to present that synchronous outcome to.
         """
 
-        self._require_v2_writable()
+        self._require_writable()
         claimed = self._claim_intent(intent_id, worker_id)
         if claimed is None:
             return self._intent_by_id(intent_id)
