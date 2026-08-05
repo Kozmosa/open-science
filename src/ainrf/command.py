@@ -51,7 +51,6 @@ from ainrf.development import (
     prepare_frontend_dev_fixture,
 )
 from ainrf.logging import configure_cli_logging
-from ainrf.harness_engine.factory import create_engine
 
 
 app = typer.Typer(
@@ -154,7 +153,6 @@ def domain_worker(
         state_root,
         artifact_sha=artifact_sha,
         conversation_only=True,
-        engine_factory=lambda engine_type: create_engine(engine_type, state_root=state_root),
     )
     try:
         if once:

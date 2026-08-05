@@ -11,18 +11,11 @@ from collections.abc import Callable
 from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from ainrf.db import connect
-from ainrf.domain.attempts import (
-    AttemptControlRequest,
-    AttemptWorkerModule,
-    DispatchClaim,
-    DispatchClaimError,
-)
 from ainrf.domain.dispatch_wakeup import DispatchWakeup
-from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain_telemetry import record_permission_denied
 from ainrf.domain_control import (
     DomainCutoverController,
@@ -41,9 +34,12 @@ from ainrf.harness_engine.base import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
-from ainrf.literature.planner import run_planner_cycle
-from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.runtime import tenant_identity
+
+if TYPE_CHECKING:
+    from ainrf.domain.attempts import AttemptControlRequest, AttemptWorkerModule, DispatchClaim
+    from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
+    from ainrf.literature.tracking import LiteratureTrackingService
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,23 +173,43 @@ class TaskDispatcher:
         # attributes precise for the dispatch paths, which are reachable only
         # after ``start`` has confirmed that writable services were assembled.
         self._cutover = cast(DomainCutoverController, None)
-        self._attempts = cast(AttemptWorkerModule, None)
-        self._overview_planner = cast(OverviewSnapshotPlanner, None)
-        self._literature_tracking = cast(LiteratureTrackingService, None)
-        self._writable_services_initialized = False
+        self._attempts = cast("AttemptWorkerModule", None)
+        self._overview_planner = cast("OverviewSnapshotPlanner", None)
+        self._literature_tracking = cast("LiteratureTrackingService", None)
+        self._dispatch_claim_error: type[Exception] = Exception
+        self._services_initialized = False
+        self._conversation_dispatcher = None
         self._maintenance_startup_read_only = _maintenance_is_active_read_only(state_root)
         if not self._maintenance_startup_read_only:
-            self._initialize_writable_services()
+            if self._conversation_only:
+                self._initialize_conversation_services()
+            else:
+                self._initialize_writable_services()
 
-        if self._conversation_only:
+    def _initialize_conversation_services(self) -> None:
+        """Assemble only the committed-v2 Conversation worker dependencies."""
+
+        try:
+            lease = self._maintenance.begin_mutation(source="task-dispatcher.bootstrap")
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+            return
+        try:
+            self._maintenance.check_lease(lease)
+            self._cutover = DomainCutoverController(self._state_root)
+            self._maintenance.check_lease(lease)
             from ainrf.domain.conversation_worker import ConversationDispatcher
 
             self._conversation_dispatcher = ConversationDispatcher(
-                state_root,
-                artifact_sha=artifact_sha,
+                self._state_root,
+                artifact_sha=self._artifact_sha,
             )
-        else:
-            self._conversation_dispatcher = None
+            self._maintenance.check_lease(lease)
+            self._services_initialized = True
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+        finally:
+            self._maintenance.finish_mutation(lease)
 
     def _initialize_writable_services(self) -> None:
         """Assemble migration-capable services behind one startup lease.
@@ -211,6 +227,11 @@ class TaskDispatcher:
             self._maintenance_startup_read_only = True
             return
         try:
+            from ainrf.domain.attempts import AttemptWorkerModule, DispatchClaimError
+            from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
+            from ainrf.literature.tracking import LiteratureTrackingService
+
+            self._dispatch_claim_error = DispatchClaimError
             self._maintenance.check_lease(lease)
             self._cutover = DomainCutoverController(self._state_root)
             self._maintenance.check_lease(lease)
@@ -224,7 +245,7 @@ class TaskDispatcher:
             self._maintenance.check_lease(lease)
             self._literature_tracking = LiteratureTrackingService(self._state_root)
             self._maintenance.check_lease(lease)
-            self._writable_services_initialized = True
+            self._services_initialized = True
         except MaintenanceModeError:
             self._maintenance_startup_read_only = True
         finally:
@@ -250,13 +271,13 @@ class TaskDispatcher:
 
     def start(self) -> bool:
         if self._started:
-            return self._writable_services_initialized
+            return self._services_initialized
         if self._maintenance_startup_read_only or _maintenance_is_active_read_only(
             self._state_root
         ):
             self._maintenance_startup_read_only = True
             return self._start_as_drained_maintenance_participant()
-        if not self._writable_services_initialized:
+        if not self._services_initialized:
             # A constructor that lost the bootstrap lease must never rebuild
             # itself after maintenance has exited.  A fresh process gets a new
             # complete graph and avoids an accidental partial recovery.
@@ -288,7 +309,7 @@ class TaskDispatcher:
         return True
 
     def stop(self) -> None:
-        if self._writable_services_initialized:
+        if self._overview_planner is not None:
             self._overview_planner.stop()
         if self._started:
             self._participant.stop()
@@ -298,18 +319,26 @@ class TaskDispatcher:
         if not self.start():
             return DispatchRunResult(outcome="maintenance_drained")
         self._assert_domain_runtime_fuse()
-        if self._artifact_sha is not None:
-            overview = self._overview_planner.run_once()
-            if overview.outcome == "maintenance_drained":
-                self._participant.drain()
-                return DispatchRunResult(outcome="maintenance_drained")
         try:
             lease = self._participant.begin_mutation(source="task-dispatcher.claim")
         except MaintenanceModeError:
             self._participant.drain()
             return DispatchRunResult(outcome="maintenance_drained")
         try:
+            if self._conversation_dispatcher is not None:
+                dispatched = await self._conversation_dispatcher.run_once()
+                if dispatched:
+                    return DispatchRunResult(outcome="completed")
+                self._participant.heartbeat()
+                return DispatchRunResult(outcome="idle")
+            if self._artifact_sha is not None and self._overview_planner is not None:
+                overview = self._overview_planner.run_once()
+                if overview.outcome == "maintenance_drained":
+                    self._participant.drain()
+                    return DispatchRunResult(outcome="maintenance_drained")
             try:
+                from ainrf.literature.planner import run_planner_cycle
+
                 run_planner_cycle(
                     self._literature_tracking,
                     check_lease=lambda: self._participant.check_lease(lease),
@@ -318,12 +347,6 @@ class TaskDispatcher:
             except MaintenanceModeError:
                 self._participant.drain()
                 return DispatchRunResult(outcome="maintenance_drained")
-            if self._conversation_dispatcher is not None:
-                dispatched = await self._conversation_dispatcher.run_once()
-                if dispatched:
-                    return DispatchRunResult(outcome="completed")
-                self._participant.heartbeat()
-                return DispatchRunResult(outcome="idle")
             claim = self._attempts.claim_next(self.dispatcher_id, lease_seconds=self._lease_seconds)
             if claim is None:
                 self._participant.heartbeat()
@@ -381,7 +404,7 @@ class TaskDispatcher:
                     dispatch_id=claim.dispatch_id,
                     attempt_id=claim.attempt_id,
                 )
-        except DispatchClaimError as exc:
+        except self._dispatch_claim_error as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
                 dispatch_id=claim.dispatch_id,
@@ -435,7 +458,7 @@ class TaskDispatcher:
                 attempt_id=claim.attempt_id,
                 detail=str(exc),
             )
-        except DispatchClaimError as exc:
+        except self._dispatch_claim_error as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
                 dispatch_id=claim.dispatch_id,
@@ -485,7 +508,7 @@ class TaskDispatcher:
             self._maintenance.check_lease(lease)
         except MaintenanceModeError:
             return self._release_for_maintenance(claim, lease)
-        except DispatchClaimError as exc:
+        except self._dispatch_claim_error as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
                 dispatch_id=claim.dispatch_id,
@@ -560,7 +583,7 @@ class TaskDispatcher:
             )
         except MaintenanceModeError:
             return self._release_for_maintenance(claim, lease)
-        except DispatchClaimError as exc:
+        except self._dispatch_claim_error as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
                 dispatch_id=claim.dispatch_id,
@@ -580,7 +603,7 @@ class TaskDispatcher:
                 (attempt_id,),
             ).fetchone()
         if row is None:
-            raise DispatchClaimError("Attempt no longer has a harness engine")
+            raise self._dispatch_claim_error("Attempt no longer has a harness engine")
         return HarnessEngineType(str(row["harness_engine"]))
 
     def _release_for_maintenance(
@@ -594,7 +617,7 @@ class TaskDispatcher:
                 maintenance_lease=lease,
                 reason="Maintenance started before external runtime launch",
             )
-        except (DispatchClaimError, MaintenanceModeError):
+        except (self._dispatch_claim_error, MaintenanceModeError):
             # A lost/expired claim remains durable for post-maintenance
             # recovery.  Do not write a speculative ``launch_unknown`` state
             # after the barrier has become active.
@@ -611,13 +634,13 @@ class TaskDispatcher:
 
         try:
             self._attempts.release_unstarted_claim(claim, reason=f"Domain cutover fuse: {reason}")
-        except DispatchClaimError:
+        except self._dispatch_claim_error:
             # If a different process crossed the durable launch fence first,
             # retain the conservative unknown state rather than starting a
             # replacement runtime under a failed fuse.
             try:
                 self._attempts.mark_launch_unknown(claim, reason=f"Domain cutover fuse: {reason}")
-            except DispatchClaimError:
+            except self._dispatch_claim_error:
                 pass
         return DispatchRunResult(
             outcome="cutover_fuse_rejected",
@@ -767,7 +790,7 @@ class TaskDispatcher:
                             active_claim, lease_seconds=self._lease_seconds
                         )
                         self._participant.heartbeat()
-            except DispatchClaimError:
+            except self._dispatch_claim_error:
                 return
 
         heartbeat_task = asyncio.create_task(heartbeat())
@@ -866,7 +889,7 @@ class TaskDispatcher:
                 reason="Dispatcher was cancelled while runtime launch was in progress",
             )
             raise
-        except DispatchClaimError as exc:
+        except self._dispatch_claim_error as exc:
             return DispatchRunResult(
                 outcome="claim_lost",
                 dispatch_id=active_claim.dispatch_id,
