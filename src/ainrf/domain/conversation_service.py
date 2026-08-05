@@ -14,7 +14,6 @@ from uuid import uuid4
 from ainrf.db import connect, run_pending
 from ainrf.domain.conversation_contracts import (
     ApprovalStatus,
-    ConversationAuthority,
     ConversationContractError,
     ConversationErrorCode,
     ControlKind,
@@ -24,7 +23,6 @@ from ainrf.domain.conversation_contracts import (
     TurnStatus,
     require_approval_transition,
     require_task_work_transition,
-    require_v3_write_authority,
 )
 from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
@@ -247,18 +245,19 @@ class ConversationApplicationService:
             raise MaintenanceModeError("domain writes are paused for maintenance")
 
     @staticmethod
-    def _require_v3(repository: SqliteConversationRepository, task_id: str) -> sqlite3.Row:
-        authority = repository.task_authority(task_id)
-        require_v3_write_authority(
-            ConversationAuthority.CONVERSATION_V3
-            if authority == ConversationAuthority.CONVERSATION_V3
-            else ConversationAuthority.LEGACY_ATTEMPT
-        )
+    def _require_current_conversation(
+        repository: SqliteConversationRepository, task_id: str
+    ) -> sqlite3.Row:
+        if repository.task_authority(task_id) is None:
+            raise ConversationContractError(
+                ConversationErrorCode.MIGRATION_REQUIRED,
+                "current conversation authority is missing",
+            )
         state = repository.task_state(task_id)
         if state is None:
             raise ConversationContractError(
                 ConversationErrorCode.MIGRATION_REQUIRED,
-                "conversation-v3 Task state is missing",
+                "current conversation Task state is missing",
             )
         return state
 
@@ -607,7 +606,7 @@ class ConversationApplicationService:
                 if task is None:
                     raise DomainNotFoundError(task_id)
                 conversations = SqliteConversationRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 if conversations.active_turn(task_id) is not None:
                     raise DomainConflictError("Active Turn must be interrupted before moving Task")
                 if str(task["project_id"]) == project_id:
@@ -735,7 +734,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_open(self._require_v3(conversations, task_id))
+                self._require_open(self._require_current_conversation(conversations, task_id))
                 conflicting = executions.submission_by_task_key(
                     task_id=task_id,
                     actor_user_id=actor,
@@ -867,7 +866,7 @@ class ConversationApplicationService:
                     conn.commit()
                     return replay
                 conversations = SqliteConversationRepository(conn)
-                state = self._require_v3(conversations, task_id)
+                state = self._require_current_conversation(conversations, task_id)
                 current = TaskWorkStatus(str(state["work_status"]))
                 require_task_work_transition(current, status)
                 if (
@@ -937,7 +936,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                state = self._require_v3(conversations, task_id)
+                state = self._require_current_conversation(conversations, task_id)
                 current = TaskWorkStatus(str(state["work_status"]))
                 control_request_id: str | None = None
                 active_turn = conversations.active_turn(task_id)
@@ -1091,7 +1090,7 @@ class ConversationApplicationService:
                     conn.commit()
                     return replay
                 conversations = SqliteConversationRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 if require_idle and conversations.active_turn(task_id) is not None:
                     raise ConversationContractError(
                         ConversationErrorCode.ACTIVE_TURN_EXISTS,
@@ -1184,7 +1183,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 turn = conversations.turn_by_id(turn_id)
                 if turn is None or str(turn["task_id"]) != task_id:
                     raise DomainNotFoundError(turn_id)
@@ -1281,7 +1280,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 approval = executions.approval_by_id(approval_id)
                 if approval is None or str(approval["task_id"]) != task_id:
                     raise DomainNotFoundError(approval_id)
@@ -1411,7 +1410,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 source_task = conn.execute(
                     "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
                 ).fetchone()
@@ -1608,7 +1607,7 @@ class ConversationApplicationService:
                     return replay
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 preview = executions.fork_preview_by_id(preview_id)
                 if preview is None or str(preview["source_task_id"]) != task_id:
                     raise DomainNotFoundError(preview_id)
@@ -1852,7 +1851,7 @@ class ConversationApplicationService:
                 if submission is None or intent is None:
                     raise DomainNotFoundError(submission_id)
                 task_id = str(submission["task_id"])
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 harness_engine = conversations.task_harness_engine(task_id)
                 try:
                     persisted_family = _ENGINE_FAMILY_BY_HARNESS[HarnessEngineType(harness_engine)]
@@ -2030,7 +2029,7 @@ class ConversationApplicationService:
                 self._begin(conn)
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
-                self._require_v3(conversations, task_id)
+                self._require_current_conversation(conversations, task_id)
                 turn = conversations.turn_by_id(turn_id)
                 if turn is None or str(turn["task_id"]) != task_id:
                     raise DomainNotFoundError(turn_id)
@@ -2124,7 +2123,7 @@ class ConversationApplicationService:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_task_viewer(task_id, user)
             conversations = SqliteConversationRepository(conn)
-            state = self._require_v3(conversations, task_id)
+            state = self._require_current_conversation(conversations, task_id)
             task = conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
             if task is None:
                 raise DomainNotFoundError(task_id)
@@ -2156,7 +2155,7 @@ class ConversationApplicationService:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_task_viewer(task_id, user)
             conversations = SqliteConversationRepository(conn)
-            self._require_v3(conversations, task_id)
+            self._require_current_conversation(conversations, task_id)
             return [self._row_dict(row) for row in conversations.list_turns(task_id)]
 
     def list_items(
@@ -2171,7 +2170,7 @@ class ConversationApplicationService:
         with closing(self._connect()) as conn:
             DomainAuthorizationService(conn).require_task_viewer(task_id, user)
             conversations = SqliteConversationRepository(conn)
-            self._require_v3(conversations, task_id)
+            self._require_current_conversation(conversations, task_id)
             if turn_id is None:
                 rows = conversations.list_task_items(task_id)
             else:

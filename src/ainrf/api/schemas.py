@@ -396,7 +396,6 @@ class ProjectContextCandidateCreateRequest(BaseModel):
     content: str
     source_metadata: dict[str, Any] = Field(default_factory=dict)
     source_task_id: str = Field(min_length=1)
-    source_attempt_id: str | None = None
     source_message_start_seq: int | None = Field(default=None, ge=0)
     source_message_end_seq: int | None = Field(default=None, ge=0)
     source_output_start_seq: int | None = Field(default=None, ge=0)
@@ -600,96 +599,6 @@ class TaskTokenUsageSummaryResponse(BaseModel):
     total: dict[str, int | float]
     by_model: dict[str, dict[str, int | float]] = Field(default_factory=dict)
     by_engine: dict[str, dict[str, int | float]] = Field(default_factory=dict)
-
-
-class TaskRuntimeSessionResponse(BaseModel):
-    """Read-only runtime identity associated with one durable Attempt."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    runtime_session_id: str
-    attempt_id: str
-    status: str
-    engine_name: str | None = None
-    engine_session_key: str | None = None
-    created_at: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    last_probe_at: str | None = None
-    adopted_at: str | None = None
-    failure_reason: str | None = None
-
-
-class TaskDispatchResponse(BaseModel):
-    """Durable dispatcher state for a Task Attempt."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    dispatch_id: str
-    task_id: str
-    attempt_id: str
-    status: str
-    launch_state: str
-    runtime_launch_key: str | None = None
-    dispatcher_id: str | None = None
-    claimed_at: str | None = None
-    claim_expires_at: str | None = None
-    claim_heartbeat_at: str | None = None
-    created_at: str
-    updated_at: str | None = None
-    completed_at: str | None = None
-    cancelled_at: str | None = None
-    cancel_reason: str | None = None
-    last_error: str | None = None
-
-
-class TaskAttemptResponse(BaseModel):
-    """Authoritative v2 TaskAttempt projection."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    attempt_id: str
-    task_id: str
-    attempt_seq: int
-    trigger: str
-    status: str
-    context_snapshot_id: str | None = None
-    context_version_id: str | None = None
-    created_at: str
-    started_at: str | None = None
-    finished_at: str | None = None
-    duration_ms: int | None = None
-    message_start_seq: int | None = None
-    message_end_seq: int | None = None
-    output_start_seq: int | None = None
-    output_end_seq: int | None = None
-    artifact_refs: list[str] = Field(default_factory=list)
-    code_refs: list[str] = Field(default_factory=list)
-    data_refs: list[str] = Field(default_factory=list)
-    token_usage_json: str | None = None
-    cost_usd: float | None = None
-    failure_reason: str | None = None
-    stop_reason: str | None = None
-    authorization_environment_id: str | None = None
-    authorization_grant_version: int | None = None
-    authorization_checked_at: str | None = None
-    stop_requested_at: str | None = None
-    stop_requested_reason: str | None = None
-    runtime_sessions: list[TaskRuntimeSessionResponse] = Field(default_factory=list)
-    dispatch: TaskDispatchResponse | None = None
-
-
-class TaskAttemptListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[TaskAttemptResponse]
-
-
-class TaskMutationResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    task: TaskSummaryResponse
-    attempt: TaskAttemptResponse
-    dispatch: TaskDispatchResponse
 
 
 class TurnSubmissionResponse(BaseModel):

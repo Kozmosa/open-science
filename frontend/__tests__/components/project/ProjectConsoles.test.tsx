@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getDomainProjectContext).mockResolvedValue({ project_id: 'project-1', active_version: version, draft: { content: 'Draft context', fingerprint: 'draft-fp', updated_by_user_id: 'user-1', updated_at: '2026-07-14T01:00:00Z' } });
   vi.mocked(getDomainProjectContextVersions).mockResolvedValue({ items: [version] });
-  vi.mocked(getDomainProjectContextCandidates).mockResolvedValue({ items: [{ candidate_id: 'candidate-1', project_id: 'project-1', content: 'Candidate fact', status: 'pending', created_at: '2026-07-14T01:00:00Z', created_by_user_id: 'user-1', source_metadata: {}, source_task_id: null, source_attempt_id: null, accepted_by_user_id: null, accepted_at: null, rejected_by_user_id: null, rejected_at: null, rejection_reason: null }] });
+  vi.mocked(getDomainProjectContextCandidates).mockResolvedValue({ items: [{ candidate_id: 'candidate-1', project_id: 'project-1', content: 'Candidate fact', status: 'pending', created_at: '2026-07-14T01:00:00Z', created_by_user_id: 'user-1', source_metadata: {}, source_task_id: null, accepted_by_user_id: null, accepted_at: null, rejected_by_user_id: null, rejected_at: null, rejection_reason: null }] });
   vi.mocked(getDomainProjectMembers).mockResolvedValue({ items: [] });
 });
 

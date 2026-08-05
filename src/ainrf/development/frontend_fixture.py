@@ -4,7 +4,6 @@ import json
 import os
 import re
 import secrets
-from contextlib import closing
 from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -13,8 +12,6 @@ import bcrypt
 
 from ainrf.runtime.product_config import hash_api_key
 from ainrf.auth.service import AuthService, provision_tenant_user
-from ainrf.backup import BackupService
-from ainrf.db import connect
 from ainrf.db.connection import atomic_write_json
 from ainrf.development.frontend_profiles import (
     FRONTEND_DEV_FIXTURE_VERSION,
@@ -27,17 +24,9 @@ from ainrf.development.frontend_faults import (
     FrontendDevFaultProfile,
     normalize_frontend_dev_fault_profile,
 )
-from ainrf.domain_control import (
-    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
-    DomainCutoverController,
-    DomainCutoverError,
-    DomainMaintenanceService,
-    backup_manifest_sha256,
-)
-from ainrf.domain_migration import DomainImporter, DomainReconciliationService
+from ainrf.domain.write_fence import DomainWriteFenceError
 
 
-_ACTOR_ID = "frontend-dev-fixture"
 _PROFILE_MARKER_NAME = "frontend-dev-fixture.json"
 _LOGIN_CREDENTIALS_SCHEMA_VERSION = 1
 _LOGIN_IDENTITY_SPECS = {
@@ -121,95 +110,6 @@ def _validate_artifact_sha(artifact_sha: str) -> str:
     return normalized
 
 
-def _enter_fixture_maintenance(maintenance: DomainMaintenanceService) -> None:
-    participant_ids: list[str] = []
-    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
-        participant_id = f"frontend-dev:{participant_type}"
-        maintenance.register_participant(participant_id, participant_type)
-        participant_ids.append(participant_id)
-    maintenance.enter(actor_id=_ACTOR_ID, reason="prepare isolated frontend v2 fixture")
-    for participant_id in participant_ids:
-        maintenance.drain_participant(participant_id)
-
-
-def _prepare_cutover(state_root: Path, artifact_sha: str) -> None:
-    controller = DomainCutoverController(state_root)
-    status = controller.status()
-    if status.state != "legacy":
-        raise DomainCutoverError("new frontend dev fixture did not start from the legacy state")
-
-    run = DomainImporter(state_root).run(artifact_sha=artifact_sha)
-    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
-    now = "2026-07-14T00:00:00+00:00"
-    with closing(connect(db_path)) as conn:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO projects (
-                project_id, owner_user_id, name, description, status, is_default,
-                created_at, updated_at
-            ) VALUES (
-                'project-frontend-dev', 'api-key-user', 'Frontend Development',
-                'Synthetic v2 project for frontend implementation', 'active', 1, ?, ?
-            )
-            """,
-            (now, now),
-        )
-        conn.commit()
-
-    maintenance = DomainMaintenanceService(state_root)
-    _enter_fixture_maintenance(maintenance)
-    backup_archive = state_root.with_name(f"{state_root.name}-cutover-backup.tar.gz")
-    try:
-        controller.finalize_constraints(
-            actor_id=_ACTOR_ID,
-            run_id=run.run_id,
-            stability_window_seconds=0,
-        )
-        archive = BackupService(state_root).create_backup(backup_archive)
-        manifest = BackupService(state_root).verify_backup(archive)
-        DomainReconciliationService(state_root).finalize_run(
-            run.run_id,
-            _ACTOR_ID,
-            artifact_sha,
-            {
-                "manifest_sha256": backup_manifest_sha256(manifest),
-                "validated_at": now,
-                "status": "valid",
-            },
-        )
-        with closing(connect(db_path)) as conn:
-            schema_row = conn.execute(
-                "SELECT version FROM _schema_version WHERE database = 'agentic_researcher'"
-            ).fetchone()
-        if schema_row is None:
-            raise RuntimeError("frontend fixture schema version is unavailable")
-        schema_version = int(schema_row[0])
-        controller.prepare(
-            actor_id=_ACTOR_ID,
-            run_id=run.run_id,
-            backup_archive=archive,
-            artifact_sha=artifact_sha,
-            artifact_contract_min=2,
-            artifact_contract_max=2,
-            artifact_schema_min=schema_version,
-            artifact_schema_max=schema_version,
-            stability_window_seconds=0,
-        )
-        controller.commit(
-            actor_id=_ACTOR_ID,
-            run_id=run.run_id,
-            backup_archive=archive,
-            artifact_sha=artifact_sha,
-            artifact_contract_min=2,
-            artifact_contract_max=2,
-            artifact_schema_min=schema_version,
-            artifact_schema_max=schema_version,
-            stability_window_seconds=0,
-        )
-    finally:
-        maintenance.exit(actor_id=_ACTOR_ID)
-
-
 def _profile_marker_path(state_root: Path) -> Path:
     return state_root / "runtime" / _PROFILE_MARKER_NAME
 
@@ -222,16 +122,16 @@ def _validate_existing_profile(
 ) -> None:
     marker_path = _profile_marker_path(state_root)
     if not marker_path.is_file():
-        raise DomainCutoverError(
+        raise DomainWriteFenceError(
             "existing frontend fixture predates profile versioning; reset the managed fixture"
         )
     payload = atomic_read_json(marker_path)
     if payload.get("fixture_version") != FRONTEND_DEV_FIXTURE_VERSION:
-        raise DomainCutoverError("frontend fixture version changed; reset the managed fixture")
+        raise DomainWriteFenceError("frontend fixture version changed; reset the managed fixture")
     if payload.get("profile") != profile.value:
-        raise DomainCutoverError("existing frontend fixture uses a different profile")
+        raise DomainWriteFenceError("existing frontend fixture uses a different profile")
     if payload.get("artifact_sha") != artifact_sha:
-        raise DomainCutoverError(
+        raise DomainWriteFenceError(
             "existing frontend fixture uses a different immutable artifact SHA"
         )
 
@@ -239,7 +139,7 @@ def _validate_existing_profile(
 def atomic_read_json(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        raise DomainCutoverError("frontend fixture profile marker is malformed")
+        raise DomainWriteFenceError("frontend fixture profile marker is malformed")
     return {str(key): value for key, value in payload.items()}
 
 
@@ -271,21 +171,21 @@ def _new_login_credentials_payload() -> dict[str, object]:
 
 def _validated_login_users(payload: dict[str, object]) -> dict[str, dict[str, str]]:
     if payload.get("schema_version") != _LOGIN_CREDENTIALS_SCHEMA_VERSION:
-        raise DomainCutoverError("frontend login credentials version changed; reset the fixture")
+        raise DomainWriteFenceError("frontend login credentials version changed; reset the fixture")
     raw_users = payload.get("users")
     if not isinstance(raw_users, dict) or set(raw_users) != set(_LOGIN_IDENTITY_SPECS):
-        raise DomainCutoverError("frontend login credentials are malformed; reset the fixture")
+        raise DomainWriteFenceError("frontend login credentials are malformed; reset the fixture")
     normalized_raw_users: dict[str, object] = {str(key): value for key, value in raw_users.items()}
     users: dict[str, dict[str, str]] = {}
     for label, expected in _LOGIN_IDENTITY_SPECS.items():
         raw_user = normalized_raw_users.get(label)
         if not isinstance(raw_user, dict):
-            raise DomainCutoverError("frontend login credentials are malformed; reset the fixture")
+            raise DomainWriteFenceError("frontend login credentials are malformed; reset the fixture")
         user = {str(key): str(value) for key, value in raw_user.items()}
         if any(user.get(key) != value for key, value in expected.items()):
-            raise DomainCutoverError("frontend login identity changed; reset the fixture")
+            raise DomainWriteFenceError("frontend login identity changed; reset the fixture")
         if not user.get("password"):
-            raise DomainCutoverError("frontend login credentials are malformed; reset the fixture")
+            raise DomainWriteFenceError("frontend login credentials are malformed; reset the fixture")
         users[label] = user
     return users
 
@@ -308,7 +208,7 @@ def _ensure_login_identities(
         users = _validated_login_users(atomic_read_json(credentials_path))
     else:
         if existing_usernames:
-            raise DomainCutoverError(
+            raise DomainWriteFenceError(
                 "frontend login identities exist without credentials; reset the managed fixture"
             )
         payload = _new_login_credentials_payload()
@@ -350,7 +250,7 @@ def _ensure_login_identities(
                 or str(row["status"]) != "active"
                 or not bcrypt.checkpw(user["password"].encode(), str(row["password_hash"]).encode())
             ):
-                raise DomainCutoverError(
+                raise DomainWriteFenceError(
                     "frontend login identity state does not match credentials; reset the fixture"
                 )
 
@@ -426,7 +326,7 @@ def prepare_frontend_dev_fixture(
     credentials_path: Path | None = None,
     fault_profile: FrontendDevFaultProfile | str = FrontendDevFaultProfile.NONE,
 ) -> FrontendDevFixture:
-    """Prepare an isolated, synthetic, committed-v2 state for frontend work."""
+    """Prepare an isolated, synthetic current-schema state for frontend work."""
 
     if not api_key.strip():
         raise ValueError("api_key is required")
@@ -442,22 +342,15 @@ def prepare_frontend_dev_fixture(
     state_exists = resolved_state_root.exists() and any(resolved_state_root.iterdir())
     resolved_state_root.mkdir(parents=True, exist_ok=True)
     if state_exists:
-        status = DomainCutoverController(resolved_state_root).status()
-        if status.state != "v2":
-            raise DomainCutoverError(
-                "frontend dev fixture refuses to reuse a non-empty or partially prepared state root"
-            )
-        if status.artifact_sha != normalized_artifact_sha:
-            raise DomainCutoverError(
-                "existing frontend fixture uses a different immutable artifact SHA"
-            )
         _validate_existing_profile(
             resolved_state_root,
             artifact_sha=normalized_artifact_sha,
             profile=normalized_profile,
         )
-    else:
-        _prepare_cutover(resolved_state_root, normalized_artifact_sha)
+    elif any(resolved_state_root.iterdir()):
+        raise DomainWriteFenceError(
+            "frontend dev fixture refuses to reuse a non-empty unmanaged state root"
+        )
     return _seed_fixture(
         resolved_state_root,
         normalized_artifact_sha,

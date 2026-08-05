@@ -1,15 +1,8 @@
 from __future__ import annotations
-import json
-import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from ainrf.agentic_researcher.models import (
-    Task,
-    TaskOutputEvent,
-)
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
-    MessageItemResponse,
     ConversationTaskMutationResponse,
     TaskCreateRequest,
     TaskForkRequest,
@@ -25,23 +18,12 @@ from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     ConversationApplicationService,
     DomainPermissionError,
-    TaskApplicationService,
     TaskProjectionService,
 )
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-
-def _get_task_application_service(request: Request) -> TaskApplicationService:
-    service = getattr(request.app.state, "task_application_service", None)
-    if service is None or not service.v2_ready():
-        raise HTTPException(status_code=503, detail="Task domain v2 is not ready")
-    if not isinstance(service, TaskApplicationService):
-        raise HTTPException(status_code=500, detail="Task application service is invalid")
-    return service
 
 
 def _get_conversation_application_service(request: Request) -> ConversationApplicationService:
@@ -55,7 +37,6 @@ def _get_conversation_application_service(request: Request) -> ConversationAppli
 
 def _get_task_projection_service(request: Request) -> TaskProjectionService:
     """Return the authoritative SQLite Task projection."""
-    _get_task_application_service(request)
     service = getattr(request.app.state, "task_projection_service", None)
     if service is None:
         service = TaskProjectionService(request.app.state.api_config.state_root)
@@ -86,104 +67,6 @@ def _v2_task_summary(
     projection: TaskProjectionService, task_id: str, user: dict[str, object]
 ) -> TaskSummaryResponse:
     return TaskSummaryResponse.model_validate(projection.task(task_id, user))
-
-
-def _parse_output_payload(content: str) -> dict:
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        return {"content": content}
-    payload = parsed if isinstance(parsed, dict) else {"content": content}
-    wrapped_payload = payload.get("payload")
-    if isinstance(wrapped_payload, dict) and isinstance(payload.get("event_type"), str):
-        return wrapped_payload
-    return payload
-
-
-_SUPPRESSED_SYSTEM_SUBTYPES = {"status", "thinking_tokens"}
-
-
-def _is_suppressed_system_payload(payload: dict[str, object]) -> bool:
-    subtype = payload.get("subtype")
-    return isinstance(subtype, str) and subtype in _SUPPRESSED_SYSTEM_SUBTYPES
-
-
-def _output_item_to_message(
-    item: TaskOutputEvent, *, initial_prompt: str | None = None
-) -> MessageItemResponse | None:
-    payload = _parse_output_payload(item.content)
-    metadata = {"timestamp": item.created_at.isoformat(), "sequence": item.seq}
-    message_id = f"{item.task_id}-{item.seq}"
-    if item.kind == "message":
-        content = str(payload.get("content") or "")
-        role = payload.get("role")
-        message_type = "user" if role == "user" or content == initial_prompt else "assistant"
-        return MessageItemResponse(
-            id=message_id, type=message_type, content=content, metadata=metadata
-        )
-    if item.kind == "thinking":
-        return MessageItemResponse(
-            id=message_id,
-            type="thinking",
-            content=str(payload.get("content") or ""),
-            metadata={**metadata, "isFolded": True},
-        )
-    if item.kind == "tool_call":
-        return MessageItemResponse(
-            id=message_id,
-            type="tool_call",
-            content={"name": payload.get("name"), "arguments": payload.get("arguments")},
-            metadata={**metadata, "isFolded": True},
-        )
-    if item.kind == "tool_result":
-        return MessageItemResponse(
-            id=message_id,
-            type="tool_result",
-            content={"tool_use_id": payload.get("tool_use_id"), "content": payload.get("content")},
-            metadata={**metadata, "isFolded": True},
-        )
-    if item.kind in {"system", "lifecycle"}:
-        if _is_suppressed_system_payload(payload):
-            return None
-        return MessageItemResponse(
-            id=message_id,
-            type="system_event",
-            content=str(payload.get("subtype") or payload.get("content") or item.kind),
-            metadata=metadata,
-        )
-    if item.kind == "stdout":
-        return MessageItemResponse(
-            id=message_id,
-            type="assistant",
-            content=str(payload.get("content") or item.content),
-            metadata=metadata,
-        )
-    if item.kind == "stderr":
-        return MessageItemResponse(
-            id=message_id,
-            type="system_event",
-            content=f"[stderr] {payload.get('content') or item.content}",
-            metadata=metadata,
-        )
-    return None
-
-
-def _output_items_to_messages(
-    items: list[TaskOutputEvent], task: Task | TaskSummaryResponse
-) -> list[MessageItemResponse]:
-    messages: list[MessageItemResponse] = []
-    seen_user_content: set[str] = set()
-    for item in items:
-        message = _output_item_to_message(item, initial_prompt=task.prompt)
-        if message is None:
-            continue
-        if message.type == "assistant" and isinstance(message.content, str):
-            if message.content in seen_user_content:
-                continue
-        if message.type == "user" and isinstance(message.content, str):
-            seen_user_content.add(message.content)
-        messages.append(message)
-    return messages
 
 
 @router.post("", status_code=202)

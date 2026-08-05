@@ -9,7 +9,7 @@
 ## 归档批次
 
 - 2026-04 至 2026-06 增量设计：已实现的 UI、runtime、auth、skills、performance、docs、deployment 和 observability 设计，稳定事实已进入代码、测试、当前参考文档或后继设计。
-- 2026-07-11 领域设计归档批次：被当前 Project / Task / Workspace 契约取代的 Session、Retry 和权限设计。
+- 2026-07-11 领域设计归档批次：Project / Workspace / Context 关系的历史设计，其中 Task runtime 章节已被 Conversation Domain 取代。
 - 2026-07-12 领域执行规范：大部分执行阶段已完成，剩余 Conversation/Runtime 方向由 2026-07-17 活跃 spec 接管。
 - 2026-07-29 架构清理设计：P0–P6 已完成，当前架构 contract 已提升到 `docs-site/docs/architecture.md` 和 `PROJECT_BASIS.md`。
 - 2026-07-30 compatibility telemetry correctness：已实现长期 HTTP contract 指标、临时 cleanup registry、durable evidence、Grafana 与 staging 验收 contract；当前事实见 observability 文档。
@@ -19,9 +19,10 @@
 
 ## 2026-07-11 领域设计归档批次
 
-当前替代入口：[`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md)
+当前替代入口：[`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)；Project/Workspace/Context 当前 contract 见 [`docs-site/docs/architecture.md`](../../../docs-site/docs/architecture.md)。
 
 - `2026-05-17-ainrf-session-chain-design.md`：旧的独立 Session/Attempt 用户模型；由唯一 Task → Attempt → Runtime Session 模型取代。
 - `2026-06-02-task-retry-design.md`：旧的“归档并克隆 Task” Retry；由同一 Task 下 Attempt 语义取代。
 - `2026-06-03-task-retry-e2e-design.md`：依赖旧 Retry response 和新 Task 选择行为的测试设计。
 - `2026-06-15-permission-and-visibility-management.md`：旧 Project collaborator、Workspace 单归属和删除权限模型；由新权限能力表与关联不变量取代。
+- `2026-07-11-project-task-workspace-domain-design.md`：Project/Workspace/Context 与旧 TaskAttempt/RuntimeSession 组合设计；其 runtime 章节由 Conversation Domain 取代，文件内容保留为历史记录。

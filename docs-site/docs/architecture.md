@@ -34,6 +34,8 @@ flowchart TD
 - 正常 L0/L1 在 Python quality gate 开始时检查 product import cycle，以及 non-API Module 对 `ainrf.api` 的静态、惰性、动态和字符串入口依赖。
 - Project、Workspace、Environment、Task 等领域通过窄 application Interface 暴露能力；SQLite repository 与共享 write kernel 保持私有。
 - Release E 已完成 committed-v2 authority cutover。产品路径不得重新引入 legacy writer、legacy read fallback、双读或双写。
+- Issue #76 将已完成的 cutover、migration chain 和 legacy Attempt/RuntimeSession authority 退休。当前 fresh-install schema baseline 是 `agentic_researcher=33`、`auth=7`、`literature=7`、`terminal=1`；正常 startup 只注册 `src/ainrf/db/migrations/current.py` 和 `src/ainrf/db/baselines/*.sql`。
+- 历史 `agentic_researcher` version 32 到 current baseline 33 的删除动作只存在于一次性的 `openscience migration retire-legacy preflight|apply|verify`。它不属于正常 import graph，也不承诺从任意历史版本升级。
 - Frontend 依赖方向为 `app -> features -> shared/design-system`。`shared` 与 `design-system` 不依赖 feature，page 只负责 composition。
 - UI 不直接消费 raw generated payload；feature adapter 将 transport type 映射为 view model。
 
@@ -44,7 +46,7 @@ flowchart TD
 - FastAPI/Pydantic OpenAPI 是唯一 transport schema authority。
 - `/api/tasks` 是唯一正式 Task HTTP Interface；Conversation Module 在该 Seam 后拥有 Task、Turn、Item、Submission、Execution 与 Binding 的行为和持久化。Project-owned relationship 与 usage 投影位于 `/api/domain/projects/{project_id}/task-relationships` 和 `/usage-summary`。管理侧 `/runs` 读取 Task/Turn/Item 投影，不存在独立 Session 资源。
 
-Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递、runtime control 与 SQLite 事务，形成足够的 Depth。HTTP、worker 与 runtime driver 是该 Module 不同 Seam 上的 Adapter；这种 Locality 让状态机修复集中在一个实现中，并为所有 caller 提供 Leverage。旧 Attempt/RuntimeSession 表只允许 standalone migration 与 legacy-authority read-only Adapter 使用，普通产品路径不得回退或双写。
+Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递、runtime control 与 SQLite 事务，形成足够的 Depth。HTTP、worker 与 runtime driver 是该 Module 不同 Seam 上的 Adapter；这种 Locality 让状态机修复集中在一个实现中，并为所有 caller 提供 Leverage。退休完成后，旧 Attempt/RuntimeSession、cutover 和 migration tables 不再是 current schema；只读 admin audit 只保留 `legacy_domain_records` 历史证据，不能把历史 payload 转成新的 Task 或 Session。
 - `npm --prefix frontend run generate:transport` 确定性生成 `frontend/src/generated/transport/`。
 - `npm --prefix frontend run check:transport` 重建并检查 schema manifest、operation/path metadata 与工作树 drift。
 - Generated transport 的长期验证由正常 drift gate、真实 HTTP contract tests 和 MSW Adapter tests 负责；临时 architecture-cleanup suite 已在 P6 删除。
@@ -77,16 +79,29 @@ Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递�
 | `AINRF_*` backend config | Backend runtime | canonical 后端配置命名空间 | 长期支持 |
 | 对应的 `OPENSCIENCE_*` backend config aliases | Product / release | `PROJECT_BASIS.md` 明确规定的正式兼容别名 | 长期支持，不是 cleanup debt |
 | `/v1/models`、`/v1/messages` | External protocol adapter | Anthropic-compatible 外部协议入口 | 长期支持 |
-| `domain-migration` CLI 与 `/api/admin/domain/legacy-records` | Domain migration / release | committed-v2 之前状态的只读迁移、reconciliation 与审计证据；不得成为 product read fallback | 保留，migration/admin-only |
+| `domain-migration` CLI 与 `/api/admin/domain/legacy-records` | Domain migration / release | 已退休状态的只读历史审计证据；不得成为 product read fallback | 保留，admin-only |
+| `migration retire-legacy preflight|apply|verify` | Release owner | version 32 到 current baseline 33 的一次性维护窗口删除动作 | 保留，one-time only |
 | Literature subscriptions CRUD（4 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 topic application Interface 上的 payload Adapter，但尚未完成删除批准 | fail-closed 保留 |
 | Literature subscription fetch/status（2 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 durable check Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
 | Literature paper read（1 operation） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 paper state Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
 
-后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；是否再次由人工判断覆盖观察窗口，需要由用户逐批明确确认。
+后续 removal 默认仍要求 caller 迁移和同步更新 schema、contract tests、文档与 rollback evidence；Issue #76 的生产删除仍必须由用户在维护窗口完成 preflight、backup/restore 和 post-validation。
 
 Literature 的正式 HTTP Interface 当前固定为 19 个 operation：overview 1、topics 6、checks 4、papers/detail/versions/state 4、summary 2、research-task create/list 2。singular research-task 查询已在 WebUI caller 迁移后退役；上述 7 个 compatibility operation 未获得独立删除批准，因此没有删除，也没有为收集 telemetry 部署未完整验收的代码到 production。
 
 临时 `ainrf_cleanup_*` registry、指标、持久化表、日志和 Dashboard，以及 superseded `ainrf_deprecated_*` 指标、旧统计 helper 与 Release E 告警已在架构清理最终收口中删除。Compatibility route 观察统一由长期、低基数的 `ainrf_http_contract_*` 指标和 durable aggregate 承担；正式长期 alias 不再产生 cleanup-only 遥测。
+
+## Production retirement checkpoint
+
+本节是用户控制的生产检查点，不是本 PR 已完成的生产证据。合并前由用户确认：
+
+1. 已完成完整 backup，并在隔离 staged root 验证 restore、SQLite integrity 和只读 post-restore smoke。
+2. release manifest 中 API、Web、worker 和 schema artifact SHA 一致；已停止 writers、进入 maintenance，并确认 participant drain、active Turn/Submission 为零或符合窗口策略，workspace/tenant source 稳定。
+3. 已在生产 state root 运行 `openscience migration retire-legacy preflight`，人工核对 ready 后只运行一次 `apply`，再运行 `verify` 并保存 JSON/integrity evidence。
+4. 已启动同一 manifest，完成只读 health/domain/Task/Turn/Item/admin-audit smoke；确认没有旧表访问、旧 writer 或 legacy fallback。
+5. 失败时使用已验证的上一份 release manifest 和完整 backup 人工 rollback。代码回滚不能恢复已删除表，数据恢复必须依赖 backup；在缺少证据时保持 fail-closed。
+
+本次 PR 不执行上述步骤，不访问 production 容器、数据库、端口、日志或数据，也不 merge。
 
 ## 最终收口验收
 

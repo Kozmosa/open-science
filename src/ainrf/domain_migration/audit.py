@@ -1,9 +1,9 @@
-"""Read-only admin audit access to unmapped legacy domain records.
+"""Read-only admin audit access to retired legacy domain records.
 
-The importer keeps records it cannot safely map instead of converting them
-into writable v2 objects.  This module intentionally exposes only inspection
-operations so an administrator can reconcile historical Sessions without
-turning an archived payload into a new Task or Session write path.
+The one-time retirement keeps records that were not safely mapped as immutable
+history instead of converting them into current Conversation objects. This
+module exposes inspection only; an administrator cannot turn an archived
+payload into a new Task, Turn, or Session write path.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ _SENSITIVE_KEY_PARTS = (
 
 
 class LegacyDomainRecordAuditService:
-    """Read archived legacy records without granting a mutation capability."""
+    """Read retired legacy records without granting a mutation capability."""
 
     def __init__(self, state_root: Path) -> None:
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"

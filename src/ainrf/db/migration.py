@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
@@ -7,11 +8,31 @@ from pathlib import Path
 MigrationFn = Callable[[sqlite3.Connection], None]
 
 
+class SchemaBaselineError(RuntimeError):
+    """The database must be handled by an explicit baseline migration."""
+
+
 class MigrationRegistry:
-    """Per-database ordered migration list."""
+    """Per-database baseline plus explicitly numbered forward migrations."""
 
     def __init__(self) -> None:
-        self._migrations: dict[str, list[MigrationFn]] = {}
+        self._migrations: dict[str, dict[int, MigrationFn]] = {}
+        self._baselines: dict[str, tuple[int, MigrationFn]] = {}
+
+    def register_baseline(
+        self, database_name: str, version: int
+    ) -> Callable[[MigrationFn], MigrationFn]:
+        """Register the current fresh-install schema for *database_name*."""
+        if version <= 0:
+            raise ValueError("baseline version must be positive")
+
+        def decorator(fn: MigrationFn) -> MigrationFn:
+            if database_name in self._baselines:
+                raise ValueError(f"baseline already registered for {database_name}")
+            self._baselines[database_name] = (version, fn)
+            return fn
+
+        return decorator
 
     def register(self, database_name: str) -> Callable[[MigrationFn], MigrationFn]:
         """Decorator to register a migration for a database.
@@ -22,15 +43,39 @@ class MigrationRegistry:
         """
 
         def decorator(fn: MigrationFn) -> MigrationFn:
-            self._migrations.setdefault(database_name, []).append(fn)
-            self._migrations[database_name].sort(key=lambda f: f.__name__)
+            match = re.match(r"migration_(\d+)(?:_|$)", fn.__name__)
+            if match is None:
+                raise ValueError(
+                    f"migration function {fn.__name__!r} must use migration_NNN_name"
+                )
+            version = int(match.group(1))
+            migrations = self._migrations.setdefault(database_name, {})
+            if version in migrations:
+                raise ValueError(f"duplicate {database_name} migration version {version}")
+            migrations[version] = fn
             return fn
 
         return decorator
 
     def get_pending(self, database_name: str, current_version: int) -> list[MigrationFn]:
-        migrations = self._migrations.get(database_name, [])
-        return migrations[current_version:]
+        migrations = self._migrations.get(database_name, {})
+        return [
+            migrations[version]
+            for version in sorted(migrations)
+            if version > current_version
+        ]
+
+    def baseline(self, database_name: str) -> tuple[int, MigrationFn] | None:
+        return self._baselines.get(database_name)
+
+    def supported_version(self, database_name: str) -> int:
+        baseline = self._baselines.get(database_name)
+        baseline_version = baseline[0] if baseline else 0
+        migration_versions = self._migrations.get(database_name, {})
+        return max(baseline_version, max(migration_versions, default=0))
+
+    def knows_database(self, database_name: str) -> bool:
+        return database_name in self._baselines or database_name in self._migrations
 
 
 # Module-level singleton
@@ -139,6 +184,16 @@ def _current_version_without_creating(conn: sqlite3.Connection, database_name: s
     return current_version(conn, database_name)
 
 
+def _has_user_tables(conn: sqlite3.Connection) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'table' AND name != '_schema_version' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+
+
 def run_pending(
     conn: sqlite3.Connection,
     database_name: str,
@@ -151,7 +206,52 @@ def run_pending(
     caller is responsible for rolling back.
     """
     r = reg or registry
-    migration_count = len(r.get_pending(database_name, 0))
+    if not r.knows_database(database_name):
+        raise SchemaBaselineError(f"{database_name} is not a supported product database")
+    baseline = r.baseline(database_name)
+    if baseline is not None:
+        baseline_version, baseline_fn = baseline
+        baseline_applied = False
+        if _maintenance_is_active(conn, database_name):
+            persisted_version = _current_version_without_creating(conn, database_name)
+            if persisted_version < baseline_version:
+                raise RuntimeError(
+                    f"domain maintenance is active; refusing {database_name} baseline "
+                    f"from version {persisted_version} to {baseline_version}"
+                )
+        ensure_schema_table(conn)
+        version = current_version(conn, database_name)
+        if version == 0:
+            if _has_user_tables(conn):
+                raise SchemaBaselineError(
+                    f"{database_name} has a pre-baseline schema; run the explicit "
+                    "retirement migration before starting this runtime"
+                )
+            baseline_fn(conn)
+            set_version(conn, database_name, baseline_version)
+            version = baseline_version
+            baseline_applied = True
+        elif version < baseline_version:
+            raise SchemaBaselineError(
+                f"{database_name} schema version {version} is older than the current "
+                f"fresh-install baseline {baseline_version}; run the explicit retirement migration"
+            )
+        supported_version = r.supported_version(database_name)
+        if version > supported_version:
+            raise RuntimeError(
+                f"unsupported {database_name} schema version {version}; "
+                f"this binary supports versions 0 through {supported_version}"
+            )
+        pending = r.get_pending(database_name, version)
+        for migration in pending:
+            migration(conn)
+            match = re.match(r"migration_(\d+)(?:_|$)", migration.__name__)
+            assert match is not None
+            set_version(conn, database_name, int(match.group(1)))
+        conn.commit()
+        return len(pending) + int(baseline_applied)
+
+    migration_count = r.supported_version(database_name)
     if _maintenance_is_active(conn, database_name):
         persisted_version = _current_version_without_creating(conn, database_name)
         if persisted_version < migration_count:
@@ -167,8 +267,10 @@ def run_pending(
             f"this binary supports versions 0 through {migration_count}"
         )
     pending = r.get_pending(database_name, version)
-    for i, migration in enumerate(pending):
+    for migration in pending:
         migration(conn)
-        set_version(conn, database_name, version + i + 1)
+        match = re.match(r"migration_(\d+)(?:_|$)", migration.__name__)
+        assert match is not None
+        set_version(conn, database_name, int(match.group(1)))
     conn.commit()
     return len(pending)

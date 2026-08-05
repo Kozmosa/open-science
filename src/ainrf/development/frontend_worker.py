@@ -10,7 +10,7 @@ from ainrf.db import connect
 from ainrf.development.frontend_profiles import FRONTEND_DEV_FIXTURE_VERSION
 from ainrf.domain.conversation_worker import ConversationDispatcher
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
-from ainrf.domain_control import DomainCutoverController, DomainCutoverError
+from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.harness_engine import (
     EngineEvent,
     ExecutionContext,
@@ -124,24 +124,19 @@ class FrontendFixtureWorker:
     def _validate_fixture_marker(self) -> None:
         marker_path = self.state_root / "runtime" / _PROFILE_MARKER_NAME
         if not marker_path.is_file():
-            raise DomainCutoverError(
+            raise DomainWriteFenceError(
                 "frontend fixture worker requires a managed synthetic fixture marker"
             )
         try:
             payload = json.loads(marker_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
-            raise DomainCutoverError("frontend fixture marker is unreadable") from exc
+            raise DomainWriteFenceError("frontend fixture marker is unreadable") from exc
         if not isinstance(payload, dict):
-            raise DomainCutoverError("frontend fixture marker is malformed")
+            raise DomainWriteFenceError("frontend fixture marker is malformed")
         if payload.get("fixture_version") != FRONTEND_DEV_FIXTURE_VERSION:
-            raise DomainCutoverError("frontend fixture version changed; reset the managed fixture")
+            raise DomainWriteFenceError("frontend fixture version changed; reset the managed fixture")
         if payload.get("artifact_sha") != self.artifact_sha:
-            raise DomainCutoverError("frontend fixture artifact SHA does not match the worker")
-        status = DomainCutoverController(self.state_root).status()
-        if status.state != "v2" or status.artifact_sha != self.artifact_sha:
-            raise DomainCutoverError(
-                "frontend fixture worker requires the committed fixture v2 fuse"
-            )
+            raise DomainWriteFenceError("frontend fixture artifact SHA does not match the worker")
 
     async def run_once(self) -> FrontendFixtureWorkerRunResult:
         literature_outcome = self._run_literature_once()

@@ -20,27 +20,14 @@ WATCH_COLUMNS: dict[str, list[str]] = {
         "created_at",
         "updated_at",
     ],
-    "task_outputs": ["kind"],
-    # Legacy database (task_harness.sqlite3) — may still exist in production
-    "task_harness_tasks": [
-        "project_id",
-        "status",
-        "environment_id",
-        "workspace_id",
-        "session_id",
-        "owner_user_id",
-        "created_at",
-    ],
-    "task_harness_output_events": ["kind"],
-    "task_harness_edges": ["project_id", "source_task_id", "target_task_id"],
-    "managed_tasks": ["environment_id", "status", "task_id"],
+    "task_turns": ["task_id", "status", "turn_seq", "updated_at"],
+    "turn_items": ["task_id", "turn_id", "item_type", "occurred_at"],
+    "turn_submissions": ["task_id", "status", "created_at", "updated_at"],
+    "runtime_executions": ["turn_id", "status", "started_at", "updated_at"],
     "task_terminal_bindings": ["status", "ownership_user_id", "agent_write_state"],
     # Auth database
     "users": ["username", "status"],
     "refresh_tokens": ["user_id", "expires_at"],
-    # Sessions database
-    "task_sessions": ["project_id", "status", "created_at"],
-    "task_attempts": ["session_id", "parent_attempt_id", "status"],
 }
 
 EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
@@ -50,22 +37,9 @@ EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
             "SELECT * FROM tasks WHERE project_id = ? AND status != 'CANCELLED' ORDER BY updated_at DESC",
         ),
         (
-            "list_task_output_after_seq",
-            "SELECT seq, kind, content FROM task_outputs WHERE task_id = ? AND seq > ? ORDER BY seq",
-        ),
-    ],
-    "task_harness.sqlite3": [
-        (
-            "list_tasks_by_project",
-            "SELECT task_id FROM task_harness_tasks WHERE project_id = ? AND status != 'archived'",
-        ),
-        (
-            "list_output_by_task",
-            "SELECT seq, kind, content FROM task_harness_output_events WHERE task_id = ? AND seq > ?",
-        ),
-        (
-            "list_edges_by_project",
-            "SELECT edge_id, source_task_id, target_task_id FROM task_harness_edges WHERE project_id = ?",
+            "list_turn_items_after_seq",
+            "SELECT item_id, item_type, occurred_at FROM turn_items "
+            "WHERE task_id = ? AND task_item_seq > ? ORDER BY task_item_seq",
         ),
     ],
     "auth.sqlite3": [
@@ -73,16 +47,6 @@ EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
         (
             "list_collaborators",
             "SELECT user_id, role FROM project_collaborators WHERE project_id = ?",
-        ),
-    ],
-    "sessions.sqlite3": [
-        (
-            "list_sessions",
-            "SELECT session_id, title, status FROM task_sessions WHERE project_id = ? ORDER BY created_at DESC",
-        ),
-        (
-            "list_attempts",
-            "SELECT attempt_id, status, started_at FROM task_attempts WHERE session_id = ? ORDER BY started_at DESC",
         ),
     ],
 }

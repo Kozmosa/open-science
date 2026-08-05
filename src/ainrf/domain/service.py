@@ -648,6 +648,78 @@ class _DomainWriteKernel:
             conn.commit()
         return result
 
+    def archive_project(
+        self,
+        project_id: str,
+        user: dict[str, object],
+        *,
+        reason: str,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Archive a Project without consulting retired Task runtime state."""
+
+        actor = self._user_id(user)
+        request = {"project_id": project_id, "reason": reason}
+        with closing(self._connect()) as conn:
+            self._begin_write(conn)
+            cached = self._idempotent_result(conn, actor, "project.archive", idempotency_key, request)
+            if cached is not None:
+                return cached
+            auth = DomainAuthorizationService(conn)
+            auth.require_project_owner(project_id, user)
+            project = conn.execute(
+                "SELECT status, is_default FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            if project is None:
+                raise DomainNotFoundError(project_id)
+            if bool(project["is_default"]):
+                raise DomainConflictError("Default projects cannot be archived")
+            if str(project["status"]) == "archived":
+                raise DomainConflictError("Project is already archived")
+            now = _now()
+            conn.execute(
+                """UPDATE projects
+                   SET status = 'archived', archived_at = ?, archive_reason = ?, updated_at = ?
+                   WHERE project_id = ?""",
+                (now, reason, now, project_id),
+            )
+            result: dict[str, object] = {"project_id": project_id, "archived": True}
+            self._store_idempotency(conn, actor, "project.archive", idempotency_key, request, result)
+            self._audit(conn, actor, "project.archived", "project", project_id)
+            conn.commit()
+        return result
+
+    def unarchive_project(
+        self,
+        project_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Restore a Project through the current Project application Module."""
+
+        actor = self._user_id(user)
+        request = {"project_id": project_id}
+        with closing(self._connect()) as conn:
+            self._begin_write(conn)
+            cached = self._idempotent_result(conn, actor, "project.unarchive", idempotency_key, request)
+            if cached is not None:
+                return cached
+            DomainAuthorizationService(conn).require_project_owner(project_id, user)
+            updated = conn.execute(
+                """UPDATE projects
+                   SET status = 'active', archived_at = NULL, archive_reason = NULL, updated_at = ?
+                   WHERE project_id = ? AND status = 'archived'""",
+                (_now(), project_id),
+            )
+            if updated.rowcount != 1:
+                raise DomainConflictError("Project is not archived")
+            result: dict[str, object] = {"project_id": project_id, "unarchived": True}
+            self._store_idempotency(conn, actor, "project.unarchive", idempotency_key, request, result)
+            self._audit(conn, actor, "project.unarchived", "project", project_id)
+            conn.commit()
+        return result
+
     def create_environment(
         self,
         user: dict[str, object],

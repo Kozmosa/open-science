@@ -10,7 +10,7 @@ from contextlib import closing
 
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
-from ainrf.domain import ProjectContextService, TaskApplicationService, build_domain_modules
+from ainrf.domain import ConversationApplicationService, ProjectContextService, build_domain_modules
 
 pytestmark = [pytest.mark.unit]
 
@@ -68,7 +68,7 @@ def test_publish_is_immutable_and_task_pins_active_version(
     domain.projects.attach_workspace(
         project_id, workspace_id, owner, idempotency_key="project-context-link"
     )
-    task = TaskApplicationService(state_root, artifact_sha=committed_v2_state).create_task(
+    task = ConversationApplicationService(state_root, artifact_sha=committed_v2_state).create_task(
         owner,
         project_id=project_id,
         workspace_id=workspace_id,

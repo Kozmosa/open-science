@@ -8,7 +8,6 @@ function capabilities(overrides: Partial<DomainCapabilities> = {}): DomainCapabi
     standard_task_create: false,
     project_context: true,
     workspace_links: true,
-    task_attempts: false,
     task_dispatcher: {
       participant_type: 'task-dispatcher',
       ready: false,

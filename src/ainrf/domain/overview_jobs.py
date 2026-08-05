@@ -851,13 +851,12 @@ class OverviewSnapshotService:
                     (owner_user_id,),
                 )
             }
-            active_attempts = int(
+            active_turns = int(
                 conn.execute(
                     """
-                    SELECT COUNT(*) FROM agent_task_attempts AS attempt
-                    JOIN tasks AS task ON task.task_id = attempt.task_id
-                    WHERE task.owner_user_id = ?
-                      AND attempt.status IN ('queued', 'starting', 'running', 'paused')
+                    SELECT COUNT(*) FROM task_turns AS turn
+                    JOIN tasks AS task ON task.task_id = turn.task_id
+                    WHERE task.owner_user_id = ? AND turn.status = 'in_progress'
                     """,
                     (owner_user_id,),
                 ).fetchone()[0]
@@ -964,7 +963,7 @@ class OverviewSnapshotService:
                 "projects_active": projects_active,
                 "workspaces_active": workspaces_active,
                 "tasks_by_status": task_statuses,
-                "active_attempts": active_attempts,
+                "active_turns": active_turns,
                 "recent_tasks": recent_tasks,
                 "attention_items": [
                     *({"kind": "task", **item} for item in task_attention),
@@ -1534,8 +1533,7 @@ class OverviewSnapshotService:
             "cards": card_payloads,
             "display_cards": display_cards,
             "next_scheduled_at": next_scheduled_at,
-            # Compatibility scalar fields let legacy consumers render the new
-            # persisted projection without reconstructing it themselves.
+            # Scalar fields keep the persisted projection convenient for the UI.
             "source": "control_plane_only",
             "projects_active": domain_data.get("projects_active", 0)
             if isinstance(domain_data, dict)
@@ -1543,7 +1541,7 @@ class OverviewSnapshotService:
             "tasks_by_status": domain_data.get("tasks_by_status", {})
             if isinstance(domain_data, dict)
             else {},
-            "active_attempts": domain_data.get("active_attempts", 0)
+            "active_turns": domain_data.get("active_turns", 0)
             if isinstance(domain_data, dict)
             else 0,
         }

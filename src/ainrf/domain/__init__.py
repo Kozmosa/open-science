@@ -25,11 +25,6 @@ _EXPORTS = {
     "ContextFragment": ("ainrf.domain.context", "ContextFragment"),
     "ContextSource": ("ainrf.domain.context", "ContextSource"),
     "ProjectContextService": ("ainrf.domain.context", "ProjectContextService"),
-    "AttemptProjectionService": ("ainrf.domain.attempt_projection", "AttemptProjectionService"),
-    "DispatchClaim": ("ainrf.domain.attempts", "DispatchClaim"),
-    "DispatchRunResult": ("ainrf.domain.worker", "DispatchRunResult"),
-    "TaskDispatcher": ("ainrf.domain.worker", "TaskDispatcher"),
-    "TaskApplicationService": ("ainrf.domain.tasks", "TaskApplicationService"),
     "ConversationApplicationService": (
         "ainrf.domain.conversation_service",
         "ConversationApplicationService",

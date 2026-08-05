@@ -11,19 +11,18 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.routes.metrics import get_metrics_text, reset_metrics
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
-from tests.testutil import seed_user
+from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state, seed_user
 
 pytestmark = [pytest.mark.api]
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     return create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key("runtime-access-key")}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
 

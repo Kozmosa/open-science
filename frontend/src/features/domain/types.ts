@@ -25,7 +25,6 @@ export interface DomainCapabilities {
   standard_task_create: boolean;
   project_context: boolean;
   workspace_links: boolean;
-  task_attempts: boolean;
   task_dispatcher: DomainParticipantReadiness;
   literature_research_task: boolean;
   overview_snapshot: boolean;
@@ -37,7 +36,6 @@ export type DomainCapabilityName =
   | 'standard_task_create'
   | 'project_context'
   | 'workspace_links'
-  | 'task_attempts'
   | 'literature_research_task'
   | 'overview_snapshot';
 
@@ -158,37 +156,6 @@ export interface DomainTaskProjection {
   harness_engine?: string;
 }
 
-export interface DomainRuntimeSessionSummary {
-  runtime_session_id: string;
-  attempt_id: string;
-  status: string;
-  engine_name: string | null;
-  started_at: string | null;
-  finished_at: string | null;
-  [key: string]: unknown;
-}
-
-export interface DomainTaskAttempt {
-  attempt_id: string;
-  task_id: string;
-  attempt_seq: number;
-  trigger: 'initial' | 'retry' | 'resume' | 'continue' | 'legacy' | string;
-  status: string;
-  context_snapshot_id: string | null;
-  context_version_id: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
-  token_usage_json: string | null;
-  cost_usd: number | null;
-  failure_reason: string | null;
-  stop_reason: string | null;
-  runtime_sessions: DomainRuntimeSessionSummary[];
-  dispatch?: Record<string, unknown> | null;
-  [key: string]: unknown;
-}
-
 export interface DomainTaskRelationship {
   edge_id: string;
   project_id: string;
@@ -252,7 +219,6 @@ export interface DomainContextCandidate {
   created_by_user_id: string | null;
   source_metadata: Record<string, unknown>;
   source_task_id: string | null;
-  source_attempt_id: string | null;
   accepted_by_user_id: string | null;
   accepted_at: string | null;
   rejected_by_user_id: string | null;

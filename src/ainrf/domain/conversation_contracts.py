@@ -153,11 +153,6 @@ class ForkTransferMode(StrEnum):
     CONTEXT_ONLY = "context_only"
 
 
-class ConversationAuthority(StrEnum):
-    CONVERSATION_V3 = "conversation_v3"
-    LEGACY_ATTEMPT = "legacy_attempt"
-
-
 class ConversationErrorCode(StrEnum):
     ACTIVE_TURN_EXISTS = "active_turn_exists"
     EXPECTED_TURN_MISMATCH = "expected_turn_mismatch"
@@ -381,14 +376,6 @@ def require_single_active_turn(statuses: tuple[TurnStatus, ...]) -> None:
         raise ConversationContractError(
             ConversationErrorCode.ACTIVE_TURN_EXISTS,
             "a task cannot have more than one active turn",
-        )
-
-
-def require_v3_write_authority(authority: ConversationAuthority) -> None:
-    if authority is ConversationAuthority.LEGACY_ATTEMPT:
-        raise ConversationContractError(
-            ConversationErrorCode.MIGRATION_REQUIRED,
-            "attempt-backed tasks are read-only for conversation-v3 writes",
         )
 
 

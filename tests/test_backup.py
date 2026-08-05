@@ -13,15 +13,12 @@ from pathlib import Path
 import pytest
 
 import ainrf.backup.service as backup_service
-from ainrf.auth.service import AuthService
 from ainrf.backup.service import BackupManifest, BackupService, _dump_sqlite_safe
 from ainrf.domain_control import (
-    CUTOVER_REQUIRED_PARTICIPANT_TYPES,
-    DomainCutoverController,
     DomainMaintenanceService,
+    REQUIRED_PARTICIPANT_TYPES,
 )
-from ainrf.domain_migration import DomainImporter, DomainReconciliationService, ReconciliationReport
-from tests.domain_cutover_fixtures import prepare_committed_v2_cutover
+from tests.testutil import prepare_current_test_state
 
 pytestmark = [pytest.mark.unit]
 
@@ -64,7 +61,7 @@ def _enter_drained_maintenance(state_root: Path) -> DomainMaintenanceService:
     maintenance = DomainMaintenanceService(state_root)
     maintenance.initialize()
     participant_ids: list[str] = []
-    for participant_type in CUTOVER_REQUIRED_PARTICIPANT_TYPES:
+    for participant_type in REQUIRED_PARTICIPANT_TYPES:
         participant_id = f"backup-test:{participant_type}"
         maintenance.register_participant(participant_id, participant_type)
         participant_ids.append(participant_id)
@@ -779,96 +776,11 @@ def test_restore_always_runs_default_domain_validator(
     assert all(not candidate.exists() for candidate in candidates)
 
 
-def test_restore_runs_domain_reconciliation_against_disposable_copy(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    source_root = tmp_path / "source"
-    _seed_state(source_root)
-    auth = AuthService(state_root=source_root)
-    auth.initialize()
-    user = auth.register(
-        username="restore-owner", display_name="Restore owner", password="safe-password"
-    )
-    workspace_path = source_root / "workspace"
-    workspace_path.mkdir()
-    runtime = source_root / "runtime"
-    (runtime / "projects.json").write_text(
-        json.dumps(
-            {
-                "items": [
-                    {
-                        "project_id": "restore-project",
-                        "name": "Restore project",
-                        "owner_user_id": user.id,
-                        "is_default": True,
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-    (runtime / "workspaces.json").write_text(
-        json.dumps(
-            {
-                "items": [
-                    {
-                        "workspace_id": "restore-workspace",
-                        "project_id": "restore-project",
-                        "owner_user_id": user.id,
-                        "default_workdir": str(workspace_path),
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-    imported = DomainImporter(source_root).run(artifact_sha="a" * 64)
-    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
-    calls: list[tuple[Path, str | None]] = []
-    original_reconcile = DomainReconciliationService.reconcile
-
-    def record_reconcile(
-        service: DomainReconciliationService, run_id: str | None = None
-    ) -> ReconciliationReport:
-        calls.append((service._state_root, run_id))
-        return original_reconcile(service, run_id)
-
-    monkeypatch.setattr(DomainReconciliationService, "reconcile", record_reconcile)
-    target = tmp_path / "restored"
-    BackupService(source_root).restore_backup(
-        archive,
-        target_state_root=target,
-        skip_pre_backup=True,
-    )
-
-    assert len(calls) == 1
-    reconciliation_root, run_id = calls[0]
-    assert run_id == imported.run_id
-    assert reconciliation_root != target
-    assert not reconciliation_root.exists()
-    assert target.exists()
-
-
-def test_restore_reconciles_committed_v2_before_promotion(tmp_path: Path) -> None:
-    source_root = tmp_path / "source"
-    prepare_committed_v2_cutover(source_root, tmp_path)
-    archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
-    target = tmp_path / "restored"
-
-    BackupService(source_root).restore_backup(
-        archive,
-        target_state_root=target,
-        skip_pre_backup=True,
-    )
-
-    assert DomainCutoverController(target).status().state == "v2"
-
-
 def test_v2_control_plane_restore_writes_privacy_safe_orphan_report(tmp_path: Path) -> None:
     """An unselected Workspace/tenant tree cannot suppress the v2 risk report."""
 
     source_root = tmp_path / "source"
-    prepare_committed_v2_cutover(source_root, tmp_path)
+    prepare_current_test_state(source_root)
     archive = BackupService(source_root).create_backup(tmp_path / "archive.tar.gz")
     target = tmp_path / "restored"
 

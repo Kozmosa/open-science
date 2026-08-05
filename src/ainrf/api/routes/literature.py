@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain.service import DomainConflictError, DomainNotFoundError, DomainPermissionError
-from ainrf.domain_control import DomainCutoverError, MaintenanceModeError
+from ainrf.domain_control import MaintenanceModeError
+from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.api.literature_presenters import (
     present,
     present_check_list,
@@ -96,8 +97,8 @@ def _research_task_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, DomainPermissionError):
         return HTTPException(status_code=403, detail=str(exc))
-    if isinstance(exc, DomainCutoverError):
-        return HTTPException(status_code=503, detail="Domain cutover fuse is not writable")
+    if isinstance(exc, DomainWriteFenceError):
+        return HTTPException(status_code=503, detail="Current domain artifact is not writable")
     if isinstance(exc, MaintenanceModeError):
         return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
     if isinstance(

@@ -344,7 +344,7 @@ def test_turn_items_are_append_only_causal_and_provider_scoped(tmp_path: Path) -
             )
 
 
-def test_legacy_task_rejects_conversation_v3_writes(tmp_path: Path) -> None:
+def test_task_without_current_authority_rejects_conversation_writes(tmp_path: Path) -> None:
     with closing(_database(tmp_path)) as conn:
         repository = SqliteConversationRepository(conn)
         conn.execute(
@@ -362,7 +362,7 @@ def test_legacy_task_rejects_conversation_v3_writes(tmp_path: Path) -> None:
             _insert_binding(repository, task_id="task-legacy", binding_id="legacy-binding")
 
 
-def test_task_state_requires_v3_authority_and_guards_transitions(tmp_path: Path) -> None:
+def test_task_state_requires_current_authority_and_guards_transitions(tmp_path: Path) -> None:
     with closing(_database(tmp_path)) as conn:
         repository = SqliteConversationRepository(conn)
         repository.insert_task_state(task_id="task-1", created_at=_NOW)
@@ -565,7 +565,49 @@ def test_retry_intent_requires_same_task_turn_lineage(tmp_path: Path) -> None:
         )
 
 
-def test_legacy_attempt_history_is_not_transformed(tmp_path: Path) -> None:
+def test_queued_submission_context_can_be_rebound_but_started_context_cannot(
+    tmp_path: Path,
+) -> None:
+    with closing(_database(tmp_path)) as conn:
+        conversations = SqliteConversationRepository(conn)
+        executions = SqliteConversationExecutionRepository(conn)
+        _insert_binding(conversations)
+        _insert_turn(conversations)
+        executions.insert_submission(
+            submission_id="submission-context",
+            task_id="task-1",
+            reserved_turn_id="turn-context",
+            actor_user_id="user-1",
+            idempotency_key="context",
+            request_hash="context-hash",
+            input_json='{"text":"hello"}',
+            context_snapshot_ref="snapshot-old",
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        conn.execute(
+            "UPDATE turn_submissions SET context_snapshot_ref = ?, updated_at = ? "
+            "WHERE submission_id = ?",
+            ("snapshot-new", _NOW, "submission-context"),
+        )
+        assert conn.execute(
+            "SELECT context_snapshot_ref FROM turn_submissions WHERE submission_id = ?",
+            ("submission-context",),
+        ).fetchone()[0] == "snapshot-new"
+        conn.execute(
+            "UPDATE turn_submissions SET status = 'claimed', claimed_at = ?, updated_at = ? "
+            "WHERE submission_id = ?",
+            (_NOW, _NOW, "submission-context"),
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="started Turn Submission context"):
+            conn.execute(
+                "UPDATE turn_submissions SET context_snapshot_ref = ? "
+                "WHERE submission_id = ?",
+                ("snapshot-too-late", "submission-context"),
+            )
+
+
+def test_fresh_current_conversation_stores_start_empty(tmp_path: Path) -> None:
     with closing(_database(tmp_path)) as conn:
         counts = {
             table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]

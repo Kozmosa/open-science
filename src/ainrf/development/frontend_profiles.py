@@ -71,7 +71,7 @@ def seed_frontend_dev_profile(
     build_domain_modules(state_root, artifact_sha=artifact_sha)
     LiteratureTrackingService(state_root).initialize()
     if profile is FrontendDevProfile.EMPTY:
-        _remove_cutover_default_project(state_root)
+        _remove_default_project(state_root)
         result = FrontendDevSeedResult(None, None, None, None, _fixture_counts(state_root))
         _assert_no_claimable_work(state_root)
         return result
@@ -337,40 +337,25 @@ def _seed_core_profile(state_root: Path, *, users: FrontendDevUsers) -> Frontend
 def _seed_representative_tasks(
     state_root: Path, *, owner_user_id: str, include_failures: bool
 ) -> None:
-    lifecycle_states = [
-        ("succeeded", "succeeded", "completed"),
-        ("failed", "failed", "failed"),
-        ("cancelled", "cancelled", "cancelled"),
-        ("stopped", "stopped", "stopped"),
-        ("launch_unknown", "launch_unknown", "launch_unknown"),
-    ]
+    lifecycle_states = ["succeeded", "failed", "cancelled", "stopped", "launch_unknown"]
     if include_failures:
-        lifecycle_states.extend(
-            [
-                ("stopped_by_project_archive", "stopped_by_project_archive", "stopped"),
-                ("stopped_permission_revoked", "stopped_permission_revoked", "stopped"),
-            ]
-        )
+        lifecycle_states.extend(["stopped_by_project_archive", "stopped_permission_revoked"])
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
-        for index, (task_status, attempt_status, runtime_status) in enumerate(
-            lifecycle_states, start=1
-        ):
+        for index, task_status in enumerate(lifecycle_states, start=1):
             task_id = f"task-frontend-{task_status}"
-            attempt_id = f"attempt-frontend-{task_status}"
             conn.execute(
                 """
                 INSERT OR IGNORE INTO tasks (
                     task_id, project_id, workspace_id, environment_id, researcher_type,
                     harness_engine, status, title, prompt, created_at, updated_at,
                     started_at, completed_at, owner_user_id, error_summary,
-                    project_context_version_id, project_context_snapshot_id,
-                    latest_attempt_id, token_usage_json
+                    project_context_version_id, project_context_snapshot_id, token_usage_json
                 ) VALUES (
                     ?, 'project-frontend-dev', 'workspace-frontend-primary',
                     'environment-frontend-dev', 'vsa', 'codex-app-server', ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, 'context-version-frontend-dev',
-                    'context-snapshot-frontend-dev', ?, ?
+                    'context-snapshot-frontend-dev', ?
                 )
                 """,
                 (
@@ -384,7 +369,6 @@ def _seed_representative_tasks(
                     _LATER,
                     owner_user_id,
                     None if task_status == "succeeded" else f"Synthetic {task_status} detail",
-                    attempt_id,
                     json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
                 ),
             )
@@ -394,62 +378,6 @@ def _seed_representative_tasks(
                 task_status=task_status,
                 owner_user_id=owner_user_id,
                 index=index,
-            )
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO agent_task_attempts (
-                    attempt_id, task_id, attempt_seq, trigger, status, context_snapshot_id,
-                    runtime_config_fingerprint, created_at, started_at, finished_at,
-                    token_usage_json, cost_usd, failure_reason, stop_reason
-                ) VALUES (?, ?, 1, 'initial', ?, 'context-snapshot-frontend-dev', ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    attempt_id,
-                    task_id,
-                    attempt_status,
-                    sha256(task_id.encode("utf-8")).hexdigest(),
-                    _NOW,
-                    _NOW,
-                    _LATER,
-                    json.dumps({"input_tokens": 100 * index, "output_tokens": 50 * index}),
-                    round(index * 0.013, 3),
-                    f"Synthetic {attempt_status} failure"
-                    if attempt_status in {"failed", "launch_unknown"}
-                    else None,
-                    attempt_status
-                    if attempt_status.startswith("stopped") or attempt_status == "cancelled"
-                    else None,
-                ),
-            )
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO agent_runtime_sessions (
-                    runtime_session_id, attempt_id, launch_key, status, created_at,
-                    engine_name, engine_session_key, runtime_metadata_json,
-                    started_at, finished_at, failure_reason
-                ) VALUES (?, ?, ?, ?, ?, 'codex-app-server', ?, ?, ?, ?, ?)
-                """,
-                (
-                    f"runtime-frontend-{task_status}",
-                    attempt_id,
-                    f"launch-frontend-{task_status}",
-                    runtime_status,
-                    _NOW,
-                    f"session-frontend-{task_status}",
-                    json.dumps(
-                        {
-                            "profile": "frontend-dev",
-                            "task_status": task_status,
-                            "attempt_status": attempt_status,
-                            "runtime_status": runtime_status,
-                        }
-                    ),
-                    _NOW,
-                    _LATER,
-                    f"Synthetic {runtime_status} runtime"
-                    if runtime_status in {"failed", "launch_unknown"}
-                    else None,
-                ),
             )
         conn.execute(
             """
@@ -476,10 +404,11 @@ def _seed_canonical_conversation(
 ) -> None:
     conversations = SqliteConversationRepository(conn)
     executions = SqliteConversationExecutionRepository(conn)
-    if conversations.task_authority(task_id) == "conversation_v3":
+    if conversations.task_authority(task_id) is None:
+        conversations.insert_task_authority(task_id=task_id, created_at=_NOW)
+        conversations.insert_task_state(task_id=task_id, created_at=_NOW)
+    else:
         return
-    conversations.insert_task_authority(task_id=task_id, created_at=_NOW)
-    conversations.insert_task_state(task_id=task_id, created_at=_NOW)
     if task_status == "cancelled":
         conversations.update_work_status(
             task_id=task_id,
@@ -879,7 +808,7 @@ def _seed_overview(state_root: Path, *, owner_user_id: str, failed: bool) -> Non
         "source": "synthetic_fixture",
         "projects_active": 2,
         "tasks_by_status": {"succeeded": 1, "failed": 1},
-        "active_attempts": 0,
+        "active_turns": 0,
     }
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
@@ -1052,7 +981,7 @@ def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> Fronten
     )
 
 
-def _remove_cutover_default_project(state_root: Path) -> None:
+def _remove_default_project(state_root: Path) -> None:
     db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
     with closing(connect(db_path)) as conn:
         conn.execute("DELETE FROM projects WHERE project_id = 'project-frontend-dev'")
@@ -1068,7 +997,7 @@ def _fixture_counts(state_root: Path) -> dict[str, int]:
             ("projects", "projects"),
             ("workspaces", "workspaces"),
             ("tasks", "tasks"),
-            ("attempts", "agent_task_attempts"),
+            ("turns", "task_turns"),
         ):
             counts[key] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
     with closing(connect(literature_db)) as conn:
@@ -1084,7 +1013,8 @@ def _assert_no_claimable_work(state_root: Path) -> None:
     with closing(connect(domain_db)) as conn:
         claimable_dispatches = int(
             conn.execute(
-                "SELECT COUNT(*) FROM task_dispatch_outbox WHERE status IN ('pending', 'claimed')"
+                "SELECT COUNT(*) FROM turn_submissions "
+                "WHERE status IN ('queued', 'claimed', 'delivering')"
             ).fetchone()[0]
         )
     with closing(connect(literature_db)) as conn:

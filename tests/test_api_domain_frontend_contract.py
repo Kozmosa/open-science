@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
-from ainrf.domain import ProjectContextService, TaskApplicationService
-from tests.domain_cutover_fixtures import V2_ARTIFACT_SHA, prepare_committed_v2_cutover
+from ainrf.domain import ConversationApplicationService, ProjectContextService
+from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
 
 
 pytestmark = [pytest.mark.api]
@@ -24,12 +24,12 @@ _ADMIN = {"id": "admin", "role": "admin"}
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
-    prepare_committed_v2_cutover(state_root, tmp_path)
+    prepare_current_test_state(state_root)
     return create_app(
         ApiConfig(
             api_key_hashes=frozenset({hash_api_key(_API_KEY)}),
             state_root=state_root,
-            domain_artifact_sha=V2_ARTIFACT_SHA,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
         )
     )
 
@@ -104,7 +104,7 @@ def _seed_frontend_contract(app: FastAPI, state_root: Path) -> dict[str, str]:
     context: ProjectContextService = app.state.project_context_service
     context.save_draft(project_id, "Frontend contract context", _API_USER)
     context.publish(project_id, _API_USER)
-    TaskApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA).create_task(
+    ConversationApplicationService(state_root, artifact_sha=CURRENT_ARTIFACT_SHA).create_task(
         _API_USER,
         project_id=project_id,
         workspace_id=workspace_id,

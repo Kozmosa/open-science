@@ -9,13 +9,8 @@ import socket
 from pathlib import Path
 from threading import Lock
 
-from ainrf.domain_control import (
-    DomainCutoverController,
-    DomainCutoverError,
-    DomainMaintenanceService,
-    DomainWriteParticipant,
-    MaintenanceModeError,
-)
+from ainrf.domain_control import DomainMaintenanceService, DomainWriteParticipant, MaintenanceModeError
+from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.literature.models import LiteraturePaper
 from ainrf.literature.limits import ArxivRequestLimiter
 from ainrf.literature.providers import ArxivRssProvider
@@ -134,12 +129,6 @@ def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str:
     artifact takes ownership.
     """
 
-    controller = DomainCutoverController(state_root)
-    status = controller.status()
-    if status.state != "v2":
-        raise DomainCutoverError(
-            "Literature research Task work requires a committed domain v2 cutover"
-        )
     artifact_sha = (
         supplied
         or os.environ.get(
@@ -147,10 +136,9 @@ def _research_task_artifact_sha(state_root: Path, supplied: str | None) -> str:
         ).strip()
     )
     if not artifact_sha:
-        raise DomainCutoverError(
-            "AINRF_DOMAIN_ARTIFACT_SHA is required for v2 Literature research Task work"
+        raise DomainWriteFenceError(
+            "AINRF_DOMAIN_ARTIFACT_SHA is required for current Literature research Task work"
         )
-    controller.assert_v2_writable(artifact_sha=artifact_sha)
     return artifact_sha
 
 

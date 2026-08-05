@@ -16,7 +16,7 @@ from ainrf.development.frontend_fixture import prepare_frontend_dev_fixture
 from ainrf.development.frontend_worker import FrontendFixtureWorker
 from ainrf.domain import OverviewSnapshotService
 from ainrf.domain.conversation_service import ConversationApplicationService
-from ainrf.domain_control import DomainCutoverError
+from ainrf.domain.write_fence import DomainWriteFenceError
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
@@ -35,12 +35,12 @@ def _prepare(state_root: Path, artifact_sha: str) -> dict[str, object]:
 
 
 def test_frontend_fixture_worker_refuses_unmarked_or_mismatched_state(tmp_path: Path) -> None:
-    with pytest.raises(DomainCutoverError, match="marker"):
+    with pytest.raises(DomainWriteFenceError, match="marker"):
         FrontendFixtureWorker(tmp_path / "unmarked", artifact_sha="a" * 64)
 
     state_root = tmp_path / "fixture"
     _prepare(state_root, "b" * 64)
-    with pytest.raises(DomainCutoverError, match="artifact SHA"):
+    with pytest.raises(DomainWriteFenceError, match="artifact SHA"):
         FrontendFixtureWorker(state_root, artifact_sha="c" * 64)
 
 
