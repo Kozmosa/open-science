@@ -17,8 +17,6 @@ const projectionReasonAliases: Record<string, ProjectionReason> = {
   failed_tasks: 'failed_tasks',
   environment_disabled: 'environment_disabled',
   environment_grant_required: 'environment_grant_required',
-  environment_grant_missing: 'environment_grant_required',
-  'active Environment grant is required': 'environment_grant_required',
   project_archived: 'project_archived',
   workspace_unregistered: 'workspace_unregistered',
   workspace_link_inactive: 'workspace_link_inactive',
@@ -29,7 +27,7 @@ const projectionReasonAliases: Record<string, ProjectionReason> = {
 const projectionReasonLabels: Record<Locale, Record<ProjectionReason | 'unknown', string>> = {
   en: {
     no_workspace: 'No Workspace is linked to this Project.',
-    no_executable_workspace: 'No linked Workspace is currently executable.',
+    no_executable_workspace: 'No linked Workspace is currently available.',
     failed_tasks: 'One or more Tasks need attention after failing.',
     environment_disabled: 'The Workspace Environment is disabled.',
     environment_grant_required: 'You do not currently have permission to use this runtime Environment. Contact an administrator for access.',
@@ -37,11 +35,11 @@ const projectionReasonLabels: Record<Locale, Record<ProjectionReason | 'unknown'
     workspace_unregistered: 'The Workspace is no longer registered.',
     workspace_link_inactive: 'The Project–Workspace link is inactive.',
     owner_required: 'Workspace owner permission is required.',
-    unknown: 'The execution requirement is unavailable.',
+    unknown: 'The reason this Workspace is unavailable could not be determined.',
   },
   zh: {
     no_workspace: '此项目尚未关联工作区。',
-    no_executable_workspace: '当前没有可执行的已关联工作区。',
+    no_executable_workspace: '当前没有可用的已关联工作区。',
     failed_tasks: '一个或多个任务失败，需要处理。',
     environment_disabled: '工作区所属环境已停用。',
     environment_grant_required: '你目前没有使用此运行环境的权限，请联系管理员授权。',
@@ -49,7 +47,7 @@ const projectionReasonLabels: Record<Locale, Record<ProjectionReason | 'unknown'
     workspace_unregistered: '工作区已注销。',
     workspace_link_inactive: '项目与工作区的关联已失效。',
     owner_required: '此操作需要工作区所有者权限。',
-    unknown: '暂时无法确定不可执行原因。',
+    unknown: '暂时无法确定工作区不可用的原因。',
   },
 };
 
@@ -64,9 +62,12 @@ export function projectionReasonLabel(
   reason: string | null | undefined,
 ): string {
   if (!reason) return projectionReasonLabels[locale].unknown;
-  const canonicalReason = projectionReasonAliases[reason];
+  const normalizedReason = reason.trim();
+  const canonicalReason = projectionReasonAliases[normalizedReason];
   if (canonicalReason) return projectionReasonLabels[locale][canonicalReason];
-  return /^[a-z0-9_-]+$/i.test(reason) ? humanizeIdentifier(reason) : reason;
+  return /^[a-z0-9_-]+$/i.test(normalizedReason)
+    ? humanizeIdentifier(normalizedReason)
+    : normalizedReason;
 }
 
 export function projectionReasonList(

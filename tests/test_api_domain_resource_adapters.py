@@ -169,6 +169,11 @@ async def test_domain_workspace_unregister_preserves_directory(
     owner: dict[str, object] = {"id": "workspace-owner", "role": "member"}
     headers = _headers(app, "workspace-owner", "workspace-owner", "member")
     project_id, _ = _project_with_primary(app, state_root, owner)
+    primary_workspace = app.state.project_module.project_console_summary(project_id, owner)[
+        "primary_workspace"
+    ]
+    assert isinstance(primary_workspace, dict)
+    environment_id = primary_workspace["environment_id"]
     workspace_path = state_root / "retained-workspace"
     workspace_path.mkdir()
 
@@ -179,9 +184,7 @@ async def test_domain_workspace_unregister_preserves_directory(
             "/api/domain/workspaces",
             headers=_write_headers(headers, "workspace-create"),
             json={
-                "environment_id": app.state.project_module.workspace_links(project_id, owner)[0][
-                    "environment_id"
-                ],
+                "environment_id": environment_id,
                 "label": "Retained",
                 "canonical_path": str(workspace_path),
             },

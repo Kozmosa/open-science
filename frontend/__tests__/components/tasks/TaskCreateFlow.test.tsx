@@ -183,7 +183,7 @@ describe('TaskCreateFlow', () => {
     );
 
     expect(await screen.findByLabelText('Project')).toBeDisabled();
-    expect(screen.getByText(/No linked Workspace is currently executable/)).toBeInTheDocument();
+    expect(screen.getByText(/No linked Workspace is currently available/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Register or link Workspace/ })).toBeInTheDocument();
   });
 
@@ -192,11 +192,11 @@ describe('TaskCreateFlow', () => {
       items: [{
         ...workspace,
         can_execute: false,
-        cannot_execute_reason: 'environment_grant_missing',
+        cannot_execute_reason: 'environment_grant_required',
         project_links: [{
           ...workspace.project_links[0],
           can_execute: false,
-          cannot_execute_reason: 'environment_grant_missing',
+          cannot_execute_reason: 'environment_grant_required',
         }],
       }],
     });
@@ -212,7 +212,7 @@ describe('TaskCreateFlow', () => {
 
     expect(await screen.findByLabelText('Workspace')).toBeDisabled();
     expect(await screen.findByText(/do not currently have permission to use this runtime Environment/)).toBeInTheDocument();
-    expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/environment_grant_required/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });
 

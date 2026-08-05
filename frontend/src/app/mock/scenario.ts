@@ -1229,7 +1229,7 @@ export const frontendV2MockHandlers = [
     if (!workspace) return notFound('Workspace', workspaceId);
     workspace.status = 'unregistered';
     workspace.can_execute = false;
-    workspace.cannot_execute_reason = 'Workspace is unregistered';
+    workspace.cannot_execute_reason = 'workspace_unregistered';
     return noContent();
   }),
   http.get('/api/literature/overview', () => HttpResponse.json(literatureOverview())),

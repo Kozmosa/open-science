@@ -2131,42 +2131,6 @@ class _DomainWriteKernel:
                 visible.append(item)
         return visible
 
-    def workspace_links(self, project_id: str, user: dict[str, object]) -> list[dict[str, object]]:
-        with closing(self._connect()) as conn:
-            DomainAuthorizationService(conn).require_project_viewer(project_id, user)
-            rows = self._repository(conn).list_workspace_links(project_id)
-        result: list[dict[str, object]] = []
-        for row in rows:
-            reason: str | None = None
-            can_execute = bool(row["status"] == "active" and row["workspace_status"] == "active")
-            if not can_execute:
-                reason = (
-                    "workspace link is inactive"
-                    if row["status"] != "active"
-                    else "workspace is unregistered"
-                )
-            elif row["environment_status"] != "active":
-                can_execute = False
-                reason = "derived Environment is disabled"
-            elif not self._has_environment_execution_access(
-                environment_id=str(row["environment_id"]),
-                user=user,
-            ):
-                can_execute = False
-                reason = "active Environment grant is required"
-            result.append(
-                {
-                    "project_id": str(row["project_id"]),
-                    "workspace_id": str(row["workspace_id"]),
-                    "status": str(row["status"]),
-                    "is_primary": bool(row["is_primary"]),
-                    "environment_id": str(row["environment_id"]),
-                    "can_execute": can_execute,
-                    "cannot_execute_reason": reason,
-                }
-            )
-        return result
-
     def environment(
         self,
         environment_id: str,
@@ -2274,9 +2238,7 @@ class _DomainWriteKernel:
                 "is_primary": make_primary,
                 "environment_id": str(workspace["environment_id"]),
                 "can_execute": can_execute,
-                "cannot_execute_reason": None
-                if can_execute
-                else "active Environment grant is required",
+                "cannot_execute_reason": None,
             }
             self._store_idempotency(conn, actor_user_id, scope, idempotency_key, request, result)
             self._audit(
@@ -2347,9 +2309,7 @@ class _DomainWriteKernel:
             "is_primary": True,
             "environment_id": str(workspace["environment_id"]),
             "can_execute": can_execute,
-            "cannot_execute_reason": None
-            if can_execute
-            else "active Environment grant is required",
+            "cannot_execute_reason": None,
         }
 
     def _user_id(self, user: dict[str, object]) -> str:

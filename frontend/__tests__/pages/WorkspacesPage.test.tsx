@@ -73,12 +73,12 @@ const workspace: DomainWorkspaceProjection = {
     link_status: 'active',
     is_primary: true,
     can_execute: false,
-    cannot_execute_reason: 'environment_grant_missing',
+    cannot_execute_reason: 'environment_grant_required',
   }],
   task_count: 8,
   active_task_count: 2,
   can_execute: false,
-  cannot_execute_reason: 'environment_grant_missing',
+  cannot_execute_reason: 'environment_grant_required',
   can_manage_registry: true,
   git_status: {
     state: 'available',
@@ -118,7 +118,7 @@ beforeEach(() => {
     running_task_count: 1,
     primary_workspace: null,
     attention_required: true,
-    attention_reasons: ['environment_grant_missing'],
+    attention_reasons: ['environment_grant_required'],
     permissions: { can_edit: true, can_publish: true, can_manage_members: true, can_archive: true, can_unarchive: false, can_create_task: false },
   }] });
   mockGetEnvironments.mockResolvedValue({ items: [{
@@ -176,7 +176,7 @@ describe('WorkspacesPage', () => {
     expect(screen.getByText('GPU Lab (gpu-lab)')).toBeInTheDocument();
     expect(screen.getAllByText(/do not currently have permission to use this runtime Environment/i)).toHaveLength(2);
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/environment_grant_required/)).not.toBeInTheDocument();
     expect(screen.getByText('feat/paper · dirty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled();
   });

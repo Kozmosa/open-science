@@ -817,16 +817,11 @@ async def list_domain_project_environment_refs(
     project_id: str, request: Request
 ) -> ProjectEnvironmentReferenceListResponse:
     try:
-        links = _project_module(request).workspace_links(project_id, get_current_user(request))
-        primary = next(
-            (
-                link
-                for link in links
-                if link.get("status") == "active" and link.get("is_primary") is True
-            ),
-            None,
+        project = _project_module(request).project_console_summary(
+            project_id, get_current_user(request)
         )
-        environment_id = primary.get("environment_id") if primary is not None else None
+        primary = project.get("primary_workspace")
+        environment_id = primary.get("environment_id") if isinstance(primary, dict) else None
         return ProjectEnvironmentReferenceListResponse(
             items=[
                 ProjectEnvironmentReferenceResponse(environment_id=environment_id, is_default=True)

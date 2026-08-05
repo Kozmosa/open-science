@@ -29,10 +29,6 @@ class ProjectModule(Protocol):
 
     def transfer_project_owner(self, *args: object, **kwargs: object) -> dict[str, object]: ...
 
-    def workspace_links(
-        self, project_id: str, user: dict[str, object]
-    ) -> list[dict[str, object]]: ...
-
     def attach_workspace(self, *args: object, **kwargs: object) -> dict[str, object]: ...
 
     def set_primary_workspace(self, *args: object, **kwargs: object) -> dict[str, object]: ...
@@ -91,10 +87,6 @@ class WorkspaceModule(Protocol):
     def workspace_console_entry(
         self, workspace_id: str, user: dict[str, object]
     ) -> dict[str, object]: ...
-
-    def workspace_links(
-        self, project_id: str, user: dict[str, object]
-    ) -> list[dict[str, object]]: ...
 
     def environment(
         self,
