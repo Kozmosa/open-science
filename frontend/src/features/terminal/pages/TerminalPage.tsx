@@ -1,11 +1,15 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useEnvironmentSelection } from '@features/environments';
+import { useEnvironmentSelection, type EnvironmentSelectionPreferences } from '@features/environments';
 import TerminalBenchCard from '../components/TerminalBenchCard';
 import { PageShell } from '@design-system';
 
-function TerminalPage() {
-  const environmentSelection = useEnvironmentSelection();
+export interface TerminalPageProps {
+  preferences: EnvironmentSelectionPreferences;
+}
+
+function TerminalPage({ preferences }: TerminalPageProps) {
+  const environmentSelection = useEnvironmentSelection(undefined, preferences);
   const [searchParams] = useSearchParams();
   const routeEnvironmentId = searchParams.get('environment_id');
 

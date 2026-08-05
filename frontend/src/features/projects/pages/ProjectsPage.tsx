@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
@@ -42,7 +42,6 @@ import {
   type DomainWorkspaceProjection,
 } from '@features/domain';
 import { projectionReasonLabel, projectionReasonList } from '@features/domain';
-import { TaskCreateFlow } from '@features/tasks';
 import ProjectContextConsole from '../ProjectContextConsole';
 import ProjectSettingsConsole from '../ProjectSettingsConsole';
 import ProjectCanvas from '../components/canvas/ProjectCanvas';
@@ -51,6 +50,15 @@ import { useAuth } from '@features/auth';
 type ProjectTab = 'overview' | 'tasks' | 'workspaces' | 'context' | 'settings';
 type TaskView = 'list' | 'graph';
 const PROJECT_TABS = new Set<ProjectTab>(['overview', 'tasks', 'workspaces', 'context', 'settings']);
+
+interface ProjectsPageProps {
+  renderTaskCreateFlow: (props: {
+    isOpen: boolean;
+    lockedProjectId: string | null;
+    onClose: () => void;
+    onCreated: () => void;
+  }) => ReactNode;
+}
 
 function asCanvasProject(project: DomainProjectProjection): ProjectRecord {
   return {
@@ -69,7 +77,7 @@ function workspaceLink(workspace: DomainWorkspaceProjection, projectId: string) 
   return workspace.project_links.find((link) => link.project_id === projectId && link.link_status === 'active');
 }
 
-export default function ProjectsPage() {
+export default function ProjectsPage({ renderTaskCreateFlow }: ProjectsPageProps) {
   const t = useT();
   const locale = useLocale();
   const { user } = useAuth();
@@ -267,7 +275,12 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      <TaskCreateFlow isOpen={taskCreateOpen} source="project" lockedProjectId={projectId} onClose={() => setTaskCreateOpen(false)} onCreated={() => void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) })} />
+      {renderTaskCreateFlow({
+        isOpen: taskCreateOpen,
+        lockedProjectId: projectId,
+        onClose: () => setTaskCreateOpen(false),
+        onCreated: () => void queryClient.invalidateQueries({ queryKey: queryKeys.projectTasks.byProject(projectId) }),
+      })}
       <Dialog isOpen={createProjectOpen} onClose={() => setCreateProjectOpen(false)} title={t('pages.projects.createTitle')} size="md"><form className="space-y-4" onSubmit={(event) => { event.preventDefault(); createMutation.mutate(); }}><FormField label={t('pages.projects.createNameLabel')}><Input aria-label={t('pages.projects.createNameLabel')} required value={projectName} onChange={(event) => setProjectName(event.target.value)} /></FormField><FormField label={t('pages.projects.createDescriptionLabel')}><Textarea aria-label={t('pages.projects.createDescriptionLabel')} value={projectDescription} onChange={(event) => setProjectDescription(event.target.value)} /></FormField><div className="flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setCreateProjectOpen(false)}>{t('common.cancel')}</Button><Button type="submit" isLoading={createMutation.isPending}>{t('pages.projects.createSubmit')}</Button></div></form></Dialog>
     </PageShell>
   );

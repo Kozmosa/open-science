@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { EnvironmentTaskDefaults, TaskConfigurationSettings } from '@features/settings';
+import type { EnvironmentTaskDefaults, TaskConfigurationSettings } from '../types';
 import type { EnvironmentRecord } from '@/shared/types';
 import { EnvironmentDefaultsCard } from './EnvironmentDefaultsCard';
 
@@ -114,4 +114,3 @@ export function ProjectDefaultsSection({
     </SectionCard>
   );
 }
-

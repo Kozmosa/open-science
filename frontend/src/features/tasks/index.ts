@@ -2,8 +2,6 @@ export { default as TaskCreateFlow } from './components/TaskCreateFlow';
 export * from './components/TaskCreateFlow';
 export * from './taskCreateContract';
 export { default as TaskSkillPicker } from './components/TaskSkillPicker';
-export { default as SeedFileUploader } from './components/SeedFileUploader';
-export type { SeedFileInfo } from './components/SeedFileUploader';
 export { default as TaskDetailPage } from './pages/TaskDetailPage';
 export { default as TaskList } from './pages/TaskList';
 export { default as TaskActionsMenu } from './components/TaskActionsMenu';

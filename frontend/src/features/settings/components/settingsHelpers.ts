@@ -1,4 +1,4 @@
-import type { EnvironmentTaskDefaults } from '@features/settings';
+import type { EnvironmentTaskDefaults } from '../types';
 
 export function hasEnvironmentDefaultChanges(
   left: EnvironmentTaskDefaults,

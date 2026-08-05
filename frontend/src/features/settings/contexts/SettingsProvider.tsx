@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { applyOsciTheme, MotionPreferenceProvider } from '@design-system';
+import type { EnvironmentSelectionPreferences } from '@features/environments';
 import {
   clampEditorFontSize,
   clampTerminalFontSize,
@@ -360,6 +361,20 @@ export function useSettings() {
     throw new Error('useSettings must be used within a SettingsProvider');
   }
   return context;
+}
+
+export function useEnvironmentSelectionPreferences(): EnvironmentSelectionPreferences {
+  const { settings, rememberSelectedEnvironment } = useSettings();
+  return useMemo(() => ({
+    getProjectSelection: (projectId: string) => {
+      const projectSettings = settings.projectDefaults[projectId] ?? settings.projectDefaults.default;
+      return {
+        defaultEnvironmentId: projectSettings?.defaultEnvironmentId ?? null,
+        rememberedEnvironmentId: projectSettings?.selection.lastEnvironmentId ?? null,
+      };
+    },
+    rememberSelectedEnvironment,
+  }), [rememberSelectedEnvironment, settings.projectDefaults]);
 }
 
 export function useTerminalFontSize(): number {

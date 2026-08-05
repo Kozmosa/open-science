@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -44,7 +44,6 @@ import type {
   LiteratureTaskIntent,
 } from "../types";
 import { useLocale, useT } from "@/shared/i18n";
-import { TaskCreateFlow } from "@features/tasks";
 
 const VIEWS: LiteratureInboxView[] = [
   "today",
@@ -53,6 +52,20 @@ const VIEWS: LiteratureInboxView[] = [
   "updated",
   "all",
 ];
+
+interface LiteraturePageProps {
+  renderTaskCreateFlow: (props: {
+    isOpen: boolean;
+    initialTitle: string;
+    onLiteratureSubmit: (selection: {
+      project_id: string;
+      workspace_id: string;
+      task_preset: string;
+      title?: string;
+    }) => Promise<void>;
+    onClose: () => void;
+  }) => ReactNode;
+}
 const ACTIVE_CHECK_STATUSES = new Set<LiteratureCheckStatus>([
   "planned",
   "checking",
@@ -101,7 +114,7 @@ function readPendingIntent(
   }
 }
 
-export default function LiteraturePage() {
+export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageProps) {
   const t = useT();
   const locale = useLocale();
   const queryClient = useQueryClient();
@@ -706,15 +719,12 @@ export default function LiteraturePage() {
           </div>
         ) : null}
       </DetailDrawer>
-      <TaskCreateFlow
-        isOpen={taskFlowOpen}
-        source="literature"
-        initialTitle={
-          paperQuery.data?.title ? `Research: ${paperQuery.data.title}` : ""
-        }
-        onLiteratureSubmit={submitResearchTask}
-        onClose={() => setTaskFlowOpen(false)}
-      />
+      {renderTaskCreateFlow({
+        isOpen: taskFlowOpen,
+        initialTitle: paperQuery.data?.title ? `Research: ${paperQuery.data.title}` : "",
+        onLiteratureSubmit: submitResearchTask,
+        onClose: () => setTaskFlowOpen(false),
+      })}
     </PageShell>
   );
 }

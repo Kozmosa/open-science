@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -36,7 +36,6 @@ import {
   type DomainWorkspaceProjection,
 } from '@features/domain';
 import { projectionReasonLabel } from '@features/domain';
-import { TaskCreateFlow } from '@features/tasks';
 
 interface RegisterDraft {
   environmentId: string;
@@ -52,6 +51,14 @@ interface EditDraft {
   description: string;
   canonicalPath: string;
   context: string;
+}
+
+interface WorkspacesPageProps {
+  renderTaskCreateFlow: (props: {
+    isOpen: boolean;
+    lockedWorkspaceId: string | null;
+    onClose: () => void;
+  }) => ReactNode;
 }
 
 const emptyRegisterDraft: RegisterDraft = {
@@ -79,7 +86,7 @@ function formatDate(value: string | null | undefined, locale: 'en' | 'zh'): stri
   );
 }
 
-function WorkspacesPage() {
+function WorkspacesPage({ renderTaskCreateFlow }: WorkspacesPageProps) {
   const t = useT();
   const locale = useLocale();
   const navigate = useNavigate();
@@ -475,7 +482,11 @@ function WorkspacesPage() {
         onConfirm={() => unregisterMutation.mutate()}
       />
 
-      <TaskCreateFlow isOpen={taskCreateOpen} onClose={() => setTaskCreateOpen(false)} source="workspace" lockedWorkspaceId={selectedWorkspace?.workspace_id} />
+      {renderTaskCreateFlow({
+        isOpen: taskCreateOpen,
+        onClose: () => setTaskCreateOpen(false),
+        lockedWorkspaceId: selectedWorkspace?.workspace_id ?? null,
+      })}
     </PageShell>
   );
 }
