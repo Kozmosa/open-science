@@ -211,7 +211,7 @@ describe('TaskCreateFlow', () => {
     );
 
     expect(await screen.findByLabelText('Workspace')).toBeDisabled();
-    expect(await screen.findByText(/active Environment grant is required/)).toBeInTheDocument();
+    expect(await screen.findByText(/do not currently have permission to use this runtime Environment/)).toBeInTheDocument();
     expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
   });

@@ -131,12 +131,51 @@ beforeEach(() => {
 });
 
 describe('WorkspacesPage', () => {
+  it('renders the compact Chinese workspace console and filters the list', async () => {
+    const user = userEvent.setup();
+    const executableWorkspace: DomainWorkspaceProjection = {
+      ...workspace,
+      workspace_id: 'workspace-2',
+      label: '可执行工作区',
+      canonical_path: '/srv/papers/executable',
+      can_execute: true,
+      cannot_execute_reason: null,
+      project_links: [{ ...workspace.project_links[0]!, can_execute: true, cannot_execute_reason: null }],
+    };
+    mockGetDomainWorkspaces.mockResolvedValue({ items: [workspace, executableWorkspace] });
+
+    const { container } = renderWithProviders(<WorkspacesPage />, { route: '/workspaces', locale: 'zh' });
+
+    expect(await screen.findByRole('heading', { name: '工作区' })).toBeInTheDocument();
+    expect(await screen.findByText('共 2 个')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建' })).toBeInTheDocument();
+    expect(screen.getByLabelText('搜索工作区')).toBeInTheDocument();
+    expect(screen.getByLabelText('仅显示可用')).toBeInTheDocument();
+    expect(screen.getByLabelText('选择工作区')).toBeInTheDocument();
+    expect(container.querySelector('div.grid')).toHaveClass('xl:grid-cols-[360px_minmax(0,1fr)]');
+
+    await user.selectOptions(screen.getByLabelText('选择工作区'), 'workspace-2');
+    expect(await screen.findByRole('heading', { name: '可执行工作区' })).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('仅显示可用'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /可执行工作区/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Paper Experiments/ })).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText('可用')[0]).toHaveClass('whitespace-nowrap');
+
+    await user.clear(screen.getByLabelText('搜索工作区'));
+    await user.type(screen.getByLabelText('搜索工作区'), 'missing');
+    await waitFor(() => expect(screen.queryByRole('button', { name: /可执行工作区/ })).not.toBeInTheDocument());
+  });
+
   it('renders the domain projection and distinguishes linked from executable', async () => {
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
     expect(await screen.findByRole('heading', { name: 'Paper Experiments' })).toBeInTheDocument();
     expect(screen.getByText('GPU Lab (gpu-lab)')).toBeInTheDocument();
-    expect(screen.getAllByText(/active Environment grant is required/i)).toHaveLength(2);
+    expect(screen.getAllByText(/do not currently have permission to use this runtime Environment/i)).toHaveLength(2);
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.queryByText(/environment_grant_missing/)).not.toBeInTheDocument();
     expect(screen.getByText('feat/paper · dirty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /new task/i })).toBeDisabled();
@@ -150,7 +189,7 @@ describe('WorkspacesPage', () => {
     mockSetDomainPrimaryWorkspace.mockResolvedValue({});
     renderWithProviders(<WorkspacesPage />, { route: '/workspaces' });
 
-    await user.click(await screen.findByRole('button', { name: 'Register workspace' }));
+    await user.click(await screen.findByRole('button', { name: 'New' }));
     await user.selectOptions(screen.getByLabelText('Environment'), 'env-1');
     await user.type(screen.getByLabelText('Canonical path'), '/srv/papers/new');
     await user.type(screen.getByLabelText('Workspace name'), 'New Workspace');

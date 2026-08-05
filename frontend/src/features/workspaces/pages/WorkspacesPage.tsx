@@ -14,7 +14,6 @@ import {
   FormField,
   Input,
   NativeSelect,
-  PageHeader,
   PageShell,
   StatusBadge,
   Textarea,
@@ -24,6 +23,7 @@ import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from 
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useLocale, useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
+import { copyText } from '@/shared/utils/clipboard';
 import { useAuth } from '@features/auth';
 import {
   attachDomainWorkspace,
@@ -72,9 +72,9 @@ function editDraft(workspace: DomainWorkspaceProjection | null): EditDraft {
   };
 }
 
-function formatDate(value: string | null | undefined): string {
+function formatDate(value: string | null | undefined, locale: 'en' | 'zh'): string {
   if (!value) return '—';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+  return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
   );
 }
@@ -90,6 +90,8 @@ function WorkspacesPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [unregisterOpen, setUnregisterOpen] = useState(false);
   const [taskCreateOpen, setTaskCreateOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showExecutableOnly, setShowExecutableOnly] = useState(false);
   const [registerDraft, setRegisterDraft] = useState<RegisterDraft>(emptyRegisterDraft);
   const [editState, setEditState] = useState<EditDraft>(editDraft(null));
 
@@ -107,10 +109,23 @@ function WorkspacesPage() {
   });
 
   const workspaces = useMemo(() => workspacesQuery.data?.items ?? [], [workspacesQuery.data]);
+  const filteredWorkspaces = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return workspaces.filter((workspace) => {
+      const matchesAvailability = !showExecutableOnly || workspace.can_execute;
+      const matchesQuery = !normalizedQuery || [
+        workspace.label,
+        workspace.canonical_path,
+        workspace.environment.display_name,
+        workspace.environment.alias,
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      return matchesAvailability && matchesQuery;
+    });
+  }, [searchQuery, showExecutableOnly, workspaces]);
   const projects = projectsQuery.data?.items ?? [];
   const environments = environmentsQuery.data?.items ?? [];
-  const selectedWorkspace = workspaces.find((item) => item.workspace_id === selectedWorkspaceId)
-    ?? workspaces[0]
+  const selectedWorkspace = filteredWorkspaces.find((item) => item.workspace_id === selectedWorkspaceId)
+    ?? filteredWorkspaces[0]
     ?? null;
   const isOwner = selectedWorkspace?.owner_user_id === user?.id;
   const selectedWorkspaceUnavailableReason = selectedWorkspace
@@ -211,80 +226,125 @@ function WorkspacesPage() {
 
   return (
     <PageShell variant="canvas">
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 p-4 md:p-6">
-        <PageHeader
-          eyebrow={t('pages.workspaces.eyebrow')}
-          title={t('pages.workspaces.title')}
-          description={t('pages.workspaces.description')}
-          actions={<Button onClick={() => setRegisterOpen(true)}>{t('pages.workspaces.register')}</Button>}
-        />
+      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-3 p-3 md:p-4">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] px-4 py-3 shadow-[var(--osci-shadow-sm)]">
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-3">
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--osci-color-text)] md:text-2xl">
+                {t('pages.workspaces.title')}
+              </h1>
+              <span className="text-sm text-[var(--osci-color-text-muted)]">
+                {t('pages.workspaces.workspaceCount', { count: workspaces.length })}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-[var(--osci-color-text-secondary)] md:text-sm">
+              {t('pages.workspaces.consoleDescription')}
+            </p>
+          </div>
+          <Button size="sm" onClick={() => setRegisterOpen(true)}>
+            <span aria-hidden="true">＋</span>
+            {t('pages.workspaces.newAction')}
+          </Button>
+        </header>
 
         {operationError ? <Alert variant="error">{extractErrorMessage(operationError)}</Alert> : null}
         {workspacesQuery.error instanceof Error ? (
           <Alert variant="error">{workspacesQuery.error.message}</Alert>
         ) : null}
 
-        <div className="grid min-h-0 gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <Card className="min-h-0">
-            <CardBody className="space-y-2 p-3">
-              {workspaces.map((workspace) => (
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 xl:grid-cols-[360px_minmax(0,1fr)] xl:grid-rows-1">
+          <Card className="hidden min-h-0 flex-col overflow-hidden xl:flex">
+            <div className="space-y-2 border-b border-[var(--osci-color-border-subtle)] p-3">
+              <label className="relative block">
+                <span className="sr-only">{t('pages.workspaces.searchLabel')}</span>
+                <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--osci-color-text-muted)]">⌕</span>
+                <Input
+                  aria-label={t('pages.workspaces.searchLabel')}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t('pages.workspaces.searchPlaceholder')}
+                  className="pl-9"
+                />
+              </label>
+              <label className="flex min-h-8 items-center gap-2 px-1 text-xs leading-none text-[var(--osci-color-text-secondary)]">
+                <Checkbox
+                  checked={showExecutableOnly}
+                  onCheckedChange={(checked) => setShowExecutableOnly(checked === true)}
+                  aria-label={t('pages.workspaces.showAvailableOnly')}
+                />
+                <span className="whitespace-nowrap">{t('pages.workspaces.showAvailableOnly')}</span>
+              </label>
+            </div>
+            <CardBody className="min-h-0 flex-1 space-y-1 overflow-auto p-2">
+              {filteredWorkspaces.map((workspace) => (
                 <button
                   key={workspace.workspace_id}
                   type="button"
                   onClick={() => setSelectedWorkspaceId(workspace.workspace_id)}
-                  className={`w-full rounded-[var(--osci-radius-md)] border p-3 text-left transition ${
+                  className={`w-full rounded-[var(--osci-radius-md)] border px-3 py-2.5 text-left transition ${
                     selectedWorkspace?.workspace_id === workspace.workspace_id
                       ? 'border-[var(--osci-color-primary-border)] bg-[var(--osci-color-primary-soft)]'
                       : 'border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)] hover:bg-[var(--osci-color-surface-subtle)]'
                   }`}
                 >
-                  <span className="flex items-center justify-between gap-2">
+                  <span className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-semibold text-[var(--osci-color-text)]">{workspace.label}</span>
-                    <StatusBadge tone={workspace.can_execute ? 'success' : 'warning'}>
-                      {workspace.can_execute ? t('pages.workspaces.executable') : t('pages.workspaces.linkedOnly')}
+                    <StatusBadge className="shrink-0 whitespace-nowrap" tone={workspace.can_execute ? 'success' : 'warning'}>
+                      {workspace.can_execute ? t('pages.workspaces.available') : t('pages.workspaces.unavailable')}
                     </StatusBadge>
                   </span>
-                  <span className="mt-1 block truncate text-xs text-[var(--osci-color-text-muted)]">{workspace.canonical_path}</span>
-                  <span className="mt-2 block text-xs text-[var(--osci-color-text-secondary)]">
-                    {workspace.environment.display_name} · {workspace.project_links.filter((link) => link.link_status === 'active').length} {t('pages.workspaces.projects')}
+                  <span className="mt-1 block truncate font-mono text-[11px] text-[var(--osci-color-text-muted)]">{workspace.canonical_path}</span>
+                  <span className="mt-1.5 flex items-center justify-between gap-3 text-xs text-[var(--osci-color-text-secondary)]">
+                    <span className="truncate">{workspace.environment.display_name}</span>
+                    <span className="shrink-0">{t('pages.workspaces.projectCount', { count: workspace.project_links.filter((link) => link.link_status === 'active').length })}</span>
                   </span>
                 </button>
               ))}
-              {!workspacesQuery.isLoading && workspaces.length === 0 ? (
+              {!workspacesQuery.isLoading && filteredWorkspaces.length === 0 ? (
                 <EmptyState title={t('pages.workspaces.emptyTitle')} message={t('pages.workspaces.emptyDescription')} />
               ) : null}
             </CardBody>
           </Card>
 
+          <Card className="xl:hidden">
+            <CardBody className="p-3">
+              <NativeSelect
+                aria-label={t('pages.workspaces.selectWorkspace')}
+                value={selectedWorkspace?.workspace_id ?? ''}
+                onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+              >
+                {workspaces.map((workspace) => (
+                  <option key={workspace.workspace_id} value={workspace.workspace_id}>
+                    {workspace.label} · {workspace.can_execute ? t('pages.workspaces.available') : t('pages.workspaces.unavailable')}
+                  </option>
+                ))}
+              </NativeSelect>
+            </CardBody>
+          </Card>
+
           {selectedWorkspace ? (
-            <div className="space-y-5">
-              <Card>
-                <CardBody className="space-y-5 p-5 md:p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-xl font-semibold text-[var(--osci-color-text)]">{selectedWorkspace.label}</h2>
-                        <Badge variant="outline">{selectedWorkspace.status}</Badge>
-                        <StatusBadge tone={selectedWorkspace.can_execute ? 'success' : 'warning'}>
-                          {selectedWorkspace.can_execute ? t('pages.workspaces.availableForTasks') : t('pages.workspaces.notAvailableForTasks')}
-                        </StatusBadge>
-                      </div>
-                      <p className="mt-2 text-sm text-[var(--osci-color-text-secondary)]">{selectedWorkspace.description || t('pages.workspaces.noDescription')}</p>
-                    </div>
+            <Card className="min-h-0 overflow-auto">
+              <CardBody className="space-y-4 p-4 md:p-5">
+                <div className="border-b border-[var(--osci-color-border-subtle)] pb-4">
+                  <div className="flex flex-col items-start gap-3 xl:flex-row xl:justify-between">
+                    <h2 className="w-full min-w-0 text-lg font-semibold text-[var(--osci-color-text)] md:text-xl xl:flex-1 xl:truncate">{selectedWorkspace.label}</h2>
                     <div className="flex flex-wrap gap-2">
                       <Button
+                        size="sm"
                         variant="secondary"
                         onClick={() => navigate(`/workspace-browser?environment_id=${encodeURIComponent(selectedWorkspace.environment.environment_id)}&workspace_id=${encodeURIComponent(selectedWorkspace.workspace_id)}`)}
                       >
                         {t('pages.workspaces.files')}
                       </Button>
                       <Button
+                        size="sm"
                         variant="secondary"
                         onClick={() => navigate(`/terminal?environment_id=${encodeURIComponent(selectedWorkspace.environment.environment_id)}`)}
                       >
                         {t('pages.workspaces.terminal')}
                       </Button>
                       <Button
+                        size="sm"
                         disabled={!selectedWorkspace.can_execute}
                         title={selectedWorkspaceUnavailableReason ?? undefined}
                         onClick={() => setTaskCreateOpen(true)}
@@ -293,50 +353,74 @@ function WorkspacesPage() {
                       </Button>
                     </div>
                   </div>
+                  <div className="mt-2 flex min-w-0 items-center gap-2">
+                    <StatusBadge className="shrink-0 whitespace-nowrap" tone={selectedWorkspace.can_execute ? 'success' : 'warning'}>
+                      {selectedWorkspace.can_execute ? t('pages.workspaces.available') : t('pages.workspaces.unavailable')}
+                    </StatusBadge>
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-[var(--osci-color-text-muted)]">
+                      <span className="truncate font-mono" title={selectedWorkspace.canonical_path}>{selectedWorkspace.canonical_path}</span>
+                      <button
+                        type="button"
+                        className="flex h-6 w-8 shrink-0 items-center justify-center rounded-md hover:bg-[var(--osci-color-surface-subtle)] hover:text-[var(--osci-color-primary)]"
+                        aria-label={t('pages.workspaces.copyPath')}
+                        title={t('pages.workspaces.copyPath')}
+                        onClick={() => { void copyText(selectedWorkspace.canonical_path); }}
+                      >
+                        <span aria-hidden="true" className="text-[10px]">{t('pages.workspaces.copy')}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-2 w-full text-sm text-[var(--osci-color-text-secondary)]">{selectedWorkspace.description || t('pages.workspaces.noDescription')}</p>
+                </div>
 
-                  {!selectedWorkspace.can_execute ? (
-                    <Alert variant="warning">
-                      {t('pages.workspaces.cannotExecute')}: {selectedWorkspaceUnavailableReason}
-                    </Alert>
-                  ) : null}
+                {!selectedWorkspace.can_execute ? (
+                  <div className="flex items-start gap-2 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-warning-border)] bg-[var(--osci-color-warning-soft)] px-3 py-2 text-sm text-[var(--osci-color-warning-foreground)]">
+                    <span aria-hidden="true" className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+                    <span><strong>{t('pages.workspaces.unavailableReason')}</strong>{selectedWorkspaceUnavailableReason}</span>
+                  </div>
+                ) : null}
 
-                  <dl className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
-                    <div><dt className="text-[var(--osci-color-text-muted)]">{t('pages.workspaces.environment')}</dt><dd className="mt-1 font-medium text-[var(--osci-color-text)]">{selectedWorkspace.environment.display_name} ({selectedWorkspace.environment.alias})</dd></div>
-                    <div><dt className="text-[var(--osci-color-text-muted)]">{t('pages.workspaces.canonicalPath')}</dt><dd className="mt-1 break-all font-mono text-[var(--osci-color-text)]">{selectedWorkspace.canonical_path}</dd></div>
-                    <div><dt className="text-[var(--osci-color-text-muted)]">{t('pages.workspaces.owner')}</dt><dd className="mt-1 font-mono text-[var(--osci-color-text)]">{selectedWorkspace.owner_user_id}</dd></div>
-                    <div><dt className="text-[var(--osci-color-text-muted)]">{t('pages.workspaces.tasks')}</dt><dd className="mt-1 text-[var(--osci-color-text)]">{selectedWorkspace.active_task_count} active / {selectedWorkspace.task_count} total</dd></div>
-                    <div><dt className="text-[var(--osci-color-text-muted)]">{t('pages.workspaces.recentActivity')}</dt><dd className="mt-1 text-[var(--osci-color-text)]">{formatDate(selectedWorkspace.recent_activity_at)}</dd></div>
-                    <div><dt className="text-[var(--osci-color-text-muted)]">Git</dt><dd className="mt-1 text-[var(--osci-color-text)]">{selectedWorkspace.git_status.state === 'available' ? `${selectedWorkspace.git_status.branch ?? 'detached'}${selectedWorkspace.git_status.is_dirty ? ' · dirty' : ' · clean'}` : selectedWorkspace.git_status.state}</dd></div>
-                  </dl>
-                </CardBody>
-              </Card>
+                <dl className="grid overflow-hidden rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] text-sm sm:grid-cols-2 xl:grid-cols-3">
+                  {[
+                    [t('pages.workspaces.environment'), `${selectedWorkspace.environment.display_name} (${selectedWorkspace.environment.alias})`],
+                    [t('pages.workspaces.owner'), selectedWorkspace.owner_user_id],
+                    [t('pages.workspaces.tasks'), t('pages.workspaces.taskSummary', { active: selectedWorkspace.active_task_count, total: selectedWorkspace.task_count })],
+                    [t('pages.workspaces.recentActivity'), formatDate(selectedWorkspace.recent_activity_at, locale)],
+                    ['Git', selectedWorkspace.git_status.state === 'available' ? `${selectedWorkspace.git_status.branch ?? 'detached'}${selectedWorkspace.git_status.is_dirty ? ' · dirty' : ' · clean'}` : selectedWorkspace.git_status.state],
+                    [t('pages.workspaces.lifecycle'), selectedWorkspace.status],
+                  ].map(([label, value]) => (
+                    <div key={label} className="border-b border-[var(--osci-color-border-subtle)] px-3 py-2.5 sm:border-r xl:last:border-r-0">
+                      <dt className="text-[11px] text-[var(--osci-color-text-muted)]">{label}</dt>
+                      <dd className="mt-0.5 truncate font-medium text-[var(--osci-color-text)]" title={value}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
 
-              <Card>
-                <CardBody className="space-y-4 p-5 md:p-6">
+                <section className="space-y-3 border-t border-[var(--osci-color-border-subtle)] pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-semibold text-[var(--osci-color-text)]">{t('pages.workspaces.projectLinks')}</h3>
-                      <p className="text-sm text-[var(--osci-color-text-secondary)]">{t('pages.workspaces.projectLinksDescription')}</p>
+                      <h3 className="text-sm font-semibold text-[var(--osci-color-text)]">{t('pages.workspaces.projectLinks')}</h3>
+                      <p className="text-xs text-[var(--osci-color-text-secondary)]">{t('pages.workspaces.projectLinksDescription')}</p>
                     </div>
                     {isOwner ? (
                       <div className="flex gap-2">
-                        <Button variant="secondary" onClick={() => { setEditState(editDraft(selectedWorkspace)); setEditOpen(true); }}>{t('pages.workspaces.edit')}</Button>
-                        <Button variant="danger" onClick={() => setUnregisterOpen(true)}>{t('pages.workspaces.unregister')}</Button>
+                        <Button size="sm" variant="secondary" onClick={() => { setEditState(editDraft(selectedWorkspace)); setEditOpen(true); }}>{t('pages.workspaces.edit')}</Button>
+                        <Button size="sm" variant="danger" onClick={() => setUnregisterOpen(true)}>{t('pages.workspaces.unregister')}</Button>
                       </div>
                     ) : null}
                   </div>
                   <div className="space-y-2">
                     {selectedWorkspace.project_links.filter((link) => link.link_status === 'active').map((link) => (
-                      <div key={link.project_id} className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] p-3">
-                        <div><p className="font-medium text-[var(--osci-color-text)]">{link.project_name}</p><p className="text-xs text-[var(--osci-color-text-muted)]">{link.current_user_role} · {link.project_status}</p></div>
-                        <div className="flex items-center gap-2">{link.is_primary ? <Badge>{t('pages.workspaces.primary')}</Badge> : null}<StatusBadge tone={link.can_execute ? 'success' : 'warning'}>{link.can_execute ? t('pages.workspaces.executable') : projectionReasonLabel(locale, link.cannot_execute_reason)}</StatusBadge></div>
+                      <div key={link.project_id} className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--osci-radius-md)] border border-[var(--osci-color-border-subtle)] px-3 py-2">
+                        <div><p className="text-sm font-medium text-[var(--osci-color-text)]">{link.project_name}</p><p className="text-[11px] text-[var(--osci-color-text-muted)]">{link.current_user_role} · {link.project_status}</p></div>
+                        <div className="flex items-center gap-2">{link.is_primary ? <Badge>{t('pages.workspaces.primary')}</Badge> : null}<StatusBadge className="whitespace-nowrap" tone={link.can_execute ? 'success' : 'warning'}>{link.can_execute ? t('pages.workspaces.available') : projectionReasonLabel(locale, link.cannot_execute_reason)}</StatusBadge></div>
                       </div>
                     ))}
                     {selectedWorkspace.project_links.filter((link) => link.link_status === 'active').length === 0 ? <p className="text-sm text-[var(--osci-color-text-muted)]">{t('pages.workspaces.noProjectLinks')}</p> : null}
                   </div>
-                </CardBody>
-              </Card>
-            </div>
+                </section>
+              </CardBody>
+            </Card>
           ) : null}
         </div>
       </div>
