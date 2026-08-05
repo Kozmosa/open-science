@@ -25,6 +25,7 @@ from ainrf.domain.attempts import (
     DispatchClaim,
     DispatchClaimError,
 )
+from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.worker import (
     DispatchRunResult,
     TaskDispatcher,
@@ -98,6 +99,57 @@ def _queued_task(
         idempotency_key="create",
     )
     return task, auth, environment_id
+
+
+def _queued_conversation_task(
+    state_root: Path, tmp_path: Path
+) -> tuple[ConversationApplicationService, dict[str, object]]:
+    prepare_committed_v2_cutover(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "owner", "role": "member"}
+    admin: dict[str, object] = {"id": "admin", "role": "admin"}
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    seed_user(auth, username="conversation-owner", role="member", user_id="owner")
+    seed_user(auth, username="conversation-admin", role="admin", user_id="admin")
+    domain = build_domain_modules(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
+    environment_id = str(environment["environment_id"])
+    auth.grant_environment(
+        env_id=environment_id,
+        user_id="owner",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation worker test",
+    )
+    project = domain.projects.create_project(owner, name="Conversation Project")
+    workspace_path = tmp_path / "conversation-workspace"
+    workspace_path.mkdir()
+    workspace = domain.workspaces.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path=str(workspace_path),
+        label="Conversation Workspace",
+    )
+    project_id = str(project["project_id"])
+    workspace_id = str(workspace["workspace_id"])
+    domain.projects.attach_workspace(project_id, workspace_id, owner, idempotency_key="link")
+    context = ProjectContextService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    context.save_draft(project_id, "Conversation context", owner)
+    context.publish(project_id, owner)
+    application = ConversationApplicationService(state_root, artifact_sha=V2_ARTIFACT_SHA)
+    task = application.create_task(
+        owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        title="Conversation task",
+        prompt="Dispatch this conversation",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="conversation-create",
+    )
+    return application, task
 
 
 def _state_tree_digest(state_root: Path, *, exclude_control_database: bool) -> str:
@@ -368,8 +420,6 @@ async def test_active_maintenance_worker_never_constructs_writable_services(
         pytest.fail("active-maintenance worker must not construct a writable service")
 
     monkeypatch.setattr("ainrf.domain.worker.DomainCutoverController", unexpected_constructor)
-    monkeypatch.setattr("ainrf.domain.worker.AttemptWorkerModule", unexpected_constructor)
-    monkeypatch.setattr("ainrf.domain.worker.OverviewSnapshotPlanner", unexpected_constructor)
 
     dispatcher = TaskDispatcher(
         state_root,
@@ -393,6 +443,46 @@ async def test_active_maintenance_worker_never_constructs_writable_services(
     finally:
         dispatcher.stop()
         maintenance.exit(actor_id="operator")
+
+
+@pytest.mark.anyio
+async def test_conversation_only_worker_dispatches_without_legacy_writable_modules(
+    state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application, task = _queued_conversation_task(state_root, tmp_path)
+
+    def unexpected_constructor(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("conversation-only worker must not construct a legacy writable Module")
+
+    monkeypatch.setattr(AttemptService, "__init__", unexpected_constructor)
+    monkeypatch.setattr(
+        "ainrf.domain.overview_jobs.OverviewSnapshotPlanner.__init__", unexpected_constructor
+    )
+    monkeypatch.setattr(
+        "ainrf.literature.tracking.LiteratureTrackingService.__init__", unexpected_constructor
+    )
+    monkeypatch.setattr(
+        "ainrf.domain.conversation_worker.create_engine", lambda *_args, **_kwargs: FakeEngine()
+    )
+
+    dispatcher = TaskDispatcher(
+        state_root,
+        dispatcher_id="conversation-only-dispatcher",
+        lease_seconds=3,
+        artifact_sha=V2_ARTIFACT_SHA,
+        conversation_only=True,
+    )
+    result = await dispatcher.run_once()
+    dispatcher.stop()
+
+    assert result.outcome == "completed"
+    task_id = str(task["task_id"])
+    task_state = application.read_task(task_id, {"id": "owner", "role": "member"})
+    turns = application.list_turns(task_id, {"id": "owner", "role": "member"})
+    items = application.list_items(task_id, {"id": "owner", "role": "member"})
+    assert task_state["runtime_status"] == "idle"
+    assert turns[0]["status"] == "completed"
+    assert [item["item_type"] for item in items] == ["user_message", "agent_message"]
 
 
 @pytest.mark.anyio
