@@ -28,6 +28,39 @@ vi.mock('@features/literature/api', () => ({
   requestLiteratureSummary: vi.fn(),
   updateLiteraturePaperState: vi.fn(),
 }));
+
+const paperDetail = {
+  paper_id: 'paper-1',
+  provider: 'arxiv',
+  external_id: '2607.00001',
+  title: 'Inspectable research paper',
+  authors: ['Ada Researcher'],
+  abstract: 'A paper abstract.',
+  primary_category: 'cs.AI',
+  categories: ['cs.AI'],
+  published_at: '2026-07-14T08:00:00Z',
+  updated_at: '2026-07-15T08:00:00Z',
+  source_url: 'https://arxiv.org/abs/2607.00001',
+  pdf_url: 'https://arxiv.org/pdf/2607.00001',
+  current_version_id: 'version-1',
+  matched_topics: [],
+  user_state: {
+    is_read: false,
+    is_saved: true,
+    is_ignored: true,
+    first_seen_at: '2026-07-14T08:00:00Z',
+    last_seen_at: '2026-07-15T08:00:00Z',
+    latest_seen_version_id: 'version-1',
+  },
+  versions: [{
+    version_id: 'version-1',
+    provider_version: 'v1',
+    published_at: '2026-07-14T08:00:00Z',
+    updated_at: '2026-07-15T08:00:00Z',
+    first_seen_at: '2026-07-14T08:00:00Z',
+  }],
+};
+
 describe('LiteraturePage', () => {
   it('renders the canvas inbox with a single source-check action and persistent URL filters', async () => {
     const user = userEvent.setup();
@@ -46,37 +79,7 @@ describe('LiteraturePage', () => {
 
   it('shows and updates user state in the paper detail drawer', async () => {
     const user = userEvent.setup();
-    vi.mocked(getLiteraturePaper).mockResolvedValue({
-      paper_id: 'paper-1',
-      provider: 'arxiv',
-      external_id: '2607.00001',
-      title: 'Inspectable research paper',
-      authors: ['Ada Researcher'],
-      abstract: 'A paper abstract.',
-      primary_category: 'cs.AI',
-      categories: ['cs.AI'],
-      published_at: '2026-07-14T08:00:00Z',
-      updated_at: '2026-07-15T08:00:00Z',
-      source_url: 'https://arxiv.org/abs/2607.00001',
-      pdf_url: 'https://arxiv.org/pdf/2607.00001',
-      current_version_id: 'version-1',
-      matched_topics: [],
-      user_state: {
-        is_read: false,
-        is_saved: true,
-        is_ignored: true,
-        first_seen_at: '2026-07-14T08:00:00Z',
-        last_seen_at: '2026-07-15T08:00:00Z',
-        latest_seen_version_id: 'version-1',
-      },
-      versions: [{
-        version_id: 'version-1',
-        provider_version: 'v1',
-        published_at: '2026-07-14T08:00:00Z',
-        updated_at: '2026-07-15T08:00:00Z',
-        first_seen_at: '2026-07-14T08:00:00Z',
-      }],
-    });
+    vi.mocked(getLiteraturePaper).mockResolvedValue(paperDetail);
     vi.mocked(getLiteratureSummary).mockResolvedValue({ status: 'not_requested' });
     vi.mocked(getLiteratureResearchTasks).mockResolvedValue({ items: [] });
     vi.mocked(updateLiteraturePaperState).mockResolvedValue(undefined as never);
@@ -88,6 +91,16 @@ describe('LiteraturePage', () => {
     expect(within(drawer).getByText('Unread')).toBeInTheDocument();
     expect(within(drawer).getByText('Saved')).toBeInTheDocument();
     expect(within(drawer).getByText('Ignored')).toBeInTheDocument();
+    expect(screen.getByTestId('literature-paper-detail-content')).toHaveClass('p-4', 'sm:p-5');
+    expect(within(drawer).getByRole('heading', { name: 'Versions' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('heading', { name: 'Summary' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('heading', { name: 'Research tasks' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: 'Source' })).toHaveAttribute(
+      'href',
+      'https://arxiv.org/abs/2607.00001',
+    );
+    expect(within(drawer).getByRole('button', { name: 'Convert to Task' })).toHaveClass('w-full');
+    expect(within(drawer).getByText('No research tasks have been created from this paper yet.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Restore to inbox' }));
     expect(vi.mocked(updateLiteraturePaperState)).toHaveBeenCalledWith(
@@ -95,5 +108,26 @@ describe('LiteraturePage', () => {
       { is_ignored: false },
       expect.stringMatching(/^literature\.paper\.state:/),
     );
+  });
+
+  it('localizes the redesigned paper detail hierarchy in Chinese', async () => {
+    vi.mocked(getLiteraturePaper).mockResolvedValue(paperDetail);
+    vi.mocked(getLiteratureSummary).mockResolvedValue({ status: 'not_requested' });
+    vi.mocked(getLiteratureResearchTasks).mockResolvedValue({ items: [] });
+
+    renderWithProviders(<LiteraturePage />, {
+      route: '/literature?paper=paper-1',
+      locale: 'zh',
+    });
+
+    const drawer = await screen.findByRole('dialog', { name: 'Inspectable research paper' });
+    expect(within(drawer).getByRole('button', { name: '关闭' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('heading', { name: '版本记录' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('heading', { name: '摘要' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('heading', { name: '研究任务' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('link', { name: '原文' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: '生成摘要' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: '转换为任务' })).toBeInTheDocument();
+    expect(within(drawer).getByText('尚未基于这篇论文创建研究任务。')).toBeInTheDocument();
   });
 });

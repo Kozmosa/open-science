@@ -5,6 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { ExternalLink } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   Badge,
@@ -40,6 +41,8 @@ import { queryKeys } from "@/shared/api/queryKeys";
 import type {
   LiteratureCheckStatus,
   LiteratureInboxView,
+  LiteraturePaperDetail,
+  LiteratureSummary,
   LiteratureTaskIntent,
 } from "../types";
 import { useLocale, useT } from "@/shared/i18n";
@@ -89,6 +92,257 @@ function formatDate(value: string | null, locale: "en" | "zh"): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function PaperDetailSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)] p-4 shadow-[var(--osci-shadow-sm)]">
+      <h3 className="text-sm font-semibold text-[var(--osci-color-text)]">{title}</h3>
+      {description ? (
+        <p className="mt-1 text-xs leading-relaxed text-[var(--osci-color-text-muted)]">
+          {description}
+        </p>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+function LiteraturePaperDetailContent({
+  paper,
+  summary,
+  researchTasks,
+  statePending,
+  summaryPending,
+  onUpdateState,
+  onGenerateSummary,
+  onConvertToTask,
+}: {
+  paper: LiteraturePaperDetail;
+  summary: LiteratureSummary | undefined;
+  researchTasks: LiteratureTaskIntent[];
+  statePending: boolean;
+  summaryPending: boolean;
+  onUpdateState: (payload: {
+    is_read?: boolean;
+    is_saved?: boolean;
+    is_ignored?: boolean;
+  }) => void;
+  onGenerateSummary: () => void;
+  onConvertToTask: () => void;
+}) {
+  const t = useT();
+  const locale = useLocale();
+  const summaryInProgress = ["queued", "generating"].includes(summary?.status ?? "");
+
+  return (
+    <div
+      className="space-y-4 p-4 sm:p-5"
+      data-testid="literature-paper-detail-content"
+    >
+      <section className="rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface-subtle)] p-4">
+        <div className="flex flex-wrap gap-2">
+          <Badge>{paper.primary_category}</Badge>
+          {paper.matched_topics.map((topic) => (
+            <Badge key={topic.topic_id} variant="outline">
+              {topic.label}
+            </Badge>
+          ))}
+        </div>
+        <p className="mt-3 text-sm leading-6 text-[var(--osci-color-text-secondary)]">
+          {paper.abstract}
+        </p>
+        <dl className="mt-4 grid gap-3 border-t border-[var(--osci-color-border-subtle)] pt-4 text-xs min-[460px]:grid-cols-2">
+          <div className="min-w-0">
+            <dt className="font-medium text-[var(--osci-color-text-muted)]">
+              {t("literature.authors")}
+            </dt>
+            <dd className="mt-1 break-words text-[var(--osci-color-text)]">
+              {paper.authors.join(", ")}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-[var(--osci-color-text-muted)]">
+              {t("literature.updated")}
+            </dt>
+            <dd className="mt-1 text-[var(--osci-color-text)]">
+              {formatDate(paper.updated_at ?? paper.published_at, locale)}
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <a
+            className="inline-flex items-center gap-1.5 font-medium text-[var(--osci-color-primary)] hover:underline"
+            href={paper.source_url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("literature.viewSource")}
+            <ExternalLink aria-hidden="true" size={14} />
+          </a>
+          <a
+            className="inline-flex items-center gap-1.5 font-medium text-[var(--osci-color-primary)] hover:underline"
+            href={paper.pdf_url}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("literature.viewPdf")}
+            <ExternalLink aria-hidden="true" size={14} />
+          </a>
+        </div>
+      </section>
+
+      <PaperDetailSection
+        title={t("literature.userState")}
+        description={t("literature.userStateDescription")}
+      >
+        <div className="mt-3 flex flex-wrap gap-2">
+          <StatusBadge tone={paper.user_state.is_read ? "neutral" : "info"}>
+            {paper.user_state.is_read ? t("literature.read") : t("literature.unread")}
+          </StatusBadge>
+          {paper.user_state.is_saved ? (
+            <StatusBadge tone="success">{t("literature.saved")}</StatusBadge>
+          ) : null}
+          {paper.user_state.is_ignored ? (
+            <StatusBadge tone="warning">{t("literature.ignored")}</StatusBadge>
+          ) : null}
+        </div>
+        <div className="mt-4 grid gap-2 min-[460px]:grid-cols-3">
+          <Button
+            className="w-full"
+            size="sm"
+            variant="secondary"
+            disabled={statePending}
+            onClick={() => onUpdateState({ is_read: !paper.user_state.is_read })}
+          >
+            {paper.user_state.is_read ? t("literature.markUnread") : t("literature.markRead")}
+          </Button>
+          <Button
+            className="w-full"
+            size="sm"
+            variant="secondary"
+            disabled={statePending}
+            onClick={() => onUpdateState({ is_saved: !paper.user_state.is_saved })}
+          >
+            {paper.user_state.is_saved ? t("literature.unsave") : t("literature.savePaper")}
+          </Button>
+          <Button
+            className="w-full"
+            size="sm"
+            variant="secondary"
+            disabled={statePending}
+            onClick={() => onUpdateState({ is_ignored: !paper.user_state.is_ignored })}
+          >
+            {paper.user_state.is_ignored ? t("literature.restore") : t("literature.ignore")}
+          </Button>
+        </div>
+      </PaperDetailSection>
+
+      <PaperDetailSection title={t("literature.versions")}>
+        <div className="mt-3 divide-y divide-[var(--osci-color-border-subtle)] rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] px-3">
+          {paper.versions.map((version) => (
+            <div
+              key={version.version_id}
+              className="flex items-start justify-between gap-4 py-2.5 text-sm"
+            >
+              <span className="font-mono font-medium text-[var(--osci-color-text)]">
+                {version.provider_version}
+              </span>
+              <span className="text-right text-xs leading-5 text-[var(--osci-color-text-muted)]">
+                {formatDate(version.updated_at ?? version.published_at, locale)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </PaperDetailSection>
+
+      <PaperDetailSection
+        title={t("literature.summary")}
+        description={t("literature.summaryDescription")}
+      >
+        {summary?.status === "completed" && summary.text ? (
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--osci-color-text-secondary)]">
+            {summary.text}
+          </p>
+        ) : (
+          <div className="mt-3">
+            {summary?.status === "failed" ? (
+              <p className="mb-3 text-sm text-[var(--osci-color-danger-foreground)]">
+                {summary.error || t("literature.summaryFailed")}
+              </p>
+            ) : null}
+            <Button
+              className="w-full min-[460px]:w-auto"
+              size="sm"
+              variant="secondary"
+              onClick={onGenerateSummary}
+              isLoading={summaryPending || summaryInProgress}
+            >
+              {t("literature.generateSummary")}
+            </Button>
+          </div>
+        )}
+      </PaperDetailSection>
+
+      <PaperDetailSection
+        title={t("literature.researchTasks")}
+        description={t("literature.researchTasksDescription")}
+      >
+        <Button className="mt-4 w-full" onClick={onConvertToTask}>
+          {t("literature.convertToTask")}
+        </Button>
+        {researchTasks.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {researchTasks.map((intent) => (
+              <div
+                key={intent.intent_id}
+                className="rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <StatusBadge
+                    tone={
+                      intent.status === "completed"
+                        ? "success"
+                        : intent.status === "failed"
+                          ? "danger"
+                          : "warning"
+                    }
+                  >
+                    {intent.status}
+                  </StatusBadge>
+                  {intent.task_id ? (
+                    <a
+                      className="truncate text-[var(--osci-color-primary)] hover:underline"
+                      href={`/tasks?task=${encodeURIComponent(intent.task_id)}`}
+                    >
+                      {intent.task_id}
+                    </a>
+                  ) : null}
+                </div>
+                {intent.last_error ? (
+                  <p className="mt-2 text-[var(--osci-color-danger-foreground)]">
+                    {intent.last_error}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm text-[var(--osci-color-text-muted)]">
+            {t("literature.noResearchTasks")}
+          </p>
+        )}
+      </PaperDetailSection>
+    </div>
+  );
 }
 
 export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageProps) {
@@ -483,7 +737,7 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
                       size="sm"
                       onClick={() => updateSearch({ paper: paper.paper_id })}
                     >
-                      Details
+                      {t("literature.details")}
                     </Button>
                   </div>
                 </article>
@@ -512,184 +766,21 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
         onOpenChange={(open) => {
           if (!open) updateSearch({ paper: null });
         }}
-        title={paperQuery.data?.title ?? "Paper details"}
+        title={paperQuery.data?.title ?? t("literature.paperDetails")}
+        closeLabel={t("components.modal.close")}
+        className="!w-[min(34rem,calc(100%-1rem))]"
       >
         {paperQuery.data ? (
-          <div className="space-y-5">
-            <div className="flex flex-wrap gap-2">
-              <Badge>{paperQuery.data.primary_category}</Badge>
-              {paperQuery.data.matched_topics.map((topic) => (
-                <Badge key={topic.topic_id} variant="outline">
-                  {topic.label}
-                </Badge>
-              ))}
-            </div>
-            <p className="text-sm leading-relaxed text-[var(--osci-color-text-secondary)]">
-              {paperQuery.data.abstract}
-            </p>
-            <div>
-              <h3 className="font-semibold text-[var(--osci-color-text)]">
-                {t("literature.userState")}
-              </h3>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <StatusBadge
-                  tone={paperQuery.data.user_state.is_read ? "neutral" : "info"}
-                >
-                  {paperQuery.data.user_state.is_read
-                    ? t("literature.read")
-                    : t("literature.unread")}
-                </StatusBadge>
-                {paperQuery.data.user_state.is_saved ? (
-                  <StatusBadge tone="success">
-                    {t("literature.saved")}
-                  </StatusBadge>
-                ) : null}
-                {paperQuery.data.user_state.is_ignored ? (
-                  <StatusBadge tone="warning">
-                    {t("literature.ignored")}
-                  </StatusBadge>
-                ) : null}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={stateMutation.isPending}
-                  onClick={() =>
-                    updatePaperState(paperQuery.data.paper_id, {
-                      is_read: !paperQuery.data.user_state.is_read,
-                    })
-                  }
-                >
-                  {paperQuery.data.user_state.is_read
-                    ? t("literature.markUnread")
-                    : t("literature.markRead")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={stateMutation.isPending}
-                  onClick={() =>
-                    updatePaperState(paperQuery.data.paper_id, {
-                      is_saved: !paperQuery.data.user_state.is_saved,
-                    })
-                  }
-                >
-                  {paperQuery.data.user_state.is_saved
-                    ? t("literature.unsave")
-                    : t("literature.savePaper")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={stateMutation.isPending}
-                  onClick={() =>
-                    updatePaperState(paperQuery.data.paper_id, {
-                      is_ignored: !paperQuery.data.user_state.is_ignored,
-                    })
-                  }
-                >
-                  {paperQuery.data.user_state.is_ignored
-                    ? t("literature.restore")
-                    : t("literature.ignore")}
-                </Button>
-              </div>
-            </div>
-            <div>
-              <h3 className="font-semibold text-[var(--osci-color-text)]">
-                Versions
-              </h3>
-              <div className="mt-2 space-y-2">
-                {paperQuery.data.versions.map((version) => (
-                  <div
-                    key={version.version_id}
-                    className="flex justify-between text-sm"
-                  >
-                    <span className="font-mono text-[var(--osci-color-text)]">
-                      {version.provider_version}
-                    </span>
-                    <span className="text-[var(--osci-color-text-muted)]">
-                      {formatDate(
-                        version.updated_at ?? version.published_at,
-                        locale,
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h3 className="font-semibold text-[var(--osci-color-text)]">
-                Summary
-              </h3>
-              {summaryQuery.data?.status === "completed" ? (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--osci-color-text-secondary)]">
-                  {summaryQuery.data.text}
-                </p>
-              ) : (
-                <Button
-                  className="mt-2"
-                  variant="secondary"
-                  onClick={generateSummary}
-                  isLoading={
-                    summaryMutation.isPending ||
-                    ["queued", "generating"].includes(
-                      summaryQuery.data?.status ?? "",
-                    )
-                  }
-                >
-                  Generate summary
-                </Button>
-              )}
-            </div>
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-[var(--osci-color-text)]">
-                  Research Tasks
-                </h3>
-                <Button onClick={() => setTaskFlowOpen(true)}>
-                  Convert to research Task
-                </Button>
-              </div>
-              <div className="mt-2 space-y-2">
-                {researchTasksQuery.data?.items.map(
-                  (intent: LiteratureTaskIntent) => (
-                    <div
-                      key={intent.intent_id}
-                      className="rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm"
-                    >
-                      <div className="flex items-center justify-between">
-                        <StatusBadge
-                          tone={
-                            intent.status === "completed"
-                              ? "success"
-                              : intent.status === "failed"
-                                ? "danger"
-                                : "warning"
-                          }
-                        >
-                          {intent.status}
-                        </StatusBadge>
-                        {intent.task_id ? (
-                          <a
-                            className="text-[var(--osci-color-primary)]"
-                            href={`/tasks?task=${encodeURIComponent(intent.task_id)}`}
-                          >
-                            {intent.task_id}
-                          </a>
-                        ) : null}
-                      </div>
-                      {intent.last_error ? (
-                        <p className="mt-2 text-[var(--osci-color-danger-foreground)]">
-                          {intent.last_error}
-                        </p>
-                      ) : null}
-                    </div>
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
+          <LiteraturePaperDetailContent
+            paper={paperQuery.data}
+            summary={summaryQuery.data}
+            researchTasks={researchTasksQuery.data?.items ?? []}
+            statePending={stateMutation.isPending}
+            summaryPending={summaryMutation.isPending}
+            onUpdateState={(payload) => updatePaperState(paperQuery.data.paper_id, payload)}
+            onGenerateSummary={generateSummary}
+            onConvertToTask={() => setTaskFlowOpen(true)}
+          />
         ) : null}
       </DetailDrawer>
       {renderTaskCreateFlow({
