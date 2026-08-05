@@ -60,6 +60,12 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     credentials = json.loads(credentials_path.read_text(encoding="utf-8"))
     assert credentials["schema_version"] == 1
     assert set(credentials["users"]) == {"owner", "editor", "viewer", "admin"}
+    assert {label: user["password"] for label, user in credentials["users"].items()} == {
+        "owner": "frontend-owner-dev",
+        "editor": "frontend-editor-dev",
+        "viewer": "frontend-viewer-dev",
+        "admin": "frontend-admin-dev",
+    }
     assert all(user["password"] for user in credentials["users"].values())
     assert all(user["password"] not in first.stdout for user in credentials["users"].values())
     assert first_payload["counts"] == {

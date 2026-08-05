@@ -51,7 +51,7 @@ OMP/Claude MCP configuration is loaded at session start. If preflight succeeds b
 
 Use `full`, `empty`, `permissions`, `failures`, or `large` fixture profiles rather than editing persisted state by hand. `reset` is allowed only for marker-owned synthetic instances and is forbidden for the personal `~/.ainrf` launcher.
 
-The fixture worker is closed-world: Task execution, Literature checks/summaries, and Overview refreshes complete through the real persistence/projection paths without starting a real harness runtime or calling arXiv, an LLM, environment detect, Docker, staging, or production. Login credentials for owner/editor/viewer/admin identities are generated once in a repository-external `0600` JSON file reported by `dev.sh prepare --json`.
+The fixture worker is closed-world: Task execution, Literature checks/summaries, and Overview refreshes complete through the real persistence/projection paths without starting a real harness runtime or calling arXiv, an LLM, environment detect, Docker, staging, or production. Login credentials for owner/editor/viewer/admin identities use stable role-specific development passwords and are stored only in a repository-external `0600` JSON file reported by `dev.sh prepare --json`.
 
 Fault profiles are selected with `--fault-profile none|latency|transient|resources|offline`. They require marker-owned synthetic state, never apply in production, and are forbidden for personal state roots. When changing fixture or fault profiles, reset the managed instance and pass the same options to the next `up` command.
 

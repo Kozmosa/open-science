@@ -59,6 +59,12 @@ _LOGIN_IDENTITY_SPECS = {
         "project_role": "admin",
     },
 }
+_DEFAULT_LOGIN_PASSWORDS = {
+    "owner": "frontend-owner-dev",
+    "editor": "frontend-editor-dev",
+    "viewer": "frontend-viewer-dev",
+    "admin": "frontend-admin-dev",
+}
 
 DEFAULT_FRONTEND_DEV_API_KEY = "openscience-frontend-dev"
 DEFAULT_FRONTEND_DEV_ARTIFACT_SHA = sha256(b"openscience-frontend-dev-fixture-v1").hexdigest()
@@ -161,7 +167,7 @@ def _new_login_credentials_payload() -> dict[str, object]:
     for label, spec in _LOGIN_IDENTITY_SPECS.items():
         users[label] = {
             **spec,
-            "password": secrets.token_urlsafe(24),
+            "password": _DEFAULT_LOGIN_PASSWORDS[label],
         }
     return {
         "schema_version": _LOGIN_CREDENTIALS_SCHEMA_VERSION,
