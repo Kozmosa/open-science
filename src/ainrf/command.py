@@ -126,7 +126,6 @@ def domain_worker(
 ) -> None:
     """Run the no-port durable Conversation dispatcher."""
     from ainrf.domain.conversation_worker import ConversationDispatcher
-    from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
 
     try:
         artifact_sha = _domain_worker_artifact_sha(state_root)
@@ -142,9 +141,6 @@ def domain_worker(
     dispatcher = ConversationDispatcher(
         state_root,
         artifact_sha=artifact_sha,
-        adapter_factory=lambda engine_type: ConversationRuntimeAdapter(
-            create_engine(engine_type, state_root=state_root)
-        ),
     )
     if once:
         processed = asyncio.run(dispatcher.run_once())

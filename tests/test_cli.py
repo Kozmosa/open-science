@@ -123,11 +123,9 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
             state_root: Path,
             *,
             artifact_sha: str,
-            adapter_factory: object,
         ) -> None:
             assert state_root == tmp_path
             assert artifact_sha == "a" * 64
-            assert callable(adapter_factory)
             calls.append("init")
 
         async def run_once(self) -> bool:
