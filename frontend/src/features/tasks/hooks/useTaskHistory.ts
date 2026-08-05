@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { listCanonicalTaskItems } from '../api';
-import type { TurnItemResponse } from '@/shared/api/transportTypes';
-import type { MessageItem } from '@/shared/types';
+import type { MessageItem, TaskTurnItem } from '../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
-function itemToMessage(item: TurnItemResponse): MessageItem {
+function itemToMessage(item: TaskTurnItem): MessageItem {
   const payload = item.payload ?? {};
   const typeByItem: Record<string, MessageItem['type']> = {
     user_message: 'user',

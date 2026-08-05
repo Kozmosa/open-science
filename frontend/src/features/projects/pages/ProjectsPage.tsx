@@ -28,7 +28,7 @@ import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from 
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useLocale, useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
-import type { ProjectRecord } from '@/shared/types';
+import type { ProjectRecord } from '../types';
 import {
   attachDomainWorkspace,
   createDomainProject,

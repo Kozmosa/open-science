@@ -5,12 +5,12 @@ import { ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOp
 import { updateTask } from '../../api';
 import { useT } from '@/shared/i18n';
 import { taskStatusClassName, taskStatusLabel } from '../../utils/status';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '../../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 
 interface TaskHeaderBarProps {
-  task: TaskRecord;
+  task: TaskSummary;
   showInterrupt?: boolean;
   onInterrupt?: () => void;
   taskSidebarCollapsed?: boolean;

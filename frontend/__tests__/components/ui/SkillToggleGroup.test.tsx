@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SkillToggleGroup } from '@design-system';
-import type { SkillItem } from '@/shared/types';
+import type { SkillItem } from '@features/settings/types';
 
 describe('SkillToggleGroup grouping', () => {
   const skills: SkillItem[] = [

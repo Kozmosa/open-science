@@ -6,11 +6,12 @@ import {
   getTerminalSession,
   resetTerminalSession,
 } from '../api';
-import type { EnvironmentRecord, TerminalSession, TerminalSessionStatus } from '@/shared/types';
+import type { EnvironmentRecord } from '@features/environments/types';
+import type { TerminalSession, TerminalSessionStatus } from '../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 
-interface AttachRequest {
+interface AttachVariables {
   environmentId: string;
   requestKey: string;
 }
@@ -86,7 +87,7 @@ export function useTerminalBenchSession(
   });
 
   const attachMutation = useMutation({
-    mutationFn: ({ environmentId }: AttachRequest) => createTerminalSession(environmentId),
+    mutationFn: ({ environmentId }: AttachVariables) => createTerminalSession(environmentId),
     onSuccess: (session, variables) => {
       if (attachRequestKeyRef.current === variables.requestKey) {
         attachRequestKeyRef.current = null;

@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { semanticDotClasses } from '@design-system';
 import { useLocale } from '@/shared/i18n';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 
 interface TaskNodeData extends Record<string, unknown> {
   task: TaskSummary;

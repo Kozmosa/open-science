@@ -48,7 +48,7 @@ const FAILED_TASK_SUMMARY = {
   latest_output_seq: 0,
 }
 
-// TaskRecord extends TaskSummary with extra fields — needed for GET /tasks/{id}
+// Task detail fixtures keep the optional runtime fields returned by GET /tasks/{id}.
 const FAILED_TASK_RECORD = {
   ...FAILED_TASK_SUMMARY,
   binding: null,

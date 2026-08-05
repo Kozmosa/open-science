@@ -16,3 +16,4 @@ export { formatTaskDateTime } from './utils/metadataPresentation';
 export { getTaskPreset, TASK_PRESET_OPTIONS } from './utils/taskPresets';
 export type { TaskPresetId } from './utils/taskPresets';
 export * from './api';
+export type { TaskEdge, TaskEdgeListResponse } from './types';

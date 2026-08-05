@@ -11,7 +11,7 @@ import { useEditorSettings } from '@features/settings';
 import { useResolvedOsciTheme } from '@/shared/hooks/useResolvedOsciTheme';
 import { NativeSelect, PageShell, SplitPane } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { FileEntry, FileReadResponse } from '@/shared/types';
+import type { FileEntry, FileReadResponse } from '../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 const FILE_TREE_DEFAULT_WIDTH = 288;

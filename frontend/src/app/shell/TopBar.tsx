@@ -1,6 +1,6 @@
 import { Command, Menu } from 'lucide-react';
 import { Button } from '@design-system';
-import type { UserInfo } from '@/shared/types';
+import type { UserInfo } from '@features/auth/types';
 import { useT } from '@/shared/i18n';
 import { LocaleSwitcher } from '@/shared/i18n';
 import { AccountMenu } from './AccountMenu';

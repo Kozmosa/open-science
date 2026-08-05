@@ -1,7 +1,7 @@
 import { RefreshCw, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/shared/i18n';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '../types';
 import { taskStatusClassName, taskStatusLabel } from '../utils/status';
 
 interface Props {

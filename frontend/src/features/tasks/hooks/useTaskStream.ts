@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { TaskOutputEvent } from '@/shared/types';
+import type { TaskOutputEvent } from '../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 export interface TaskOutputStreamState {

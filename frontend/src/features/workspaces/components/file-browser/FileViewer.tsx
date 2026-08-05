@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import type { FileReadResponse } from '@/shared/types';
+import type { FileReadResponse } from '../../types';
 import { useT } from '@/shared/i18n';
 
 const MonacoTextViewer = lazy(() => import('./MonacoTextViewer'));

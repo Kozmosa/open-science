@@ -1,4 +1,4 @@
-import type { TaskTokenUsageSummary } from '@/shared/types';
+import type { TaskTokenUsageSummary } from '../types';
 import { useT } from '@/shared/i18n';
 
 interface Props {

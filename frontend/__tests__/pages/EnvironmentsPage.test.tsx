@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EnvironmentsPage from '../../src/pages/EnvironmentsPage';
-import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
+import type { EnvironmentListResponse, EnvironmentRecord, ProjectEnvironmentReference } from '@features/environments/types';
 import { renderWithProviders } from '@/test-support/render';
 import {
   createDefaultWebUiSettings,
@@ -12,20 +12,22 @@ import {
   createEnvironment,
   deleteEnvironment,
   detectEnvironment,
-  getEnvironments,
-  getProjectEnvironmentReferences,
   updateProjectEnvironmentReference,
 } from '@features/environments/api';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api/queries';
 
 vi.mock('@features/environments/api', () => ({
   createProjectEnvironmentReference: vi.fn(),
   createEnvironment: vi.fn(),
   deleteEnvironment: vi.fn(),
   detectEnvironment: vi.fn(),
-  getEnvironments: vi.fn(),
-  getProjectEnvironmentReferences: vi.fn(),
   updateEnvironment: vi.fn(),
   updateProjectEnvironmentReference: vi.fn(),
+}));
+
+vi.mock('@features/environments/api/queries', () => ({
+  getEnvironments: vi.fn(),
+  getProjectEnvironmentReferences: vi.fn(),
 }));
 
 vi.mock('@features/domain', () => ({
@@ -165,10 +167,10 @@ describe('EnvironmentsPage', () => {
     expect(mockCreateEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
         alias: 'gpu-lab',
-        display_name: 'GPU Lab',
+        displayName: 'GPU Lab',
         host: 'gpu.example.com',
         tags: [],
-        ssh_options: {},
+        sshOptions: {},
       })
     );
     expect(await screen.findByText('GPU Lab')).toBeInTheDocument();
@@ -196,8 +198,8 @@ describe('EnvironmentsPage', () => {
     await waitFor(() =>
       expect(mockCreateProjectEnvironmentReference).toHaveBeenCalledWith(
         expect.objectContaining({
-          environment_id: 'env-1',
-          is_default: true,
+          environmentId: 'env-1',
+          isDefault: true,
         }),
         'project-user-default'
       )
@@ -261,7 +263,7 @@ describe('EnvironmentsPage', () => {
     await waitFor(() =>
       expect(mockUpdateProjectEnvironmentReference).toHaveBeenCalledWith(
         'env-1',
-        { is_default: true },
+        expect.objectContaining({ isDefault: true }),
         'project-user-default'
       )
     );

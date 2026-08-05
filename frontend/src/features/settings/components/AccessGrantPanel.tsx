@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { AdminUserResponse } from '@/shared/types';
+import type { AdminUserResponse } from '../types';
 
 interface AccessGrantPanelProps {
   users: AdminUserResponse[];

@@ -2,12 +2,12 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import TaskHeaderBar from '@features/tasks/components/messages/TaskHeaderBar';
 import { renderWithProviders } from '@/test-support/render';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import { updateTask } from '@features/tasks/api';
 
 vi.mock('@features/tasks/api', () => ({ updateTask: vi.fn().mockResolvedValue({}) }));
 
-function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
+function makeTask(overrides?: Partial<TaskSummary>): TaskSummary {
   return {
     task_id: 'task-1',
     title: 'Research paper analysis',
@@ -16,7 +16,7 @@ function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
-  } as TaskRecord;
+  } as TaskSummary;
 }
 
 describe('TaskHeaderBar', () => {
@@ -32,7 +32,7 @@ describe('TaskHeaderBar', () => {
 
   it('humanizes an unknown runtime status instead of exposing an i18n key', () => {
     renderWithProviders(
-      <TaskHeaderBar task={makeTask({ status: 'completed' as TaskRecord['status'] })} />
+      <TaskHeaderBar task={makeTask({ status: 'completed' as TaskSummary['status'] })} />
     );
 
     expect(screen.getByText('Completed')).toBeInTheDocument();

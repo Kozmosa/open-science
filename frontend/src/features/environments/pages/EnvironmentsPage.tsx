@@ -28,8 +28,8 @@ import type {
   EnvironmentListResponse,
   EnvironmentRecord,
   ProjectEnvironmentReferenceListResponse,
-} from '@/shared/types';
-import type { ProjectEnvironmentReferenceUpdateRequest } from '@/shared/api/transportTypes';
+} from '../types';
+import type { ProjectEnvironmentReferenceUpdateInput } from '../types';
 import { useLocale, useT } from '@/shared/i18n';
 import { queryKeys } from '@/shared/api/queryKeys';
 import EnvironmentDetectionModal from '../components/EnvironmentDetectionModal';
@@ -45,7 +45,6 @@ import {
   mergeProjectReferenceList,
   removeEnvironmentFromList,
   removeProjectReferenceFromList,
-  toEnvironmentUpdateRequest,
   valuesFromEnvironment,
 } from './environments/helpers';
 import type {
@@ -384,7 +383,7 @@ function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
         throw new Error(t('components.environmentEditor.noEnvironmentSelectedForEditing'));
       }
 
-      return updateEnvironment(editorEnvironmentId, toEnvironmentUpdateRequest(request));
+      return updateEnvironment(editorEnvironmentId, request);
     },
     onSuccess: (environment) => {
       const current = queryClient.getQueryData<EnvironmentListResponse>(queryKeys.environments.all);
@@ -446,7 +445,7 @@ function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
   });
 
   const saveProjectReferenceMutation = useMutation({
-    mutationFn: async (payload: ProjectEnvironmentReferenceUpdateRequest) => {
+    mutationFn: async (payload: ProjectEnvironmentReferenceUpdateInput) => {
       if (selectedEnvironment === null) {
         throw new Error(t('pages.environments.projectReferenceNoSelection'));
       }
@@ -702,7 +701,13 @@ function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
                               title={t('pages.environments.defaultTooltip')}
                               onClick={async () => {
                                 try {
-                                  await saveProjectReferenceMutation.mutateAsync({ is_default: true });
+                                  await saveProjectReferenceMutation.mutateAsync({
+                                    isDefault: true,
+                                    overrideWorkdir: selectedProjectReference?.override_workdir ?? null,
+                                    overrideEnvName: selectedProjectReference?.override_env_name ?? null,
+                                    overrideEnvManager: selectedProjectReference?.override_env_manager ?? null,
+                                    overrideRuntimeNotes: selectedProjectReference?.override_runtime_notes ?? null,
+                                  });
                                 } catch { /* error handled by mutation state */ }
                               }}
                               disabled={

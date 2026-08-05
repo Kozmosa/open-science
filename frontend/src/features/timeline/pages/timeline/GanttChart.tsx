@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import { useT } from '@/shared/i18n';
 import { GanttRow } from './GanttRow';
 

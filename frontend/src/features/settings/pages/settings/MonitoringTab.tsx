@@ -4,7 +4,7 @@ import { ExternalLink, BarChart3, Activity, Sparkles, Server } from 'lucide-reac
 import { getMonitoringSettings } from '../../api';
 import { SectionCard, SectionHeader } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { MonitoringServiceItem } from '@/shared/types';
+import type { MonitoringServiceItem } from '../../types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {

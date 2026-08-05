@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEnvironments } from '@features/environments';
+import { getEnvironments } from '@features/environments/api/queries';
 import { getAdminUsers, getEnvAccess, grantEnvAccess, revokeEnvAccess } from '../../api';
 import { useAuth } from '@features/auth';
 import { useT } from '@/shared/i18n';

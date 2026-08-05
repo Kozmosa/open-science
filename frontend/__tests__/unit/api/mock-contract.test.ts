@@ -67,13 +67,13 @@ describe('frontend v2 mock contract', () => {
 
   it('keeps a Task ID stable across create, Turn projection, and retry', async () => {
     const task = await createTask({
-      project_id: 'project-alpha',
-      workspace_id: 'workspace-alpha',
-      researcher_type: 'vanilla',
-      harness_engine: 'claude-code',
+      projectId: 'project-alpha',
+      workspaceId: 'workspace-alpha',
+      researcherType: 'vanilla',
+      harnessEngine: 'claude-code',
       prompt: 'Exercise the deterministic Task flow.',
       skills: [],
-      mcp_servers: [],
+      mcpServers: [],
       title: 'Contract Task',
     }, 'task.create:contract');
     const turns = await getTaskTurns(task.task_id);

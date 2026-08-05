@@ -18,7 +18,7 @@ import {
   StatusBadge,
   Textarea,
 } from '@design-system';
-import { getEnvironments } from '@features/environments';
+import { getEnvironments } from '@features/environments/api/queries';
 import { IdempotencyKeyManager, semanticMutationValue, useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useLocale, useT } from '@/shared/i18n';

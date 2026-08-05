@@ -1,10 +1,10 @@
 import { TokenFlowBar } from '@features/tasks';
 import { SectionStack, semanticDotClasses, semanticToneClasses } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { TurnResponse } from '@/shared/api/transportTypes';
+import type { TaskTurn } from '@features/tasks/types';
 
 interface Props {
-  turns: TurnResponse[];
+  turns: TaskTurn[];
 }
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {

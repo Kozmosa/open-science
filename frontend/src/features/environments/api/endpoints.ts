@@ -1,57 +1,75 @@
-import type { EnvironmentRecord, ProjectEnvironmentReference } from '@/shared/types';
+import { api } from '@/shared/api/client';
+import { idempotencyHeaders } from '@/shared/api/idempotency';
 import type {
-  EnvironmentCreateRequest,
-  EnvironmentUpdateRequest,
-  ProjectEnvironmentReferenceCreateRequest,
-  ProjectEnvironmentReferenceUpdateRequest,
-} from '@/shared/api/transportTypes';
+  EnvironmentResponse,
+  ProjectEnvironmentReferenceResponse,
+} from '@/generated/transport';
 import {
-  createDomainEnvironment,
-  createDomainProjectEnvironmentReference,
-  deleteDomainProjectEnvironmentReference,
-  detectDomainEnvironment,
-  disableDomainEnvironment,
-  getDomainEnvironment,
-  getDomainEnvironments,
-  getDomainProjectEnvironmentReferences,
-  updateDomainEnvironment,
-  updateDomainProjectEnvironmentReference,
-} from '@features/domain';
+  adaptEnvironment,
+  adaptProjectEnvironmentReference,
+  toEnvironmentCreateRequest,
+  toEnvironmentUpdateRequest,
+  toProjectEnvironmentReferenceCreateRequest,
+  toProjectEnvironmentReferenceUpdateRequest,
+} from '../types';
+import type {
+  EnvironmentMutationInput,
+  EnvironmentRecord,
+  ProjectEnvironmentReference,
+  ProjectEnvironmentReferenceCreateInput,
+  ProjectEnvironmentReferenceUpdateInput,
+} from '../types';
 
-export const getEnvironments = getDomainEnvironments;
-export const getEnvironment = getDomainEnvironment;
-export const createEnvironment = (payload: EnvironmentCreateRequest): Promise<EnvironmentRecord> =>
-  createDomainEnvironment(payload, crypto.randomUUID());
+export const createEnvironment = (payload: EnvironmentMutationInput): Promise<EnvironmentRecord> =>
+  environmentPost<EnvironmentResponse>('/domain/environments', toEnvironmentCreateRequest(payload)).then(adaptEnvironment);
 export const updateEnvironment = (
   environmentId: string,
-  payload: EnvironmentUpdateRequest,
-): Promise<EnvironmentRecord> => updateDomainEnvironment(environmentId, payload, crypto.randomUUID());
+  payload: EnvironmentMutationInput,
+): Promise<EnvironmentRecord> => environmentPatch<EnvironmentResponse>(
+  `/domain/environments/${encodeURIComponent(environmentId)}`,
+  toEnvironmentUpdateRequest(payload),
+).then(adaptEnvironment);
 export const deleteEnvironment = (environmentId: string): Promise<void> =>
-  disableDomainEnvironment(environmentId, crypto.randomUUID());
-export const detectEnvironment = detectDomainEnvironment;
-
-export const getProjectEnvironmentReferences = (
-  projectId = 'default',
-)=> getDomainProjectEnvironmentReferences(projectId);
+  environmentDelete(`/domain/environments/${encodeURIComponent(environmentId)}`);
+export const detectEnvironment = (environmentId: string): Promise<EnvironmentRecord> =>
+  api.post<EnvironmentResponse>(`/domain/environments/${encodeURIComponent(environmentId)}/detect`, {}).then(adaptEnvironment);
 
 export const createProjectEnvironmentReference = (
-  payload: ProjectEnvironmentReferenceCreateRequest,
+  payload: ProjectEnvironmentReferenceCreateInput,
   projectId = 'default',
 ): Promise<ProjectEnvironmentReference> => {
-  return createDomainProjectEnvironmentReference(projectId, payload, crypto.randomUUID());
+  return environmentPost<ProjectEnvironmentReferenceResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/environment-refs`,
+    toProjectEnvironmentReferenceCreateRequest(payload),
+  ).then(adaptProjectEnvironmentReference);
 };
 
 export const updateProjectEnvironmentReference = (
   environmentId: string,
-  payload: ProjectEnvironmentReferenceUpdateRequest,
+  payload: ProjectEnvironmentReferenceUpdateInput,
   projectId = 'default',
 ): Promise<ProjectEnvironmentReference> => {
-  return updateDomainProjectEnvironmentReference(projectId, environmentId, payload, crypto.randomUUID());
+  return environmentPatch<ProjectEnvironmentReferenceResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/environment-refs/${encodeURIComponent(environmentId)}`,
+    toProjectEnvironmentReferenceUpdateRequest(payload),
+  ).then(adaptProjectEnvironmentReference);
 };
 
 export const deleteProjectEnvironmentReference = (
   environmentId: string,
   projectId = 'default',
 ): Promise<void> => {
-  return deleteDomainProjectEnvironmentReference(projectId, environmentId, crypto.randomUUID());
+  return environmentDelete(`/domain/projects/${encodeURIComponent(projectId)}/environment-refs/${encodeURIComponent(environmentId)}`);
 };
+
+function environmentPost<TResponse>(path: string, body: unknown): Promise<TResponse> {
+  return api.post(path, body, { headers: idempotencyHeaders(crypto.randomUUID()) });
+}
+
+function environmentPatch<TResponse>(path: string, body: unknown): Promise<TResponse> {
+  return api.patch(path, body, { headers: idempotencyHeaders(crypto.randomUUID()) });
+}
+
+function environmentDelete<TResponse = void>(path: string): Promise<TResponse> {
+  return api.delete(path, { headers: idempotencyHeaders(crypto.randomUUID()) });
+}

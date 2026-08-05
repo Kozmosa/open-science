@@ -1,5 +1,7 @@
 import { api } from '@/shared/api/client';
-import type { TerminalSession, UserSessionPairListResponse } from '@/shared/types';
+import type { TerminalSessionResponse, UserSessionPairListResponse as TransportUserSessionPairListResponse } from '@/generated/transport';
+import { adaptSessionPairs, adaptTerminalSession } from '../types';
+import type { TerminalSession, UserSessionPairListResponse } from '../types';
 
 function withEnvironmentId(path: string, environmentId?: string): string {
   if (!environmentId) return path;
@@ -18,23 +20,23 @@ function withDetachQuery(
 }
 
 export const getTerminalSession = (environmentId?: string): Promise<TerminalSession> =>
-  api.get(withEnvironmentId('/terminal/session', environmentId));
+  api.get<TerminalSessionResponse>(withEnvironmentId('/terminal/session', environmentId)).then(adaptTerminalSession);
 
 export const getSessionPairs = (environmentId?: string): Promise<UserSessionPairListResponse> =>
-  api.get(withEnvironmentId('/terminal/session-pairs', environmentId));
+  api.get<TransportUserSessionPairListResponse>(withEnvironmentId('/terminal/session-pairs', environmentId)).then(adaptSessionPairs);
 
 export const createTerminalSession = (environmentId: string): Promise<TerminalSession> =>
-  api.post('/terminal/session', { environment_id: environmentId });
+  api.post<TerminalSessionResponse>('/terminal/session', { environment_id: environmentId }).then(adaptTerminalSession);
 
 export const deleteTerminalSession = (options: {
   environmentId?: string | null;
   attachmentId?: string | null;
-}): Promise<TerminalSession> => api.delete(withDetachQuery('/terminal/session', options));
+}): Promise<TerminalSession> => api.delete<TerminalSessionResponse>(withDetachQuery('/terminal/session', options)).then(adaptTerminalSession);
 
 export const resetTerminalSession = (
   environmentId: string,
   attachmentId?: string | null,
-): Promise<TerminalSession> => api.post('/terminal/session/reset', {
+): Promise<TerminalSession> => api.post<TerminalSessionResponse>('/terminal/session/reset', {
   environment_id: environmentId,
   attachment_id: attachmentId ?? null,
-});
+}).then(adaptTerminalSession);

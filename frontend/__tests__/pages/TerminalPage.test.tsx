@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalPage from '../../src/pages/TerminalPage';
 import { renderWithProviders } from '@/test-support/render';
-import type { EnvironmentRecord } from '@/shared/types';
+import type { EnvironmentRecord } from '@features/environments/types';
 
 const selectedEnvironment: EnvironmentRecord = {
   id: 'env-1',

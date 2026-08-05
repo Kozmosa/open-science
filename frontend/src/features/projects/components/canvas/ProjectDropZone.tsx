@@ -1,6 +1,6 @@
 import { Folder } from 'lucide-react';
 import { useT } from '@/shared/i18n';
-import type { ProjectRecord } from '@/shared/types';
+import type { ProjectRecord } from '../../types';
 
 interface ProjectDropZoneProps {
   projects: ProjectRecord[];

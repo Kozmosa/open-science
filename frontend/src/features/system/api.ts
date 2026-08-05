@@ -1,4 +1,4 @@
 import { api } from '@/shared/api/client';
-import type { SystemHealth } from '@/shared/types';
+import type { HealthResponse } from '@/generated/transport';
 
-export const getHealth = (): Promise<SystemHealth> => api.get('/health');
+export const getHealth = (): Promise<HealthResponse> => api.get<HealthResponse>('/health');

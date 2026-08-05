@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@design-system';
-import type { UserInfo } from '@/shared/types';
+import type { UserInfo } from '@features/auth/types';
 import { useT } from '@/shared/i18n';
 import { cn } from '@/shared/utils/cn';
 

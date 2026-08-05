@@ -1,24 +1,37 @@
 import { api } from '@/shared/api/client';
+import {
+  adaptTask,
+  adaptTaskList,
+  adaptTaskTurn,
+  adaptTaskTurnItem,
+  toTaskCreateRequest,
+} from '../types';
 import type {
   TaskEdge,
   TaskEdgeListResponse,
   TaskListResponse,
-  TaskRecord,
+  TaskCreateInput,
   TaskSummary,
-  TaskTokenUsageSummary,
-} from '@/shared/types';
+  TaskTurnItem,
+  TaskTurnItemListResponse,
+  TaskTurnListResponse,
+} from '../types';
 import type {
-  TaskCreatePayload,
   ConversationTaskMutationResponse,
+  TaskCreateRequest,
+  TaskForkRequest,
+  TaskListResponse as TransportTaskListResponse,
+  TaskMoveRequest,
   TaskRelationshipCreateRequest,
   TaskRelationshipListResponse,
   TaskRelationshipResponse,
+  TaskSummaryResponse,
+  TaskUpdateRequest,
   TurnControlResponse,
-  TurnItemListResponse,
-  TurnItemResponse,
-  TurnListResponse,
+  TurnItemListResponse as TransportTurnItemListResponse,
+  TurnListResponse as TransportTurnListResponse,
   TurnSubmissionResponse,
-} from '@/shared/api/transportTypes';
+} from '@/generated/transport';
 
 export const getTasks = (params: {
   includeArchived?: boolean;
@@ -30,34 +43,27 @@ export const getTasks = (params: {
   if (params.projectId) search.set('project_id', params.projectId);
   if (params.limit) search.set('limit', String(params.limit));
   if (params.sort) search.set('sort', params.sort);
-  return api.get(`/tasks?${search.toString()}`);
+  return api.get<TransportTaskListResponse>(`/tasks?${search.toString()}`).then(adaptTaskList);
 };
 
-export const getTask = (taskId: string): Promise<TaskRecord> => api.get(`/tasks/${taskId}`);
-
-export const getTaskTokenUsageSummary = (
-  params: { includeArchived?: boolean } = {},
-): Promise<TaskTokenUsageSummary> => {
-  const search = new URLSearchParams({
-    include_archived: String(params.includeArchived ?? true),
-  });
-  return api.get(`/tasks/token-usage?${search.toString()}`);
-};
+export const getTask = (taskId: string): Promise<TaskSummary> =>
+  api.get<TaskSummaryResponse>(`/tasks/${taskId}`).then(adaptTask);
 
 export const createTask = async (
-  payload: TaskCreatePayload,
+  payload: TaskCreateInput,
   idempotencyKey: string,
 ): Promise<TaskSummary> => {
-  const response = await api.post<ConversationTaskMutationResponse>('/tasks', payload, {
+  const request: TaskCreateRequest = toTaskCreateRequest(payload);
+  const response = await api.post<ConversationTaskMutationResponse>('/tasks', request, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
-  return response.task as unknown as TaskSummary;
+  return adaptTask(response.task as TaskSummaryResponse);
 };
 
 function taskAction(taskId: string, action: string, idempotencyKey: string): Promise<TaskSummary> {
-  return api.post(`/tasks/${taskId}/${action}`, {}, {
+  return api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/${action}`, {}, {
     headers: { 'Idempotency-Key': idempotencyKey },
-  });
+  }).then((response) => adaptTask(response.task as TaskSummaryResponse));
 }
 
 export const archiveTask = (taskId: string, key: string): Promise<TaskSummary> =>
@@ -66,18 +72,22 @@ export const unarchiveTask = (taskId: string, key: string): Promise<TaskSummary>
   taskAction(taskId, 'unarchive', key);
 export const cancelTask = (taskId: string, key: string): Promise<void> =>
   api.post(`/tasks/${taskId}/cancel`, {}, { headers: { 'Idempotency-Key': key } });
-export const getTaskTurns = (taskId: string): Promise<TurnListResponse> =>
-  api.get(`/tasks/${taskId}/turns`);
+export const getTaskTurns = (taskId: string): Promise<TaskTurnListResponse> =>
+  api.get<TransportTurnListResponse>(`/tasks/${taskId}/turns`).then((response) => ({
+    items: response.items.map(adaptTaskTurn),
+  }));
 
-export const getTurnItems = (taskId: string, turnId: string): Promise<TurnItemListResponse> =>
-  api.get(`/tasks/${taskId}/turns/${turnId}/items`);
+export const getTurnItems = (taskId: string, turnId: string): Promise<TaskTurnItemListResponse> =>
+  api.get<TransportTurnItemListResponse>(`/tasks/${taskId}/turns/${turnId}/items`).then((response) => ({
+    items: response.items.map(adaptTaskTurnItem),
+  }));
 
 export const createTurn = (
   taskId: string,
   text: string,
   key: string,
   allowNextTurn = false,
-): Promise<TurnSubmissionResponse> => api.post(
+): Promise<TurnSubmissionResponse> => api.post<TurnSubmissionResponse>(
   `/tasks/${taskId}/turns`,
   { text, allow_next_turn: allowNextTurn },
   { headers: { 'Idempotency-Key': key } },
@@ -88,7 +98,7 @@ export const steerTurn = (
   turnId: string,
   text: string,
   key: string,
-): Promise<TurnControlResponse> => api.post(
+): Promise<TurnControlResponse> => api.post<TurnControlResponse>(
   `/tasks/${taskId}/turns/${turnId}/steer`,
   { expected_turn_id: turnId, text },
   { headers: { 'Idempotency-Key': key } },
@@ -98,7 +108,7 @@ export const interruptTurn = (
   taskId: string,
   turnId: string,
   key: string,
-): Promise<TurnControlResponse> => api.post(
+): Promise<TurnControlResponse> => api.post<TurnControlResponse>(
   `/tasks/${taskId}/turns/${turnId}/interrupt`,
   { expected_turn_id: turnId },
   { headers: { 'Idempotency-Key': key } },
@@ -116,7 +126,7 @@ export const retryTask = async (taskId: string, key: string): Promise<TurnSubmis
   if (typeof text !== 'string' || !text.trim()) {
     throw new Error('Terminal Turn has no retryable user input');
   }
-  return api.post(
+  return api.post<TurnSubmissionResponse>(
     `/tasks/${taskId}/turns/${terminal.turn_id}/retry`,
     { text, allow_next_turn: false },
     { headers: { 'Idempotency-Key': key } },
@@ -125,30 +135,30 @@ export const retryTask = async (taskId: string, key: string): Promise<TurnSubmis
 
 export const moveTask = (
   taskId: string,
-  payload: { project_id: string; context_version_id: string },
+  payload: TaskMoveRequest,
   key: string,
-): Promise<TaskSummary> => api.post(`/tasks/${taskId}/move`, payload, {
+): Promise<TaskSummary> => api.post<TaskSummaryResponse>(`/tasks/${taskId}/move`, payload, {
   headers: { 'Idempotency-Key': key },
-});
+}).then(adaptTask);
 
 export const forkTask = async (
   taskId: string,
-  payload: { workspace_id: string; project_id?: string; prompt?: string; title?: string },
+  payload: TaskForkRequest,
   key: string,
 ): Promise<TaskSummary> => {
   const response = await api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/fork`, payload, {
     headers: { 'Idempotency-Key': key },
   });
-  return response.task as unknown as TaskSummary;
+  return adaptTask(response.task as TaskSummaryResponse);
 };
 
 export const updateTask = (
   taskId: string,
-  data: { title?: string },
+  data: TaskUpdateRequest,
   key: string,
-): Promise<TaskSummary> => api.patch(`/tasks/${taskId}`, data, {
+): Promise<TaskSummary> => api.patch<TaskSummaryResponse>(`/tasks/${taskId}`, data, {
   headers: { 'Idempotency-Key': key },
-});
+}).then(adaptTask);
 
 export const getProjectTasks = (
   projectId: string,
@@ -157,7 +167,7 @@ export const getProjectTasks = (
   const search = new URLSearchParams({ include_archived: String(params.includeArchived ?? false) });
   search.set('project_id', projectId);
   if (params.limit) search.set('limit', String(params.limit));
-  return api.get(`/tasks?${search.toString()}`);
+  return api.get<TransportTaskListResponse>(`/tasks?${search.toString()}`).then(adaptTaskList);
 };
 
 const relationshipToTaskEdge = (relationship: TaskRelationshipResponse): TaskEdge => ({
@@ -208,7 +218,7 @@ export const sendTaskPrompt = async (
     : await createTurn(taskId, prompt, key);
 };
 
-export const listCanonicalTaskItems = async (taskId: string): Promise<TurnItemResponse[]> => {
+export const listCanonicalTaskItems = async (taskId: string): Promise<TaskTurnItem[]> => {
   const turns = await getTaskTurns(taskId);
   const pages = await Promise.all(turns.items.map((turn) => getTurnItems(taskId, turn.turn_id)));
   return pages.flatMap((page) => page.items).sort((a, b) => a.task_item_seq - b.task_item_seq);

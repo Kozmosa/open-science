@@ -2,7 +2,7 @@ import { BrandMark, Button } from '@design-system';
 import type { ResolvedAppRoute } from '@/app/routeRegistry';
 import { useT } from '@/shared/i18n';
 import { cn } from '@/shared/utils/cn';
-import type { UserInfo } from '@/shared/types';
+import type { UserInfo } from '@features/auth/types';
 import { AccountMenu } from './AccountMenu';
 import { NavigationLinks } from './NavigationLinks';
 

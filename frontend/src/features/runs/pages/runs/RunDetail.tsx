@@ -1,14 +1,14 @@
 import { SectionStack, semanticToneClasses } from '@design-system';
 import { useLocale, useT } from '@/shared/i18n';
 import { formatTaskDateTime, taskStatusLabel } from '@features/tasks';
-import type { TaskRecord } from '@/shared/types';
-import type { ProjectUsageSummaryResponse, TurnResponse } from '@/shared/api/transportTypes';
+import type { TaskSummary, TaskTurn } from '@features/tasks/types';
+import type { ProjectUsageSummary } from '@features/projects/types';
 import { TurnChain } from './TurnChain';
 
 interface Props {
-  detail: TaskRecord | null;
-  turns: TurnResponse[];
-  usage: ProjectUsageSummaryResponse | null;
+  detail: TaskSummary | null;
+  turns: TaskTurn[];
+  usage: ProjectUsageSummary | null;
   loading: boolean;
   selectedId: string | null;
 }

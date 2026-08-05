@@ -1,4 +1,4 @@
-import type { ResourceSnapshot } from '@/shared/types';
+import type { ResourceSnapshot } from '../types';
 import { useT } from '@/shared/i18n';
 import GpuBar from './GpuBar';
 import CpuRing from './CpuRing';

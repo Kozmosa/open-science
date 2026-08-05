@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Input, StatusDot } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { taskStatusLabel } from '@features/tasks';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 
 interface Props {
   tasks: TaskSummary[];

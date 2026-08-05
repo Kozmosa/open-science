@@ -1,4 +1,4 @@
-import type { GpuInfo } from '@/shared/types';
+import type { GpuInfo } from '../types';
 import { useT } from '@/shared/i18n';
 
 function formatMB(mb: number): string {
