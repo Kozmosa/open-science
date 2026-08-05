@@ -4,7 +4,7 @@ import { useTaskMessages } from '../hooks/useTaskMessages';
 import { groupMessages, ChatInputBar, ChatMessageList } from '../components/chat';
 import TaskHeaderBar from '../components/messages/TaskHeaderBar';
 import type { ReactNode } from 'react';
-import type { TaskOutputEvent, TaskSummary } from '../types';
+import type { TaskSummary } from '../types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
 
@@ -12,11 +12,6 @@ interface TaskDetailPageProps {
   taskId: string | null;
   selectedTask: TaskSummary | null;
   detailError: string | null;
-  outputItems: TaskOutputEvent[];
-  outputError: string | null;
-  hasMore: boolean;
-  loadMore: () => void;
-  isLoadingMore: boolean;
   taskSidebarCollapsed?: boolean;
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
@@ -31,11 +26,6 @@ export default function TaskDetailPage({
   taskId,
   selectedTask,
   detailError,
-  outputItems,
-  outputError,
-  hasMore,
-  loadMore,
-  isLoadingMore,
   taskSidebarCollapsed = false,
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
@@ -46,7 +36,7 @@ export default function TaskDetailPage({
   headerActions,
 }: TaskDetailPageProps) {
   const t = useT();
-  const { messages, isLoading, error } = useTaskMessages(taskId, outputItems, selectedTask?.prompt ?? null);
+  const { messages, isLoading, error } = useTaskMessages(taskId, selectedTask?.prompt ?? null);
   const actions = useTaskActions(taskId);
   const chatMessages = groupMessages(messages);
 
@@ -95,12 +85,6 @@ export default function TaskDetailPage({
         actions={headerActions}
       />
 
-      {outputError && (
-        <div className="shrink-0 border-b border-[var(--osci-color-danger-border)] bg-[var(--osci-color-danger-soft)] px-4 py-2 text-xs text-[var(--osci-color-danger-foreground)]">
-          {outputError}
-        </div>
-      )}
-
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center p-6 font-mono text-xs text-[var(--osci-color-text-muted)]">
@@ -113,9 +97,9 @@ export default function TaskDetailPage({
         ) : (
           <ChatMessageList
             messages={chatMessages}
-            hasMore={hasMore}
-            loadMore={loadMore}
-            isLoadingMore={isLoadingMore}
+            hasMore={false}
+            loadMore={() => undefined}
+            isLoadingMore={false}
           />
         )}
       </div>

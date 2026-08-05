@@ -33,7 +33,6 @@ import {
   updateLiteraturePaperState,
 } from "../api";
 import {
-  createIdempotencyKey,
   IdempotencyKeyManager,
   semanticMutationValue,
 } from "@/shared/api/idempotency";
@@ -92,28 +91,6 @@ function formatDate(value: string | null, locale: "en" | "zh"): string {
   }).format(new Date(value));
 }
 
-function intentStorageKey(paperId: string): string {
-  return `openscience:literature-intent:${paperId}`;
-}
-
-function readPendingIntent(
-  paperId: string | null,
-): { key: string; semantic: string } | null {
-  if (!paperId) return null;
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem(intentStorageKey(paperId)) ?? "null",
-    ) as { key?: unknown; semantic?: unknown } | null;
-    return parsed &&
-      typeof parsed.key === "string" &&
-      typeof parsed.semantic === "string"
-      ? { key: parsed.key, semantic: parsed.semantic }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageProps) {
   const t = useT();
   const locale = useLocale();
@@ -137,6 +114,9 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
   const summaryKeyManager = useRef(
     new IdempotencyKeyManager("literature.summary.request"),
   ).current;
+  const [researchTaskKeyManager] = useState(
+    () => new IdempotencyKeyManager("literature.research-task"),
+  );
 
   const updateSearch = (changes: Record<string, string | null>) =>
     setSearchParams((current) => {
@@ -294,21 +274,14 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
     title?: string;
   }) => {
     if (!selectedPaperId) return;
-    const semantic = semanticMutationValue(selection);
-    const previous = readPendingIntent(selectedPaperId);
-    const key =
-      previous?.semantic === semantic
-        ? previous.key
-        : createIdempotencyKey(`literature.research-task.${selectedPaperId}`);
-    localStorage.setItem(
-      intentStorageKey(selectedPaperId),
-      JSON.stringify({ key, semantic }),
-    );
+    const semantic = semanticMutationValue({ paperId: selectedPaperId, selection });
+    const key = researchTaskKeyManager.keyFor(semantic);
     await createLiteratureResearchTask(
       selectedPaperId,
       selection,
       key,
     );
+    researchTaskKeyManager.markSucceeded(key);
     void queryClient.invalidateQueries({
       queryKey: queryKeys.literature.researchTasks(selectedPaperId),
     });

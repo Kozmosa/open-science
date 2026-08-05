@@ -37,8 +37,6 @@ import { useEnvironmentSelection, type EnvironmentSelectionPreferences } from '.
 import {
   buildEnvironmentRequest,
   buildProjectReferenceCreateRequest,
-  EMPTY_ENVIRONMENTS,
-  EMPTY_PROJECT_REFS,
   emptyFormValues,
   formatTimestamp,
   mergeEnvironmentList,
@@ -332,8 +330,8 @@ function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
   const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
   const [selectedDetectionEnvironmentId, setSelectedDetectionEnvironmentId] = useState<string | null>(null);
 
-  const environments = environmentSelection.environments ?? EMPTY_ENVIRONMENTS;
-  const projectReferences = environmentSelection.projectReferences ?? EMPTY_PROJECT_REFS;
+  const environments = environmentSelection.environments;
+  const projectReferences = environmentSelection.projectReferences;
   const selectedEnvironment = environmentSelection.selectedEnvironment;
   const editorEnvironment = useMemo(
     () => environments.find((environment) => environment.id === editorEnvironmentId) ?? null,
@@ -408,38 +406,17 @@ function EnvironmentsPage({ preferences }: EnvironmentsPageProps) {
 
   const detectMutation = useMutation({
     mutationFn: async (environmentId: string) => detectEnvironment(environmentId),
-    onMutate: (environmentId) => {
-      const environment = environments.find((item) => item.id === environmentId) ?? null;
-      console.info('environment detect requested', {
-        environmentId,
-        alias: environment?.alias ?? null,
-      });
-    },
     onSuccess: (environment) => {
       const current = queryClient.getQueryData<EnvironmentListResponse>(queryKeys.environments.all);
       syncEnvironmentList(mergeEnvironmentList(current, environment));
       const detection = environment.latest_detection;
-      console.info('environment detect succeeded', {
-        environmentId: environment.id,
-        alias: environment.alias,
-        status: detection?.status ?? null,
-        warnings: detection?.warnings ?? [],
-        errors: detection?.errors ?? [],
-        codexPath: detection?.codex?.path ?? null,
-      });
       if (detection?.warnings.includes('used_personal_tmux_fallback')) {
         showToast(t('pages.environments.detectFallbackToast', { alias: environment.alias }), 'warning');
       } else if (detection?.status === 'failed') {
         showToast(detection.summary, 'error');
       }
     },
-    onError: (error, environmentId) => {
-      const environment = environments.find((item) => item.id === environmentId) ?? null;
-      console.error('environment detect failed', {
-        environmentId,
-        alias: environment?.alias ?? null,
-        error: error instanceof Error ? error.message : error,
-      });
+    onError: (error) => {
       showToast(error instanceof Error ? error.message : t('pages.environments.detectFailedToast'), 'error');
     },
   });
