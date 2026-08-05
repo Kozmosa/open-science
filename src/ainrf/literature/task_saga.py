@@ -15,7 +15,7 @@ import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, cast
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
@@ -541,7 +541,9 @@ class LiteratureTaskSagaService:
                 self._record_task_created(intent_id, worker_id, recovered_task_id)
                 self._persist_completed_link(intent_id, worker_id, recovered_task_id)
                 return self._intent_by_id(intent_id)
-            current_actor = self._current_active_actor(str(claimed["user_id"]))
+            current_actor = cast(
+                dict[str, object], self._current_active_actor(str(claimed["user_id"]))
+            )
             task = self._conversation.create_task(
                 current_actor,
                 project_id=str(request["project_id"]),

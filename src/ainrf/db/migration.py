@@ -4,8 +4,13 @@ import re
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
-MigrationFn = Callable[[sqlite3.Connection], None]
+
+class MigrationFn(Protocol):
+    __name__: str
+
+    def __call__(self, conn: sqlite3.Connection) -> None: ...
 
 
 class SchemaBaselineError(RuntimeError):

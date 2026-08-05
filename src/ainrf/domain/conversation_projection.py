@@ -338,9 +338,9 @@ class ConversationProjectionService:
             projection = projections.get(task_id)
             turns = () if projection is None else projection.turns
             duration = sum(
-                int(turn["duration_ms"])
+                duration_ms
                 for turn in turns
-                if isinstance(turn.get("duration_ms"), int)
+                if isinstance(duration_ms := turn.get("duration_ms"), int)
             )
             if duration:
                 durations.append(duration)

@@ -659,7 +659,7 @@ class _DomainWriteKernel:
         """Archive a Project without consulting retired Task runtime state."""
 
         actor = self._user_id(user)
-        request = {"project_id": project_id, "reason": reason}
+        request: dict[str, object] = {"project_id": project_id, "reason": reason}
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             cached = self._idempotent_result(
@@ -703,7 +703,7 @@ class _DomainWriteKernel:
         """Restore a Project through the current Project application Module."""
 
         actor = self._user_id(user)
-        request = {"project_id": project_id}
+        request: dict[str, object] = {"project_id": project_id}
         with closing(self._connect()) as conn:
             self._begin_write(conn)
             cached = self._idempotent_result(
