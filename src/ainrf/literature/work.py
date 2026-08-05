@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import socket
+import time
 from pathlib import Path
 from threading import Lock
+
+import structlog
 
 from ainrf.domain_control import (
     DomainMaintenanceService,
@@ -25,6 +29,7 @@ from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
 
 _WORKER_PARTICIPANTS: dict[Path, DomainWriteParticipant] = {}
 _WORKER_PARTICIPANTS_LOCK = Lock()
+logger = structlog.get_logger(__name__).bind(component="literature-worker")
 
 
 def _worker_maintenance_participant(state_root: Path) -> DomainWriteParticipant:
@@ -57,6 +62,14 @@ async def execute_work_item(
     *,
     artifact_sha: str | None = None,
 ) -> None:
+    logger.debug(
+        "literature_work_item_started",
+        work_item_id=item.work_item_id,
+        kind=item.kind,
+        check_id=item.payload.get("check_id"),
+        scope_id=item.payload.get("scope_id"),
+        summary_id=item.payload.get("summary_id"),
+    )
     if item.kind == "fetch_rss":
         await _fetch_rss(service, item)
         return
@@ -76,31 +89,107 @@ async def _fetch_rss(service: LiteratureTrackingService, item: WorkItem) -> None
     scope = service.check_scope(scope_id)
     if scope is None:
         raise KeyError(f"Literature check scope not found: {scope_id}")
-    await asyncio.to_thread(ArxivRequestLimiter().acquire)
-    result = await ArxivRssProvider().fetch(
-        categories, etag=scope.get("etag"), last_modified=scope.get("last_modified")
+    started = time.perf_counter()
+    logger.debug(
+        "literature_rss_fetch_started",
+        work_item_id=item.work_item_id,
+        check_id=check_id,
+        scope_id=scope_id,
+        provider="arxiv-rss",
+        categories=categories,
+        has_etag=bool(scope.get("etag")),
+        has_last_modified=bool(scope.get("last_modified")),
     )
+    try:
+        await asyncio.to_thread(ArxivRequestLimiter().acquire)
+        result = await ArxivRssProvider().fetch(
+            categories, etag=scope.get("etag"), last_modified=scope.get("last_modified")
+        )
+    except Exception as exc:
+        logger.error(
+            "literature_rss_fetch_failed",
+            work_item_id=item.work_item_id,
+            check_id=check_id,
+            scope_id=scope_id,
+            provider="arxiv-rss",
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+        raise
     if result.status_code == 304:
         service.store_discovered_papers(check_id, [])
+        logger.debug(
+            "literature_rss_not_modified",
+            work_item_id=item.work_item_id,
+            check_id=check_id,
+            scope_id=scope_id,
+            provider="arxiv-rss",
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         return
     if result.status_code != 200 or result.body is None:
+        logger.warning(
+            "literature_rss_unexpected_status",
+            work_item_id=item.work_item_id,
+            check_id=check_id,
+            scope_id=scope_id,
+            provider="arxiv-rss",
+            status_code=result.status_code,
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         raise RuntimeError(f"arXiv RSS returned HTTP {result.status_code}")
     # arXiv documents 2,000 as the feed cap.  A cap-sized response is never
     # claimed complete; the planner can split the category scope later.
-    service.record_rss_response(
+    try:
+        service.record_rss_response(
+            check_id=check_id,
+            scope_id=scope_id,
+            body=result.body,
+            etag=result.etag,
+            last_modified=result.last_modified,
+            papers=result.papers,
+            is_truncated=len(result.papers) >= 2000,
+        )
+    except Exception as exc:
+        logger.error(
+            "literature_rss_persistence_failed",
+            work_item_id=item.work_item_id,
+            check_id=check_id,
+            scope_id=scope_id,
+            paper_count=len(result.papers),
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
+        raise
+    logger.debug(
+        "literature_rss_fetch_completed",
+        work_item_id=item.work_item_id,
         check_id=check_id,
         scope_id=scope_id,
-        body=result.body,
-        etag=result.etag,
-        last_modified=result.last_modified,
-        papers=result.papers,
-        is_truncated=len(result.papers) >= 2000,
+        provider="arxiv-rss",
+        status_code=result.status_code,
+        paper_count=len(result.papers),
+        paper_id_sample=[f"{paper.provider}:{paper.external_id}" for paper in result.papers[:5]],
+        response_hash=hashlib.sha256(result.body).hexdigest(),
+        elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
     )
 
 
 async def _summarize(service: LiteratureTrackingService, item: WorkItem) -> None:
-    context = service.summary_context(str(item.payload["summary_id"]))
+    summary_id = str(item.payload["summary_id"])
+    started = time.perf_counter()
+    logger.debug(
+        "literature_summary_started", work_item_id=item.work_item_id, summary_id=summary_id
+    )
+    context = service.summary_context(summary_id)
     if context is None:
+        logger.warning(
+            "literature_summary_context_missing",
+            work_item_id=item.work_item_id,
+            summary_id=summary_id,
+        )
         return
     paper = LiteraturePaper(
         paper_id=context["paper_id"],
@@ -115,11 +204,23 @@ async def _summarize(service: LiteratureTrackingService, item: WorkItem) -> None
             await summarizer.summarize([paper])
         if paper.ai_summary is None:
             raise RuntimeError("Summary provider returned no summary")
-        service.complete_summary(
-            str(item.payload["summary_id"]), paper.ai_summary, paper.ai_practice_note
+        service.complete_summary(summary_id, paper.ai_summary, paper.ai_practice_note)
+        logger.debug(
+            "literature_summary_completed",
+            work_item_id=item.work_item_id,
+            summary_id=summary_id,
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
         )
     except Exception as exc:
-        service.fail_summary(str(item.payload["summary_id"]), str(exc))
+        service.fail_summary(summary_id, str(exc))
+        logger.error(
+            "literature_summary_failed",
+            work_item_id=item.work_item_id,
+            summary_id=summary_id,
+            error_type=type(exc).__name__,
+            error=str(exc)[:500],
+            elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+        )
         raise
 
 
@@ -180,11 +281,13 @@ async def _recover_research_task(
 def process_durable_work_item(work_item_id: str) -> None:
     """Entrypoint shared by the Dramatiq actor and direct L1 tests."""
     state_root = Path(os.getenv("AINRF_STATE_ROOT", ".ainrf"))
+    logger.debug("literature_work_item_received", work_item_id=work_item_id)
     participant = _worker_maintenance_participant(state_root)
     participant.heartbeat()
     try:
         lease = participant.begin_mutation(source="literature-worker.claim-retry-complete")
     except MaintenanceModeError:
+        logger.warning("literature_worker_drained_for_maintenance", work_item_id=work_item_id)
         participant.drain()
         return
     try:
@@ -198,6 +301,7 @@ def process_durable_work_item(work_item_id: str) -> None:
         item = service.claim_work_item_by_id(work_item_id, participant.participant_id)
         participant.check_lease(lease)
         if item is None:
+            logger.debug("literature_work_item_not_claimed", work_item_id=work_item_id)
             return
         try:
             asyncio.run(execute_work_item(service, item))

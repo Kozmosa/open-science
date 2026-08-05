@@ -59,6 +59,9 @@ def test_stack_environment_keeps_proxy_key_out_of_browser_bundle(
     assert environment["OPENSCIENCE_WEBUI_API_KEY"] == "private-dev-key"
     assert environment["AINRF_API_KEY_HASHES"] == hash_api_key("private-dev-key")
     assert environment["AINRF_DOMAIN_ARTIFACT_SHA"] == "b" * 64
+    assert environment["AINRF_DEV_LOGGING"] == "1"
+    assert environment["AINRF_LOG_LEVEL"] == "DEBUG"
+    assert environment["VITE_DEV_LOGGING"] == "1"
     assert environment["HOME"] == str(instance.runtime_root / "home")
     assert "VITE_OPENSCIENCE_API_KEY" not in environment
     assert "VITE_AINRF_API_KEY" not in environment

@@ -1,8 +1,9 @@
 """HTTP request/response logging middleware.
 
-Logs every request with method, stable route template, status, duration, and
-the request_id set by ``request_context`` middleware.  Slow requests and 5xx
-responses are elevated to WARNING / ERROR so they stand out in production logs.
+Logs requests with method, stable route template, status, duration, and the
+request_id set by ``request_context`` middleware. Successful fast requests are
+DEBUG events so the development logging mode can expose them without making
+production logs noisy; slow requests and 5xx responses remain WARNING / ERROR.
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ def build_request_logging_middleware(
         elif elapsed >= slow_threshold:
             log_fn = logger.warning
         else:
-            log_fn = logger.info
+            log_fn = logger.debug
 
         log_fn(
             "request",

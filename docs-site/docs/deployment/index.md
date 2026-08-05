@@ -64,6 +64,23 @@ description: OpenScience 生产部署前置条件、首次登录、安全检查�
 | Nginx 访问日志 | `/var/log/nginx/access.log` |
 | systemd 日志 | `journalctl -u ainrf -f` |
 
+### 开发日志模式
+
+本地开发栈会自动设置 `AINRF_DEV_LOGGING=1` 和 `AINRF_LOG_LEVEL=DEBUG`。此模式会输出
+Literature 检查、arXiv RSS 请求、解析/持久化、work item 状态以及对应 API 请求的结构化
+调试事件；前端开发服务器也会在浏览器 Console 中输出 Literature 请求的状态、耗时、请求 ID
+和响应摘要。生产环境即使误设置 `AINRF_DEV_LOGGING=1`，`AINRF_PRODUCTION=1` 仍会强制保持
+INFO 级别，不输出这些 DEBUG 事件。
+
+手动启动前端开发服务器时，额外设置 `VITE_DEV_LOGGING=1`。
+
+手动启动本地服务时可使用：
+
+```bash
+AINRF_DEV_LOGGING=1 AINRF_LOG_LEVEL=DEBUG \
+  uv run openscience serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf
+```
+
 ### Prometheus 指标
 
 设置 `AINRF_METRICS_ENABLED=true` 后，指标暴露在 `/metrics`。

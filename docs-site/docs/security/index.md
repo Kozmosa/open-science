@@ -24,6 +24,8 @@ OpenScience 采用三层纵深防御架构：
 | `AINRF_MAX_REQUEST_BODY_BYTES` | `52428800` | 请求体上限（50 MB） |
 | `AINRF_MAX_CONCURRENT_REQUESTS` | `0` | 最大并发请求数（0 = 无限） |
 | `AINRF_METRICS_ENABLED` | `false` | 启用 Prometheus `/metrics` 端点 |
+| `AINRF_DEV_LOGGING` | `false` | 开发态结构化 DEBUG 日志；生产模式强制忽略 |
+| `AINRF_LOG_LEVEL` | `DEBUG`（开发日志开启时）/ `INFO` | 非生产进程的日志级别 |
 
 ## 敏感路径检测
 

@@ -18,11 +18,14 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import structlog
+
 from ainrf.db.connection import connect
 from ainrf.db.migration import run_pending
 
 _SUMMARY_RECIPE_VERSION = "v1"
 _DEFAULT_SUMMARY_MODEL = "claude-sonnet-4-6"
+logger = structlog.get_logger(__name__).bind(component="literature-tracking")
 
 
 def _now() -> str:
@@ -269,6 +272,12 @@ class LiteratureTrackingService:
                 conn, user_id, "literature.check.create", idempotency_key, request
             )
             if cached is not None:
+                logger.debug(
+                    "literature_check_reused_idempotency",
+                    check_id=cached.get("check_id"),
+                    trigger=trigger,
+                    topic_count=len(topic_ids or []),
+                )
                 return cached
             if trigger == "scheduled":
                 topic_rows = conn.execute(
@@ -308,6 +317,13 @@ class LiteratureTrackingService:
                     request,
                     result,
                 )
+                logger.debug(
+                    "literature_check_reused_daily_scope",
+                    check_id=result.get("check_id"),
+                    trigger=trigger,
+                    category_count=len(categories),
+                    categories=categories,
+                )
                 return result
             now = _now()
             check_id = _identifier("check")
@@ -328,7 +344,7 @@ class LiteratureTrackingService:
                 """,
                 (scope_id, check_id, "+".join(categories)),
             )
-            self._insert_work_item(
+            work_item_id = self._insert_work_item(
                 conn,
                 kind="fetch_rss",
                 idempotency_key=f"fetch-rss:{fingerprint}",
@@ -346,6 +362,15 @@ class LiteratureTrackingService:
                 idempotency_key,
                 request,
                 result,
+            )
+            logger.debug(
+                "literature_check_created",
+                check_id=check_id,
+                scope_id=scope_id,
+                work_item_id=work_item_id,
+                trigger=trigger,
+                category_count=len(categories),
+                categories=categories,
             )
             return result
 
@@ -607,6 +632,13 @@ class LiteratureTrackingService:
                     request,
                     result,
                 )
+                logger.debug(
+                    "literature_summary_reused",
+                    summary_id=result.get("summary_id"),
+                    paper_id=paper_id,
+                    language=language,
+                    status=result.get("status"),
+                )
                 return result
             now = _now()
             summary_id = _identifier("summary")
@@ -647,6 +679,14 @@ class LiteratureTrackingService:
                 idempotency_key,
                 request,
                 result,
+            )
+            logger.debug(
+                "literature_summary_queued",
+                summary_id=summary_id,
+                work_item_id=work_id,
+                paper_id=paper_id,
+                version_id=version["version_id"],
+                language=language,
             )
             return result
 
@@ -738,7 +778,15 @@ class LiteratureTrackingService:
             )
             if updated.rowcount != 1:
                 return None
-        return WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        item = WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        logger.debug(
+            "literature_work_item_claimed",
+            work_item_id=item.work_item_id,
+            kind=item.kind,
+            worker_id=worker_id,
+            attempt_count=int(row["attempt_count"]) + 1,
+        )
+        return item
 
     def claim_work_item_by_id(
         self, work_item_id: str, worker_id: str, lease_seconds: int = 120
@@ -767,7 +815,15 @@ class LiteratureTrackingService:
             )
             if cursor.rowcount != 1:
                 return None
-        return WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        item = WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        logger.debug(
+            "literature_work_item_claimed",
+            work_item_id=item.work_item_id,
+            kind=item.kind,
+            worker_id=worker_id,
+            attempt_count=int(row["attempt_count"]) + 1,
+        )
+        return item
 
     def work_item(self, work_item_id: str) -> WorkItem | None:
         with self._connect() as conn:
@@ -832,6 +888,16 @@ class LiteratureTrackingService:
                 (now, check_id),
             )
         self.store_discovered_papers(check_id, papers, complete_check=not is_truncated)
+        logger.debug(
+            "literature_rss_persisted",
+            check_id=check_id,
+            scope_id=scope_id,
+            paper_count=len(papers),
+            paper_id_sample=[f"{paper.provider}:{paper.external_id}" for paper in papers[:5]],
+            response_hash=body_hash,
+            body_bytes=len(body),
+            is_truncated=is_truncated,
+        )
 
     def mark_check_retrying(self, check_id: str, error: str, delay_seconds: int = 60) -> None:
         retry_at = (datetime.now(UTC) + timedelta(seconds=delay_seconds)).isoformat()
@@ -840,6 +906,12 @@ class LiteratureTrackingService:
                 "UPDATE literature_checks SET status = 'retrying', next_attempt_at = ?, last_error = ? WHERE check_id = ?",
                 (retry_at, error[:1000], check_id),
             )
+        logger.warning(
+            "literature_check_retrying",
+            check_id=check_id,
+            error=error[:500],
+            retry_delay_seconds=delay_seconds,
+        )
 
     def check_scope(self, scope_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
@@ -868,6 +940,7 @@ class LiteratureTrackingService:
                 """,
                 (_now(), work_item_id),
             )
+        logger.debug("literature_outbox_published", work_item_id=work_item_id)
 
     def mark_outbox_failed(self, work_item_id: str, error: str) -> None:
         with self._connect() as conn:
@@ -878,6 +951,11 @@ class LiteratureTrackingService:
                 """,
                 (error[:1000], work_item_id),
             )
+        logger.warning(
+            "literature_outbox_publish_failed",
+            work_item_id=work_item_id,
+            error=error[:500],
+        )
 
     def complete_work_item(self, work_item_id: str) -> None:
         with self._connect() as conn:
@@ -885,6 +963,7 @@ class LiteratureTrackingService:
                 "UPDATE literature_work_items SET status = 'completed', lease_owner = NULL, lease_expires_at = NULL, updated_at = ? WHERE work_item_id = ?",
                 (_now(), work_item_id),
             )
+        logger.debug("literature_work_item_completed", work_item_id=work_item_id)
 
     def retry_work_item(self, work_item_id: str, error: str, delay_seconds: int = 60) -> None:
         available_at = (datetime.now(UTC) + timedelta(seconds=delay_seconds)).isoformat()
@@ -903,6 +982,17 @@ class LiteratureTrackingService:
                 """,
                 (state, available_at, error[:1000], _now(), work_item_id),
             )
+        logger.warning(
+            "literature_work_item_retrying"
+            if state == "retrying"
+            else "literature_work_item_failed",
+            work_item_id=work_item_id,
+            status=state,
+            attempt_count=int(row["attempt_count"]),
+            max_attempts=int(row["max_attempts"]),
+            error=error[:500],
+            retry_delay_seconds=delay_seconds if state == "retrying" else None,
+        )
 
     def store_discovered_papers(
         self, check_id: str, papers: list[DiscoveredPaper], *, complete_check: bool = True
@@ -979,7 +1069,7 @@ class LiteratureTrackingService:
                         now,
                     ),
                 )
-            self._match_all_topics(conn, papers, now)
+            matched_count = self._match_all_topics(conn, papers, now)
             if complete_check:
                 conn.execute(
                     "UPDATE literature_checks SET status = 'completed', completed_at = ? WHERE check_id = ?",
@@ -990,12 +1080,21 @@ class LiteratureTrackingService:
                     "UPDATE literature_checks SET status = 'partial' WHERE check_id = ?",
                     (check_id,),
                 )
+        logger.debug(
+            "literature_papers_stored",
+            check_id=check_id,
+            paper_count=len(papers),
+            matched_count=matched_count,
+            paper_id_sample=[f"{paper.provider}:{paper.external_id}" for paper in papers[:5]],
+            complete_check=complete_check,
+        )
         return len(papers)
 
     def _match_all_topics(
         self, conn: sqlite3.Connection, papers: list[DiscoveredPaper], now: str
-    ) -> None:
+    ) -> int:
         topics = conn.execute("SELECT * FROM literature_topics WHERE is_active = 1").fetchall()
+        matched_count = 0
         for paper in papers:
             paper_id = f"{paper.provider}:{paper.external_id}"
             version_id = f"{paper_id}:{paper.provider_version}"
@@ -1010,6 +1109,7 @@ class LiteratureTrackingService:
                 matched, reasons = self._matches(catalog, categories, include_terms, exclude_terms)
                 if not matched:
                     continue
+                matched_count += 1
                 conn.execute(
                     """
                     INSERT INTO literature_topic_matches (topic_id, paper_id, reason_json, matched_at)
@@ -1032,6 +1132,7 @@ class LiteratureTrackingService:
                     "UPDATE literature_topics SET last_matched_at = ? WHERE topic_id = ?",
                     (now, topic["topic_id"]),
                 )
+        return matched_count
 
     def _insert_work_item(
         self, conn: sqlite3.Connection, *, kind: str, idempotency_key: str, payload: dict[str, Any]
