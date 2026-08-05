@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import sys
+from collections.abc import MutableMapping
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import TextIO, cast
+from typing import Any, TextIO, cast
 
 import structlog
 
@@ -29,6 +31,61 @@ class _CurrentStderr:
 
 _CURRENT_STDERR: TextIO = cast(TextIO, _CurrentStderr())
 
+_LOG_LEVELS: dict[str, int] = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "WARN": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+}
+
+
+def _env_flag(name: str, default: bool = False, *, compatibility_name: str | None = None) -> bool:
+    value = os.environ.get(name)
+    if value is None and compatibility_name is not None:
+        value = os.environ.get(compatibility_name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def development_logging_enabled() -> bool:
+    """Return whether verbose development diagnostics are enabled.
+
+    Production is an explicit safety boundary: a stray development flag can
+    never turn on the high-volume diagnostic stream there.
+    """
+
+    return _env_flag(
+        "AINRF_DEV_LOGGING", compatibility_name="OPENSCIENCE_DEV_LOGGING"
+    ) and not _env_flag("AINRF_PRODUCTION", compatibility_name="OPENSCIENCE_PRODUCTION")
+
+
+def effective_log_level() -> int:
+    """Return the process-wide level for both stdlib and structlog output."""
+
+    if _env_flag("AINRF_PRODUCTION", compatibility_name="OPENSCIENCE_PRODUCTION"):
+        return logging.INFO
+    default = "DEBUG" if development_logging_enabled() else "INFO"
+    configured = (
+        os.environ.get("AINRF_LOG_LEVEL", os.environ.get("OPENSCIENCE_LOG_LEVEL", default))
+        .strip()
+        .upper()
+    )
+    return _LOG_LEVELS.get(configured, _LOG_LEVELS[default])
+
+
+def _drop_below_effective_level(
+    _logger: Any, method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
+    """Filter PrintLogger events, whose backend has no stdlib level gate."""
+
+    method_level = _LOG_LEVELS.get(method_name.upper(), logging.INFO)
+    if method_level < effective_log_level():
+        raise structlog.DropEvent
+    return event_dict
+
 
 def configure_cli_logging() -> None:
     """Send structured CLI diagnostics to stderr without touching state.
@@ -44,6 +101,7 @@ def configure_cli_logging() -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            _drop_below_effective_level,
             structlog.stdlib.add_log_level,
             timestamper,
             structlog.processors.JSONRenderer(),
@@ -74,7 +132,7 @@ def configure_logging(state_root: Path) -> None:
 
     # --- stdlib side ---
     root = logging.getLogger()
-    root.setLevel(logging.INFO)
+    root.setLevel(effective_log_level())
 
     # Remove any existing handlers (e.g. a previous basicConfig) so we don't
     # duplicate output when configure_logging is called more than once in tests.
@@ -98,6 +156,7 @@ def configure_logging(state_root: Path) -> None:
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
+            _drop_below_effective_level,
             structlog.stdlib.add_log_level,
             timestamper,
             structlog.processors.JSONRenderer(),

@@ -143,6 +143,9 @@ class DevelopmentStack:
                 "OPENSCIENCE_WEBUI_BACKEND_TARGET": (
                     f"http://{self._api_probe_host()}:{self.instance.ports.api}"
                 ),
+                "AINRF_DEV_LOGGING": "1" if self.mode is DevelopmentStackMode.DEV else "0",
+                "AINRF_LOG_LEVEL": "DEBUG" if self.mode is DevelopmentStackMode.DEV else "INFO",
+                "VITE_DEV_LOGGING": "1" if self.mode is DevelopmentStackMode.DEV else "0",
                 "AINRF_RUNTIME_RECONCILIATION_ENABLED": "false",
                 "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE": self.fault_profile.value,
                 "UV_CACHE_DIR": environment.get("UV_CACHE_DIR", "/tmp/uv-cache"),

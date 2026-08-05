@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import structlog
 
 from ainrf.literature.broker import LiteratureRuntimeConfig
 from ainrf.literature.providers.arxiv_rss import parse_rss
@@ -97,6 +98,29 @@ def test_duplicate_checks_share_one_durable_work_item(tmp_path: Path) -> None:
     second = service.create_check(user_id="u1", topic_ids=[topic["topic_id"]])
     assert first["check_id"] == second["check_id"]
     assert len(service.pending_outbox_work_ids()) == 1
+
+
+def test_check_log_contains_durable_workflow_identifiers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ainrf.literature.tracking as tracking_module
+
+    service = _service(tmp_path)
+    topic = service.create_topic(
+        user_id="u1", label="Agents", include_terms=[], exclude_terms=[], categories=["cs.AI"]
+    )
+
+    with structlog.testing.capture_logs() as logs:
+        # The production module logger may have been initialized by an earlier
+        # test with a different structlog backend; use a fresh proxy here.
+        monkeypatch.setattr(tracking_module, "logger", structlog.get_logger("test-literature"))
+        result = service.create_check(user_id="u1", topic_ids=[topic["topic_id"]])
+
+    event = next(item for item in logs if item["event"] == "literature_check_created")
+    assert event["check_id"] == result["check_id"]
+    assert isinstance(event["scope_id"], str)
+    assert isinstance(event["work_item_id"], str)
+    assert event["categories"] == ["cs.AI"]
 
 
 def test_summary_is_version_keyed_and_deduplicated(tmp_path: Path) -> None:

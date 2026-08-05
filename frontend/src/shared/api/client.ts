@@ -10,6 +10,8 @@ let _refreshPromise: Promise<string | null> | null = null;
 
 // Track the last X-Request-ID for error correlation with server logs.
 let _lastRequestId: string | null = null;
+const DEV_LITERATURE_LOGGING =
+  import.meta.env.DEV && import.meta.env.VITE_DEV_LOGGING === '1';
 
 /** Return the most recent X-Request-ID received from the backend. */
 export function getLastRequestId(): string | null {
@@ -111,6 +113,54 @@ function createErrorMessage(path: string, response: Response, data: unknown): st
   return detail ? `${baseMessage}: ${detail}` : baseMessage;
 }
 
+function isLiteraturePath(path: string): boolean {
+  return path.startsWith('/literature');
+}
+
+function summarizeResponseData(data: unknown): Record<string, unknown> {
+  if (data === null) return { type: 'null' };
+  if (Array.isArray(data)) return { type: 'array', item_count: data.length };
+  if (typeof data !== 'object') return { type: typeof data };
+
+  const record = data as Record<string, unknown>;
+  const items = record.items;
+  return {
+    type: 'object',
+    keys: Object.keys(record).slice(0, 20),
+    ...(Array.isArray(items) ? { item_count: items.length } : {}),
+    ...(typeof record.status === 'string' ? { status: record.status } : {}),
+  };
+}
+
+function logLiteratureRequest(
+  method: string,
+  path: string,
+  details: {
+    phase: 'start' | 'success' | 'failure';
+    status?: number;
+    requestId?: string | null;
+    elapsedMs: number;
+    retry?: boolean;
+    response?: unknown;
+    error?: string;
+  },
+): void {
+  if (!DEV_LITERATURE_LOGGING || !isLiteraturePath(path)) return;
+  const payload = {
+    method,
+    path,
+    ...details,
+    elapsed_ms: Math.round(details.elapsedMs * 10) / 10,
+    response: details.response === undefined ? undefined : summarizeResponseData(details.response),
+  };
+  delete (payload as Record<string, unknown>).elapsedMs;
+  if (details.phase === 'failure') {
+    console.warn('[OpenScience] literature request', payload);
+  } else {
+    console.debug('[OpenScience] literature request', payload);
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   if (import.meta.env.DEV) {
     const { assertTransportRequest } = await import('./transport');
@@ -138,7 +188,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     init.body = options.body instanceof FormData ? options.body : JSON.stringify(options.body);
   }
 
-  const response = await fetch(url, init);
+  const method = options.method ?? 'GET';
+  const startedAt = performance.now();
+  logLiteratureRequest(method, path, { phase: 'start', elapsedMs: 0 });
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    logLiteratureRequest(method, path, {
+      phase: 'failure',
+      elapsedMs: performance.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 
   // Capture request ID for error correlation.
   const reqId = response.headers.get('x-request-id');
@@ -175,8 +238,21 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         setAccessToken(newToken);
         headers.set('Authorization', `Bearer ${newToken}`);
         const retryResponse = await fetch(url, init);
+        const retryReqId = retryResponse.headers.get('x-request-id');
+        if (retryReqId) {
+          _lastRequestId = retryReqId;
+        }
         if (!retryResponse.ok) {
           const retryData = await parseResponseBody(retryResponse);
+          logLiteratureRequest(method, path, {
+            phase: 'failure',
+            status: retryResponse.status,
+            requestId: retryReqId,
+            elapsedMs: performance.now() - startedAt,
+            retry: true,
+            response: retryData,
+            error: createErrorMessage(path, retryResponse, retryData),
+          });
           throw new ApiError(
             createErrorMessage(path, retryResponse, retryData),
             retryResponse.status,
@@ -185,6 +261,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           );
         }
         const retryBody = await parseResponseBody(retryResponse);
+        logLiteratureRequest(method, path, {
+          phase: 'success',
+          status: retryResponse.status,
+          requestId: retryReqId,
+          elapsedMs: performance.now() - startedAt,
+          retry: true,
+          response: retryBody,
+        });
         return retryBody as T;
       }
     }
@@ -195,15 +279,37 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
+    logLiteratureRequest(method, path, {
+      phase: 'failure',
+      status: 401,
+      requestId: reqId,
+      elapsedMs: performance.now() - startedAt,
+      error: 'Session expired',
+    });
     throw new ApiError('Session expired', 401, path);
   }
 
   if (!response.ok) {
     const data = await parseResponseBody(response);
+    logLiteratureRequest(method, path, {
+      phase: 'failure',
+      status: response.status,
+      requestId: reqId,
+      elapsedMs: performance.now() - startedAt,
+      response: data,
+      error: createErrorMessage(path, response, data),
+    });
     throw new ApiError(createErrorMessage(path, response, data), response.status, path, data);
   }
 
   const data = await parseResponseBody(response);
+  logLiteratureRequest(method, path, {
+    phase: 'success',
+    status: response.status,
+    requestId: reqId,
+    elapsedMs: performance.now() - startedAt,
+    response: data,
+  });
   return data as T;
 }
 

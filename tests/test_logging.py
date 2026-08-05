@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 import structlog
 
-from ainrf.logging import configure_cli_logging, configure_logging
+from ainrf.logging import configure_cli_logging, configure_logging, effective_log_level
 
 pytestmark = [pytest.mark.unit]
 
@@ -69,6 +69,65 @@ def test_configure_logging_idempotent(tmp_path: Path) -> None:
 
     configure_logging(tmp_path)
     assert len(logging.getLogger().handlers) == first_count
+
+
+def test_development_logging_enables_debug_events(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AINRF_DEV_LOGGING", "1")
+    monkeypatch.delenv("AINRF_PRODUCTION", raising=False)
+    monkeypatch.delenv("AINRF_LOG_LEVEL", raising=False)
+
+    configure_logging(tmp_path)
+    assert effective_log_level() == logging.DEBUG
+    logging.getLogger("test.development").debug("development details")
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    content = next((tmp_path / "logs").glob("backend-*.log")).read_text(encoding="utf-8")
+    assert "development details" in content
+
+
+def test_production_overrides_development_logging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AINRF_DEV_LOGGING", "1")
+    monkeypatch.setenv("AINRF_PRODUCTION", "1")
+    monkeypatch.setenv("AINRF_LOG_LEVEL", "DEBUG")
+
+    configure_logging(tmp_path)
+    assert effective_log_level() == logging.INFO
+    logger = logging.getLogger("test.production")
+    logger.debug("must stay hidden")
+    logger.info("production info")
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    content = next((tmp_path / "logs").glob("backend-*.log")).read_text(encoding="utf-8")
+    assert "must stay hidden" not in content
+    assert "production info" in content
+
+
+def test_cli_logging_suppresses_debug_in_production(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_config = structlog.get_config()
+    stderr = io.StringIO()
+    try:
+        monkeypatch.setattr(sys, "stderr", stderr)
+        monkeypatch.setenv("AINRF_PRODUCTION", "1")
+        monkeypatch.setenv("AINRF_DEV_LOGGING", "1")
+        configure_cli_logging()
+
+        logger = structlog.get_logger("cli-production")
+        logger.debug("hidden cli details")
+        logger.info("visible cli status")
+
+        content = stderr.getvalue()
+        assert "hidden cli details" not in content
+        assert "visible cli status" in content
+    finally:
+        structlog.configure(**original_config)
 
 
 def test_cli_logging_does_not_retain_a_closed_capture_stream(

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import structlog
+
 from ainrf.literature.tracking import LiteratureTrackingService
+
+logger = structlog.get_logger(__name__).bind(component="literature-planner")
 
 
 def dispatch_outbox(
@@ -24,10 +28,17 @@ def dispatch_outbox(
         except Exception as exc:
             check_lease()
             service.mark_outbox_failed(work_item_id, str(exc))
+            logger.error(
+                "literature_work_item_publish_failed",
+                work_item_id=work_item_id,
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+            )
         else:
             check_lease()
             service.mark_outbox_published(work_item_id)
             sent += 1
+            logger.debug("literature_work_item_published", work_item_id=work_item_id)
     return sent
 
 
@@ -41,8 +52,13 @@ def run_planner_cycle(
     check_lease()
     service.initialize()
     check_lease()
-    service.plan_daily_check()
+    planned_check = service.plan_daily_check()
     check_lease()
     sent = dispatch_outbox(service, check_lease=check_lease)
     check_lease()
+    logger.debug(
+        "literature_planner_cycle_completed",
+        planned_check_id=planned_check.get("check_id") if planned_check else None,
+        published_work_item_count=sent,
+    )
     return sent

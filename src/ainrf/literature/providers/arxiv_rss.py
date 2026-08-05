@@ -7,15 +7,19 @@ therefore exposes HTTP validators and the exact raw body to the durable layer.
 from __future__ import annotations
 
 import email.utils
+import hashlib
+import time
 import xml.etree.ElementTree as element_tree
 from dataclasses import dataclass
 from typing import Iterable
 
 import httpx
+import structlog
 
 from ainrf.literature.tracking import DiscoveredPaper, canonical_arxiv_id
 
 _RSS_BASE_URL = "https://rss.arxiv.org/rss"
+logger = structlog.get_logger(__name__).bind(component="arxiv-rss-provider")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +43,8 @@ class ArxivRssProvider:
         last_modified: str | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> RssFetchResult:
-        scope = "+".join(sorted(set(categories)))
+        normalized_categories = sorted(set(categories))
+        scope = "+".join(normalized_categories)
         if not scope:
             raise ValueError("RSS discovery requires at least one category")
         headers = {"User-Agent": "OpenScience literature tracker/1.0"}
@@ -49,19 +54,72 @@ class ArxivRssProvider:
             headers["If-Modified-Since"] = last_modified
         owns_client = client is None
         request_client = client or httpx.AsyncClient(timeout=30)
+        url = f"{_RSS_BASE_URL}/{scope}"
+        started = time.perf_counter()
+        logger.debug(
+            "literature_provider_request_started",
+            provider=self.name,
+            scope=scope,
+            categories=normalized_categories,
+            has_etag=bool(etag),
+            has_last_modified=bool(last_modified),
+        )
         try:
-            response = await request_client.get(f"{_RSS_BASE_URL}/{scope}", headers=headers)
+            response = await request_client.get(url, headers=headers)
+        except Exception as exc:
+            logger.error(
+                "literature_provider_request_failed",
+                provider=self.name,
+                scope=scope,
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+                elapsed_ms=round((time.perf_counter() - started) * 1000, 1),
+            )
+            raise
         finally:
             if owns_client:
                 await request_client.aclose()
         body = response.content if response.status_code == 200 else None
+        body_hash = hashlib.sha256(body).hexdigest() if body is not None else None
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
+        try:
+            papers = parse_rss(body) if body else []
+        except Exception as exc:
+            logger.error(
+                "literature_provider_response_parse_failed",
+                provider=self.name,
+                scope=scope,
+                status_code=response.status_code,
+                response_hash=body_hash,
+                body_bytes=len(body) if body is not None else 0,
+                error_type=type(exc).__name__,
+                error=str(exc)[:500],
+                elapsed_ms=elapsed_ms,
+            )
+            raise
+        event = (
+            "literature_provider_response_received"
+            if response.status_code in {200, 304}
+            else "literature_provider_response_unexpected"
+        )
+        log_fn = logger.debug if response.status_code in {200, 304} else logger.warning
+        log_fn(
+            event,
+            provider=self.name,
+            scope=scope,
+            status_code=response.status_code,
+            paper_count=len(papers),
+            response_hash=body_hash,
+            body_bytes=len(body) if body is not None else 0,
+            elapsed_ms=elapsed_ms,
+        )
         return RssFetchResult(
             status_code=response.status_code,
             body=body,
             etag=response.headers.get("ETag"),
             last_modified=response.headers.get("Last-Modified"),
             cache_control=response.headers.get("Cache-Control"),
-            papers=parse_rss(body) if body else [],
+            papers=papers,
         )
 
 

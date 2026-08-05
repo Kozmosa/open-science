@@ -128,10 +128,13 @@ def _print_environment(stack: DevelopmentStack) -> None:
     names = (
         "AINRF_STATE_ROOT",
         "AINRF_DOMAIN_ARTIFACT_SHA",
+        "AINRF_DEV_LOGGING",
+        "AINRF_LOG_LEVEL",
         "AINRF_RUNTIME_RECONCILIATION_ENABLED",
         "AINRF_JWT_SECRET",
         "OPENSCIENCE_WEBUI_API_KEY",
         "OPENSCIENCE_WEBUI_BACKEND_TARGET",
+        "VITE_DEV_LOGGING",
         "AINRF_AUTH_COOKIE_NAMESPACE",
         "OPENSCIENCE_FRONTEND_DEV_FAULT_PROFILE",
     )
