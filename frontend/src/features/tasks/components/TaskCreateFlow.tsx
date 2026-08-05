@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,9 +7,13 @@ import {
   Dialog,
   FormField,
   Input,
-  NativeSelect,
   RadioGroup,
   RadioGroupItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@design-system';
 import { getSkills } from '@features/settings';
@@ -27,12 +31,47 @@ import {
   type DomainWorkspaceProjection,
 } from '@features/domain';
 import { projectionReasonList } from '@features/domain/projectionReasons';
-import { useLocale, useT } from '@/shared/i18n';
+import { useLocale, useT, type MessageKey } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
 import TaskSkillPicker from './TaskSkillPicker';
 import { getTaskPreset, TASK_PRESET_OPTIONS, type TaskPresetId } from '../utils/taskPresets';
 
 export type TaskCreateSource = 'global' | 'project' | 'workspace' | 'literature';
+
+const CAPABILITY_REASON_KEYS: Partial<Record<string, MessageKey>> = {
+  'OpenScience capabilities are still loading.': 'pages.tasks.create.capabilityLoading',
+  'Task execution is paused for maintenance.': 'pages.tasks.create.taskExecutionMaintenance',
+  'The task dispatcher heartbeat is stale.': 'pages.tasks.create.taskDispatcherStale',
+  'No active task dispatcher is available.': 'pages.tasks.create.taskDispatcherUnavailable',
+  'The overview snapshot store is unavailable.': 'pages.tasks.create.overviewSnapshotUnavailable',
+};
+
+interface TaskCreateSelectProps {
+  ariaLabel: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  children: ReactNode;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+function TaskCreateSelect({
+  ariaLabel,
+  value,
+  onValueChange,
+  children,
+  placeholder,
+  disabled = false,
+}: TaskCreateSelectProps) {
+  return (
+    <Select value={value} disabled={disabled} onValueChange={onValueChange}>
+      <SelectTrigger aria-label={ariaLabel} className="min-h-9 px-3 py-1.5">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
+  );
+}
 
 interface TaskCreateFlowProps {
   isOpen: boolean;
@@ -201,6 +240,9 @@ function TaskCreateFlowContent({
     ...(selectedProject?.attention_reasons ?? []),
     noExecutableWorkspace ? 'no_executable_workspace' : null,
   ]);
+  const capabilityReason = capability.reason
+    ? t(CAPABILITY_REASON_KEYS[capability.reason] ?? 'pages.tasks.create.capabilityUnavailable')
+    : null;
   const canSubmit = capability.available
     && selectedProject?.permissions.can_create_task === true
     && selectedWorkspace !== null
@@ -217,7 +259,7 @@ function TaskCreateFlowContent({
 
   return (
     <form
-      className="space-y-4 text-[var(--osci-color-text)]"
+      className="space-y-3 text-[var(--osci-color-text)]"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) mutation.mutate();
@@ -225,54 +267,55 @@ function TaskCreateFlowContent({
     >
       {error ? <Alert variant="error">{error}</Alert> : null}
       {!capability.available && !capabilitiesQuery.isLoading ? (
-        <Alert variant="warning">{capability.reason}</Alert>
+        <Alert variant="warning">{capabilityReason}</Alert>
       ) : null}
-      <div className="grid gap-3 md:grid-cols-3">
-        <FormField label={t('pages.tasks.projectLabel')}>
-          <NativeSelect
-            aria-label={t('pages.tasks.projectLabel')}
+      <div className="grid gap-2.5 min-[480px]:grid-cols-2 lg:grid-cols-3">
+        <FormField className="space-y-1.5" label={t('pages.tasks.projectLabel')}>
+          <TaskCreateSelect
+            ariaLabel={t('pages.tasks.projectLabel')}
             value={effectiveProjectId}
+            placeholder={t('pages.tasks.create.selectProject')}
             disabled={source === 'project' || lockedProjectId != null || projectsQuery.isLoading}
-            onChange={(event) => {
-              setProjectId(event.target.value);
+            onValueChange={(value) => {
+              setProjectId(value);
               setWorkspaceId('');
             }}
           >
-            <option value="">Select project</option>
             {projects.map((project: DomainProjectProjection) => (
-              <option
+              <SelectItem
                 key={project.project_id}
                 value={project.project_id}
                 disabled={!project.permissions.can_create_task}
               >
                 {project.name}
-              </option>
+              </SelectItem>
             ))}
-          </NativeSelect>
+          </TaskCreateSelect>
         </FormField>
-        <FormField label={t('pages.tasks.workspaceLabel')}>
-          <NativeSelect
-            aria-label={t('pages.tasks.workspaceLabel')}
+        <FormField className="space-y-1.5" label={t('pages.tasks.workspaceLabel')}>
+          <TaskCreateSelect
+            ariaLabel={t('pages.tasks.workspaceLabel')}
             value={effectiveWorkspaceId}
+            placeholder={t('pages.tasks.create.selectWorkspace')}
             disabled={source === 'workspace' || lockedWorkspaceId != null || noExecutableWorkspace}
-            onChange={(event) => setWorkspaceId(event.target.value)}
+            onValueChange={setWorkspaceId}
           >
-            <option value="">Select workspace</option>
             {availableWorkspaces.map((workspace) => (
-              <option key={workspace.workspace_id} value={workspace.workspace_id}>
+              <SelectItem key={workspace.workspace_id} value={workspace.workspace_id}>
                 {workspace.label}
-              </option>
+              </SelectItem>
             ))}
-          </NativeSelect>
+          </TaskCreateSelect>
         </FormField>
-        <FormField label={t('pages.tasks.environmentLabel')}>
+        <FormField className="space-y-1.5" label={t('pages.tasks.environmentLabel')}>
           <Input
             aria-label={t('pages.tasks.environmentLabel')}
             readOnly
+            className="py-2"
             value={selectedWorkspace
               ? `${selectedWorkspace.environment.display_name} (${selectedWorkspace.environment.alias})`
               : ''}
-            placeholder="Derived from Workspace"
+            placeholder={t('pages.tasks.create.derivedEnvironment')}
           />
         </FormField>
       </div>
@@ -290,65 +333,67 @@ function TaskCreateFlowContent({
                 navigate('/workspaces');
               }}
             >
-              Register or link Workspace
+              {t('pages.tasks.create.registerWorkspace')}
             </Button>
           </div>
         </Alert>
       ) : null}
 
-      <FormField label={t('pages.tasks.create.taskPreset')}>
-        <NativeSelect
-          aria-label={t('pages.tasks.create.taskPreset')}
-          value={presetId}
-          onChange={(event) => applyPreset(event.target.value as TaskPresetId)}
-        >
-          {TASK_PRESET_OPTIONS.map((preset) => (
-            <option key={preset.id} value={preset.id}>{t(preset.labelKey)}</option>
-          ))}
-        </NativeSelect>
-      </FormField>
+      <div className="grid gap-2.5 min-[480px]:grid-cols-2">
+        <FormField className="space-y-1.5" label={t('pages.tasks.create.taskPreset')}>
+          <TaskCreateSelect
+            ariaLabel={t('pages.tasks.create.taskPreset')}
+            value={presetId}
+            onValueChange={(value) => applyPreset(value as TaskPresetId)}
+          >
+            {TASK_PRESET_OPTIONS.map((preset) => (
+              <SelectItem key={preset.id} value={preset.id}>{t(preset.labelKey)}</SelectItem>
+            ))}
+          </TaskCreateSelect>
+        </FormField>
+        {source !== 'literature' ? <FormField className="space-y-1.5" label={t('pages.tasks.create.executionEngine')}>
+          <TaskCreateSelect
+            ariaLabel={t('pages.tasks.create.executionEngine')}
+            value={harnessEngine}
+            onValueChange={(value) => setHarnessEngine(value as HarnessEngine)}
+          >
+            <SelectItem value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</SelectItem>
+            <SelectItem value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</SelectItem>
+            <SelectItem value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</SelectItem>
+          </TaskCreateSelect>
+        </FormField> : null}
+      </div>
 
-      {source !== 'literature' ? <FormField label={t('pages.tasks.create.researcherType')}>
+      {source !== 'literature' ? <FormField className="space-y-1.5" label={t('pages.tasks.create.researcherType')}>
         <RadioGroup
           aria-label={t('pages.tasks.create.researcherType')}
           value={researcherType}
           onValueChange={(value) => setResearcherType(value as ResearcherType)}
-          className="flex flex-wrap gap-4"
+          className="flex flex-wrap gap-2"
         >
-          <label className="flex items-center gap-2 text-sm">
-            <RadioGroupItem value="vanilla" aria-label="Vanilla" />
+          <label className="inline-flex min-h-9 items-center gap-2 rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] px-2.5 text-sm transition hover:border-[var(--osci-color-primary)]">
+            <RadioGroupItem value="vanilla" aria-label={t('pages.tasks.create.researcherVanilla')} />
             {t('pages.tasks.create.researcherVanilla')}
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <RadioGroupItem value="aris-researcher" aria-label="ARIS Researcher" />
+          <label className="inline-flex min-h-9 items-center gap-2 rounded-[var(--osci-radius-sm)] border border-[var(--osci-color-border)] bg-[var(--osci-color-surface)] px-2.5 text-sm transition hover:border-[var(--osci-color-primary)]">
+            <RadioGroupItem value="aris-researcher" aria-label={t('pages.tasks.create.researcherAris')} />
             {t('pages.tasks.create.researcherAris')}
           </label>
         </RadioGroup>
       </FormField> : null}
 
-      {source !== 'literature' ? <FormField label={t('pages.tasks.create.executionEngine')}>
-        <NativeSelect
-          aria-label={t('pages.tasks.create.executionEngine')}
-          value={harnessEngine}
-          onChange={(event) => setHarnessEngine(event.target.value as HarnessEngine)}
-        >
-          <option value="claude-code">Claude Code</option>
-          <option value="agent-sdk">Agent SDK</option>
-          <option value="codex-app-server">Codex App Server</option>
-        </NativeSelect>
-      </FormField> : null}
-
-      <FormField label={t('pages.tasks.titleLabel')}>
+      <FormField className="space-y-1.5" label={t('pages.tasks.titleLabel')}>
         <Input
           aria-label={t('pages.tasks.titleLabel')}
+          className="py-2"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           placeholder={t('pages.tasks.create.titlePlaceholder')}
         />
       </FormField>
-      {source !== 'literature' ? <FormField label={t('pages.tasks.taskInputLabel')}>
+      {source !== 'literature' ? <FormField className="space-y-1.5" label={t('pages.tasks.taskInputLabel')}>
         <Textarea
-          aria-label="Prompt"
+          aria-label={t('pages.tasks.create.promptLabel')}
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder={t('pages.tasks.create.promptPlaceholder')}
@@ -363,7 +408,7 @@ function TaskCreateFlowContent({
         />
       ) : null}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="secondary" onClick={onClose}>
           {t('common.cancel')}
         </Button>

@@ -40,6 +40,11 @@ function stubTaskViewport(narrow: boolean): void {
   })) as unknown as typeof window.matchMedia);
 }
 
+function selectTaskCreateOption(label: string, option: string): void {
+  fireEvent.click(screen.getByLabelText(label));
+  fireEvent.click(screen.getByRole('option', { name: option }));
+}
+
 const workspace = {
   workspace_id: 'workspace-default',
   project_id: 'default',
@@ -655,7 +660,7 @@ describe('TasksPage', () => {
 
     renderWithProviders(<TasksPage />, { client });
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
-    await waitFor(() => expect(screen.getByLabelText('Execution Engine')).toHaveValue('claude-code'));
+    await waitFor(() => expect(screen.getByLabelText('Execution Engine')).toHaveTextContent('Claude Code'));
 
     fireEvent.click(await screen.findByRole('button', { name: 'Show skills in research' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select Analysis' }));
@@ -741,7 +746,7 @@ describe('TasksPage', () => {
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
-    await waitFor(() => expect(screen.getByLabelText('Project')).toHaveValue('default'));
+    await waitFor(() => expect(screen.getByLabelText('Project')).toHaveTextContent('Default Project'));
     expect(screen.getByLabelText('Environment')).toHaveValue('GPU Lab (gpu-lab)');
     expect(screen.getByLabelText('Environment')).toHaveAttribute('readonly');
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Run with selected bindings.' } });
@@ -771,9 +776,8 @@ describe('TasksPage', () => {
     renderWithProviders(<TasksPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
-    const presetSelect = await screen.findByLabelText('Task preset');
-    expect(within(presetSelect).getAllByRole('option')).toHaveLength(4);
-    fireEvent.change(presetSelect, { target: { value: 'reproduce-baseline-default' } });
+    await screen.findByLabelText('Task preset');
+    selectTaskCreateOption('Task preset', 'Reproduce Baseline');
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Reproduce the baseline experiment.' },
     });
@@ -918,7 +922,7 @@ describe('TasksPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New task' }));
     expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
-    fireEvent.change(screen.getByLabelText('Execution Engine'), { target: { value: 'agent-sdk' } });
+    selectTaskCreateOption('Execution Engine', 'Agent SDK');
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Dialog task body' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
@@ -984,9 +988,7 @@ describe('TasksPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New task' }));
 
     fireEvent.click(screen.getByLabelText('ARIS Researcher'));
-    fireEvent.change(screen.getByLabelText('Execution Engine'), {
-      target: { value: 'codex-app-server' },
-    });
+    selectTaskCreateOption('Execution Engine', 'Codex App Server');
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Run the ARIS checklist.' },
     });

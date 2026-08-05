@@ -15,9 +15,9 @@ const KIB = 1024;
 const MIB = 1024 * KIB;
 const budgets = {
   // The authenticated shell includes the public design-system barrel, Radix
-  // focus/toast/form-control infrastructure, and the multi-page modulepreload
-  // polyfill shared with the public status page.
-  entry: { raw: 825 * KIB, gzip: 264 * KIB },
+  // focus/toast/form-control infrastructure including the standard Select,
+  // and the multi-page modulepreload polyfill shared with the public status page.
+  entry: { raw: 832 * KIB, gzip: 264 * KIB },
   // Public status page is a standalone multi-page entry and must stay small.
   statusPage: { raw: 64 * KIB, gzip: 32 * KIB },
   fileBrowserBeforeEditor: { raw: 850 * KIB, gzip: 300 * KIB },

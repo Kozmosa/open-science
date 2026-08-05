@@ -183,7 +183,7 @@ describe('TaskCreateFlow', () => {
 
     expect(await screen.findByLabelText('Project')).toBeDisabled();
     expect(screen.getByText(/No linked Workspace is currently available/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Register or link Workspace/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Register or link workspace/ })).toBeInTheDocument();
   });
 
   it('refuses a locked Workspace when its Project link is not executable', async () => {
