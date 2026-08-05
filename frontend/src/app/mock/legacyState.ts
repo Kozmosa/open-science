@@ -1,44 +1,58 @@
 import type {
-  AnthropicEnvStatus,
-  EnvironmentListResponse,
-  EnvironmentRecord,
-  FileListResponse,
-  FileReadResponse,
-  ProjectEnvironmentReference,
-  ProjectEnvironmentReferenceListResponse,
-  ProjectListResponse,
-  ProjectRecord,
-  SkillDetail,
-  SkillImportResponse,
-  SkillItem,
-  SkillListResponse,
-  SkillPreview,
-  SystemHealth,
-  TaskListResponse,
-  TaskRecord,
   TaskOutputEvent,
   TaskOutputListResponse,
+  TaskListResponse,
   TaskSummary,
-  TerminalSession,
-  UserSessionPair,
-  UserSessionPairListResponse,
-  WorkspaceListResponse,
-  WorkspaceRecord,
-  ResourcesResponse,
   TaskEdge,
   TaskEdgeListResponse,
-} from '@/shared/types';
+} from '@features/tasks/types';
+import type {
+  EnvironmentListResponse,
+  EnvironmentRecord,
+  ProjectEnvironmentReference,
+  ProjectEnvironmentReferenceListResponse,
+  AnthropicEnvStatus,
+} from '@features/environments/types';
+import type { FileListResponse, FileReadResponse } from '@features/workspaces/types';
+import type { SkillDetail, SkillImportResponse, SkillItem, SkillListResponse, SkillPreview } from '@features/settings/types';
+import type { ResourcesResponse } from '@features/resources/types';
+import type { TerminalSession, UserSessionPair, UserSessionPairListResponse } from '@features/terminal/types';
 import type {
   EnvironmentCreateRequest,
   EnvironmentUpdateRequest,
+  HealthResponse,
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
   ProjectUpdateRequest,
   SkillImportRequest,
-  TaskCreatePayload,
+  TaskCreateRequest,
   TaskRelationshipCreateRequest,
   WorkspaceUpdateRequest,
-} from '@/shared/api/transportTypes';
+} from '@/generated/transport';
+
+type ProjectRecord = {
+  project_id: string;
+  name: string;
+  description: string | null;
+  default_workspace_id: string | null;
+  default_environment_id: string | null;
+  created_at: string;
+  updated_at: string;
+  owner_user_id: string | null;
+};
+type ProjectListResponse = { items: ProjectRecord[] };
+type WorkspaceRecord = {
+  workspace_id: string;
+  project_id: string;
+  label: string;
+  description: string | null;
+  default_workdir: string | null;
+  workspace_prompt: string;
+  created_at: string;
+  updated_at: string;
+  owner_user_id: string | null;
+};
+type WorkspaceListResponse = { items: WorkspaceRecord[] };
 
 interface MockProjectCreateRequest {
   name: string;
@@ -57,7 +71,7 @@ const DEFAULT_PROJECT_ID = 'default';
 const MOCK_STATE_ROOT = '.ainrf';
 const MOCK_APP_USER_ID = 'mock-browser-user';
 
-const mockHealth: SystemHealth = {
+const mockHealth: HealthResponse = {
   status: 'ok',
   state_root: MOCK_STATE_ROOT,
   startup_cwd: '/workspace/scholar-agent',
@@ -95,7 +109,7 @@ let mockProjectEnvironmentReferences: Record<string, ProjectEnvironmentReference
   [DEFAULT_PROJECT_ID]: [],
 };
 let mockTerminalSessions: Record<string, TerminalSession> = {};
-let mockTasks: Record<string, TaskRecord> = {};
+let mockTasks: Record<string, TaskSummary> = {};
 let mockTaskOutputs: Record<string, TaskOutputEvent[]> = {};
 let mockEdges: Record<string, TaskEdge[]> = {};
 
@@ -321,7 +335,7 @@ function agentSessionName(environmentId: string): string {
   return `a-${shortSessionSuffix(environmentId, 'agent')}`;
 }
 
-function cloneTask(task: TaskRecord): TaskRecord {
+function cloneTask(task: TaskSummary): TaskSummary {
   return {
     ...task,
     workspace_summary: task.workspace_summary ? { ...task.workspace_summary } : undefined,
@@ -484,7 +498,7 @@ mockEnvironments = [...initialMockEnvironments];
 mockWorkspaces = [createSeedWorkspace()];
 mockProjects = [createSeedProject()];
 
-export function mockGetHealth(): SystemHealth {
+export function mockGetHealth(): HealthResponse {
   return mockHealth;
 }
 
@@ -730,7 +744,7 @@ export function mockGetTasks(): TaskListResponse {
   };
 }
 
-export function mockGetTask(taskId: string): TaskRecord {
+export function mockGetTask(taskId: string): TaskSummary {
   const task = mockTasks[taskId];
   if (!task) {
     throw new Error(`Task not found: ${taskId}`);
@@ -738,8 +752,8 @@ export function mockGetTask(taskId: string): TaskRecord {
   return cloneTask(task);
 }
 
-export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
-  const legacyPayload = payload as TaskCreatePayload & {
+export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
+  const legacyPayload = payload as TaskCreateRequest & {
     task_input?: string;
     task_profile?: string;
   };
@@ -756,7 +770,7 @@ export function mockCreateTask(payload: TaskCreatePayload): TaskSummary {
   const taskId = `task-${++mockTaskCounter}`;
   const title = payload.title?.trim() ? payload.title.trim() : deriveTaskTitle(prompt);
   const resolvedWorkdir = workspace.default_workdir ?? environment.default_workdir ?? MOCK_STATE_ROOT;
-  const task: TaskRecord = {
+  const task: TaskSummary = {
     task_id: taskId,
     project_id: payload.project_id?.trim() ? payload.project_id : DEFAULT_PROJECT_ID,
     workspace_id: workspace.workspace_id,

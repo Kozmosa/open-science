@@ -1,14 +1,12 @@
 import { http as mswHttp, HttpResponse } from 'msw';
 import type {
-  AdminUserItem,
-  EnvAccessItem,
   MessageItem,
-  SearchSettingsResponse,
-  TaskCreatePayload,
   TaskEdge,
-  TaskRecord,
+  TaskSummary,
   TaskStatus,
-} from '@/shared/types';
+} from '@features/tasks/types';
+import type { AdminUserItem, EnvAccessItem, SearchSettingsResponse } from '@features/settings/types';
+import type { TaskCreateRequest } from '@/generated/transport';
 import type {
   LiteratureCheck,
   LiteraturePaperDetail,
@@ -68,7 +66,7 @@ interface FrontendV2MockState {
   intent_counter: number;
   projects: DomainProjectProjection[];
   workspaces: DomainWorkspaceProjection[];
-  tasks: TaskRecord[];
+  tasks: TaskSummary[];
   messages: Record<string, MessageItem[]>;
   task_edges: TaskEdge[];
   contexts: Record<string, DomainProjectContext>;
@@ -246,7 +244,7 @@ function makeTask(
   title: string,
   prompt: string,
   status: TaskStatus = 'queued',
-): TaskRecord {
+): TaskSummary {
   const isFinished = status === 'succeeded' || status === 'failed' || status === 'cancelled';
   return {
     task_id: taskId,
@@ -544,7 +542,7 @@ export function resetFrontendV2MockState(): void {
   state = createState();
 }
 
-function taskById(taskId: string): TaskRecord | undefined {
+function taskById(taskId: string): TaskSummary | undefined {
   return state.tasks.find((task) => task.task_id === taskId);
 }
 
@@ -580,7 +578,7 @@ function workspaceWithCounts(workspace: DomainWorkspaceProjection): DomainWorksp
   };
 }
 
-function updateTaskStatus(task: TaskRecord, status: TaskStatus): TaskRecord {
+function updateTaskStatus(task: TaskSummary, status: TaskStatus): TaskSummary {
   task.status = status;
   task.updated_at = LATER_TIME;
   if (status === 'running') {
@@ -1078,7 +1076,7 @@ export const frontendV2MockHandlers = [
     return HttpResponse.json({ items, total: items.length });
   }),
   http.post('/api/tasks', async ({ request }) => {
-    const payload = await requestJson<TaskCreatePayload>(request);
+    const payload = await requestJson<TaskCreateRequest>(request);
     const workspace = workspaceById(payload.workspace_id);
     if (!workspace) return notFound('Workspace', payload.workspace_id);
     const project = projectById(payload.project_id);

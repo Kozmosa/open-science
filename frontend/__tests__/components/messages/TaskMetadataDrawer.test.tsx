@@ -2,10 +2,10 @@ import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import TaskMetadataDrawer from '@features/tasks/components/messages/TaskMetadataDrawer';
 import { renderWithProviders } from '@/test-support/render';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';
 
-function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
+function makeTask(overrides?: Partial<TaskSummary>): TaskSummary {
   return {
     task_id: 'task-1',
     title: 'Research task',
@@ -25,7 +25,7 @@ function makeTask(overrides?: Partial<TaskRecord>): TaskRecord {
       completed_at: '2026-06-01T10:29:00Z',
     },
     ...overrides,
-  } as TaskRecord;
+  } as TaskSummary;
 }
 
 describe('TaskMetadataDrawer', () => {

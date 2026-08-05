@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { ConfirmDialog, Sheet } from '@design-system';
 import { getRouteDefinition, getVisibleRoutes, type ResolvedAppRoute } from '@/app/routeRegistry';
 import { useT } from '@/shared/i18n';
-import type { TaskListResponse, TaskSummary } from '@/shared/types';
+import type { TaskListResponse, TaskSummary } from '@features/tasks/types';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { useAuth } from '@features/auth';
 import { useUserPreference } from '@/shared/hooks/useUserPreference';

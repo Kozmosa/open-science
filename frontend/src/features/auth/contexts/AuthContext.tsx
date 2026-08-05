@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import { login as apiLogin, register as apiRegister, refreshToken, logoutApi, getMe } from '../api';
 import { setAccessToken, getStoredRefreshToken, setStoredRefreshToken } from '@/shared/api/client';
-import type { UserInfo } from '@/shared/types';
+import type { UserInfo } from '../types';
 
 interface AuthState {
   user: UserInfo | null;

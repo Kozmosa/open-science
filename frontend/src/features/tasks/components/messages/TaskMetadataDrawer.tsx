@@ -1,11 +1,11 @@
 import { Alert } from '@design-system';
 import { useLocale, useT } from '@/shared/i18n';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '../../types';
 import { TechnicalIdentifier } from '../TechnicalIdentifier';
 import { formatTaskDateTime, taskMetadataLabels } from '../../utils/metadataPresentation';
 
 interface TaskMetadataDrawerProps {
-  task: TaskRecord;
+  task: TaskSummary;
 }
 
 function MetadataRow({

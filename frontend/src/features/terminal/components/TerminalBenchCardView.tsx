@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Dialog, SectionCard, SectionHeader, StatusDot, useToast } from '@design-system';
 import TerminalSessionConsole from './TerminalSessionConsole';
-import type { TerminalSessionStatus } from '@/shared/types';
+import type { TerminalSessionStatus } from '../types';
 import { useT } from '@/shared/i18n';
 
 interface Props {

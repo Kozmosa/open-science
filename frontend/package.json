@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "generate:transport": "node scripts/generate-transport-contract.mjs",
-    "check:transport": "node scripts/generate-transport-contract.mjs --check",
+    "check:transport": "node scripts/generate-transport-contract.mjs --check && node scripts/check-type-authority.mjs",
     "check:feature-dependencies": "node scripts/check-feature-dependencies.mjs",
     "dev": "vite",
     "build": "npm run check:transport && node scripts/prepare-build-output.mjs && node scripts/write-build-info.mjs && tsc -b && vite build && node scripts/verify-bundle-budget.mjs && node scripts/verify-document-metadata.mjs",

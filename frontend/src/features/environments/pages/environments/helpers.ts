@@ -1,16 +1,13 @@
 import type {
   EnvironmentAuthKind,
   EnvironmentListResponse,
+  EnvironmentMutationInput,
   EnvironmentRecord,
   ProjectEnvironmentReference,
+  ProjectEnvironmentReferenceCreateInput,
   ProjectEnvironmentReferenceListResponse,
-} from '@/shared/types';
-import type {
-  EnvironmentCreateRequest,
-  EnvironmentUpdateRequest,
-  ProjectEnvironmentReferenceCreateRequest,
-  ProjectEnvironmentReferenceUpdateRequest,
-} from '@/shared/api/transportTypes';
+  ProjectEnvironmentReferenceUpdateInput,
+} from '../../types';
 
 export const EMPTY_ENVIRONMENTS: EnvironmentRecord[] = [];
 export const EMPTY_PROJECT_REFS: ProjectEnvironmentReference[] = [];
@@ -142,30 +139,30 @@ export function buildEnvironmentRequest(
     sshOptionsObjectError: string;
     sshOptionsValuesError: string;
   }
-): EnvironmentCreateRequest {
+): EnvironmentMutationInput {
   const request = {
     alias: values.alias.trim(),
-    display_name: values.display_name.trim(),
+    displayName: values.display_name.trim(),
     description: values.description.trim() || null,
     tags: parseTags(values.tags),
     host: values.host.trim(),
     port: Number.parseInt(values.port, 10),
     user: values.user.trim() || 'root',
-    auth_kind: values.auth_kind,
-    identity_file: values.identity_file.trim() || null,
-    proxy_jump: values.proxy_jump.trim() || null,
-    proxy_command: values.proxy_command.trim() || null,
-    ssh_options: parseJsonObject(
+    authKind: values.auth_kind,
+    identityFile: values.identity_file.trim() || null,
+    proxyJump: values.proxy_jump.trim() || null,
+    proxyCommand: values.proxy_command.trim() || null,
+    sshOptions: parseJsonObject(
       values.ssh_options,
       errorMessages.sshOptionsObjectError,
       errorMessages.sshOptionsValuesError
     ),
-    default_workdir: values.default_workdir.trim() || null,
-    preferred_python: values.preferred_python.trim() || null,
-    preferred_env_manager: values.preferred_env_manager.trim() || null,
-    preferred_runtime_notes: values.preferred_runtime_notes.trim() || null,
-    task_harness_profile: values.task_harness_profile.trim() || null,
-  } satisfies EnvironmentCreateRequest;
+    defaultWorkdir: values.default_workdir.trim() || null,
+    preferredPython: values.preferred_python.trim() || null,
+    preferredEnvManager: values.preferred_env_manager.trim() || null,
+    preferredRuntimeNotes: values.preferred_runtime_notes.trim() || null,
+    taskHarnessProfile: values.task_harness_profile.trim() || null,
+  } satisfies EnvironmentMutationInput;
 
   if (!Number.isInteger(request.port) || request.port < 1 || request.port > 65535) {
     throw new Error(errorMessages.portRangeError);
@@ -176,26 +173,26 @@ export function buildEnvironmentRequest(
 
 export function buildProjectReferenceUpdateRequest(
   values: ProjectRefFormValues
-): ProjectEnvironmentReferenceUpdateRequest {
+): ProjectEnvironmentReferenceUpdateInput {
   return {
-    override_workdir: values.override_workdir.trim() || null,
-    override_env_name: values.override_env_name.trim() || null,
-    override_env_manager: values.override_env_manager.trim() || null,
-    override_runtime_notes: values.override_runtime_notes.trim() || null,
+    overrideWorkdir: values.override_workdir.trim() || null,
+    overrideEnvName: values.override_env_name.trim() || null,
+    overrideEnvManager: values.override_env_manager.trim() || null,
+    overrideRuntimeNotes: values.override_runtime_notes.trim() || null,
   };
 }
 
 export function buildProjectReferenceCreateRequest(
   environmentId: string,
-  payload: ProjectEnvironmentReferenceUpdateRequest
-): ProjectEnvironmentReferenceCreateRequest {
+  payload: ProjectEnvironmentReferenceUpdateInput
+): ProjectEnvironmentReferenceCreateInput {
   return {
-    environment_id: environmentId,
-    is_default: payload.is_default ?? false,
-    override_workdir: payload.override_workdir ?? null,
-    override_env_name: payload.override_env_name ?? null,
-    override_env_manager: payload.override_env_manager ?? null,
-    override_runtime_notes: payload.override_runtime_notes ?? null,
+    environmentId,
+    isDefault: payload.isDefault ?? false,
+    overrideWorkdir: payload.overrideWorkdir,
+    overrideEnvName: payload.overrideEnvName,
+    overrideEnvManager: payload.overrideEnvManager,
+    overrideRuntimeNotes: payload.overrideRuntimeNotes,
   };
 }
 
@@ -253,10 +250,4 @@ export function removeProjectReferenceFromList(
   return {
     items: (current?.items ?? []).filter((item) => item.environment_id !== environmentId),
   };
-}
-
-export function toEnvironmentUpdateRequest(
-  request: EnvironmentCreateRequest
-): EnvironmentUpdateRequest {
-  return request;
 }

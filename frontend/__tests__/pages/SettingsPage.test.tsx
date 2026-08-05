@@ -8,7 +8,7 @@ import {
   getSkillRegistries,
   getSkills,
 } from '@features/settings/api';
-import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
+import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api/queries';
 import { getWorkspaces } from '@features/workspaces/api';
 import {
   createDefaultWebUiSettings,
@@ -17,7 +17,7 @@ import {
   settingsStorageKey,
 } from '@/features/settings';
 import { renderWithProviders } from '@/test-support/render';
-import type { EnvironmentRecord } from '@/shared/types';
+import type { EnvironmentRecord } from '@features/environments/types';
 import SettingsPage from '../../src/pages/SettingsPage';
 
 vi.mock('@features/environments/components/EnvironmentSelectorPanel', () => ({
@@ -61,7 +61,7 @@ vi.mock('@features/settings/api', () => ({
   importSkill: vi.fn(),
   installSkillRegistry: vi.fn(),
 }));
-vi.mock('@features/environments/api', () => ({
+vi.mock('@features/environments/api/queries', () => ({
   getEnvironments: vi.fn(),
   getProjectEnvironmentReferences: vi.fn(() => Promise.resolve({ items: [] })),
 }));

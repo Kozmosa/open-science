@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { SkillItem } from '@/shared/types';
 import { useT } from '@/shared/i18n';
 
 export type SkillMode = 'disabled' | 'enabled' | 'auto';
+export type SkillToggleItem = {
+  skill_id: string;
+  label: string;
+  description: string | null;
+  package?: string | null;
+};
 
 interface Props {
-  skills: SkillItem[];
+  skills: SkillToggleItem[];
   skillModes: Record<string, SkillMode>;
   onChange: (skillModes: Record<string, SkillMode>) => void;
 }
@@ -44,8 +49,8 @@ function getGroupMode(
 export function SkillToggleGroup({ skills, skillModes, onChange }: Props) {
   const t = useT();
   const groups = useMemo(() => {
-    const map = new Map<string, SkillItem[]>();
-    const ungrouped: SkillItem[] = [];
+    const map = new Map<string, SkillToggleItem[]>();
+    const ungrouped: SkillToggleItem[] = [];
 
     for (const skill of skills) {
       if (skill.package) {

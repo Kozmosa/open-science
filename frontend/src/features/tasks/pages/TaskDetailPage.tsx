@@ -4,13 +4,13 @@ import { useTaskMessages } from '../hooks/useTaskMessages';
 import { groupMessages, ChatInputBar, ChatMessageList } from '../components/chat';
 import TaskHeaderBar from '../components/messages/TaskHeaderBar';
 import type { ReactNode } from 'react';
-import type { TaskOutputEvent, TaskRecord } from '@/shared/types';
+import type { TaskOutputEvent, TaskSummary } from '../types';
 
 const interactiveEngines = new Set(['claude-code', 'agent-sdk', 'codex-app-server']);
 
 interface TaskDetailPageProps {
   taskId: string | null;
-  selectedTask: TaskRecord | null;
+  selectedTask: TaskSummary | null;
   detailError: string | null;
   outputItems: TaskOutputEvent[];
   outputError: string | null;

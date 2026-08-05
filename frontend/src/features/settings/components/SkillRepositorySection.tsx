@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Button, Dialog, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SkillDetail, SkillItem, SkillPreview, SkillRegistryItem } from '@/shared/types';
-import type { SkillImportRequest } from '@/shared/api/transportTypes';
+import type { SkillDetail, SkillImportInput, SkillItem, SkillPreview, SkillRegistryItem } from '../types';
 import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
@@ -90,11 +89,11 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
 
   const handleImportSubmit = () => {
     setImportError(null);
-    const payload: SkillImportRequest = {
+    const payload: SkillImportInput = {
       source: importSource,
       url: importSource === 'git' ? importUrl || null : null,
-      local_path: importSource === 'local' ? importPath || null : null,
-      skill_id: importSkillId || null,
+      localPath: importSource === 'local' ? importPath || null : null,
+      skillId: importSkillId || null,
     };
     importMutation.mutate(payload);
   };

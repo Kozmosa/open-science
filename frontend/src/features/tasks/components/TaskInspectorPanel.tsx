@@ -3,7 +3,7 @@ import { Alert, Button, Skeleton } from '@design-system';
 import { getDomainTaskContext } from '@features/domain';
 import { getTaskTurns } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '../types';
 import TaskMetadataDrawer from './messages/TaskMetadataDrawer';
 import { useLocale } from '@/shared/i18n';
 import { TechnicalIdentifier } from './TechnicalIdentifier';
@@ -12,7 +12,7 @@ import { formatTaskDateTime, taskMetadataLabels } from '../utils/metadataPresent
 export type TaskDrawerView = 'details' | 'turns' | 'context' | 'closed';
 
 interface TaskInspectorPanelProps {
-  task: TaskRecord;
+  task: TaskSummary;
   view: Exclude<TaskDrawerView, 'closed'>;
   onViewChange: (view: TaskDrawerView) => void;
 }

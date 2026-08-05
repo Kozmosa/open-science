@@ -4,7 +4,7 @@ import TaskInspectorPanel from '@features/tasks/components/TaskInspectorPanel';
 import { renderWithProviders } from '@/test-support/render';
 import { getDomainTaskContext } from '@features/domain';
 import { getTaskTurns } from '@features/tasks/api';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import { formatTaskDateTime, shortIdentifier } from '@features/tasks/utils/metadataPresentation';
 
 vi.mock('@features/domain', async (importOriginal) => {
@@ -20,7 +20,7 @@ vi.mock('@features/tasks/api', async (importOriginal) => {
   return { ...actual, getTaskTurns: vi.fn() };
 });
 
-const task: TaskRecord = {
+const task: TaskSummary = {
   task_id: 'task-1',
   project_id: 'project-1',
   workspace_id: 'workspace-1',

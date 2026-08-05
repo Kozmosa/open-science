@@ -15,7 +15,7 @@ import {
   convertOutputEventToMessage,
   mergeMessages,
 } from '@features/tasks/hooks/useTaskMessages';
-import type { MessageItem, TaskOutputEvent } from '@/shared/types';
+import type { MessageItem, TaskOutputEvent } from '@features/tasks/types';
 
 // ── Helpers ──────────────────────────────────────────────────
 

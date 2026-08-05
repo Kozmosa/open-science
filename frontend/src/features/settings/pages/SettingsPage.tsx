@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, FormField, NativeSelect, PageHeader, PageShell, SectionCard, SectionHeader, SectionStack } from '@design-system';
 import { EnvironmentSelectorPanel, useEnvironmentSelection } from '@features/environments';
-import { getEnvironments } from '@features/environments';
+import { getEnvironments } from '@features/environments/api/queries';
 import { getDomainWorkspaces } from '@features/domain';
 import { getSkills } from '../api';
 import { useEnvironmentSelectionPreferences, useSettings } from '../contexts/SettingsProvider';

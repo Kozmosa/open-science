@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProjectCanvas } from '@features/projects';
 import { createTaskEdge, deleteTaskEdge } from '@features/tasks';
-import type { TaskSummary, TaskEdge } from '@/shared/types';
+import type { TaskSummary, TaskEdge } from '@features/tasks/types';
 
 const mockFitView = vi.fn();
 const mockGetNodes = vi.fn(() => []);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
-import { getTaskTokenUsageSummary } from '@features/tasks';
+import { getTaskTokenUsageSummary } from '../api';
 import { getResources } from '../api';
 import OpenScienceProcessCard from '../components/OpenScienceProcessCard';
 import SystemResourceCard from '../components/SystemResourceCard';

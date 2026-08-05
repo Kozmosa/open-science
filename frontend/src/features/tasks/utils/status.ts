@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@/shared/types';
+import type { TaskStatus } from '../types';
 import { semanticToneClasses } from '@design-system';
 import type { MessageKey } from '@/shared/i18n/messages';
 

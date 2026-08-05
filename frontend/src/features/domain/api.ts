@@ -14,18 +14,9 @@ import type {
   OverviewSnapshot,
 } from './types';
 import type {
-  EnvironmentListResponse,
-  EnvironmentRecord,
-  ProjectEnvironmentReferenceListResponse,
-} from '@/shared/types';
-import type {
-  EnvironmentCreateRequest,
-  EnvironmentUpdateRequest,
   ProjectUpdateRequest,
-  ProjectEnvironmentReferenceCreateRequest,
-  ProjectEnvironmentReferenceUpdateRequest,
   WorkspaceUpdateRequest,
-} from '@/shared/api/transportTypes';
+} from '@/generated/transport';
 
 interface ItemList<T> {
   items: T[];
@@ -193,71 +184,6 @@ export function unregisterDomainWorkspace(
   idempotencyKey: string,
 ): Promise<void> {
   return domainPost(`/domain/workspaces/${encodeURIComponent(workspaceId)}/unregister`, {}, idempotencyKey);
-}
-
-export function getDomainEnvironments(): Promise<EnvironmentListResponse> {
-  return api.get('/domain/environments');
-}
-
-export function getDomainEnvironment(environmentId: string): Promise<EnvironmentRecord> {
-  return api.get(`/domain/environments/${encodeURIComponent(environmentId)}`);
-}
-
-export function createDomainEnvironment(
-  payload: EnvironmentCreateRequest,
-  idempotencyKey: string,
-): Promise<EnvironmentRecord> {
-  return domainPost('/domain/environments', payload, idempotencyKey);
-}
-
-export function updateDomainEnvironment(
-  environmentId: string,
-  payload: EnvironmentUpdateRequest,
-  idempotencyKey: string,
-): Promise<EnvironmentRecord> {
-  return domainPatch(`/domain/environments/${encodeURIComponent(environmentId)}`, payload, idempotencyKey);
-}
-
-export function disableDomainEnvironment(
-  environmentId: string,
-  idempotencyKey: string,
-): Promise<void> {
-  return domainDelete(`/domain/environments/${encodeURIComponent(environmentId)}`, idempotencyKey);
-}
-
-export function detectDomainEnvironment(environmentId: string): Promise<EnvironmentRecord> {
-  return api.post(`/domain/environments/${encodeURIComponent(environmentId)}/detect`, {});
-}
-
-export function getDomainProjectEnvironmentReferences(
-  projectId: string,
-): Promise<ProjectEnvironmentReferenceListResponse> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/environment-refs`);
-}
-
-export function createDomainProjectEnvironmentReference(
-  projectId: string,
-  payload: ProjectEnvironmentReferenceCreateRequest,
-  idempotencyKey: string,
-): Promise<import('@/shared/types').ProjectEnvironmentReference> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/environment-refs`, payload, idempotencyKey);
-}
-
-export function updateDomainProjectEnvironmentReference(
-  projectId: string,
-  environmentId: string,
-  payload: ProjectEnvironmentReferenceUpdateRequest,
-  idempotencyKey: string,
-): Promise<import('@/shared/types').ProjectEnvironmentReference> {
-  return domainPatch(`/domain/projects/${encodeURIComponent(projectId)}/environment-refs/${encodeURIComponent(environmentId)}`, payload, idempotencyKey);
-}
-
-export function deleteDomainProjectEnvironmentReference(
-  projectId: string,
-  environmentId: string,
-  idempotencyKey: string,
-): Promise<void> {
-  return domainDelete(`/domain/projects/${encodeURIComponent(projectId)}/environment-refs/${encodeURIComponent(environmentId)}`, idempotencyKey);
 }
 
 export function getTodayOverview(): Promise<OverviewSnapshot> {

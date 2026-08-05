@@ -28,13 +28,13 @@ describe('api endpoints', () => {
     const session = await getTerminalSession('env-localhost');
     const workspaces = await getDomainWorkspaces(false);
     const created = await createTask({
-      project_id: 'project-alpha',
-      workspace_id: 'workspace-alpha',
-      researcher_type: 'vanilla',
-      harness_engine: 'claude-code',
+      projectId: 'project-alpha',
+      workspaceId: 'workspace-alpha',
+      researcherType: 'vanilla',
+      harnessEngine: 'claude-code',
       prompt: 'Implement harness',
       skills: [],
-      mcp_servers: [],
+      mcpServers: [],
     }, 'task.create:test');
     const tasks = await getTasks();
     const detail = await getTask(created.task_id);

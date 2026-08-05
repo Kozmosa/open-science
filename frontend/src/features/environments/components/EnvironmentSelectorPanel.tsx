@@ -1,5 +1,5 @@
 import { Badge, SectionCard, SectionHeader, NativeSelect, StatusDot } from '@design-system';
-import type { EnvironmentRecord } from '@/shared/types';
+import type { EnvironmentRecord } from '../types';
 import { useT } from '@/shared/i18n';
 
 interface Props {

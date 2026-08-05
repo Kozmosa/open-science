@@ -2,13 +2,15 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ResourcesPage from '../../src/pages/ResourcesPage';
 import { resourceRefreshInterval } from '@features/resources/refreshPolicy';
-import type { ResourcesResponse } from '@/shared/types';
+import type { ResourcesResponse } from '@features/resources/types';
 import { renderWithProviders } from '@/test-support/render';
 import { getResources } from '@features/resources/api';
-import { getTaskTokenUsageSummary } from '@features/tasks/api';
+import { getTaskTokenUsageSummary } from '@features/resources/api';
 
-vi.mock('@features/resources/api', () => ({ getResources: vi.fn() }));
-vi.mock('@features/tasks/api', () => ({ getTaskTokenUsageSummary: vi.fn() }));
+vi.mock('@features/resources/api', () => ({
+  getResources: vi.fn(),
+  getTaskTokenUsageSummary: vi.fn(),
+}));
 
 const mockGetResources = vi.mocked(getResources);
 const mockGetTaskTokenUsageSummary = vi.mocked(getTaskTokenUsageSummary);

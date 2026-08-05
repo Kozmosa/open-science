@@ -1,5 +1,5 @@
 import { useT } from '@/shared/i18n';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import type { DomainProjectProjection } from '@features/domain';
 
 interface Props {

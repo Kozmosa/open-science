@@ -160,8 +160,8 @@ describe('TaskCreateFlow', () => {
     await waitFor(() => expect(mockCreateTask).toHaveBeenCalledTimes(1));
     const [payload, key] = mockCreateTask.mock.calls[0]!;
     expect(payload).toMatchObject({
-      project_id: 'project-1',
-      workspace_id: 'workspace-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
       prompt: 'Inspect the contract',
     });
     expect(payload).not.toHaveProperty('environment_id');

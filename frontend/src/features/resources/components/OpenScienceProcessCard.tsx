@@ -1,4 +1,4 @@
-import type { ProcessInfo } from '@/shared/types';
+import type { ProcessInfo } from '../types';
 import { useT } from '@/shared/i18n';
 
 interface OpenScienceProcessCardProps {

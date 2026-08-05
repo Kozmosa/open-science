@@ -5,7 +5,7 @@ import { getTasks } from '@features/tasks';
 import { PageShell, SectionStack } from '@design-system';
 import { GanttChart } from './timeline/GanttChart';
 import { TimelineControls } from './timeline/TimelineControls';
-import type { TaskSummary } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 function taskStartTime(task: TaskSummary): number {

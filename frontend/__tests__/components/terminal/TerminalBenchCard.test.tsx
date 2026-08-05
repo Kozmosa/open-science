@@ -7,7 +7,8 @@ import { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TerminalBenchCard from '@features/terminal/components/TerminalBenchCard';
-import type { EnvironmentRecord, TerminalSession } from '@/shared/types';
+import type { EnvironmentRecord } from '@features/environments/types';
+import type { TerminalSession } from '@features/terminal/types';
 import { renderWithProviders } from '@/test-support/render';
 import {
   createTerminalSession,

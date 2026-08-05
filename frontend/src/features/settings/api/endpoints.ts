@@ -7,6 +7,7 @@ import type {
   MonitoringSettingsResponse,
   SearchSettingsResponse,
   SkillDetail,
+  SkillImportInput,
   SkillImportResponse,
   SkillListResponse,
   SkillPreview,
@@ -16,28 +17,47 @@ import type {
   SkillRegistryUpdateResponse,
   EnvAccessItem,
   EnvAccessListResponse,
-} from '@/shared/types';
+} from '../types';
+import {
+  adaptSkillDetail,
+  adaptSkillList,
+  adaptSkillPreview,
+  adaptSkillRegistries,
+  adaptSkillRegistryStatus,
+  toSkillImportRequest,
+} from '../types';
+import type {
+  AdminUserListResponse as TransportAdminUserListResponse,
+  AdminUserResponse as TransportAdminUserResponse,
+  CodexDefaultsResponse,
+  DeploymentVersionResponse as TransportDeploymentVersionResponse,
+  EnvironmentAccessListResponse,
+  SkillDetailResponse,
+  SkillListResponse as TransportSkillListResponse,
+  SkillPreviewResponse,
+  SkillRegistryListResponse as TransportSkillRegistryListResponse,
+  SkillRegistryStatusResponse,
+} from '@/generated/transport';
 import type {
   AdminPasswordResetRequest,
   AdminUserUpdateRequest,
-  EnvAccessRequest,
+  EnvironmentAccessRequest,
   SearchSettingsUpdateRequest,
-  SkillImportRequest,
   SkillRegistryUpdateRequest,
-} from '@/shared/api/transportTypes';
+} from '@/generated/transport';
 
-export const getSkills = (): Promise<SkillListResponse> => api.get('/skills');
+export const getSkills = (): Promise<SkillListResponse> => api.get<TransportSkillListResponse>('/skills').then(adaptSkillList);
 export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
-  api.get(`/skills/${skillId}`);
+  api.get<SkillDetailResponse>(`/skills/${skillId}`).then(adaptSkillDetail);
 export const previewSkillSettings = (skillId: string): Promise<SkillPreview> =>
-  api.get(`/skills/${skillId}/preview`);
-export const importSkill = (payload: SkillImportRequest): Promise<SkillImportResponse> =>
-  api.post('/skills/import', payload);
+  api.get<SkillPreviewResponse>(`/skills/${skillId}/preview`).then(adaptSkillPreview);
+export const importSkill = (payload: SkillImportInput): Promise<SkillImportResponse> =>
+  api.post('/skills/import', toSkillImportRequest(payload));
 
 export const getCodexDefaults = (): Promise<CodexDefaults> =>
-  api.get('/settings/codex-defaults');
+  api.get<CodexDefaultsResponse>('/settings/codex-defaults');
 export const getDeploymentVersion = (): Promise<DeploymentVersionResponse> =>
-  api.get('/settings/deployment-version');
+  api.get<TransportDeploymentVersionResponse>('/settings/deployment-version');
 export const getFrontendBuildVersion = (): Promise<DeploymentVersionResponse> =>
   fetch('/build-info.json', { headers: { Accept: 'application/json' } })
     .then((response) => response.ok
@@ -46,9 +66,9 @@ export const getFrontendBuildVersion = (): Promise<DeploymentVersionResponse> =>
     .catch(() => ({ short_commit: null, committed_at: null }));
 
 export const getSkillRegistries = (): Promise<SkillRegistryListResponse> =>
-  api.get('/skill-registries');
+  api.get<TransportSkillRegistryListResponse>('/skill-registries').then(adaptSkillRegistries);
 export const getSkillRegistryStatus = (registryId: string): Promise<SkillRegistryStatus> =>
-  api.get(`/skill-registries/${registryId}/status`);
+  api.get<SkillRegistryStatusResponse>(`/skill-registries/${registryId}/status`).then(adaptSkillRegistryStatus);
 export const installSkillRegistry = (registryId: string): Promise<SkillRegistryInstallResponse> =>
   api.post(`/skill-registries/${registryId}/install`, {});
 export const updateSkillRegistry = (
@@ -64,20 +84,20 @@ export const updateSearchSettings = (
 export const getMonitoringSettings = (): Promise<MonitoringSettingsResponse> =>
   api.get('/settings/monitoring');
 
-export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get('/admin/users');
+export const getAdminUsers = (): Promise<AdminUserListResponse> => api.get<TransportAdminUserListResponse>('/admin/users');
 export const updateAdminUser = (
   userId: string,
   payload: AdminUserUpdateRequest,
-): Promise<AdminUserItem> => api.patch(`/admin/users/${userId}`, payload);
+): Promise<AdminUserItem> => api.patch<TransportAdminUserResponse>(`/admin/users/${userId}`, payload);
 export const resetUserPassword = (
   userId: string,
   payload: AdminPasswordResetRequest,
 ): Promise<void> => api.put(`/admin/users/${userId}/password`, payload);
 export const getEnvAccess = (environmentId: string): Promise<EnvAccessListResponse> =>
-  api.get(`/admin/environments/${environmentId}/access`);
+  api.get<EnvironmentAccessListResponse>(`/admin/environments/${environmentId}/access`);
 export const grantEnvAccess = (
   environmentId: string,
-  payload: EnvAccessRequest,
+  payload: EnvironmentAccessRequest,
 ): Promise<EnvAccessItem> => api.put(`/admin/environments/${environmentId}/access`, payload);
 export const revokeEnvAccess = (environmentId: string, userId: string): Promise<void> =>
   api.delete(`/admin/environments/${environmentId}/access/${userId}`);

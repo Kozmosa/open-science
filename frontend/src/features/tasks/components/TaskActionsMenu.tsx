@@ -7,10 +7,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@design-system';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '../types';
 
 interface TaskActionsMenuProps {
-  task: TaskRecord;
+  task: TaskSummary;
   canMutate: boolean;
   disabledReason: string | null;
   onArchive: () => void;

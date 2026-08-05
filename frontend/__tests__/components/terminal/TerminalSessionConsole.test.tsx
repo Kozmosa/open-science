@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalSessionConsole } from '@features/terminal';
 import { createDefaultWebUiSettings, settingsStorageKey } from '@/features/settings';
 import { renderWithProviders } from '@/test-support/render';
-import type { TerminalSessionStatus } from '@/shared/types';
+import type { TerminalSessionStatus } from '@features/terminal/types';
 
 interface MockTerminalInstance {
   cols: number;

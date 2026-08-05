@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { LocaleProvider } from '@/shared/i18n';
-import type { FileReadResponse } from '@/shared/types';
+import type { FileReadResponse } from '@features/workspaces/types';
 import FileViewer from '@features/workspaces/components/file-browser/FileViewer';
 
 const lazyModuleState = vi.hoisted(() => ({ loads: 0 }));

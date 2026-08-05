@@ -1,6 +1,6 @@
 import TerminalBenchCardView from './TerminalBenchCardView';
 import { useTerminalBenchSession } from '../hooks/useTerminalBenchSession';
-import type { EnvironmentRecord } from '@/shared/types';
+import type { EnvironmentRecord } from '@features/environments/types';
 
 interface Props {
   selectedEnvironment: EnvironmentRecord | null;

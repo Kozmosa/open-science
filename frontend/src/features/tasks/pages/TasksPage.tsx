@@ -16,7 +16,7 @@ import {
 import { Button, Checkbox, Dialog, FormField, NativeSelect, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
-import type { TaskListResponse, TaskSummary } from '@/shared/types';
+import type { TaskListResponse, TaskSummary } from '../types';
 import { useAuth } from '@features/auth';
 import {
   getDomainProjectContext,

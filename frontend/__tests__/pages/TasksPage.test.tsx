@@ -4,14 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
 import { createTestQueryClient, renderWithProviders } from '@/test-support/render';
 import type {
-  EnvironmentRecord,
   TaskOutputEvent,
   TaskOutputListResponse,
-  SkillItem,
-  TaskRecord,
   TaskSummary,
-  WorkspaceRecord,
-} from '@/shared/types';
+  TaskSummary,
+} from '@features/tasks/types';
+import type { EnvironmentRecord } from '@features/environments/types';
+import type { SkillItem } from '@features/settings/types';
 import {
   createTask,
   forkTask,
@@ -43,7 +42,7 @@ function stubTaskViewport(narrow: boolean): void {
   })) as unknown as typeof window.matchMedia);
 }
 
-const workspace: WorkspaceRecord = {
+const workspace = {
   workspace_id: 'workspace-default',
   project_id: 'default',
   label: 'Repository Default',
@@ -160,7 +159,7 @@ const reviewTaskSummary: TaskSummary = {
   latest_output_seq: 4,
 };
 
-const taskRecord: TaskRecord = {
+const taskRecord: TaskSummary = {
   ...taskSummary,
   binding: {
     workspace: taskSummary.workspace_summary,
@@ -696,7 +695,7 @@ describe('TasksPage', () => {
       status: 'queued',
       updated_at: '2026-04-23T08:02:00Z',
     };
-    const createdRecord: TaskRecord = {
+    const createdRecord: TaskSummary = {
       ...taskRecord,
       ...createdSummary,
       binding: {
@@ -762,13 +761,13 @@ describe('TasksPage', () => {
     await waitFor(() => {
       const payload = mockCreateTask.mock.calls[0]?.[0];
       expect(payload).toMatchObject({
-        project_id: 'default',
-        workspace_id: 'workspace-default',
-        researcher_type: 'vanilla',
-        harness_engine: 'claude-code',
+        projectId: 'default',
+        workspaceId: 'workspace-default',
+        researcherType: 'vanilla',
+        harnessEngine: 'claude-code',
         prompt: 'Implement harness\nMake it stream output.',
         skills: ['analysis', 'code-review'],
-        mcp_servers: [],
+        mcpServers: [],
         title: undefined,
       });
       expect(payload).not.toHaveProperty('environment_id');
@@ -841,8 +840,8 @@ describe('TasksPage', () => {
 
     await waitFor(() => {
       expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
-        project_id: 'default',
-        workspace_id: 'workspace-default',
+        projectId: 'default',
+        workspaceId: 'workspace-default',
         prompt: 'Run with selected bindings.',
       });
       expect(mockCreateTask.mock.calls[0]?.[0]).not.toHaveProperty('environment_id');
@@ -873,15 +872,15 @@ describe('TasksPage', () => {
 
     await waitFor(() => {
       expect(mockCreateTask.mock.calls[0]?.[0]).toMatchObject({
-        researcher_type: 'vanilla',
-        harness_engine: 'codex-app-server',
+        researcherType: 'vanilla',
+        harnessEngine: 'codex-app-server',
         prompt: 'Reproduce the baseline experiment.',
       });
     });
   });
 
   it('selects a task from the task query param and keeps selection in the URL', async () => {
-    const reviewRecord: TaskRecord = {
+    const reviewRecord: TaskSummary = {
       ...taskRecord,
       ...reviewTaskSummary,
       binding: {
@@ -980,7 +979,7 @@ describe('TasksPage', () => {
       title: 'Dialog task',
       status: 'queued',
     };
-    const createdRecord: TaskRecord = {
+    const createdRecord: TaskSummary = {
       ...taskRecord,
       ...createdSummary,
       binding: {
@@ -1019,8 +1018,8 @@ describe('TasksPage', () => {
         expect.objectContaining({
           title: 'Dialog task',
           prompt: 'Dialog task body',
-          harness_engine: 'agent-sdk',
-          researcher_type: 'vanilla',
+          harnessEngine: 'agent-sdk',
+          researcherType: 'vanilla',
         }),
         expect.stringMatching(/^task\.create/),
       );
@@ -1087,8 +1086,8 @@ describe('TasksPage', () => {
     await waitFor(() =>
       expect(mockCreateTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          researcher_type: 'aris-researcher',
-          harness_engine: 'codex-app-server',
+          researcherType: 'aris-researcher',
+          harnessEngine: 'codex-app-server',
           prompt: 'Run the ARIS checklist.',
           skills: [],
         }),

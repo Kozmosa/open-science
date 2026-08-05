@@ -2,7 +2,7 @@ import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Button, Input } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { ProjectRecord } from '@/shared/types';
+import type { ProjectRecord } from '../../types';
 
 interface Props {
   projects: ProjectRecord[];

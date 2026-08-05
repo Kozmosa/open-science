@@ -6,10 +6,10 @@ import type {
   ProjectEnvironmentReferenceCreateRequest,
   ProjectEnvironmentReferenceUpdateRequest,
   SkillImportRequest,
-  TaskCreatePayload,
+  TaskCreateRequest,
   TaskRelationshipCreateRequest,
   WorkspaceUpdateRequest,
-} from '@/shared/api/transportTypes';
+} from '@/generated/transport';
 import { ApiError } from '@/shared/api/client';
 import { createTransportMockAdapter } from '@/shared/api/transport';
 import { frontendV2MockHandlers, resetFrontendV2MockState } from './scenario';
@@ -189,7 +189,7 @@ export const legacyMockHandlers = [
   http.get('/api/tasks/token-usage', () => HttpResponse.json(taskUsage)),
   http.get('/api/tasks/:taskId', ({ params }) => mockJson(() => mockGetTask(textParam(params, 'taskId')))),
   http.post('/api/tasks', resolveJson(async ({ request }) => {
-    const body = await request.json() as TaskCreatePayload;
+    const body = await request.json() as TaskCreateRequest;
     const task = mockCreateTask(body);
     return HttpResponse.json({
       task,

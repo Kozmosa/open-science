@@ -1,4 +1,4 @@
-import type { HarnessEngine, ResearcherType } from '@/shared/types';
+import type { HarnessEngine, ResearcherType } from '../types';
 
 
 export type TaskPresetLabelKey =

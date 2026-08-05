@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import TaskActionsMenu from '@features/tasks/components/TaskActionsMenu';
 import { renderWithProviders } from '@/test-support/render';
-import type { TaskRecord } from '@/shared/types';
+import type { TaskSummary } from '@features/tasks/types';
 
-const task: TaskRecord = {
+const task: TaskSummary = {
   task_id: 'task-1',
   project_id: 'project-1',
   workspace_id: 'workspace-1',

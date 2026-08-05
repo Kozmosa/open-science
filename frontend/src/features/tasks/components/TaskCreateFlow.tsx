@@ -16,7 +16,8 @@ import { getSkills } from '@features/settings';
 import { createTask } from '../api';
 import { useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
-import type { HarnessEngine, ResearcherType, SkillItem, TaskCreatePayload, TaskSummary } from '@/shared/types';
+import type { HarnessEngine, ResearcherType, TaskCreateInput, TaskSummary } from '../types';
+import type { SkillItem } from '@features/settings/types';
 import {
   capabilityAvailability,
   getDomainCapabilities,
@@ -154,14 +155,14 @@ function TaskCreateFlowContent({
     'standard_task_create',
   );
 
-  const payload = useMemo<TaskCreatePayload>(() => ({
-    project_id: effectiveProjectId,
-    workspace_id: effectiveWorkspaceId,
-    researcher_type: researcherType,
-    harness_engine: harnessEngine,
+  const payload = useMemo<TaskCreateInput>(() => ({
+    projectId: effectiveProjectId,
+    workspaceId: effectiveWorkspaceId,
+    researcherType,
+    harnessEngine,
     prompt: prompt.trim(),
     skills: researcherType === 'vanilla' ? skills : [],
-    mcp_servers: [],
+    mcpServers: [],
     title: title.trim() || undefined,
   }), [effectiveProjectId, effectiveWorkspaceId, harnessEngine, prompt, researcherType, skills, title]);
   const { idempotencyKey, markSucceeded } = useIdempotencyKey('task.create', payload);
