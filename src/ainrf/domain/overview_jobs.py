@@ -201,9 +201,7 @@ class OverviewSnapshotService:
     The public enqueue/claim/complete methods intentionally make the job table
     the only write model used by both manual and scheduled refreshes.  Failed
     jobs retain their user-visible identity while waiting for bounded retries,
-    so a planner restart never drops a scheduled Shanghai slot.  The
-    compatibility :meth:`refresh` helper merely enqueues and immediately runs
-    such a job for an administrative CLI; it does not maintain a second path.
+    so a planner restart never drops a scheduled Shanghai slot.
     """
 
     def __init__(self, state_root: Path, *, artifact_sha: str | None = None) -> None:
@@ -667,30 +665,6 @@ class OverviewSnapshotService:
         if claim is None:
             return OverviewRefreshRunResult(job_id=job_id, outcome="not_claimed")
         return self._run_claim(claim, now=now)
-
-    def refresh(self, owner_user_id: str) -> dict[str, object]:
-        """Synchronously refresh through a maintenance-aware planner facade.
-
-        This compatibility helper remains useful to administrative callers,
-        but it must not become a second writer that bypasses the durable
-        participant registry.  API callers enqueue only; the CLI facade below
-        uses this same planner-owned job path.
-        """
-
-        planner = OverviewSnapshotPlanner(
-            self._state_root,
-            artifact_sha=self._artifact_sha,
-            active_user_ids=lambda: (),
-        )
-        try:
-            job = planner.request_refresh(owner_user_id)
-            result = planner.run_job(str(job["job_id"]))
-            payload = self.latest(owner_user_id)
-            if payload is None:
-                raise RuntimeError(result.detail or "overview refresh did not produce a snapshot")
-            return payload
-        finally:
-            planner.stop()
 
     def latest(self, owner_user_id: str) -> dict[str, object] | None:
         with closing(self._connect()) as conn:

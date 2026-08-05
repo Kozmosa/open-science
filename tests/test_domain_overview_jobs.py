@@ -234,21 +234,6 @@ def test_overview_hidden_job_records_telemetry_without_changing_lookup_result(
     reset_metrics()
 
 
-def test_overview_compatibility_refresh_uses_a_maintenance_participant(
-    state_root: Path, committed_v2_state: str
-) -> None:
-    service = _service(state_root, committed_v2_state)
-    maintenance = DomainMaintenanceService(state_root)
-    maintenance.enter(actor_id="test-operator", reason="verify overview writer drain")
-    try:
-        with pytest.raises(MaintenanceModeError):
-            service.refresh("owner")
-    finally:
-        maintenance.exit(actor_id="test-operator")
-
-    assert service.latest("owner") is None
-
-
 def test_overview_request_refresh_rejects_a_maintenance_epoch_before_queueing(
     state_root: Path, committed_v2_state: str
 ) -> None:

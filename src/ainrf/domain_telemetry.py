@@ -35,59 +35,6 @@ _LOG = structlog.get_logger("domain_telemetry")
 
 _DOMAIN_MODES = ("legacy", "prepared", "v2", "unknown")
 _RUNTIME_MODES = ("legacy", "validate", "v2", "unknown")
-_ISSUE_SEVERITIES = ("blocking", "non_blocking")
-_ISSUE_RESOLUTIONS = ("open", "resolved")
-_MIGRATION_RUN_STATUSES = ("running", "completed", "interrupted", "stale", "unknown")
-_MIGRATION_RECORD_STATUSES = ("imported", "skipped", "attention_needed", "unknown")
-_MIGRATION_ATTENTION_RECORD_TYPES = (
-    "environment",
-    "project",
-    "project_member",
-    "runtime_checkpoint",
-    "session",
-    "session_attempt",
-    "source",
-    "task",
-    "task_output",
-    "task_relationship",
-    "workspace",
-    "other",
-    "unknown",
-)
-_MIGRATION_ATTENTION_CATEGORIES = (
-    "canonical_path_conflict",
-    "collaborator_unmapped",
-    "environment_alias_conflict",
-    "environment_identity_conflict",
-    "environment_owner_unmapped",
-    "environment_registry_invalid",
-    "legacy_environment_placeholder",
-    "orphan_task_relationship",
-    "owner_missing",
-    "owner_unmapped",
-    "primary_link_inactive",
-    "primary_workspace_conflict",
-    "primary_workspace_missing",
-    "project_identity_conflict",
-    "runtime_checkpoint_unmapped",
-    "session_attempt_unmapped",
-    "session_mapping_missing",
-    "session_unmapped",
-    "source_manifest_changed",
-    "task_domain_mapping_invalid",
-    "task_output_unmapped",
-    "task_owner_unmapped",
-    "workspace_environment_ambiguous",
-    "workspace_environment_invalid",
-    "workspace_environment_missing",
-    "workspace_identity_conflict",
-    "workspace_owner_unmapped",
-    "workspace_path_invalid",
-    "workspace_project_missing",
-    "unclassified",
-    "other",
-    "unknown",
-)
 _OUTBOX_BACKLOG_STATES = (
     "pending",
     "expired_claimed",
@@ -274,15 +221,6 @@ _V2_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "source_inventory_sha256",
         "preparation_digest",
     ),
-    "domain_migration_issues": (
-        "run_id",
-        "category",
-        "record_type",
-        "severity",
-        "resolution_status",
-    ),
-    "domain_migration_runs": ("run_id", "status"),
-    "domain_migration_record_results": ("run_id", "record_type", "source_record_id", "status"),
     "tasks": ("task_id",),
     "agent_task_attempts": ("attempt_id", "task_id", "status", "context_snapshot_id"),
     "context_snapshots": ("context_snapshot_id",),
@@ -350,7 +288,6 @@ _TELEMETRY_STATE_ROOT: ContextVar[Path | None] = ContextVar(
 )
 _LAST_GOOD_SCRAPES: dict[Path, _CollectedDomainMetrics] = {}
 _LAST_SUCCESS_TIMESTAMPS: dict[Path, float] = {}
-_PUBLISHED_MIGRATION_ATTENTION_LABELS: set[tuple[str, str]] = set()
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,8 +296,6 @@ class DomainTelemetrySnapshot:
 
     mode: str
     contract_version: int
-    migration_issue_count: int
-    migration_attention_needed_count: int
     outbox_oldest_age_seconds: float
     outbox_backlog_count: int
     orphan_attempt_count: int
@@ -376,10 +311,6 @@ class _CollectedDomainMetrics:
     """One complete, internally consistent durable scrape result."""
 
     snapshot: DomainTelemetrySnapshot
-    migration_issues: Mapping[tuple[str, str], int]
-    migration_runs: Mapping[str, int]
-    migration_records: Mapping[str, int]
-    migration_attention: Mapping[tuple[str, str], int]
     outbox_backlog: Mapping[str, int]
     orphan_attempts: Mapping[str, int]
     saga_counts: Mapping[str, int]
@@ -1092,8 +1023,6 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
         "snapshot": {
             "mode": snapshot.mode,
             "contract_version": snapshot.contract_version,
-            "migration_issue_count": snapshot.migration_issue_count,
-            "migration_attention_needed_count": snapshot.migration_attention_needed_count,
             "outbox_oldest_age_seconds": snapshot.outbox_oldest_age_seconds,
             "outbox_backlog_count": snapshot.outbox_backlog_count,
             "orphan_attempt_count": snapshot.orphan_attempt_count,
@@ -1103,22 +1032,6 @@ def _snapshot_payload(collected: _CollectedDomainMetrics) -> str:
             "overview_missing_active_user_count": snapshot.overview_missing_active_user_count,
             "overview_attention_required_count": snapshot.overview_attention_required_count,
         },
-        "migration_issues": [
-            {"severity": severity, "resolution": resolution, "value": value}
-            for (severity, resolution), value in sorted(collected.migration_issues.items())
-        ],
-        "migration_runs": [
-            {"status": status, "value": value}
-            for status, value in sorted(collected.migration_runs.items())
-        ],
-        "migration_records": [
-            {"status": status, "value": value}
-            for status, value in sorted(collected.migration_records.items())
-        ],
-        "migration_attention": [
-            {"record_type": record_type, "category": category, "value": value}
-            for (record_type, category), value in sorted(collected.migration_attention.items())
-        ],
         "outbox_backlog": [
             {"status": status, "value": value}
             for status, value in sorted(collected.outbox_backlog.items())
@@ -1196,43 +1109,6 @@ def _bounded_count_records(
     return values
 
 
-def _bounded_pair_count_records(
-    payload: Mapping[str, object],
-    *,
-    key: str,
-    first_label_name: str,
-    first_allowed: tuple[str, ...],
-    second_label_name: str,
-    second_allowed: tuple[str, ...],
-) -> dict[tuple[str, str], int]:
-    """Parse a bounded two-label gauge collection from a persisted snapshot."""
-
-    records = payload.get(key)
-    if not isinstance(records, list):
-        raise _TelemetryStoreError(f"invalid snapshot {key}")
-    values: dict[tuple[str, str], int] = {}
-    for record in records:
-        if not isinstance(record, dict) or not all(
-            isinstance(item_key, str) for item_key in record
-        ):
-            raise _TelemetryStoreError(f"invalid snapshot {key}")
-        typed_record = cast(dict[str, object], record)
-        first = typed_record.get(first_label_name)
-        second = typed_record.get(second_label_name)
-        if (
-            not isinstance(first, str)
-            or not isinstance(second, str)
-            or first not in first_allowed
-            or second not in second_allowed
-        ):
-            raise _TelemetryStoreError(f"invalid snapshot {key}")
-        pair = (first, second)
-        if pair in values:
-            raise _TelemetryStoreError(f"duplicate snapshot {key}")
-        values[pair] = _non_negative_int(typed_record.get("value"), name=key)
-    return values
-
-
 def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
     try:
         payload = json.loads(raw)
@@ -1257,13 +1133,6 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
         mode=mode,
         contract_version=_non_negative_int(
             typed_snapshot.get("contract_version"), name="contract_version"
-        ),
-        migration_issue_count=_non_negative_int(
-            typed_snapshot.get("migration_issue_count"), name="migration_issue_count"
-        ),
-        migration_attention_needed_count=_non_negative_int(
-            typed_snapshot.get("migration_attention_needed_count"),
-            name="migration_attention_needed_count",
         ),
         outbox_oldest_age_seconds=_non_negative_float(
             typed_snapshot.get("outbox_oldest_age_seconds"), name="outbox_oldest_age_seconds"
@@ -1293,39 +1162,6 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
             name="overview_attention_required_count",
         ),
     )
-    migration_issues = {
-        (severity, resolution): 0
-        for severity in _ISSUE_SEVERITIES
-        for resolution in _ISSUE_RESOLUTIONS
-    }
-    issue_records = typed_payload.get("migration_issues")
-    if not isinstance(issue_records, list):
-        raise _TelemetryStoreError("invalid snapshot migration_issues")
-    seen_issues: set[tuple[str, str]] = set()
-    for record in issue_records:
-        if not isinstance(record, dict) or not all(
-            isinstance(item_key, str) for item_key in record
-        ):
-            raise _TelemetryStoreError("invalid snapshot migration_issues")
-        typed_record = cast(dict[str, object], record)
-        severity = typed_record.get("severity")
-        resolution = typed_record.get("resolution")
-        if (
-            not isinstance(severity, str)
-            or not isinstance(resolution, str)
-            or severity not in _ISSUE_SEVERITIES
-            or resolution not in _ISSUE_RESOLUTIONS
-        ):
-            raise _TelemetryStoreError("invalid snapshot migration_issues")
-        issue_key = (severity, resolution)
-        if issue_key in seen_issues:
-            raise _TelemetryStoreError("duplicate snapshot migration_issues")
-        seen_issues.add(issue_key)
-        migration_issues[issue_key] = _non_negative_int(
-            typed_record.get("value"), name="migration_issues"
-        )
-    if seen_issues != set(migration_issues):
-        raise _TelemetryStoreError("incomplete snapshot migration_issues")
     counter_records = typed_payload.get("durable_counters")
     if not isinstance(counter_records, list):
         raise _TelemetryStoreError("invalid snapshot durable_counters")
@@ -1355,27 +1191,6 @@ def _snapshot_from_payload(raw: str) -> _CollectedDomainMetrics:
         )
     return _CollectedDomainMetrics(
         snapshot=snapshot,
-        migration_issues=migration_issues,
-        migration_runs=_bounded_count_records(
-            typed_payload,
-            key="migration_runs",
-            label_name="status",
-            allowed=_MIGRATION_RUN_STATUSES,
-        ),
-        migration_records=_bounded_count_records(
-            typed_payload,
-            key="migration_records",
-            label_name="status",
-            allowed=_MIGRATION_RECORD_STATUSES,
-        ),
-        migration_attention=_bounded_pair_count_records(
-            typed_payload,
-            key="migration_attention",
-            first_label_name="record_type",
-            first_allowed=_MIGRATION_ATTENTION_RECORD_TYPES,
-            second_label_name="category",
-            second_allowed=_MIGRATION_ATTENTION_CATEGORIES,
-        ),
         outbox_backlog=_bounded_count_records(
             typed_payload,
             key="outbox_backlog",
@@ -1549,10 +1364,6 @@ def refresh_domain_metrics(
                     not_ready = _first_not_ready_source(source_states)
                     if not_ready is not None:
                         raise _TelemetrySourceReadinessError(*not_ready)
-                migration_issues = _migration_issue_count(conn, tables)
-                migration_runs = _migration_run_counts(conn, tables)
-                migration_records = _migration_record_counts(conn, tables)
-                migration_attention = _migration_attention_issue_counts(conn, tables)
                 outbox_age, outbox_backlog = _outbox_metrics(conn, tables, now)
                 orphan_attempts = _orphan_attempt_count(conn, tables)
                 idempotency_records = _idempotency_record_count(conn, tables)
@@ -1586,8 +1397,6 @@ def refresh_domain_metrics(
         snapshot = DomainTelemetrySnapshot(
             mode=mode,
             contract_version=contract_version,
-            migration_issue_count=sum(migration_issues.values()),
-            migration_attention_needed_count=migration_records["attention_needed"],
             outbox_oldest_age_seconds=outbox_age,
             outbox_backlog_count=sum(outbox_backlog.values()),
             orphan_attempt_count=sum(orphan_attempts.values()),
@@ -1599,10 +1408,6 @@ def refresh_domain_metrics(
         )
         collected = _CollectedDomainMetrics(
             snapshot=snapshot,
-            migration_issues=migration_issues,
-            migration_runs=migration_runs,
-            migration_records=migration_records,
-            migration_attention=migration_attention,
             outbox_backlog=outbox_backlog,
             orphan_attempts=orphan_attempts,
             saga_counts=saga_counts,
@@ -1685,8 +1490,6 @@ def _empty_collected_metrics() -> _CollectedDomainMetrics:
     snapshot = DomainTelemetrySnapshot(
         mode="unknown",
         contract_version=0,
-        migration_issue_count=0,
-        migration_attention_needed_count=0,
         outbox_oldest_age_seconds=0.0,
         outbox_backlog_count=0,
         orphan_attempt_count=0,
@@ -1698,14 +1501,6 @@ def _empty_collected_metrics() -> _CollectedDomainMetrics:
     )
     return _CollectedDomainMetrics(
         snapshot=snapshot,
-        migration_issues={
-            (severity, resolution): 0
-            for severity in _ISSUE_SEVERITIES
-            for resolution in _ISSUE_RESOLUTIONS
-        },
-        migration_runs={status: 0 for status in _MIGRATION_RUN_STATUSES},
-        migration_records={status: 0 for status in _MIGRATION_RECORD_STATUSES},
-        migration_attention={},
         outbox_backlog={status: 0 for status in _OUTBOX_BACKLOG_STATES},
         orphan_attempts={reason: 0 for reason in _ORPHAN_REASONS},
         saga_counts={status: 0 for status in _SAGA_STATUSES},
@@ -1934,94 +1729,6 @@ def _cutover_state(conn: sqlite3.Connection, tables: set[str]) -> tuple[str, int
         else 0
     )
     return mode, contract_version
-
-
-def _migration_issue_count(
-    conn: sqlite3.Connection, tables: set[str]
-) -> dict[tuple[str, str], int]:
-    values = {
-        (severity, resolution): 0
-        for severity in _ISSUE_SEVERITIES
-        for resolution in _ISSUE_RESOLUTIONS
-    }
-    if "domain_migration_issues" not in tables:
-        return values
-    has_resolution = "resolution_status" in _columns(conn, "domain_migration_issues")
-    query = (
-        "SELECT severity, COALESCE(resolution_status, 'open') AS resolution, COUNT(*) AS count "
-        "FROM domain_migration_issues GROUP BY severity, resolution"
-        if has_resolution
-        else "SELECT severity, 'open' AS resolution, COUNT(*) AS count FROM domain_migration_issues GROUP BY severity"
-    )
-    for row in conn.execute(query).fetchall():
-        severity = str(row["severity"])
-        resolution = str(row["resolution"])
-        if severity in _ISSUE_SEVERITIES and resolution in _ISSUE_RESOLUTIONS:
-            values[(severity, resolution)] = int(row["count"])
-    return values
-
-
-def _migration_run_counts(conn: sqlite3.Connection, tables: set[str]) -> dict[str, int]:
-    """Return current durable migration runs with a bounded status label."""
-
-    values = {status: 0 for status in _MIGRATION_RUN_STATUSES}
-    if "domain_migration_runs" not in tables:
-        return values
-    for row in conn.execute(
-        "SELECT status, COUNT(*) AS count FROM domain_migration_runs GROUP BY status"
-    ).fetchall():
-        raw_status = str(row["status"])
-        status = raw_status if raw_status in values else "unknown"
-        values[status] += int(row["count"])
-    return values
-
-
-def _migration_record_counts(conn: sqlite3.Connection, tables: set[str]) -> dict[str, int]:
-    values = {status: 0 for status in _MIGRATION_RECORD_STATUSES}
-    if "domain_migration_record_results" not in tables:
-        return values
-    for row in conn.execute(
-        "SELECT status, COUNT(*) AS count FROM domain_migration_record_results GROUP BY status"
-    ).fetchall():
-        raw_status = str(row["status"])
-        status = raw_status if raw_status in values else "unknown"
-        values[status] += int(row["count"])
-    return values
-
-
-def _migration_attention_issue_counts(
-    conn: sqlite3.Connection, tables: set[str]
-) -> dict[tuple[str, str], int]:
-    """Return unresolved migration remediation work with bounded labels.
-
-    Import result rows preserve historical outcomes, including an
-    ``attention_needed`` result after its remediation has been completed.
-    The issue workflow is the authoritative current queue, so this gauge
-    counts only open typed issues rather than joining and over-counting source
-    records with multiple remediation steps.
-    """
-
-    if "domain_migration_issues" not in tables:
-        return {}
-    columns = _columns(conn, "domain_migration_issues")
-    if not {"record_type", "category"} <= columns:
-        return {}
-    resolution = (
-        "WHERE COALESCE(resolution_status, 'open') = 'open'"
-        if "resolution_status" in columns
-        else ""
-    )
-    values: dict[tuple[str, str], int] = {}
-    query = (
-        "SELECT record_type, category, COUNT(*) AS count "
-        f"FROM domain_migration_issues {resolution} GROUP BY record_type, category"
-    )
-    for row in conn.execute(query).fetchall():
-        record_type = _bounded_label(str(row["record_type"]), _MIGRATION_ATTENTION_RECORD_TYPES)
-        category = _bounded_label(str(row["category"]), _MIGRATION_ATTENTION_CATEGORIES)
-        key = (record_type, category)
-        values[key] = values.get(key, 0) + int(row["count"])
-    return values
 
 
 def _outbox_metrics(
@@ -2372,8 +2079,6 @@ def _publish_collected_metrics(
     telemetry_delivery_failure_latched: bool,
     source_states: Mapping[str, str],
 ) -> None:
-    global _PUBLISHED_MIGRATION_ATTENTION_LABELS
-
     snapshot = collected.snapshot
     risk_value = 1.0 if risk_state_known else math.nan
 
@@ -2409,36 +2114,6 @@ def _publish_collected_metrics(
                 1.0 if current_state == state else 0.0,
                 {"source": source, "state": state},
             )
-    for severity in _ISSUE_SEVERITIES:
-        for resolution in _ISSUE_RESOLUTIONS:
-            value = collected.migration_issues.get((severity, resolution), 0)
-            _gauge(
-                "ainrf_domain_migration_issues",
-                risk(float(value)),
-                {"severity": severity, "resolution_status": resolution},
-            )
-    for status in _MIGRATION_RUN_STATUSES:
-        _gauge(
-            "ainrf_domain_migration_runs",
-            risk(float(collected.migration_runs.get(status, 0))),
-            {"status": status},
-        )
-    for status in _MIGRATION_RECORD_STATUSES:
-        _gauge(
-            "ainrf_domain_migration_record_results",
-            risk(float(collected.migration_records.get(status, 0))),
-            {"status": status},
-        )
-    attention_labels = set(collected.migration_attention) | _PUBLISHED_MIGRATION_ATTENTION_LABELS
-    if not risk_state_known:
-        attention_labels.add(("unknown", "unknown"))
-    for record_type, category in sorted(attention_labels):
-        _gauge(
-            "ainrf_domain_migration_attention_needed_issues",
-            risk(float(collected.migration_attention.get((record_type, category), 0))),
-            {"record_type": record_type, "category": category},
-        )
-    _PUBLISHED_MIGRATION_ATTENTION_LABELS = attention_labels
     for state in _OUTBOX_BACKLOG_STATES:
         _gauge(
             "ainrf_domain_dispatch_outbox_entries",

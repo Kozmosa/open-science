@@ -260,19 +260,6 @@ groups:
             stale, unavailable, failed, or unknown card state. A fresh
             snapshot timestamp does not make that degraded data healthy.
 
-      - alert: AINRFDomainMigrationBlockingIssue
-        expr: ainrf_domain_migration_issues{severity="blocking",resolution_status="open"} > 0
-        for: 5m
-        labels:
-          severity: critical
-          component: domain-migration
-        annotations:
-          summary: "Open blocking domain migration issue"
-          description: >
-            A cutover-blocking migration issue remains unresolved. Prepare and
-            commit must remain unavailable until explicit remediation is
-            recorded.
-
       - alert: AINRFDomainOrphanAttempt
         expr: sum(ainrf_domain_orphan_attempts) > 0
         for: 5m
