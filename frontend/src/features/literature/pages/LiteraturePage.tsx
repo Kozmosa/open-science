@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ExternalLink } from "lucide-react";
+import { Clock3, ExternalLink, RefreshCw } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   Badge,
@@ -14,12 +14,14 @@ import {
   CardBody,
   DetailDrawer,
   EmptyState,
-  NativeSelect,
-  PageHeader,
   PageShell,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   StatusBadge,
-  UpdateStrip,
-  ViewToolbar,
+  type StatusBadgeTone,
 } from "@design-system";
 import {
   createLiteratureCheck,
@@ -54,6 +56,15 @@ const VIEWS: LiteratureInboxView[] = [
   "updated",
   "all",
 ];
+const ALL_FILTER_VALUE = "__all__";
+const CATEGORY_OPTIONS = [
+  "cs.AI",
+  "cs.CL",
+  "cs.CV",
+  "cs.LG",
+  "cs.RO",
+  "stat.ML",
+];
 
 interface LiteraturePageProps {
   renderTaskCreateFlow: (props: {
@@ -84,6 +95,25 @@ const POLL_INTERVALS = [5_000, 10_000, 20_000, 30_000];
 
 function progressiveInterval(dataUpdateCount: number): number {
   return POLL_INTERVALS[Math.min(dataUpdateCount, POLL_INTERVALS.length - 1)];
+}
+
+function checkStatusTone(
+  status: LiteratureCheckStatus | undefined,
+): StatusBadgeTone {
+  switch (status) {
+    case "failed":
+      return "danger";
+    case "partial":
+    case "retrying":
+      return "warning";
+    case "completed":
+      return "success";
+    case "planned":
+    case "checking":
+      return "info";
+    default:
+      return "neutral";
+  }
 }
 
 function formatDate(value: string | null, locale: "en" | "zh"): string {
@@ -512,14 +542,7 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
   const papers = papersQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const overview = overviewQuery.data;
   const activeCheck = overview?.active_check;
-  const stripTone =
-    activeCheck?.status === "failed"
-      ? "danger"
-      : activeCheck?.status === "partial" || activeCheck?.status === "retrying"
-        ? "warning"
-        : ACTIVE_CHECK_STATUSES.has(activeCheck?.status ?? "completed")
-          ? "info"
-          : "neutral";
+  const checkTone = checkStatusTone(activeCheck?.status);
 
   const submitResearchTask = async (selection: {
     project_id: string;
@@ -544,96 +567,186 @@ export default function LiteraturePage({ renderTaskCreateFlow }: LiteraturePageP
   return (
     <PageShell variant="canvas">
       <div className="mx-auto flex w-full max-w-[1450px] flex-col gap-4 p-4 md:p-6">
-        <PageHeader
-          eyebrow={t("literature.eyebrow")}
-          title={t("literature.inbox")}
-          description={t("literature.inboxDescription")}
-          actions={
-            <Button
-              onClick={startCheck}
-              isLoading={
-                checkMutation.isPending ||
-                Boolean(
-                  activeCheck && ACTIVE_CHECK_STATUSES.has(activeCheck.status),
-                )
-              }
+        <header className="flex flex-wrap items-end justify-between gap-x-5 gap-y-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--osci-color-primary)]">
+              {t("literature.eyebrow")}
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--osci-color-text)]">
+              {t("literature.inbox")}
+            </h1>
+          </div>
+          <Button
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={startCheck}
+            isLoading={
+              checkMutation.isPending ||
+              Boolean(
+                activeCheck && ACTIVE_CHECK_STATUSES.has(activeCheck.status),
+              )
+            }
+          >
+            <RefreshCw aria-hidden="true" size={14} />
+            {t("literature.checkLatest")}
+          </Button>
+        </header>
+
+        <section
+          className="overflow-hidden rounded-[var(--osci-radius-lg)] border border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface)] shadow-[var(--osci-shadow-sm)]"
+          data-testid="literature-controls"
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-2 p-2.5">
+            <div className="flex shrink-0 items-center gap-1 rounded-[var(--osci-radius-md)] bg-[var(--osci-color-surface-subtle)] p-0.5">
+              <Button
+                size="sm"
+                className="min-h-7 px-2.5"
+                variant={section === "inbox" ? "primary" : "ghost"}
+                onClick={() => updateSearch({ section: null })}
+              >
+                {t("literature.inboxSection")}
+              </Button>
+              <Button
+                size="sm"
+                className="min-h-7 px-2.5"
+                variant={section === "topics" ? "primary" : "ghost"}
+                onClick={() => updateSearch({ section: "topics" })}
+              >
+                {t("literature.manageTopics")}
+              </Button>
+            </div>
+            {section === "inbox" ? (
+              <nav
+                aria-label={t("literature.inboxViews")}
+                className="min-w-0 flex-1 overflow-x-auto"
+              >
+                <div className="flex w-max min-w-full items-center gap-1">
+                  {VIEWS.map((item) => {
+                    const count =
+                      item === "all" ? undefined : overview?.counts[item];
+                    return (
+                      <Button
+                        key={item}
+                        size="sm"
+                        className="min-h-7 whitespace-nowrap px-2.5"
+                        variant={view === item ? "secondary" : "ghost"}
+                        onClick={() =>
+                          updateSearch({ view: item === "today" ? null : item })
+                        }
+                      >
+                        {t(`literature.views.${item}`)}
+                        {count !== undefined ? (
+                          <span
+                            aria-hidden="true"
+                            className="ml-1.5 rounded-full bg-[var(--osci-color-surface-subtle)] px-1.5 py-0.5 text-[10px] leading-none tabular-nums text-[var(--osci-color-text-muted)]"
+                          >
+                            {count}
+                          </span>
+                        ) : null}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </nav>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--osci-color-border-subtle)] bg-[var(--osci-color-surface-subtle)]/45 px-2.5 py-2">
+            <div
+              className="flex min-w-0 flex-1 items-center gap-2 text-xs text-[var(--osci-color-text)]"
+              data-testid="literature-check-status"
             >
-              {t("literature.checkLatest")}
-            </Button>
-          }
-        />
-        <UpdateStrip tone={stripTone}>
-          Last check:{" "}
-          {formatDate(overview?.last_successful_check_at ?? null, locale)} ·
-          Next check:{" "}
-          {formatDate(overview?.next_scheduled_check_at ?? null, locale)}
-          {activeCheck
-            ? ` · ${activeCheck.status}${activeCheck.error ? ` · ${activeCheck.error}` : ""}`
-            : ""}
-        </UpdateStrip>
-        <ViewToolbar>
-          <Button
-            size="sm"
-            variant={section === "inbox" ? "primary" : "secondary"}
-            onClick={() => updateSearch({ section: null })}
-          >
-            Inbox
-          </Button>
-          <Button
-            size="sm"
-            variant={section === "topics" ? "primary" : "secondary"}
-            onClick={() => updateSearch({ section: "topics" })}
-          >
-            {t("literature.manageTopics")}
-          </Button>
-          {section === "inbox" ? (
-            <>
-              <div className="h-6 w-px bg-[var(--osci-color-border)]" />
-              {VIEWS.map((item) => (
-                <Button
-                  key={item}
-                  size="sm"
-                  variant={view === item ? "primary" : "ghost"}
-                  onClick={() =>
-                    updateSearch({ view: item === "today" ? null : item })
-                  }
-                >
-                  {t(`literature.views.${item}`)}
-                </Button>
-              ))}
-              <div className="ml-auto flex gap-2">
-                <NativeSelect
-                  aria-label={t("literature.filterTopic")}
-                  value={topicId ?? ""}
-                  onChange={(event) =>
-                    updateSearch({ topic: event.target.value || null })
-                  }
-                >
-                  <option value="">{t("literature.allTopics")}</option>
-                  {(topicsQuery.data?.items ?? []).map((topic) => (
-                    <option key={topic.topic_id} value={topic.topic_id}>
-                      {topic.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <NativeSelect
-                  aria-label={t("literature.filterCategory")}
-                  value={category ?? ""}
-                  onChange={(event) =>
-                    updateSearch({ category: event.target.value || null })
-                  }
-                >
-                  <option value="">{t("literature.allCategories")}</option>
-                  {["cs.AI", "cs.CL", "cs.CV", "cs.LG", "cs.RO", "stat.ML"].map(
-                    (item) => (
-                      <option key={item}>{item}</option>
-                    ),
-                  )}
-                </NativeSelect>
+              <Clock3
+                aria-hidden="true"
+                className="shrink-0 text-[var(--osci-color-text-muted)]"
+                size={14}
+              />
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="whitespace-nowrap">
+                  <span className="text-[var(--osci-color-text-muted)]">
+                    {t("literature.lastChecked")}
+                  </span>{" "}
+                  <span className="font-medium tabular-nums">
+                    {formatDate(overview?.last_successful_check_at ?? null, locale)}
+                  </span>
+                </span>
+                <span className="whitespace-nowrap">
+                  <span className="text-[var(--osci-color-text-muted)]">
+                    {t("literature.nextCheck")}
+                  </span>{" "}
+                  <span className="font-medium tabular-nums">
+                    {formatDate(overview?.next_scheduled_check_at ?? null, locale)}
+                  </span>
+                </span>
+                {activeCheck ? (
+                  <StatusBadge tone={checkTone}>
+                    {t(`literature.checkStatus.${activeCheck.status}`)}
+                  </StatusBadge>
+                ) : null}
+                {activeCheck?.error ? (
+                  <span className="min-w-0 truncate text-[var(--osci-color-danger-foreground)]">
+                    {activeCheck.error}
+                  </span>
+                ) : null}
               </div>
-            </>
-          ) : null}
-        </ViewToolbar>
+            </div>
+
+            {section === "inbox" ? (
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <Select
+                  value={topicId ?? ALL_FILTER_VALUE}
+                  onValueChange={(value) =>
+                    updateSearch({
+                      topic: value === ALL_FILTER_VALUE ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t("literature.filterTopic")}
+                    className="min-h-8 w-[9.5rem] px-2.5 py-1 text-xs"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER_VALUE}>
+                      {t("literature.allTopics")}
+                    </SelectItem>
+                    {(topicsQuery.data?.items ?? []).map((topic) => (
+                      <SelectItem key={topic.topic_id} value={topic.topic_id}>
+                        {topic.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={category ?? ALL_FILTER_VALUE}
+                  onValueChange={(value) =>
+                    updateSearch({
+                      category: value === ALL_FILTER_VALUE ? null : value,
+                    })
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t("literature.filterCategory")}
+                    className="min-h-8 w-[8.75rem] px-2.5 py-1 text-xs"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_FILTER_VALUE}>
+                      {t("literature.allCategories")}
+                    </SelectItem>
+                    {CATEGORY_OPTIONS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+          </div>
+        </section>
 
         {section === "topics" ? (
           <Card>
