@@ -16,6 +16,7 @@ _EXPORTS = {
         "MaintenanceModeError",
         "MaintenanceStatus",
         "ParticipantStatus",
+        "maintenance_is_active_read_only",
     )
 }
 __all__ = list(_EXPORTS)

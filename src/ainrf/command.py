@@ -124,8 +124,8 @@ def domain_worker(
         typer.Option(help="Claim and dispatch at most one durable Task, then exit."),
     ] = False,
 ) -> None:
-    """Run the no-port durable Conversation dispatcher."""
-    from ainrf.domain.conversation_worker import ConversationDispatcher
+    """Run the no-port current domain worker runtime."""
+    from ainrf.domain.conversation_worker import ConversationWorkerRuntime
 
     try:
         artifact_sha = _domain_worker_artifact_sha(state_root)
@@ -138,21 +138,18 @@ def domain_worker(
             err=True,
         )
         raise typer.Exit(code=2)
-    dispatcher = ConversationDispatcher(
+    worker = ConversationWorkerRuntime(
         state_root,
         artifact_sha=artifact_sha,
     )
-    if once:
-        processed = asyncio.run(dispatcher.run_once())
-        typer.echo(json_mod.dumps({"outcome": "completed" if processed else "idle"}, indent=2))
-        return
-
-    async def run_forever() -> None:
-        while True:
-            await dispatcher.run_once()
-            await asyncio.sleep(0.1)
-
-    asyncio.run(run_forever())
+    try:
+        if once:
+            result = asyncio.run(worker.run_once())
+            typer.echo(json_mod.dumps({"outcome": result.outcome}, indent=2))
+            return
+        asyncio.run(worker.run_forever())
+    finally:
+        worker.stop()
 
 
 @frontend_dev_app.command("prepare")

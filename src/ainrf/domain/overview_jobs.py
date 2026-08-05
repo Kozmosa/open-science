@@ -30,6 +30,7 @@ from ainrf.domain_control import (
     DomainWriteParticipant,
     MaintenanceLease,
     MaintenanceModeError,
+    maintenance_is_active_read_only as _maintenance_is_active_read_only,
 )
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -50,49 +51,6 @@ _RETRY_MAX_DELAY_SECONDS = 15 * 60
 _MAX_RETRY_COUNT = 3
 
 RefreshTrigger = Literal["manual", "scheduled", "catchup"]
-
-
-def _maintenance_is_active_read_only(state_root: Path) -> bool:
-    """Read the maintenance flag without constructing writable Overview state.
-
-    A planner can be started by the no-port worker, the compatibility CLI, or
-    an administrative Python caller while a restore/cutover owns the
-    maintenance epoch.  ``OverviewSnapshotService`` creates the runtime
-    directory and runs migrations in its constructor, so checking through the
-    ordinary maintenance service would already be a source mutation.  Keep
-    this narrow read-only probe in front of every writable planner bootstrap.
-
-    An existing WAL cannot be safely observed with SQLite's immutable URI, so
-    it is deliberately treated as active/indeterminate and the caller joins
-    maintenance as a drained participant instead of risking a write.
-    """
-
-    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
-    if not database_path.is_file():
-        return False
-    if database_path.with_name(f"{database_path.name}-wal").exists():
-        return True
-    try:
-        database_uri = f"{database_path.resolve().as_uri()}?mode=ro&immutable=1"
-        with sqlite3.connect(database_uri, uri=True, isolation_level=None) as connection:
-            table = connection.execute(
-                "SELECT 1 FROM sqlite_master "
-                "WHERE type = 'table' AND name = 'domain_maintenance_state'"
-            ).fetchone()
-            if table is None:
-                return False
-            row = connection.execute(
-                "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
-            ).fetchone()
-    except sqlite3.Error as exc:
-        raise RuntimeError(
-            "cannot read persisted domain maintenance state; refusing overview planner startup"
-        ) from exc
-    if row is None:
-        raise RuntimeError(
-            "persisted domain maintenance state is malformed; refusing overview planner startup"
-        )
-    return bool(row[0])
 
 
 def _utc_now() -> datetime:

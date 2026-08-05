@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -52,7 +51,11 @@ from ainrf.skills.registry_config_service import SkillRegistryConfigService
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.sessions import SessionManager
 from ainrf.terminal.tmux import TmuxAdapter
-from ainrf.domain_control import DomainMaintenanceService, DomainWriteParticipant
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    maintenance_is_active_read_only as _maintenance_is_active_read_only,
+)
 from ainrf.domain import (
     ConversationApplicationService,
     build_domain_modules,
@@ -74,53 +77,6 @@ def _run_sync_in_lifespan(callback: Callable[[], T]) -> Awaitable[T]:
 
 
 _LOG = logging.getLogger(__name__)
-
-
-def _maintenance_is_active_read_only(state_root: Path) -> bool:
-    """Inspect an existing maintenance flag without creating any state.
-
-    ``create_app`` normally builds several services whose constructors create
-    directories or run migrations.  During a staged restore/cutover, that is
-    already too late: the process must decide whether it may assemble its
-    writable service graph before it instantiates any of those services.
-
-    A missing control database or pre-maintenance schema is a normal fresh
-    install and therefore does not imply maintenance.  A present but unreadable
-    or malformed maintenance table is fail-closed: starting the writable graph
-    without a trustworthy answer would violate the maintenance epoch.
-    """
-
-    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
-    if not database_path.is_file():
-        return False
-    # A live WAL contains uncheckpointed state which immutable reads cannot
-    # observe.  A lone ``-shm`` is only SQLite's lock/cache artifact: without
-    # a WAL the main database remains complete and immutable mode is safe.
-    # Treat the former as indeterminate/fail-closed without penalising normal
-    # process restarts that merely left a shared-memory file behind.
-    if database_path.with_name(f"{database_path.name}-wal").exists():
-        return True
-    try:
-        database_uri = f"{database_path.resolve().as_uri()}?mode=ro&immutable=1"
-        with sqlite3.connect(database_uri, uri=True, isolation_level=None) as connection:
-            table = connection.execute(
-                "SELECT 1 FROM sqlite_master "
-                "WHERE type = 'table' AND name = 'domain_maintenance_state'"
-            ).fetchone()
-            if table is None:
-                return False
-            row = connection.execute(
-                "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
-            ).fetchone()
-    except sqlite3.Error as exc:
-        raise RuntimeError(
-            "cannot read persisted domain maintenance state; refusing writable API startup"
-        ) from exc
-    if row is None:
-        raise RuntimeError(
-            "persisted domain maintenance state is malformed; refusing writable API startup"
-        )
-    return bool(row[0])
 
 
 ROUTERS: tuple[APIRouter, ...] = (
