@@ -8,8 +8,11 @@ import os
 import sqlite3
 import subprocess
 from collections.abc import Callable, Mapping
-from contextlib import closing
+from contextlib import closing, suppress
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from ainrf.db import connect
 from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType, TurnStatus
@@ -18,11 +21,23 @@ from ainrf.domain.conversation_execution import (
     RuntimeExecutionClaim,
     SubmissionClaim,
 )
+from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
+from ainrf.domain_control import (
+    DomainMaintenanceService,
+    DomainWriteParticipant,
+    MaintenanceModeError,
+    maintenance_is_active_read_only,
+)
 from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngineType
 from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
 from ainrf.harness_engine.factory import create_engine
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
+from ainrf.literature.planner import run_planner_cycle
+from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.runtime import tenant_identity
+
+if TYPE_CHECKING:
+    from ainrf.literature.task_saga import LiteratureTaskSagaService
 
 
 _EVENT_ITEM: dict[str, tuple[TurnItemType, TurnItemActor]] = {
@@ -347,3 +362,167 @@ class ConversationDispatcher:
     def _optional_string(row: Mapping[str, object], key: str) -> str | None:
         value = row[key]
         return value if isinstance(value, str) and value else None
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationWorkerRunResult:
+    """Observable result of one current domain-worker cycle."""
+
+    outcome: str
+
+
+class ConversationWorkerRuntime:
+    """Compose every current no-port worker capability behind one Interface.
+
+    The worker Adapter owns maintenance participation, Overview scheduling,
+    Literature planning/recovery, and Conversation dispatch.  Historical
+    Attempt and cutover authorities are deliberately absent.
+    """
+
+    def __init__(
+        self,
+        state_root: Path,
+        *,
+        artifact_sha: str,
+        worker_id: str | None = None,
+        adapter_factory: Callable[[HarnessEngineType], ConversationRuntimeAdapter] | None = None,
+        context_factory: Callable[[SubmissionClaim], ExecutionContext] | None = None,
+    ) -> None:
+        if not artifact_sha:
+            raise ValueError("Conversation worker requires an immutable artifact SHA")
+        self._state_root = state_root
+        self._artifact_sha = artifact_sha
+        self.worker_id = worker_id or f"domain-worker-{uuid4().hex[:12]}"
+        self._maintenance = DomainMaintenanceService(state_root)
+        self._participant = DomainWriteParticipant(
+            self._maintenance,
+            "task-dispatcher",
+            participant_id=self.worker_id,
+            details={"component": "domain-worker"},
+        )
+        self._adapter_factory = adapter_factory
+        self._context_factory = context_factory
+        self._dispatcher: ConversationDispatcher | None = None
+        self._overview_planner: OverviewSnapshotPlanner | None = None
+        self._literature_tracking: LiteratureTrackingService | None = None
+        self._literature_saga: LiteratureTaskSagaService | None = None
+        self._started = False
+        self._writable_runtime_ready = False
+        self._maintenance_startup_read_only = maintenance_is_active_read_only(state_root)
+        if not self._maintenance_startup_read_only:
+            self._initialize_writable_runtime()
+
+    def _initialize_writable_runtime(self) -> None:
+        try:
+            lease = self._maintenance.begin_mutation(source="domain-worker.bootstrap")
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+            return
+        try:
+            self._maintenance.check_lease(lease)
+            self._dispatcher = ConversationDispatcher(
+                self._state_root,
+                artifact_sha=self._artifact_sha,
+                adapter_factory=self._adapter_factory,
+                context_factory=self._context_factory,
+            )
+            self._maintenance.check_lease(lease)
+            self._overview_planner = OverviewSnapshotPlanner(
+                self._state_root,
+                planner_id=f"{self.worker_id}:overview",
+                artifact_sha=self._artifact_sha,
+            )
+            self._maintenance.check_lease(lease)
+            self._literature_tracking = LiteratureTrackingService(self._state_root)
+            self._literature_tracking.initialize()
+            self._maintenance.check_lease(lease)
+            from ainrf.literature.task_saga import LiteratureTaskSagaService
+
+            self._literature_saga = LiteratureTaskSagaService(
+                self._state_root,
+                artifact_sha=self._artifact_sha,
+            )
+            self._maintenance.check_lease(lease)
+            self._writable_runtime_ready = True
+        except MaintenanceModeError:
+            self._maintenance_startup_read_only = True
+        finally:
+            self._maintenance.finish_mutation(lease)
+
+    def start(self) -> bool:
+        if self._maintenance_startup_read_only:
+            if not maintenance_is_active_read_only(self._state_root):
+                return False
+            if not self._started:
+                self._maintenance.adopt_existing_maintenance_schema()
+                self._participant.start()
+                self._started = True
+            return False
+        if not self._writable_runtime_ready:
+            return False
+        status = self._participant.heartbeat() if self._started else self._participant.start()
+        self._started = True
+        return status.status == "active"
+
+    def stop(self) -> None:
+        if self._overview_planner is not None:
+            self._overview_planner.stop()
+        if self._started:
+            self._participant.stop()
+            self._started = False
+
+    async def run_once(self) -> ConversationWorkerRunResult:
+        if not self.start():
+            return ConversationWorkerRunResult(outcome="maintenance_drained")
+        assert self._dispatcher is not None
+        assert self._overview_planner is not None
+        assert self._literature_tracking is not None
+        assert self._literature_saga is not None
+        overview = self._overview_planner.run_once()
+        if overview.outcome == "maintenance_drained":
+            self._participant.drain()
+            return ConversationWorkerRunResult(outcome="maintenance_drained")
+        try:
+            lease = self._participant.begin_mutation(source="task-dispatcher.cycle")
+        except MaintenanceModeError:
+            self._participant.drain()
+            return ConversationWorkerRunResult(outcome="maintenance_drained")
+        try:
+            run_planner_cycle(
+                self._literature_tracking,
+                check_lease=lambda: self._participant.check_lease(lease),
+            )
+            self._maintenance.check_lease(lease)
+            self._literature_saga.recover_pending(worker_id=f"{self.worker_id}:literature")
+            self._maintenance.check_lease(lease)
+            processed = await self._dispatcher.run_once()
+            self._participant.heartbeat()
+            return ConversationWorkerRunResult(outcome="completed" if processed else "idle")
+        except MaintenanceModeError:
+            self._participant.drain()
+            return ConversationWorkerRunResult(outcome="maintenance_drained")
+        finally:
+            self._participant.finish_mutation(lease)
+
+    async def run_forever(self, *, poll_seconds: float = 1.0) -> None:
+        if poll_seconds <= 0:
+            raise ValueError("poll_seconds must be positive")
+        self.start()
+        heartbeat_task = asyncio.create_task(self._heartbeat_forever(poll_seconds=poll_seconds))
+        try:
+            while True:
+                result = await self.run_once()
+                if result.outcome in {"idle", "maintenance_drained"}:
+                    await asyncio.sleep(poll_seconds)
+        finally:
+            heartbeat_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await heartbeat_task
+            self.stop()
+
+    async def _heartbeat_forever(self, *, poll_seconds: float) -> None:
+        interval = min(5.0, max(1.0, poll_seconds))
+        while True:
+            if self._started:
+                self._participant.heartbeat()
+            await asyncio.sleep(interval)

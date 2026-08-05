@@ -117,7 +117,7 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
     calls: list[str] = []
     artifact_sha = "a" * 64
 
-    class FakeDispatcher:
+    class FakeWorker:
         def __init__(
             self,
             state_root: Path,
@@ -128,11 +128,14 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
             assert artifact_sha == "a" * 64
             calls.append("init")
 
-        async def run_once(self) -> bool:
+        async def run_once(self) -> SimpleNamespace:
             calls.append("once")
-            return False
+            return SimpleNamespace(outcome="idle")
 
-    monkeypatch.setattr("ainrf.domain.conversation_worker.ConversationDispatcher", FakeDispatcher)
+        def stop(self) -> None:
+            calls.append("stop")
+
+    monkeypatch.setattr("ainrf.domain.conversation_worker.ConversationWorkerRuntime", FakeWorker)
     monkeypatch.setattr(
         "ainrf.command._domain_worker_artifact_sha", lambda _state_root: artifact_sha
     )
@@ -141,7 +144,7 @@ def test_domain_worker_once_runs_one_dispatch_and_stops(
 
     assert result.exit_code == 0
     assert json.loads(result.stdout) == {"outcome": "idle"}
-    assert calls == ["init", "once"]
+    assert calls == ["init", "once", "stop"]
 
 
 def test_domain_worker_requires_current_artifact_before_constructing_dispatcher(
@@ -149,7 +152,7 @@ def test_domain_worker_requires_current_artifact_before_constructing_dispatcher(
 ) -> None:
     monkeypatch.setattr("ainrf.command._domain_worker_artifact_sha", lambda _state_root: None)
     monkeypatch.setattr(
-        "ainrf.domain.conversation_worker.ConversationDispatcher",
+        "ainrf.domain.conversation_worker.ConversationWorkerRuntime",
         lambda *_args, **_kwargs: pytest.fail("missing artifact must not start a domain worker"),
     )
 

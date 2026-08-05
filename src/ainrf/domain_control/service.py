@@ -109,6 +109,41 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def maintenance_is_active_read_only(state_root: Path) -> bool:
+    """Inspect the maintenance flag before writable Modules are constructed.
+
+    A live WAL makes an immutable read indeterminate, so process composition
+    fails closed and joins maintenance as an incomplete, drained process.
+    """
+
+    database_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    if not database_path.is_file():
+        return False
+    if database_path.with_name(f"{database_path.name}-wal").exists():
+        return True
+    try:
+        database_uri = f"{database_path.resolve().as_uri()}?mode=ro&immutable=1"
+        with sqlite3.connect(database_uri, uri=True, isolation_level=None) as connection:
+            table = connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'domain_maintenance_state'"
+            ).fetchone()
+            if table is None:
+                return False
+            row = connection.execute(
+                "SELECT is_active FROM domain_maintenance_state WHERE singleton = 1"
+            ).fetchone()
+    except sqlite3.Error as exc:
+        raise RuntimeError(
+            "cannot read persisted domain maintenance state; refusing writable startup"
+        ) from exc
+    if row is None:
+        raise RuntimeError(
+            "persisted domain maintenance state is malformed; refusing writable startup"
+        )
+    return bool(row[0])
+
+
 class DomainMaintenanceService:
     """Coordinate a persistent, cross-process migration maintenance epoch."""
 

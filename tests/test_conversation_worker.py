@@ -6,8 +6,10 @@ from pathlib import Path
 import pytest
 
 from ainrf.db import connect, run_pending
+from ainrf.domain import OverviewSnapshotService
 from ainrf.domain.conversation_service import ConversationApplicationService
-from ainrf.domain.conversation_worker import ConversationDispatcher
+from ainrf.domain.conversation_worker import ConversationDispatcher, ConversationWorkerRuntime
+from ainrf.domain_control import DomainMaintenanceService
 from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngineType
 from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine
@@ -111,6 +113,44 @@ async def test_dispatcher_projects_engine_events_to_canonical_items(state_root: 
     assert task["runtime_status"] == "idle"
     assert turns[0]["status"] == "completed"
     assert [item["item_type"] for item in items] == ["user_message", "agent_message"]
+
+
+@pytest.mark.anyio
+async def test_worker_runtime_advertises_current_dispatch_and_overview_readiness(
+    state_root: Path,
+) -> None:
+    artifact_sha = "a" * 64
+    worker = ConversationWorkerRuntime(
+        state_root,
+        artifact_sha=artifact_sha,
+        worker_id="domain-worker-test",
+        adapter_factory=lambda _engine_type: FakeRuntimeAdapter(),
+        context_factory=lambda claim: ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        ),
+    )
+    try:
+        result = await worker.run_once()
+
+        assert result.outcome == "completed"
+        dispatcher = DomainMaintenanceService(state_root).participant_readiness("task-dispatcher")
+        assert dispatcher["ready"] is True
+        assert dispatcher["active_participant_ids"] == ["domain-worker-test"]
+        overview = OverviewSnapshotService(
+            state_root,
+            artifact_sha=artifact_sha,
+        ).planner_readiness()
+        assert overview["job_store_ready"] is True
+        assert overview["planner_ready"] is True
+    finally:
+        worker.stop()
+
+    dispatcher = DomainMaintenanceService(state_root).participant_readiness("task-dispatcher")
+    assert dispatcher["ready"] is False
 
 
 @pytest.mark.anyio
