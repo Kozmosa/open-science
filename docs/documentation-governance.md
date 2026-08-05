@@ -26,6 +26,31 @@ doc_state: current
 
 设计文档不能仅凭日期较新就覆盖代码或长期治理约束。若 accepted spec 尚未实现，必须明确写出“等待实现”；若代码已经偏离它，应重新确认、修订或归档。
 
+## Agent instruction planes
+
+仓库明确区分 contributor agent 与产品运行时 research agent 的提示平面，避免两个同名 `CLAUDE.md` 被误认为同一 authority：
+
+| 平面 | 入口与来源 | 职责 | 维护规则 |
+| --- | --- | --- | --- |
+| Durable project basis | `PROJECT_BASIS.md` | 项目身份、长期边界、架构 invariant、维护与安全底线 | 只允许用户人工修改；其他提示不得覆盖 |
+| Contributor agent | `AGENTS.md`、任务相关 `.rules/` 与本文件定义的 current docs | 代码贡献、验证、worktree、文档与运维协作方式 | `AGENTS.md` 是跨 Agent 宿主的 canonical 操作入口；细节按任务渐进披露 |
+| Claude host adapter | 根目录 `CLAUDE.md` | 让 Claude Code 显式导入 `PROJECT_BASIS.md` 与 `AGENTS.md` | 必须保持纯 import stub，不独立复制或新增规则 |
+| Runtime operator guardrail | `deploy/config/CLAUDE.md`，经容器 entrypoint 与 Agent SDK config 复制链注入 | PDF 分块、工具输出上限、SDK transport 与错误恢复等产品运行时行为 | 只约束 OpenScience 启动的 research-agent 会话；不得覆盖 contributor authority |
+
+机器或开发者私有提示只可记录非规范性的本机事实，例如可执行文件位置或资源上限。它们不得覆盖项目身份、架构、权限、production safety、文档 authority 或其他 `PROJECT_BASIS.md` 长期规则，也不得成为团队依赖但不可审阅的隐藏 contract。
+
+### 加载与渐进披露
+
+1. Claude Code 通过根 `CLAUDE.md` 的 import stub 加载两个 canonical 根文件；支持 `AGENTS.md` 的宿主直接发现同一操作入口。
+2. `AGENTS.md` 只保留跨任务必需的 authority、工作原则、上下文路由、安全与验证入口。
+3. `.rules/`、subsystem README 和 current architecture docs 只在任务命中其路由时加载，不递归读取无关 reference、archive 或历史 spec。
+4. README 默认是导航层，不因目录更近或日期更新而获得更高 authority；它必须指向当前 contract，并接受 drift gate 检查。
+5. 已归档 spec、worklog 与研究材料只能解释历史，不能反向注入当前实现要求。
+
+### Instruction drift gate
+
+`uv run python scripts/check_agent_instructions.py` 检查 Claude import stub、canonical 文件存在性、根指令必要章节、受治理文档的本地 Markdown 链接、已知退休路径和 runtime guardrail 注入链。该检查进入 L0 与 L1 backend gate，用于捕获结构性漂移；语义冲突仍必须由 Agent 报告并由用户裁定，不能假装由字符串检查自动解决。
+
 ## 目录职责
 
 | 目录 | 职责 | 是否定义当前事实 |

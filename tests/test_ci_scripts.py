@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tomllib
 from typing import cast
 
@@ -101,6 +102,7 @@ def test_l0_runs_bounded_backend_and_frontend_checks(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     commands = _command_lines(log_path)
+    assert "uv run python scripts/check_agent_instructions.py" in commands
     assert "uv run ruff check src tests scripts" in commands
     assert "uv run ruff format --check src tests scripts" in commands
     assert (
@@ -126,6 +128,7 @@ def test_l1_backend_partitions_parallel_and_serial_tests(tmp_path: Path) -> None
 
     assert result.returncode == 0, result.stderr
     commands = _command_lines(log_path)
+    assert "uv run python scripts/check_agent_instructions.py" in commands
     assert "uv run ty check" in commands
     assert "uv run pytest tests/ -m not concurrent and not db_race -q --timeout=60 -n 4" in commands
     assert "uv run pytest tests/ -m concurrent or db_race -q --timeout=120 -n 0" in commands
@@ -256,6 +259,22 @@ def test_l1_docs_builds_public_site(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert _command_lines(log_path) == ["npm --prefix docs-site run build"]
+
+
+def test_agent_instruction_governance_check_passes() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    result = subprocess.run(
+        [sys.executable, str(repo_root / "scripts" / "check_agent_instructions.py")],
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "agent-instructions: ok"
 
 
 def test_pytest_defaults_do_not_auto_scale_or_rerun() -> None:

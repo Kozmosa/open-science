@@ -22,6 +22,8 @@ _run() {
 }
 
 run_python_quality() {
+  _info "Agent instruction drift"
+  _run uv run python scripts/check_agent_instructions.py
   _info "Python dependency direction"
   _run uv run python scripts/check_dependency_direction.py
   _info "Python lint and format"
@@ -100,7 +102,7 @@ Usage: bash scripts/ci.sh <command>
 Commands:
   l0             Run the bounded agent/developer inner loop
   l1             Run the complete deterministic backend, frontend, and docs gate
-  l1-backend     Run Python lint, format, types, and backend tests
+  l1-backend     Run instruction drift, Python quality, types, and backend tests
   l1-frontend    Run frontend lint, correctness tests, and production build
   l1-docs        Build the public documentation site
   describe       Describe all five CI layers and their implementation status

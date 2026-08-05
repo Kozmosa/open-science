@@ -1,281 +1,265 @@
 # Repository Guidelines
 
-## Instruction Priority
+## Authority and Conflict Handling
 
-Agents working in this repository must treat [`PROJECT_BASIS.md`](PROJECT_BASIS.md) as the highest-authority, human-reviewed source of long-lived project facts and rules.
+[`PROJECT_BASIS.md`](PROJECT_BASIS.md) is the highest-authority, human-reviewed
+source of long-lived OpenScience facts and rules.
 
-- **Agents must never edit `PROJECT_BASIS.md`.** It may only be changed manually by the user after human review. If a correction is needed, stop the affected work and ask the user to review it, or create an issue when the user has authorized issue creation.
-- Follow `PROJECT_BASIS.md` for project identity, goals, durable boundaries, documentation placement, architecture invariants, and maintenance rules.
-- `AGENTS.md`, `CLAUDE.md`, nested agent instructions, current docs, specs, and implementation plans must not contradict `PROJECT_BASIS.md`.
-- If any of those files contradict `PROJECT_BASIS.md`, do not choose the stricter, newer, or more implementation-aligned rule. Stop the affected decision and explicitly ask the user how the documentation drift should be resolved.
-- If `PROJECT_BASIS.md` appears inconsistent with current code, schemas, tests, deployment configuration, or other engineering facts, do not silently treat either side as authoritative. Ask the user to re-review the engineering facts and manually correct `PROJECT_BASIS.md` or direct an implementation correction.
-- If no trustworthy higher-authority document resolves a material conflict, stop and ask the user rather than making an autonomous governance decision.
-- A task-specific user instruction may override ordinary repository workflow for that task, but an apparent change to a durable `PROJECT_BASIS.md` rule must be called out explicitly and remains a user-owned manual documentation change.
+- Agents must never edit `PROJECT_BASIS.md`. Only the user may change it after
+  human review.
+- Repository instructions, local guidance, current docs, specs, plans, code,
+  schemas, tests, and deployment configuration must not silently override it.
+- If another instruction contradicts `PROJECT_BASIS.md`, stop the affected
+  decision and ask the user how the drift should be resolved. Do not choose the
+  stricter, newer, or more implementation-aligned statement automatically.
+- If reliable engineering evidence appears to contradict `PROJECT_BASIS.md`,
+  report the evidence and ask the user to choose an implementation correction
+  or a manual `PROJECT_BASIS.md` revision.
+- A task-specific user instruction may override ordinary repository workflow
+  for that task, but a durable project-basis change remains user-owned.
 
-- Review [`dev-bitter-lesson.md`](dev-bitter-lesson.md) before debugging frontend deployment, browser/devtools tooling, multi-tenant permissions, or session-scoped config issues. It captures recurring high-cost mistakes and the corresponding fixed workflow.
+## Working Principles
 
-## Project Structure & Module Organization
+- State assumptions when they materially affect behavior, architecture, data,
+  safety, or scope. Resolve high-impact ambiguity before implementing.
+- Prefer the smallest coherent change that fully satisfies the request. Do not
+  add speculative configurability, abstractions, or adjacent cleanup.
+- Keep changes surgical. Preserve unrelated code, comments, formatting, and
+  user-owned work; remove only artifacts made obsolete by the current change.
+- Convert work into verifiable outcomes. For a bug, obtain a reproducer or
+  regression test when practical; for a multi-step change, identify the check
+  that proves each step.
+- Fix rules at the module, authority, or seam that owns them. Surface the
+  tradeoff before introducing a downstream workaround for an upstream limit.
+- Use repository or framework facilities before creating custom machinery.
+- Report which validations ran and why any relevant validation was skipped.
 
-This repository's active product surface is the OpenScience runtime plus WebUI, while the docs tree remains the long-lived product/reference knowledge base:
+## Context Routing
 
-- `frontend/`: React + Vite WebUI for OpenScience.
-- `src/ainrf/`: Python package, CLI, backend API, and runtime code.
-- `docs/`: Obsidian-style research notes and design docs. Key areas are `docs/framework/`, `docs/projects/`, and `docs/summary/`.
-- `docs-site/`: VitePress product documentation site (deployed to GitHub Pages).
-- `tests/`: CLI smoke tests for the Python package.
-- `scripts/`: local build helpers.
+Read only the task-relevant material below; do not recursively load unrelated
+reference or archived documents. A directory README is navigational context,
+not an authority that can override `PROJECT_BASIS.md`, current code, schemas, or
+tests.
 
-Reference repositories live under `ref-repos/` and are treated as read-only research inputs.
+| Task touches | Required context |
+| --- | --- |
+| Backend, API, domain, runtime, or CLI | [`src/ainrf/README.md`](src/ainrf/README.md) and [`docs-site/docs/architecture.md`](docs-site/docs/architecture.md) |
+| Frontend implementation, tests, or browser behavior | [`frontend/README.md`](frontend/README.md) and [`.rules/frontend-and-testing.md`](.rules/frontend-and-testing.md) |
+| Frontend deployment, DevTools, session-scoped config, or recurring environment failures | [`dev-bitter-lesson.md`](dev-bitter-lesson.md) before diagnosis |
+| Tenant provisioning, auth, uploads, workspace paths, or cross-user execution | [`.rules/multi-tenant-permissions.md`](.rules/multi-tenant-permissions.md) and the relevant `dev-bitter-lesson.md` section |
+| Worktrees, branch synchronization, merges, or cleanup | [`.rules/git-workflow.md`](.rules/git-workflow.md) and [`.rules/worktree-working-guide.md`](.rules/worktree-working-guide.md) |
+| Active specs, plans, authority, archival, or long-lived docs | [`docs/documentation-governance.md`](docs/documentation-governance.md) and the active spec inventory |
+| Staging | [`.rules/staging-environment.md`](.rules/staging-environment.md) |
+| Production, release, rollback, backup, or observability operations | [`.rules/deployment.md`](.rules/deployment.md); production actions still require explicit user authorization |
+| Generated HTTP transport | [`frontend/src/generated/transport/README.md`](frontend/src/generated/transport/README.md) and the architecture contract |
 
-## Project Overview
+## Project Surface
 
-`scholar-agent` currently centers on the OpenScience frontend/backend product surface. OpenScience is the user-facing product brand and `openscience` is the project CLI. AINRF is the backend: `ainrf` is the canonical Python package, runtime identity, service/config namespace, state-path identity, and telemetry namespace. Backend environment variables use `AINRF_*`; corresponding `OPENSCIENCE_*` backend variables are compatibility aliases. Repository-wide development and orchestration variables such as `OPENSCIENCE_DEV_*`, `OPENSCIENCE_L2_*`, and bounded CI worker controls may retain the OpenScience project prefix. `src/ainrf/` and `frontend/` contain the active CLI, backend API, WebUI, and runtime capabilities. `docs/`, `ref-repos/`, and historical research notes remain long-lived knowledge and reference assets that support product design, implementation choices, and traceability. Notes continue to use Chinese content with English file slugs. Product documentation is built with VitePress in `docs-site/` and deployed to GitHub Pages.
+The active product is the OpenScience runtime and WebUI:
+
+- `src/ainrf/`: canonical Python package, CLI, backend API, domain Modules, and
+  runtime code.
+- `frontend/`: React + Vite WebUI.
+- `docs-site/`: current public product documentation.
+- `docs/`: internal design, engineering reference, research input, history, and
+  working memory governed by `docs/documentation-governance.md`.
+- `tests/`: backend, API, middleware, engine, CLI, integration, and regression
+  tests.
+- `scripts/`: repository-level build, validation, development, and release
+  helpers.
+- `ref-repos/`: read-only research inputs; never treat them as product source.
+
+OpenScience is the user-facing brand. `ainrf` is the canonical backend package,
+runtime, state-path, Linux, deployment, telemetry, and backend configuration
+identity. Backend variables use `AINRF_*`; corresponding `OPENSCIENCE_*`
+variables are compatibility aliases. Repository development and orchestration
+variables may use the OpenScience prefix as defined by `PROJECT_BASIS.md`.
 
 ## LLM Working Log
 
-- `docs/LLM-Working/` is versioned working memory for plans, checklists, smoke notes, and agent-side implementation records.
-- Daily work logs must live under `docs/LLM-Working/worklog/` using one file per day named `YYYY-MM-DD.md`.
-- Before or during a work session, if today's file does not exist yet, create it first and keep appending to that same file for the rest of the day.
-- The default unit is one changelog entry per completed modification plan or work slice, not one line per atomic edit/validation/commit action.
-- Each changelog entry must record at least the time, the completed slice or plan label, the substantive change summary, and the validation outcome. If that slice produced commits, append the commit hash and subject in the same entry.
-- Do not use the worklog as a transcript of commit subjects or atomic slice labels; summarize what the completed batch actually changed and verified.
-- Treat the worklog as append-only session history. Do not silently rewrite earlier entries unless you are correcting an objective factual mistake.
+- When a task actually modifies, develops, validates, or commits repository
+  state, use `docs/LLM-Working/worklog/YYYY-MM-DD.md`. Read-only explanation,
+  review, or investigation does not create a worklog entry by itself.
+- Create today's file if needed, then append one changelog entry per completed
+  work slice rather than one line per atomic edit or command.
+- Record the time, slice label, substantive result, and validation outcome. If
+  the slice creates commits, identify them in the same entry.
+- Keep the log append-only except when correcting an objective factual error.
 
 ## Build, Test, and Development Commands
 
-- `cd docs-site && npm run dev`: start the docs site dev server with hot reload.
-- `cd docs-site && npm run build`: build the static docs site for production.
-- `cd docs-site && npm run preview`: preview the production build locally.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run openscience --help`: inspect the CLI scaffold.
-  The legacy `ainrf` CLI remains available during the OpenScience compatibility phase.
-- `bash scripts/ci.sh l0`: run the bounded agent/developer inner loop.
-- `bash scripts/ci.sh l1`: run the complete deterministic backend/frontend/docs gate without Docker or external services.
-- `bash scripts/dev.sh up --profile full`: start the worktree-isolated Vite HMR, reloadable API, deterministic fixture worker, and synthetic v2 state.
-- `bash scripts/dev.sh smoke --profile full`: verify the local frontend proxy, health, capabilities, and domain projections without Docker or browser E2E.
-- `bash scripts/dev.sh doctor --profile full --browser`: verify Chrome, chrome-devtools MCP configuration, and an isolated CDP launch; restart the agent session if browser tools are still absent.
-- `bash scripts/test.sh all`: run the backend suite with a bounded parallel lane and a separate serial race/contention lane. The default worker limit is 8; lower it with `OPENSCIENCE_PYTEST_WORKERS`. Do not use `-n auto` on the shared production/development host.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff check src tests scripts`: run lint checks.
-- `UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check src tests scripts`: verify formatting.
+- Fast inner loop: `bash scripts/ci.sh l0`.
+- Complete deterministic gate: `bash scripts/ci.sh l1`.
+- Backend lanes: `bash scripts/test.sh api`, `unit`, `middleware`, `engine`, or
+  `all`.
+- Frontend contract/lint/tests/build: `npm --prefix frontend run
+  check:transport`, `lint`, `test:run`, and `build`.
+- Public docs build: `npm --prefix docs-site run build`.
+- Local full-profile development: `bash scripts/dev.sh up --profile full`, then
+  `bash scripts/dev.sh smoke --profile full`.
+- Browser preflight: `bash scripts/dev.sh doctor --profile full --browser`.
 
-### Build & Serve Shortcuts
+Use `uv run` so Python execution follows the lockfile. Backend pytest defaults
+to at most 8 workers and frontend Vitest to at most 4; lower them with
+`OPENSCIENCE_PYTEST_WORKERS` and `OPENSCIENCE_VITEST_WORKERS`. Never use
+unbounded `-n auto` on the shared host.
 
-- `cd docs-site && npm run build`: build the static docs site.
-- `cd docs-site && npm run dev`: run the local docs dev server with hot reload.
+All frontend tooling lives under `frontend/`. Prefer `npm --prefix frontend ...`
+from the repository root. Do not invoke root-level `npx tsc`, `tsc --noEmit`, or
+an ad-hoc `tsc -b`; the supported build uses TypeScript project references
+through `npm --prefix frontend run build`.
 
-Dependencies are managed by `uv`. Prefer `uv run ...` over manual venv activation so execution stays aligned with the lockfile.
+`VITE_USE_MOCK=true` is an offline, contract-validated MSW browser scenario. It
+must not be cited as real backend, worker, permission, or persistence evidence.
 
-### Five-Layer Hybrid CI
+### Verification by Change Type
 
-- `L0` agent/developer inner loop: `bash scripts/ci.sh l0`.
-- `L1` deterministic gate: `bash scripts/ci.sh l1`; GitHub-hosted jobs run backend, frontend, and docs lanes separately.
-- `L2` isolated container integration: reserved for per-SHA local CI cells; never reuse shared staging.
-- `L3` deep system verification: trusted, serialized local tests for tenant permissions, SSH/tmux, backup/restore, full runtime, and performance.
-- `L4` release acceptance: a planned maintenance-window release with verified backup/restore, version-consistent immutable artifacts, read-only post-smoke, and an executable manual rollback. Independent release staging is optional.
-- Public pull-request code must never execute on a self-hosted runner attached to the production machine or its Docker daemon.
-- Backend pytest defaults to at most 8 workers and frontend Vitest defaults to at most 4; lower them with `OPENSCIENCE_PYTEST_WORKERS` and `OPENSCIENCE_VITEST_WORKERS` when the shared host is under load.
-- The long-lived design is documented in [`docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md`](docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md).
+- Python or repository scripts: run the relevant focused lane and
+  `bash scripts/ci.sh l1` before submission.
+- Frontend: run transport drift, lint, relevant Vitest tests, and the production
+  build; use DevTools when the claim concerns DOM, styles, network, focus, or
+  loaded assets.
+- Public docs: run `npm --prefix docs-site run build`.
+- Agent instruction or governance docs: run
+  `uv run python scripts/check_agent_instructions.py` and `git diff --check`;
+  run the docs-site build when public docs are affected.
 
-### Frontend Command Constraints
+The five-layer CI model is defined in
+[`docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md`](docs/superpowers/specs/2026-07-11-five-layer-hybrid-ci-design.md).
+L0/L1 do not use Docker or external services. Public PR code must never run on a
+self-hosted runner attached to the production machine or Docker daemon.
 
-- All frontend tooling lives under `frontend/`. Commands must either `cd frontend && ...` or use `npm --prefix frontend ...`.
-- **Prefer `--prefix`**: `npm --prefix frontend run <script>` works regardless of current `pwd` and avoids the most common worktree mistake (running `npm` from the repo root).
-- Frontend type-check: `npm --prefix frontend run build` wraps `tsc -b`. Do **not** invoke `tsc -b` directly from outside `frontend/`.
-- Frontend tests: `npm --prefix frontend run test:run` (vitest runs test files in parallel by default; pass `--no-file-parallelism` for serial execution).
-- Frontend lint: `npm --prefix frontend run lint`.
-- Do **not** use `npx tsc --noEmit`, `npx tsc -p tsconfig.app.json`, or run plain `tsc` / `npx tsc -b` from the repo root — the latter may install an unrelated `tsc` npm package.
-- This frontend uses TypeScript project references; always use `tsc -b` from the `frontend/` directory.
-- When installing dependencies: `npm --prefix frontend install [-D] <pkg>`.
-- The managed synthetic API is the primary DevTools validation surface. `VITE_USE_MOCK=true` starts the contract-validated MSW browser scenario only for offline frontend work; it must not be cited as real API or worker evidence.
+## Coding and Architecture Rules
 
-## Worktree Working Guide
+- Python under `src/ainrf/`, `tests/`, and `scripts/` targets `>=3.13`, uses
+  4-space indentation, and requires strict type annotations. Use `snake_case`
+  for modules/functions/variables and `PascalCase` for classes.
+- Ruff owns Python formatting and lint; `ty` owns static type checking.
+- Current Task behavior is owned by the Conversation Domain's Task, Turn, Item,
+  TurnSubmission, RuntimeExecution, and EngineConversationBinding model.
+  `agentic_researcher/` owns presets, engine configuration, and explicit
+  compatibility types; it does not own Task CRUD or lifecycle writes.
+- `harness_engine/` owns execution-engine adapters. Product application Modules
+  must not depend on the HTTP Adapter in `ainrf.api`, including through lazy,
+  dynamic, or string imports.
+- Canonical product HTTP routes use `/api`. `/v1/models` and `/v1/messages` are
+  separate, supported external-model protocol interfaces.
+- Frontend dependency direction is `app -> features -> shared/design-system`.
+  Pages consume feature view models, not raw generated transport payloads.
+- Use shared layout primitives from `frontend/src/components/layout/`; dynamic
+  Tailwind classes do not work, and `@dnd-kit` draggable wrappers must not be
+  nested.
 
-Worktree sessions differ from working in the main repo tree:
+### Multi-Tenant Permissions
 
-- **CWD is the repo root**, not `frontend/`. Shell state (including `cd`) does not persist across tool calls.
-- All frontend commands must use `npm --prefix frontend ...` or explicit `cd frontend && ...`.
-- `sed` batch import rewrites are fast but brittle — grep the full match set before running a batch, replace most-specific paths first, and verify with `npm --prefix frontend run build` immediately after.
-- `git mv <src> <target>` silently nests when `<target>` already exists; check target existence first.
-- When multiple planning documents exist (e.g., proposal vs implementation plan), their Phase 1 scopes may differ — cross-reference and clarify priority before starting.
+Linux user isolation is authoritative: the backend runs as `ainrf`, tenants as
+`ainrf_<tenant>`, and tenant execution through `sudo -u`. Never assume `ainrf`
+can write below `/home/ainrf_tenants/`; create tenant files and directories as
+the tenant user. Follow the permission rule document for every affected path.
 
-> **Full details (CWD discipline, tsc hazards, sed mitigation, git mv pitfalls, config paths, dual-plan scoping)**: [.rules/worktree-working-guide.md](.rules/worktree-working-guide.md)
+### API and Runtime Guardrails
 
-## Coding Style & Naming Conventions
+- External tools probe `/v1/models` and `/v1/messages`; keep their API-key
+  middleware exemptions consistent when related protocol paths change.
+- Localhost environment detection is SSH-first. After bounded repeated failure,
+  fall back to the user's personal tmux session and surface a WebUI warning.
+- Keep tmux probe marker output newline-safe; literal `n` output previously
+  broke parsing.
 
-Use 4-space indentation and keep Python compatible with `>=3.13`. All Python code in `src/ainrf/`, `tests/`, and `scripts/` must include strict type annotations. Treat missing annotations as defects, not optional cleanup. Use `snake_case` for files, functions, and variables; use `PascalCase` for classes.
+## Generated Artifacts
 
-For notes, keep file slugs in English and content in Chinese. Use Obsidian wikilinks like `[[framework/v1-rfc]]`, YAML frontmatter, and Mermaid fences when needed.
+| Generated path | Authority | Supported action |
+| --- | --- | --- |
+| `frontend/src/generated/transport/` | FastAPI/Pydantic OpenAPI | Change backend schemas/routes, then run `npm --prefix frontend run generate:transport` |
+| `frontend/dist/` and target-specific frontend bundles | Frontend source and Vite/build configuration | Rebuild; never edit generated bundles manually |
+| `docs-site/dist/` | `docs-site/docs/` and VitePress configuration | Run `npm --prefix docs-site run build`; never edit output manually |
 
-Formatting and linting are enforced with `ruff`; static type checking must pass with `ty`; pre-commit hooks are defined in `.pre-commit-config.yaml`.
+Generated transport is imported only at API, adapter, and mock boundaries. Run
+`npm --prefix frontend run check:transport` to detect schema or generated-file
+drift.
 
-## Architecture
+## Specs, Plans, and Notes
 
-### AgenticResearcher 架构
-
-任务系统采用两层架构：
-
-- `agentic_researcher/` - 研究员层，负责任务管理和预设配置
-- `harness_engine/` - 执行引擎层，负责底层执行能力
-
-废弃的模块：
-
-- `tasks/` - 旧的 ManagedTask 系统（已删除）
-- `task_harness/` - 旧的 TaskHarness 系统（已删除）
-
-
-### Multi-Tenant Permission Model
-
-OpenScience uses Linux user isolation for multi-tenancy (`ainrf` backend user, `ainrf_<tenant>` per tenant, `sudo -u` execution). Any code creating files/dirs in tenant paths must use the tenant user. Never assume the `ainrf` user can write to `/home/ainrf_tenants/`.
-
-> **Full details including code-path audit table**: [.rules/multi-tenant-permissions.md](.rules/multi-tenant-permissions.md)
-
-### Docs Build Pipeline
-
-Product documentation lives in `docs-site/` and is built with VitePress:
-
-1. Content files are in `docs-site/docs/` (Markdown format).
-2. Sidebar and navigation configured in `docs-site/docs/.vitepress/config.mts`.
-3. `npm run build` generates static HTML to `docs-site/dist/`.
-4. CI deploys `docs-site/dist/` to GitHub Pages on push to master.
-
-Internal research notes in `docs/` use Obsidian-style Markdown with wikilinks and are not part of the public docs site.
-
-### Directory Layout Notes
-
-- `docs/index.md`: top-level docs/research index.
-- `docs/projects/`: per-project research reports.
-- `docs/framework/`: OpenScience design notes.
-- `docs/summary/`: cross-project comparison and synthesis.
-- `.codex-skill-staging/`: Codex skill definitions and staging assets.
-
-### Frontend Patterns
-
-Use shared layout primitives (`PageShell`, `SplitPane`, `SectionStack`, `CardGrid`) from `frontend/src/components/layout/`. Dynamic Tailwind classes do not work — use static lookup maps. Do not nest `@dnd-kit` draggable wrappers.
-
-> **Full details (component API, Tailwind, DnD, DevTools config, E2E testing)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
-
-### API Key Middleware
-
-- External tools may probe Anthropic-compatible endpoints such as `/v1/models` and `/v1/messages`.
-- These are exempted from API key auth in `src/ainrf/api/middleware.py` to avoid local 401 log spam.
-- If new externally probed paths are added, update `_EXEMPT_PATH_PREFIXES` consistently.
-
-### Runtime Fallback Notes
-
-- Localhost environment detection is SSH-first.
-- After repeated bounded SSH failure, runtime must fall back to the user's personal tmux session and surface a warning in the WebUI.
-- Keep localhost tmux probe marker output newline-safe; a previous `printf %s\n` style bug produced literal `n` characters and broke parsing.
-
-### Spec & Plan Documents
-
-- Design specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
-- Implementation plans: `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
-- Documentation authority and lifecycle rules: `docs/documentation-governance.md`
-- Every active spec must declare `last_reviewed` and `review_by`; the review period is at most 30 days. An overdue, unimplemented spec is not trustworthy implementation input. Re-review it before use, and delete it when it has become obsolete without lasting migration or decision value.
-
-**Commit rules for spec/plan documents:**
-- Active design specs (`docs/superpowers/specs/`) are part of the long-lived knowledge base and should be committed. Once implemented, superseded, retired, or contradicted by the current contract, move them to `docs/superpowers/specs/archived/` and update the active inventory.
-- Implementation plans (`docs/superpowers/plans/`) are transient agent working artifacts and must **not** be committed to git. They should be kept in the working directory only and discarded after implementation completes.
-
-### Note Conventions
-
-- Frontmatter: YAML with fields such as `aliases`, `tags`, `source_repo`, `source_path`.
-- Internal links: use Obsidian wikilinks like `[[note-name]]` or `[[note-name|label]]`.
-- Callouts: use Obsidian `> [!type]` syntax, not MkDocs admonitions directly in source notes.
-- Diagrams: use Mermaid fenced code blocks.
-- File naming: English slugs, Chinese content.
+- Active design specs live at
+  `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and must declare
+  `status`, `last_reviewed`, and `review_by`; the review period is at most 30
+  days.
+- Implementation plans under `docs/superpowers/plans/` are transient,
+  uncommitted artifacts and must be removed after implementation.
+- Implemented, superseded, retired, or conflicting specs move to
+  `docs/superpowers/specs/archived/` with the inventory updated.
+- Internal notes use English slugs, Chinese content, YAML frontmatter, Obsidian
+  wikilinks, Obsidian callouts, and Mermaid fences where useful.
 
 ## Testing Guidelines
-Tests use `pytest`. Place new tests under `tests/` and name files `test_*.py`. Match function names to behavior, for example `test_serve_stub_runs`. Add or update smoke tests for every new CLI surface, parser behavior, or build-script contract you change.
-### Test Markers
-Every test file must declare a module-level `pytestmark` to categorize its tests:
-| Marker | Scope | Run |
-|--------|-------|-----|
-| `api` | HTTP API route integration tests (full request/response) | `bash scripts/test.sh api` |
-| `unit` | Pure unit tests (no HTTP server, isolated logic) | `bash scripts/test.sh unit` |
-| `middleware` | Security, auth, audit, and request middleware | `bash scripts/test.sh middleware` |
-| `engine` | Execution engine, SSH, terminal, harness | `bash scripts/test.sh engine` |
-| `cli` | CLI commands, build scripts, server lifecycle | `pytest -m cli -n 4` |
-| `integration` | In-process production-mode API/SPA contracts | `bash scripts/test.sh production-contract` |
-| `slow` | Tests that take >1s (opt-in marker for slow tests) | `pytest -m 'not slow' -n 4` |
-When adding a new test file, add the appropriate marker:
-```python
-import pytest
 
-pytestmark = [pytest.mark.api]  # or unit, middleware, engine, cli, integration
-```
-### Before Submitting
-Before submitting changes to Python code, run both runtime and static checks:
-- `bash scripts/ci.sh l1`
-### Command Reference
-- Backend tests must run from the repo root through `bash scripts/test.sh <lane>` or `bash scripts/ci.sh <layer>`. Backend tests must not rely on the process working directory for output — write to `tmp_path` so parallel workers never collide.
-- Frontend tests and type-check must run from `frontend/`.
-- Start manual service testing with `uv run openscience serve --host 127.0.0.1 --port 8000 --state-root ~/.ainrf`.
-- Selective runs: `bash scripts/test.sh api`, `bash scripts/test.sh unit`, or explicit pytest commands with a bounded numeric `-n` value.
-- Frontend test command: `cd frontend && npm run test:run`.
+Tests use pytest and belong under `tests/`. Every new test file must declare a
+module-level marker:
 
-### Agent E2E Testing
+| Marker | Scope |
+| --- | --- |
+| `api` | Full HTTP API request/response tests |
+| `unit` | Isolated non-HTTP logic |
+| `middleware` | Security, auth, audit, and request middleware |
+| `engine` | Execution engine, SSH, terminal, and harness behavior |
+| `cli` | CLI, repository scripts, and server lifecycle |
+| `integration` | In-process production-mode API/SPA contracts |
+| `slow` | Tests taking more than one second |
 
-`testing/e2e/` is a legacy exploratory Playwright-MCP harness, not a reproducible merge gate. It currently uses a mutable local image and fixed shared resources; do not run it for untrusted pull requests or cite it as L2 evidence. The future isolated container integration layer is defined by the five-layer CI design.
+Name test files `test_*.py` and tests after behavior. Add or update smoke tests
+for every changed CLI surface, parser behavior, or build-script contract.
+Backend tests must use repository commands and `tmp_path` for output so parallel
+workers do not collide.
 
-> **Full details (environment, scripts, MCP config, ports)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
+`testing/e2e/` is a legacy exploratory Playwright-MCP harness, not reproducible
+L2 evidence. Do not run it for untrusted PRs or cite its mutable shared resources
+as a merge gate.
 
-## Workspace Cleanliness
+## Workspace, Git, and Commit Hygiene
 
-Agents must not leave temporary, backup, or one-off files in the repository root or any tracked directory. Specifically:
+- Do not leave temporary files, archives, logs, profiling output, debug configs,
+  one-off exports, or large binaries in tracked directories. Runtime state under
+  `deploy/data/tenants/` and `deploy/data/workspaces/` must remain untracked.
+- Preserve unrelated dirty-worktree changes. Do not commit secrets, `.env`
+  files, local keys, or investigation artifacts.
+- Use Conventional Commits with one logical change per commit. Worklog updates
+  normally travel with the corresponding work slice. Root governance documents
+  must be changed in a dedicated `docs:` or `chore:` commit.
+- All code changes use the worktree-first flow. Base a new worktree on the main
+  workspace's current `master`, implement/test/commit there, then merge back in
+  the main workspace and remove the worktree and local branch.
+- Preferred branch prefixes are `feat/`, `fix/`, `refactor/`, `docs/`, and
+  `chore/`; follow the host's required namespace prefix when present.
 
-- **No backup archives** in the repo tree: `*.tar.gz`, `*.zip`, `*.iso`, `*.bak` must never be committed. If generated locally, they must stay gitignored and be cleaned up after use.
-- **No one-off exports**: files like `kimi-export-*.md`, `session-*.md`, `*.log` are gitignored for a reason — do not `git add -f` them.
-- **No large binaries**: PDF, PNG, JPEG, MP4, ISO and other binary blobs do not belong in the main repo. If needed for docs, host externally and link. The exceptions are `frontend/public/` assets and `docs/assets/` for small diagrams.
-- **No temp scripts**: Do not create throwaway scripts in `scripts/` or at the root. If a script is needed for a task, put it in a worktree or `.claude/` scratch space and do not commit it.
-- **Clean up after yourself**: Remove any files you created during investigation (profiling output, debug logs, temp configs) before finishing a session.
-- **Runtime data is local**: `deploy/data/tenants/` and `deploy/data/workspaces/` are runtime state — never track them in git. If you need seed data for testing, put it in `deploy/examples/` or `testing/`.
+## Production and Staging Safety
 
-## Commit & Pull Request Guidelines
+Do not operate production containers, orchestration, logs, ports, databases, or
+data unless the user explicitly requests that production action. This includes
+read-only-looking commands such as `docker logs` or `docker exec` because they
+still touch a real-user environment.
 
-Follow the existing commit style: short, imperative, and scoped when useful, e.g. `docs: revise framework...` or `chore: update gitignore`. Keep commits focused.
+Production releases use `bash deploy/release-production.sh` and one
+version-consistent release manifest for frontend, API, worker, and monitoring
+artifacts. The maintenance-window contract requires verified backup/restore,
+stopped writers, necessary migration, read-only post-smoke, and an executable
+manual rollback. Never publish frontend and backend independently.
 
-- Follow Conventional Commits for the first line: `feat: ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `chore: ...`.
-- Prefer one logical change per commit. Do not mix unrelated frontend, backend, docs, and hygiene changes in the same commit unless they are inseparable.
-- Do not create commits from a dirty branch without first understanding whether unrelated changes belong to another work slice.
-- Do not commit secrets, `.env` files, local API keys, or local investigation artifacts.
-- Daily worklog updates under `docs/LLM-Working/worklog/` do not require a standalone `docs:`/`chore:` commit; they should normally be committed together with the corresponding `feat:`/`fix:`/`refactor:` work slice they record.
-- Root-level governance documents such as `AGENTS.md`, `CLAUDE.md`, and `PROJECT_BASIS.md` must be committed in a dedicated `docs:` or `chore:` commit when they change. A single dedicated commit may update multiple such root-level governance files together.
+Staging uses `bash scripts/staging.sh up` with its isolated project, volumes,
+ports, and lifecycle. Do not substitute staging activity for production
+authorization.
 
-### Git Workflow & Worktree Hygiene
+## Agent Instruction Planes
 
-`master` is protected; start branches from the **main workspace's** latest `master` (not `develop`). **All code changes must use the worktree-first flow** and merge back into the main workspace:
+- Contributor-agent instructions are versioned by `PROJECT_BASIS.md`, this
+  `AGENTS.md`, task-routed `.rules`, and governed current docs. Root `CLAUDE.md`
+  is only a host adapter that imports the two canonical root files.
+- Product-spawned research-agent guardrails originate in
+  `deploy/config/CLAUDE.md` and are copied into the container Claude config.
+  They govern transport and tool behavior for runtime sessions; they do not
+  override repository contributor authority.
+- Private or machine-local instructions may describe non-normative machine
+  facts, but they must not override project identity, architecture, security,
+  production safety, or other durable `PROJECT_BASIS.md` rules.
 
-1. In the **main workspace**, make `master` current:
-   - `git checkout master`
-   - `git pull` / `git fetch origin` and reset to the latest `master` as needed.
-2. Create a new branch in a worktree from that `master`:
-   - `git worktree add -b <prefix>/<topic> .claude/worktrees/<prefix>-<topic> master`
-   - Or use the Claude Code `EnterWorktree` tool, explicitly basing it on the main workspace's `master`.
-3. Do all implementation, testing, and committing inside the worktree. Keep the main workspace clean.
-4. When finished, switch back to the **main workspace**, merge the branch into `master`, then remove the worktree and delete the local branch.
-
-Preferred prefixes: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`.
-
-> **Full details (branch strategy, worktree conventions, PR expectations)**: [.rules/git-workflow.md](.rules/git-workflow.md)
-
-## Production Environment Safety
-
-Do NOT operate production deployment containers (Docker, Kubernetes, etc.) — including `docker exec`, `docker compose restart`, `docker logs`, or any other container interaction — unless the user explicitly asks you to. This applies to any environment that serves real users or holds production data. When in doubt, ask first.
-
-### Production Deployment
-
-CPU-only Docker Compose with host networking. Backend on `:18000`, nginx on `:8192`, Prometheus + Grafana for monitoring. The default production model permits a planned 2–3 hour maintenance window: verify a complete backup, stop writers, deploy one version-consistent release, run read-only smoke checks, and use the documented manual rollback if needed. Build and deploy through `bash deploy/release-production.sh`; do not release frontend and backend independently.
-
-> **Full details (architecture, volumes, monitoring, observability, rebuild, admin credentials)**: [.rules/deployment.md](.rules/deployment.md)
-
-### Staging Environment
-
-Staging mirrors production with offset ports (`:7192` nginx, `:17000` backend). Backend source is bind-mounted for hot-reload. Start: `bash scripts/staging.sh up`.
-
-> **Full details (ports, hot-reload, test workflow, lifecycle)**: [.rules/staging-environment.md](.rules/staging-environment.md)
-
-### Browser & DevTools
-
-Use chrome-devtools MCP as the primary frontend inspection tool. Run `bash scripts/dev.sh doctor --profile full --browser` before diagnosing DOM, computed-style, Network, focus, or loaded-asset issues. Snap Chromium is broken; the preflight discovers a supported Chrome for Testing binary and performs a real isolated CDP launch. MCP configuration is session-scoped, so restart the session when preflight succeeds but browser tools are not exposed.
-
-> **Full details (binary path, config locations, OMP setup)**: [.rules/frontend-and-testing.md](.rules/frontend-and-testing.md)
+The ownership and lifecycle of these planes are documented in
+[`docs/documentation-governance.md`](docs/documentation-governance.md).
