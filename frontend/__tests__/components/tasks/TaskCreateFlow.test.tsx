@@ -186,6 +186,36 @@ describe('TaskCreateFlow', () => {
     expect(screen.getByRole('button', { name: /Register or link workspace/ })).toBeInTheDocument();
   });
 
+  it('excludes manifest-disabled skills from task selection', async () => {
+    mockGetSkills.mockResolvedValue({
+      items: [
+        {
+          skill_id: 'analysis',
+          label: 'Analysis',
+          description: 'Analyze the task context.',
+          inject_mode: 'auto',
+          dependencies: [],
+        },
+        {
+          skill_id: 'disabled-skill',
+          label: 'Disabled Skill',
+          description: 'Must not be granted to a task.',
+          inject_mode: 'disabled',
+          dependencies: [],
+        },
+      ],
+    });
+    renderWithProviders(
+      <TaskCreateFlow isOpen source="global" onClose={vi.fn()} />,
+      { route: '/tasks' },
+    );
+
+    expect(await screen.findByText('0/1 selected')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show skills in Ungrouped' }));
+    expect(screen.getByRole('button', { name: 'Select Analysis' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select Disabled Skill' })).not.toBeInTheDocument();
+  });
+
   it('refuses a locked Workspace when its Project link is not executable', async () => {
     mockGetWorkspaces.mockResolvedValue({
       items: [{

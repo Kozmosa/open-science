@@ -35,7 +35,14 @@ function groupSkills(skills: SkillItem[], ungroupedLabel: string): Array<[string
 
 export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: Props) {
   const t = useT();
-  const groups = useMemo(() => groupSkills(skills, t('components.skills.ungrouped')), [skills, t]);
+  const availableSkills = useMemo(
+    () => skills.filter((skill) => skill.inject_mode !== 'disabled'),
+    [skills],
+  );
+  const groups = useMemo(
+    () => groupSkills(availableSkills, t('components.skills.ungrouped')),
+    [availableSkills, t],
+  );
   const selectedSet = useMemo(() => new Set(selectedSkillIds), [selectedSkillIds]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -55,7 +62,9 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
   }, [groups]);
 
   const updateSelected = (nextSelected: Set<string>) => {
-    onChange(skills.filter((skill) => nextSelected.has(skill.skill_id)).map((skill) => skill.skill_id));
+    onChange(availableSkills
+      .filter((skill) => nextSelected.has(skill.skill_id))
+      .map((skill) => skill.skill_id));
   };
 
   const toggleSkill = (skillId: string) => {
@@ -81,7 +90,7 @@ export default function TaskSkillPicker({ skills, selectedSkillIds, onChange }: 
     updateSelected(next);
   };
 
-  if (skills.length === 0) {
+  if (availableSkills.length === 0) {
     return (
       <p className="rounded-lg border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] px-3 py-2 text-xs text-[var(--osci-color-text-secondary)]">
         {t('pages.tasks.create.noSkillsAvailable')}

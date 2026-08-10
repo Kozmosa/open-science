@@ -47,6 +47,8 @@ from ainrf.harness_engine.session_state import SessionStateStore
 from ainrf.literature.planner import run_planner_cycle
 from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.runtime import tenant_identity
+from ainrf.runtime.paths import build_runtime_path_config
+from ainrf.skills.mount import preflight_workspace_skills, resolve_workspace_skills
 
 if TYPE_CHECKING:
     from ainrf.literature.task_saga import LiteratureTaskSagaService
@@ -73,6 +75,7 @@ class ConversationDispatcher:
         artifact_sha: str | None = None,
         adapter_factory: Callable[[HarnessEngineType], ConversationRuntimeAdapter] | None = None,
         context_factory: Callable[[SubmissionClaim], ExecutionContext] | None = None,
+        skill_load_dir: Path | None = None,
     ) -> None:
         self._state_root = state_root
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
@@ -81,6 +84,9 @@ class ConversationDispatcher:
         self._checkpoint_store = SessionStateStore(state_root)
         self._adapter_factory = adapter_factory or self._default_adapter
         self._context_factory = context_factory or self._execution_context
+        self._skill_load_dir = skill_load_dir or (
+            build_runtime_path_config().default_workspace_dir / "skills"
+        )
 
     def _default_adapter(self, engine_type: HarnessEngineType) -> ConversationRuntimeAdapter:
         return ConversationRuntimeAdapter(create_engine(engine_type, state_root=self._state_root))
@@ -253,6 +259,7 @@ class ConversationDispatcher:
             return False
         try:
             context = self._context_factory(claim)
+            self._resolve_context_skills(context)
             adapter = self._adapter_factory(context.engine_type)
         except asyncio.CancelledError:
             raise
@@ -401,6 +408,25 @@ class ConversationDispatcher:
         if cancelled_by_caller:
             raise asyncio.CancelledError
         return True
+
+    def _resolve_context_skills(self, context: ExecutionContext) -> None:
+        requested_skills = context.skills or []
+        if not requested_skills:
+            context.skills = []
+            return
+        load_dir = (
+            Path(context.skill_load_dir).expanduser()
+            if context.skill_load_dir
+            else self._skill_load_dir
+        )
+        context.skills = resolve_workspace_skills(load_dir, requested_skills)
+        context.skill_load_dir = str(load_dir.resolve(strict=True))
+        preflight_workspace_skills(
+            context.working_directory,
+            context.skill_load_dir,
+            context.skills,
+            tenant_user=context.tenant_user,
+        )
 
     async def _consume_controls(
         self,

@@ -116,7 +116,7 @@ class ClaudeCodeEngine(HarnessEngine):
                     os.unlink(mcp_file.name)
                 except OSError:
                     pass
-            self._cleanup_skills(skill_cleanup_dirs)
+            self._cleanup_skills(skill_cleanup_dirs, tenant_user=context.tenant_user)
 
     async def _start_inner(
         self,
@@ -484,13 +484,10 @@ class ClaudeCodeEngine(HarnessEngine):
         )
 
     @staticmethod
-    def _cleanup_skills(dirs: list[Path]) -> None:
-        for d in dirs:
-            try:
-                if d.is_symlink():
-                    d.unlink()
-            except OSError:
-                pass
+    def _cleanup_skills(dirs: list[Path], *, tenant_user: str | None) -> None:
+        from ainrf.skills.mount import cleanup_workspace_skills
+
+        cleanup_workspace_skills(dirs, tenant_user=tenant_user)
 
     def _write_mcp_config(
         self, context: ExecutionContext

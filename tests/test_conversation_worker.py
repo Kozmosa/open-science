@@ -42,6 +42,28 @@ pytestmark = [pytest.mark.engine]
 _USER: dict[str, object] = {"id": "user-1", "role": "user"}
 
 
+def _make_runtime_skill(
+    registry: Path,
+    skill_id: str,
+    *,
+    dependencies: list[str] | None = None,
+) -> None:
+    skill_dir = registry / skill_id
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "skill.json").write_text(
+        json.dumps(
+            {
+                "skill_id": skill_id,
+                "label": skill_id,
+                "dependencies": dependencies or [],
+                "inject_mode": "auto",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL.md").write_text(f"# {skill_id}\n", encoding="utf-8")
+
+
 class FakeRuntimeAdapter(ConversationRuntimeAdapter):
     def __init__(self) -> None:
         super().__init__(CodexAppServerEngine())
@@ -398,6 +420,104 @@ async def test_worker_retries_context_setup_failure_before_adapter_start(
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         assert conn.execute("SELECT status FROM turn_submissions").fetchone()[0] == "delivered"
         assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 1
+
+
+@pytest.mark.anyio
+async def test_worker_resolves_selected_skills_from_default_runtime_registry(
+    state_root: Path,
+) -> None:
+    registry = Path.home() / ".ainrf_workspaces" / "default" / "skills"
+    _make_runtime_skill(registry, "shared")
+    _make_runtime_skill(registry, "analysis", dependencies=["shared"])
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE tasks SET user_skills = ? WHERE task_id = 'task-1'",
+            (json.dumps(["analysis", "shared"]),),
+        )
+        conn.commit()
+
+    captured_contexts: list[ExecutionContext] = []
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            captured_contexts.append(context)
+            await super().start_turn(context, emit)
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine: TrackingAdapter(),
+    )
+
+    assert await dispatcher.run_once() is True
+    assert len(captured_contexts) == 1
+    assert captured_contexts[0].skill_load_dir == str(registry.resolve())
+    assert captured_contexts[0].skills == ["shared", "analysis"]
+
+
+@pytest.mark.anyio
+async def test_worker_rejects_invalid_skill_selection_before_adapter_construction(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    registry = tmp_path / "skills"
+    registry.mkdir()
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute("UPDATE tasks SET user_skills = '[\"missing\"]' WHERE task_id = 'task-1'")
+        conn.commit()
+    adapter_constructions = 0
+
+    def adapter_factory(_engine: HarnessEngineType) -> ConversationRuntimeAdapter:
+        nonlocal adapter_constructions
+        adapter_constructions += 1
+        return FakeRuntimeAdapter()
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=adapter_factory,
+        skill_load_dir=registry,
+    )
+
+    assert await dispatcher.run_once() is True
+    assert adapter_constructions == 0
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+        runtime_count = conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0]
+    assert submission is not None and tuple(submission) == ("claimed", None)
+    assert runtime_count == 0
+
+
+@pytest.mark.anyio
+async def test_worker_rejects_workspace_skill_shadow_before_adapter_construction(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    registry = tmp_path / "skills"
+    _make_runtime_skill(registry, "analysis")
+    shadow = tmp_path / "workspace" / ".claude" / "skills" / "analysis"
+    shadow.mkdir(parents=True)
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute("UPDATE tasks SET user_skills = '[\"analysis\"]' WHERE task_id = 'task-1'")
+        conn.commit()
+    adapter_constructions = 0
+
+    def adapter_factory(_engine: HarnessEngineType) -> ConversationRuntimeAdapter:
+        nonlocal adapter_constructions
+        adapter_constructions += 1
+        return FakeRuntimeAdapter()
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=adapter_factory,
+        skill_load_dir=registry,
+    )
+
+    assert await dispatcher.run_once() is True
+    assert adapter_constructions == 0
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+        runtime_count = conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0]
+    assert submission is not None and tuple(submission) == ("claimed", None)
+    assert runtime_count == 0
 
 
 @pytest.mark.anyio

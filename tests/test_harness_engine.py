@@ -28,10 +28,26 @@ from ainrf.harness_engine.engines.agent_sdk import AgentSdkEngine, AgentSession
 from ainrf.harness_engine.engines.claude_code import ClaudeCodeEngine
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
 from ainrf.harness_engine.session_state import SessionCheckpoint, SessionStateStore
-from ainrf.skills.mount import prepare_workspace_skills
+from ainrf.skills.mount import SkillSelectionError, prepare_workspace_skills
 
 
 pytestmark = [pytest.mark.engine]
+
+
+def _write_runtime_skill(skill_dir: Path, skill_id: str) -> None:
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "skill.json").write_text(
+        json.dumps(
+            {
+                "skill_id": skill_id,
+                "label": skill_id,
+                "dependencies": [],
+                "inject_mode": "auto",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (skill_dir / "SKILL.md").write_text(f"# {skill_id}\n", encoding="utf-8")
 
 
 def test_get_engine_claude_code() -> None:
@@ -391,8 +407,7 @@ async def test_agent_sdk_mounts_skills_into_workspace(tmp_path: Path) -> None:
     # Set up a skill load directory with one skill.
     load_dir = tmp_path / "skills"
     skill_dir = load_dir / "arxiv"
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("# arxiv\n")
+    _write_runtime_skill(skill_dir, "arxiv")
 
     # Workspace starts empty.
     workdir = tmp_path / "workspace"
@@ -581,12 +596,11 @@ async def test_codex_app_server_start_fails_when_process_exits_before_response()
 def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
     """prepare_workspace_skills creates symlinks in .claude/skills/ for each
     requested skill that exists in the load directory."""
-    # Set up a load directory with two skills
+    # Set up a load directory with two skills.
     load_dir = tmp_path / "load" / "skills"
     for name in ("research-lit", "arxiv"):
         skill_dir = load_dir / name
-        skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(f"# {name}\n")
+        _write_runtime_skill(skill_dir, name)
 
     workdir = tmp_path / "workspace"
     workdir.mkdir()
@@ -594,27 +608,23 @@ def test_prepare_workspace_skills_symlinks(tmp_path: Path) -> None:
     cleanup = prepare_workspace_skills(
         working_directory=str(workdir),
         skill_load_dir=str(load_dir),
-        requested_skills=["research-lit", "arxiv", "missing-skill"],
+        requested_skills=["research-lit", "arxiv"],
     )
 
-    # Two skills symlinked, one skipped (missing)
     assert len(cleanup) == 2
     claude_skills = workdir / ".claude" / "skills"
     assert (claude_skills / "research-lit").is_symlink()
     assert (claude_skills / "arxiv").is_symlink()
-    assert not (claude_skills / "missing-skill").exists()
 
     # Symlinks point to the correct targets
     assert (claude_skills / "research-lit" / "SKILL.md").read_text() == "# research-lit\n"
     assert (claude_skills / "arxiv" / "SKILL.md").read_text() == "# arxiv\n"
 
 
-def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> None:
-    """prepare_workspace_skills does not overwrite a real (non-symlink) directory."""
+def test_prepare_workspace_skills_rejects_user_owned_shadow(tmp_path: Path) -> None:
     load_dir = tmp_path / "load" / "skills"
     skill_dir = load_dir / "research-lit"
-    skill_dir.mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("# from registry\n")
+    _write_runtime_skill(skill_dir, "research-lit")
 
     workdir = tmp_path / "workspace"
     workdir.mkdir()
@@ -623,14 +633,13 @@ def test_prepare_workspace_skills_preserves_user_owned_dirs(tmp_path: Path) -> N
     user_skill.mkdir(parents=True)
     (user_skill / "SKILL.md").write_text("# user owned\n")
 
-    cleanup = prepare_workspace_skills(
-        working_directory=str(workdir),
-        skill_load_dir=str(load_dir),
-        requested_skills=["research-lit"],
-    )
+    with pytest.raises(SkillSelectionError, match="shadows"):
+        prepare_workspace_skills(
+            working_directory=str(workdir),
+            skill_load_dir=str(load_dir),
+            requested_skills=["research-lit"],
+        )
 
-    # No symlink created — user-owned dir preserved
-    assert len(cleanup) == 0
     assert (claude_skills / "research-lit" / "SKILL.md").read_text() == "# user owned\n"
 
 
@@ -642,7 +651,7 @@ def test_prepare_workspace_skills_replaces_stale_symlink(tmp_path: Path) -> None
 
     new_load_dir = tmp_path / "new" / "skills"
     new_skill = new_load_dir / "research-lit"
-    new_skill.mkdir(parents=True)
+    _write_runtime_skill(new_skill, "research-lit")
     (new_skill / "SKILL.md").write_text("# new\n")
 
     workdir = tmp_path / "workspace"

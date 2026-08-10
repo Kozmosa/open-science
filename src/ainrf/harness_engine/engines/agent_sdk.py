@@ -51,7 +51,7 @@ from ainrf.harness_engine.base import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.session_state import RuntimeLaunchTracker, SessionCheckpoint
-from ainrf.skills.mount import prepare_workspace_skills
+from ainrf.skills.mount import cleanup_workspace_skills, prepare_workspace_skills
 
 logger = logging.getLogger(__name__)
 
@@ -347,14 +347,13 @@ class AgentSdkEngine(HarnessEngine):
                     shutil.rmtree(config_tmp, ignore_errors=True)
                 except Exception:
                     pass
-                # Clean up skill symlinks created for this task.
-                for skill_dir in skill_cleanup_dirs:
-                    try:
-                        if skill_dir.is_symlink():
-                            skill_dir.unlink()
-                    except OSError:
-                        pass
-                self._runtime_recovery.finish(context)
+                try:
+                    cleanup_workspace_skills(
+                        skill_cleanup_dirs,
+                        tenant_user=context.tenant_user,
+                    )
+                finally:
+                    self._runtime_recovery.finish(context)
 
     async def _can_use_tool(
         self,

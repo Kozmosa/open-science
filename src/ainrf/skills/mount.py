@@ -1,78 +1,170 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
+
+from ainrf.skills.loader import SkillLoader
+from ainrf.skills.models import InjectMode, SkillDefinition
 
 logger = logging.getLogger(__name__)
 
 
-def _resolve_skill_dependencies(load_dir: Path, requested: list[str]) -> list[str]:
-    """Expand requested skills to include their declared dependencies.
+class SkillSelectionError(RuntimeError):
+    """A requested runtime skill set cannot be resolved or mounted safely."""
 
-    Reads ``skill.json`` from the load directory for each requested skill and
-    recursively adds dependency skill IDs. Circular dependencies are broken by
-    tracking visited skills. Missing dependencies are logged and skipped.
 
-    Returns a topologically-ish ordered list with each dependency appearing
-    before the skill that depends on it.
+def _safe_skill_id(skill_id: str) -> bool:
+    candidate = Path(skill_id)
+    return (
+        bool(skill_id)
+        and "\x00" not in skill_id
+        and not candidate.is_absolute()
+        and candidate.parts == (skill_id,)
+        and skill_id not in {".", ".."}
+    )
+
+
+def _resolve_load_dir(skill_load_dir: str | Path) -> Path:
+    try:
+        load_dir = Path(skill_load_dir).expanduser().resolve(strict=True)
+    except OSError as exc:
+        raise SkillSelectionError("Skill registry load directory is unavailable") from exc
+    if not load_dir.is_dir():
+        raise SkillSelectionError("Skill registry load directory is not a directory")
+    return load_dir
+
+
+def _load_skill(load_dir: Path, skill_id: str) -> tuple[Path, SkillDefinition]:
+    if not _safe_skill_id(skill_id):
+        raise SkillSelectionError(f"Skill ID {skill_id!r} is not a safe path component")
+
+    source = load_dir / skill_id
+    try:
+        resolved_source = source.resolve(strict=True)
+    except OSError as exc:
+        raise SkillSelectionError(f"Skill {skill_id!r} is unavailable") from exc
+    if not resolved_source.is_dir() or resolved_source.parent != load_dir:
+        raise SkillSelectionError(f"Skill {skill_id!r} escapes the registry load directory")
+
+    for required_name in ("skill.json", "SKILL.md"):
+        required_path = source / required_name
+        try:
+            resolved_required = required_path.resolve(strict=True)
+        except OSError as exc:
+            raise SkillSelectionError(
+                f"Skill {skill_id!r} is missing required file {required_name}"
+            ) from exc
+        if not resolved_required.is_file() or not resolved_required.is_relative_to(resolved_source):
+            raise SkillSelectionError(
+                f"Skill {skill_id!r} required file {required_name} escapes its directory"
+            )
+
+    try:
+        skill = SkillLoader.load_from_directory(source)
+    except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+        raise SkillSelectionError(f"Skill {skill_id!r} manifest is invalid") from exc
+    if not isinstance(skill.dependencies, list) or not all(
+        isinstance(dependency, str) for dependency in skill.dependencies
+    ):
+        raise SkillSelectionError(f"Skill {skill_id!r} dependencies must be a list of IDs")
+    return resolved_source, skill
+
+
+def resolve_workspace_skills(
+    skill_load_dir: str | Path,
+    requested_skills: Sequence[str],
+) -> list[str]:
+    """Resolve a requested skill set into strict dependency-first runtime order.
+
+    Runtime selection is fail-closed: every requested skill and dependency must
+    be a safe registry child with a valid manifest and ``SKILL.md``. Disabled,
+    missing, corrupt, cyclic, or path-escaping selections raise
+    :class:`SkillSelectionError` instead of silently reducing the grant.
     """
+
+    if not requested_skills:
+        return []
+    load_dir = _resolve_load_dir(skill_load_dir)
+    loaded: dict[str, SkillDefinition] = {}
     resolved: list[str] = []
     visited: set[str] = set()
-    stack: set[str] = set()
+    stack: list[str] = []
+
+    def load(skill_id: str) -> SkillDefinition:
+        if skill_id not in loaded:
+            _, skill = _load_skill(load_dir, skill_id)
+            loaded[skill_id] = skill
+        return loaded[skill_id]
 
     def visit(skill_id: str) -> None:
         if skill_id in visited:
             return
         if skill_id in stack:
-            logger.warning("circular dependency detected involving skill %s", skill_id)
-            return
+            cycle_start = stack.index(skill_id)
+            cycle = [*stack[cycle_start:], skill_id]
+            raise SkillSelectionError(f"Skill dependency cycle detected: {' -> '.join(cycle)}")
 
-        stack.add(skill_id)
-        skill_dir = load_dir / skill_id
-        skill_json = skill_dir / "skill.json"
-        deps: list[str] = []
-        if skill_json.is_file():
-            try:
-                data = json.loads(skill_json.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    raw_deps = data.get("dependencies", [])
-                    if isinstance(raw_deps, list):
-                        deps = [str(d) for d in raw_deps if isinstance(d, str)]
-            except (json.JSONDecodeError, OSError):
-                pass
+        skill = load(skill_id)
+        if skill.inject_mode is InjectMode.DISABLED:
+            raise SkillSelectionError(f"Skill {skill_id!r} is disabled")
 
-        for dep in deps:
-            dep_dir = load_dir / dep
-            if dep_dir.is_dir():
-                visit(dep)
-            else:
-                logger.warning(
-                    "dependency %s of skill %s not found in load dir %s, skipping",
-                    dep,
-                    skill_id,
-                    load_dir,
+        stack.append(skill_id)
+        for dependency in skill.dependencies:
+            if not _safe_skill_id(dependency):
+                raise SkillSelectionError(
+                    f"Skill {skill_id!r} dependency {dependency!r} is not a safe path component"
                 )
+            visit(dependency)
+        stack.pop()
+        visited.add(skill_id)
+        resolved.append(skill_id)
 
-        stack.remove(skill_id)
-        if skill_id not in visited:
-            visited.add(skill_id)
-            resolved.append(skill_id)
-
-    for skill_id in requested:
-        skill_dir = load_dir / skill_id
-        if skill_dir.is_dir():
-            visit(skill_id)
-        else:
-            logger.warning(
-                "requested skill %s not found in load dir %s, skipping",
-                skill_id,
-                load_dir,
-            )
-
+    for requested_skill in requested_skills:
+        if not isinstance(requested_skill, str):
+            raise SkillSelectionError("Requested skills must be identified by strings")
+        visit(requested_skill)
     return resolved
+
+
+def _run_tenant_command(tenant_user: str, operation: str, command: list[str]) -> str:
+    result = subprocess.run(
+        ["sudo", "-n", "-u", tenant_user, *command],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SkillSelectionError(f"Tenant skill mount {operation} failed")
+    return result.stdout.strip()
+
+
+def _tenant_path_kind(tenant_user: str, path: Path) -> str:
+    return _run_tenant_command(
+        tenant_user,
+        "inspection",
+        [
+            "sh",
+            "-c",
+            'if [ -L "$1" ]; then printf symlink; '
+            'elif [ -e "$1" ]; then printf existing; else printf missing; fi',
+            "skill-path-kind",
+            str(path),
+        ],
+    )
+
+
+def _tenant_resolve(tenant_user: str, path: Path) -> Path:
+    resolved = _run_tenant_command(
+        tenant_user,
+        "path resolution",
+        ["readlink", "-f", "--", str(path)],
+    )
+    if not resolved:
+        raise SkillSelectionError("Tenant skill mount path resolution returned no path")
+    return Path(resolved)
 
 
 def prepare_workspace_skills(
@@ -81,88 +173,159 @@ def prepare_workspace_skills(
     requested_skills: list[str],
     tenant_user: str | None = None,
 ) -> list[Path]:
-    """Symlink requested skill directories (and their dependencies) into ``<workdir>/.claude/skills/``.
+    """Mount a strict runtime skill selection under ``.claude/skills``.
 
-    Both Claude Code and the Claude Agent SDK discover skills by scanning
-    ``.claude/skills/<name>/SKILL.md`` in the project directory.  This helper
-    creates one symlink per requested skill that exists in the registry load
-    directory, allowing any engine to inject the ARIS skill set into any
-    workspace without copying files.
-
-    When *tenant_user* is provided the mkdir and symlink operations are
-    performed via ``sudo -u <tenant_user>`` so that the resulting
-    directories and symlinks are owned by the tenant user (ainrf cannot
-    write to tenant-owned workspace paths).
-
-    Returns a list of symlink paths created (for cleanup).
+    The returned paths are only the symlinks created by this call and may be
+    removed by the runtime Adapter after execution. Existing symlinks already
+    pointing at the canonical registry source are preserved and are not added
+    to the cleanup list. Any real-file shadow, failed tenant operation, or
+    registry inconsistency raises :class:`SkillSelectionError`.
     """
-    workdir = Path(working_directory)
+
+    skills_to_mount = resolve_workspace_skills(skill_load_dir, requested_skills)
+    if not skills_to_mount:
+        return []
+
+    load_dir = _resolve_load_dir(skill_load_dir)
+    sources = {skill_id: _load_skill(load_dir, skill_id)[0] for skill_id in skills_to_mount}
+    workdir = Path(working_directory).expanduser()
     claude_skills_dir = workdir / ".claude" / "skills"
-    load_dir = Path(skill_load_dir)
     cleanup: list[Path] = []
 
-    def _mkdir(p: Path) -> None:
-        if p.exists():
+    def mkdir(path: Path) -> None:
+        if tenant_user:
+            _run_tenant_command(tenant_user, "directory creation", ["mkdir", "-p", "--", str(path)])
             return
-        if tenant_user:
-            subprocess.run(
-                ["sudo", "-u", tenant_user, "mkdir", "-p", str(p)],
-                check=False,
-                capture_output=True,
-            )
-        else:
-            p.mkdir(parents=True, exist_ok=True)
-
-    def _symlink(src: Path, dst: Path) -> None:
-        if tenant_user:
-            subprocess.run(
-                ["sudo", "-u", tenant_user, "ln", "-sfn", str(src), str(dst)],
-                check=False,
-                capture_output=True,
-            )
-        else:
-            os.symlink(str(src), str(dst))
-
-    def _unlink(p: Path) -> None:
-        if tenant_user:
-            subprocess.run(
-                ["sudo", "-u", tenant_user, "rm", "-f", str(p)],
-                check=False,
-                capture_output=True,
-            )
-        else:
-            p.unlink(missing_ok=True)
-
-    skills_to_mount = _resolve_skill_dependencies(load_dir, requested_skills)
-
-    for skill_id in skills_to_mount:
-        source = load_dir / skill_id
-        if not source.is_dir():
-            logger.debug("skill %s not found in load dir %s, skipping", skill_id, load_dir)
-            continue
-
-        dest = claude_skills_dir / skill_id
-        # Skip if a non-symlink (user-owned) directory already exists.
-        if dest.exists() and not dest.is_symlink():
-            logger.debug("skill %s already exists as real dir, skipping", skill_id)
-            continue
-        # Remove stale symlink pointing to a different target.
-        if dest.is_symlink():
-            try:
-                current_target = dest.resolve()
-                if current_target == source.resolve():
-                    continue
-                _unlink(dest)
-            except OSError:
-                continue
-
-        _mkdir(claude_skills_dir)
         try:
-            _symlink(source, dest)
-            if dest.exists() or dest.is_symlink():
-                cleanup.append(dest)
-                logger.debug("linked skill %s -> %s", dest, source)
+            path.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            logger.warning("failed to symlink skill %s: %s", skill_id, exc)
+            raise SkillSelectionError("Workspace skill directory creation failed") from exc
+
+    def unlink(path: Path) -> None:
+        if tenant_user:
+            _run_tenant_command(tenant_user, "symlink removal", ["rm", "-f", "--", str(path)])
+            return
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise SkillSelectionError("Workspace skill symlink removal failed") from exc
+
+    def symlink(source: Path, destination: Path) -> None:
+        if tenant_user:
+            _run_tenant_command(
+                tenant_user,
+                "symlink creation",
+                ["ln", "-s", "--", str(source), str(destination)],
+            )
+            return
+        try:
+            os.symlink(str(source), str(destination))
+        except OSError as exc:
+            raise SkillSelectionError("Workspace skill symlink creation failed") from exc
+
+    pending: list[tuple[Path, Path, bool]] = []
+    for skill_id in skills_to_mount:
+        source = sources[skill_id]
+        destination = claude_skills_dir / skill_id
+        if tenant_user:
+            destination_kind = _tenant_path_kind(tenant_user, destination)
+            if destination_kind == "symlink":
+                if _tenant_resolve(tenant_user, destination) == source:
+                    continue
+                pending.append((source, destination, True))
+            elif destination_kind == "missing":
+                pending.append((source, destination, False))
+            else:
+                raise SkillSelectionError(
+                    f"Workspace path for skill {skill_id!r} shadows the registry selection"
+                )
+            continue
+
+        if destination.is_symlink():
+            try:
+                current_target = destination.resolve(strict=True)
+            except OSError:
+                pending.append((source, destination, True))
+            else:
+                if current_target == source:
+                    continue
+                pending.append((source, destination, True))
+        elif destination.exists():
+            raise SkillSelectionError(
+                f"Workspace path for skill {skill_id!r} shadows the registry selection"
+            )
+        else:
+            pending.append((source, destination, False))
+
+    try:
+        if pending:
+            mkdir(claude_skills_dir)
+        for source, destination, replace_existing in pending:
+            if replace_existing:
+                unlink(destination)
+            symlink(source, destination)
+            cleanup.append(destination)
+            logger.debug("linked skill %s -> %s", destination, source)
+    except SkillSelectionError:
+        for destination in reversed(cleanup):
+            try:
+                unlink(destination)
+            except SkillSelectionError:
+                logger.warning("failed to roll back workspace skill symlink %s", destination)
+        raise
 
     return cleanup
+
+
+def cleanup_workspace_skills(
+    mounted_paths: Sequence[Path],
+    *,
+    tenant_user: str | None = None,
+) -> None:
+    """Remove symlinks created by :func:`prepare_workspace_skills`.
+
+    Tenant-owned workspace paths are inspected and removed as the tenant user.
+    A path that has changed into a real file or directory is never deleted.
+    """
+
+    for mounted_path in mounted_paths:
+        if tenant_user:
+            path_kind = _tenant_path_kind(tenant_user, mounted_path)
+            if path_kind == "missing":
+                continue
+            if path_kind != "symlink":
+                raise SkillSelectionError("Workspace skill cleanup path is no longer a symlink")
+            _run_tenant_command(
+                tenant_user,
+                "symlink cleanup",
+                ["rm", "-f", "--", str(mounted_path)],
+            )
+            if _tenant_path_kind(tenant_user, mounted_path) != "missing":
+                raise SkillSelectionError("Tenant skill symlink cleanup could not be verified")
+            continue
+
+        if mounted_path.is_symlink():
+            try:
+                mounted_path.unlink()
+            except OSError as exc:
+                raise SkillSelectionError("Workspace skill symlink cleanup failed") from exc
+        elif mounted_path.exists():
+            raise SkillSelectionError("Workspace skill cleanup path is no longer a symlink")
+
+
+def preflight_workspace_skills(
+    working_directory: str,
+    skill_load_dir: str,
+    requested_skills: list[str],
+    *,
+    tenant_user: str | None = None,
+) -> None:
+    """Prove that a skill selection can be mounted and cleaned before delivery."""
+
+    mounted_paths = prepare_workspace_skills(
+        working_directory,
+        skill_load_dir,
+        requested_skills,
+        tenant_user=tenant_user,
+    )
+    cleanup_workspace_skills(mounted_paths, tenant_user=tenant_user)
