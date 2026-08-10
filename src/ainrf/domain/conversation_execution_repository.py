@@ -129,6 +129,32 @@ class SqliteConversationExecutionRepository:
             (task_id, actor_user_id, idempotency_key),
         ).fetchone()
 
+    def externally_active_task_ids(
+        self,
+        *,
+        owner_user_id: str,
+        environment_id: str,
+    ) -> set[str]:
+        """Return Tasks that hold or may already hold an external execution slot."""
+
+        rows = self._conn.execute(
+            """
+            SELECT submission.task_id
+            FROM turn_submissions AS submission
+            JOIN tasks AS task ON task.task_id = submission.task_id
+            WHERE task.owner_user_id = ? AND task.environment_id = ?
+              AND submission.status IN ('delivering', 'delivery_unknown')
+            UNION
+            SELECT execution.task_id
+            FROM runtime_executions AS execution
+            JOIN tasks AS task ON task.task_id = execution.task_id
+            WHERE task.owner_user_id = ? AND task.environment_id = ?
+              AND execution.status IN ('starting', 'running', 'reconciling')
+            """,
+            (owner_user_id, environment_id, owner_user_id, environment_id),
+        ).fetchall()
+        return {str(row["task_id"]) for row in rows}
+
     def transition_submission(
         self,
         *,

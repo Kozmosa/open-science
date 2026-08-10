@@ -27,7 +27,10 @@ from ainrf.domain.conversation_execution import (
     RuntimeExecutionClaim,
     SubmissionClaim,
 )
-from ainrf.domain.environment_access import has_active_environment_execution_grant
+from ainrf.domain.environment_access import (
+    EnvironmentExecutionGrant,
+    active_environment_execution_grant,
+)
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain.service import DomainConflictError
 from ainrf.domain_control import (
@@ -167,15 +170,19 @@ class ConversationDispatcher:
             tenant_user=tenant_user,
         )
 
-    def _require_environment_grant(self, row: Mapping[str, object], user_id: str) -> None:
-        if not has_active_environment_execution_grant(
+    def _require_environment_grant(
+        self, row: Mapping[str, object], user_id: str
+    ) -> EnvironmentExecutionGrant:
+        grant = active_environment_execution_grant(
             self._auth_db_path,
             environment_id=str(row["environment_id"]),
             user_id=user_id,
-        ):
+        )
+        if grant is None:
             raise RuntimeError("Environment access was revoked or is unavailable")
+        return grant
 
-    def _require_claim_environment_grant(self, claim: SubmissionClaim) -> None:
+    def _require_claim_environment_grant(self, claim: SubmissionClaim) -> EnvironmentExecutionGrant:
         """Recheck the current grant immediately before external execution."""
 
         with closing(connect(self._db_path)) as conn:
@@ -193,7 +200,7 @@ class ConversationDispatcher:
             raise RuntimeError("Conversation Task domain relationships are unavailable")
         if row["environment_id"] != row["workspace_environment_id"]:
             raise RuntimeError("Conversation Task Environment no longer matches the Workspace")
-        self._require_environment_grant(row, str(row["owner_user_id"]))
+        return self._require_environment_grant(row, str(row["owner_user_id"]))
 
     def _tenant_user_for(self, owner_user_id: str) -> str | None:
         if not tenant_identity.is_container_environment():
@@ -252,7 +259,7 @@ class ConversationDispatcher:
         except Exception:
             return True
         try:
-            self._require_claim_environment_grant(claim)
+            grant = self._require_claim_environment_grant(claim)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -262,7 +269,10 @@ class ConversationDispatcher:
             # setup and permission preflight succeeds.  Failures above leave a
             # reclaimable claim; failures after Adapter start remain fenced as
             # externally uncertain.
-            self._execution.begin_delivery(claim.submission_id)
+            self._execution.begin_delivery(
+                claim.submission_id,
+                max_concurrent_tasks=grant.max_concurrent_tasks,
+            )
         except ConversationContractError as exc:
             if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
                 # Cancellation won before delivery began.  The submission is
@@ -271,8 +281,9 @@ class ConversationDispatcher:
                 return True
             raise
         except DomainConflictError:
-            # A concurrent cancellation may have terminally consumed the
-            # claim.  Treat it as handled rather than killing the worker loop.
+            # Capacity and same-Task conflicts leave a reclaimable claim; a
+            # concurrent cancellation may instead have terminally consumed it.
+            # Treat either outcome as handled rather than killing the worker loop.
             return True
         execution: RuntimeExecutionClaim | None = None
         terminal_status: TurnStatus | None = None

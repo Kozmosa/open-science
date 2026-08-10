@@ -68,6 +68,11 @@ OpenScience 设置页面管理用户偏好、系统配置、用户与权限、�
 
 - 为每个用户授予或撤销特定环境的访问权限
 - 配置每个用户的 `max_concurrent_tasks` 上限
+- `null` 表示不限制，`0` 表示暂停该用户在该环境启动新的外部 Task 执行
+
+配额由 domain worker 在 Runtime Adapter 启动前原子预留。尚未跨入外调边界的
+queued/claimed Task 会等待容量；`delivery_unknown` 仍可能对应已接受的外部调用，
+因此在完成 reconciliation 前继续占用一个槽位。
 
 ## Collaborators 标签
 

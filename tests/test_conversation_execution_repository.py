@@ -179,6 +179,60 @@ def test_submission_is_pre_acceptance_authority_not_canonical_history(tmp_path: 
         )
 
 
+def test_external_task_capacity_counts_uncertain_deliveries_by_task(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationExecutionRepository(conn)
+        for index, task_id in enumerate(("task-1", "task-2"), start=1):
+            repository.insert_submission(
+                submission_id=f"submission-{index}",
+                task_id=task_id,
+                reserved_turn_id=f"turn-reserved-{index}",
+                actor_user_id="user-1",
+                idempotency_key=f"create-{index}",
+                request_hash=f"hash-{index}",
+                input_json='{"text":"hello"}',
+                context_snapshot_ref=None,
+                created_at=_NOW,
+                updated_at=_NOW,
+            )
+            assert (
+                repository.transition_submission(
+                    submission_id=f"submission-{index}",
+                    expected_status="queued",
+                    status="claimed",
+                    claimed_at=_NOW,
+                    updated_at=_NOW,
+                )
+                == 1
+            )
+            assert (
+                repository.transition_submission(
+                    submission_id=f"submission-{index}",
+                    expected_status="claimed",
+                    status="delivering",
+                    delivering_at=_NOW,
+                    updated_at=_NOW,
+                )
+                == 1
+            )
+        assert (
+            repository.transition_submission(
+                submission_id="submission-2",
+                expected_status="delivering",
+                status="delivery_unknown",
+                failure_code="acceptance_unknown",
+                delivery_evidence_json='{"replay_forbidden":true}',
+                updated_at=_LATER,
+            )
+            == 1
+        )
+
+        assert repository.externally_active_task_ids(
+            owner_user_id="user-1",
+            environment_id="environment-legacy",
+        ) == {"task-1", "task-2"}
+
+
 def test_delivery_unknown_converges_without_replay_or_failed_turn(tmp_path: Path) -> None:
     with closing(_database(tmp_path)) as conn:
         repository = SqliteConversationExecutionRepository(conn)

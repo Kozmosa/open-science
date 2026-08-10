@@ -16,6 +16,7 @@ from ainrf.domain.conversation_contracts import (
 )
 from ainrf.domain.conversation_execution import ConversationExecutionService
 from ainrf.domain.conversation_service import ConversationApplicationService
+from ainrf.domain.service import DomainConflictError
 
 pytestmark = [pytest.mark.engine, pytest.mark.concurrent]
 
@@ -152,6 +153,41 @@ def test_submission_claim_is_single_winner_and_opens_canonical_execution(
     assert binding is not None and tuple(binding[1:]) == ("active", "thread-1")
     assert turn is not None and turn["binding_id"] == binding["binding_id"]
     assert runtime is not None and runtime["binding_id"] == binding["binding_id"]
+
+
+def test_zero_environment_capacity_keeps_submission_reclaimable(state_root: Path) -> None:
+    execution_service = ConversationExecutionService(state_root)
+    claim = execution_service.claim_next_submission()
+    assert claim is not None
+
+    with pytest.raises(DomainConflictError, match="capacity is exhausted"):
+        execution_service.begin_delivery(claim.submission_id, max_concurrent_tasks=0)
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute(
+            "SELECT status, failure_code FROM turn_submissions WHERE submission_id = ?",
+            (claim.submission_id,),
+        ).fetchone()
+    assert submission is not None and tuple(submission) == ("claimed", None)
+
+
+def test_one_task_cannot_hold_two_external_delivery_slots(state_root: Path) -> None:
+    application = ConversationApplicationService(state_root)
+    second = application.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "second"},
+        idempotency_key="create-second",
+    )
+    execution_service = ConversationExecutionService(state_root)
+    first_claim = execution_service.claim_next_submission()
+    assert first_claim is not None
+    execution_service.begin_delivery(first_claim.submission_id)
+    second_claim = execution_service.claim_next_submission()
+    assert second_claim is not None and second_claim.submission_id == second["submission_id"]
+
+    with pytest.raises(DomainConflictError, match="already holds"):
+        execution_service.begin_delivery(second_claim.submission_id)
 
 
 def test_new_native_conversation_supersedes_binding_without_repointing_history(

@@ -417,9 +417,16 @@ class ConversationExecutionService:
                 conn.rollback()
                 raise
 
-    def begin_delivery(self, submission_id: str) -> None:
+    def begin_delivery(
+        self,
+        submission_id: str,
+        *,
+        max_concurrent_tasks: int | None = None,
+    ) -> None:
         """Arm durable delivery immediately before the Runtime Adapter starts."""
 
+        if max_concurrent_tasks is not None and max_concurrent_tasks < 0:
+            raise ValueError("max_concurrent_tasks must be zero or greater")
         delivered_at = _now()
         with closing(connect(self._db_path)) as conn:
             try:
@@ -436,6 +443,23 @@ class ConversationExecutionService:
                         ConversationErrorCode.TASK_NOT_OPEN,
                         "Task was closed before submission delivery began",
                     )
+                task = conn.execute(
+                    "SELECT owner_user_id, environment_id FROM tasks WHERE task_id = ?",
+                    (str(submission["task_id"]),),
+                ).fetchone()
+                if task is None:
+                    raise DomainNotFoundError(str(submission["task_id"]))
+                active_task_ids = repository.externally_active_task_ids(
+                    owner_user_id=str(task["owner_user_id"]),
+                    environment_id=str(task["environment_id"]),
+                )
+                if str(submission["task_id"]) in active_task_ids:
+                    raise DomainConflictError("Task already holds an external execution slot")
+                if (
+                    max_concurrent_tasks is not None
+                    and len(active_task_ids) >= max_concurrent_tasks
+                ):
+                    raise DomainConflictError("Environment concurrent Task capacity is exhausted")
                 if (
                     repository.transition_submission(
                         submission_id=submission_id,

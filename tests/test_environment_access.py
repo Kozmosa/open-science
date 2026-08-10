@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 from ainrf.auth.service import AuthService
-from ainrf.domain.environment_access import has_active_environment_execution_grant
+from ainrf.domain.environment_access import (
+    active_environment_execution_grant,
+    has_active_environment_execution_grant,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -35,10 +38,16 @@ def test_active_and_revoked_grants_are_observed_from_the_current_wal(
         auth.grant_environment(
             env_id="environment-wal",
             user_id="wal-user",
-            max_tasks=None,
+            max_tasks=2,
             granted_by="admin",
         )
         assert path.with_name(f"{path.name}-wal").is_file()
+        grant = active_environment_execution_grant(
+            path,
+            environment_id="environment-wal",
+            user_id="wal-user",
+        )
+        assert grant is not None and grant.max_concurrent_tasks == 2
         assert has_active_environment_execution_grant(
             path,
             environment_id="environment-wal",
@@ -100,4 +109,29 @@ def test_valid_sqlite_main_without_required_grant_schema_denies(
         path,
         environment_id="environment-missing-schema",
         user_id="wal-user",
+    )
+
+
+def test_invalid_negative_capacity_denies_corrupt_grant(state_root: Path) -> None:
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    path = _auth_path(state_root)
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO environment_access (
+                environment_id, user_id, max_concurrent_tasks,
+                granted_by_user_id, granted_at, status
+            ) VALUES ('environment-corrupt', 'user-corrupt', -1, 'admin', 'now', 'active')
+            """
+        )
+        conn.commit()
+
+    assert (
+        active_environment_execution_grant(
+            path,
+            environment_id="environment-corrupt",
+            user_id="user-corrupt",
+        )
+        is None
     )

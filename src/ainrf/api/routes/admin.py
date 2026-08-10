@@ -131,20 +131,9 @@ async def list_env_access(env_id: str, request: Request) -> EnvironmentAccessLis
     user = get_current_user(request)
     require_admin(user)
     service = _get_service(request)
-    users = service.list_users()
-    items = []
-    for u in users:
-        env_ids = service.get_user_environment_ids(u.id)
-        if env_id in env_ids:
-            items.append(
-                {
-                    "user_id": u.id,
-                    "username": u.username,
-                    "display_name": u.display_name,
-                    "max_concurrent_tasks": None,
-                }
-            )
-    return EnvironmentAccessListResponse.model_validate({"items": items})
+    return EnvironmentAccessListResponse.model_validate(
+        {"items": service.list_environment_access(env_id)}
+    )
 
 
 @router.put(
@@ -162,14 +151,17 @@ async def grant_env_access(
         max_tasks=payload.max_concurrent_tasks,
         granted_by=user["id"],
     )
-    return EnvironmentAccessResponse.model_validate(
-        {
-            "user_id": payload.user_id,
-            "username": "",
-            "display_name": "",
-            "max_concurrent_tasks": payload.max_concurrent_tasks,
-        }
+    item = next(
+        (
+            grant
+            for grant in service.list_environment_access(env_id)
+            if grant["user_id"] == payload.user_id
+        ),
+        None,
     )
+    if item is None:
+        raise HTTPException(status_code=500, detail="environment grant was not persisted")
+    return EnvironmentAccessResponse.model_validate(item)
 
 
 @router.delete("/environments/{env_id}/access/{user_id}", status_code=204)

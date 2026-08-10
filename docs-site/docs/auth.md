@@ -106,6 +106,11 @@ PUT /admin/environments/env-localhost/access
 }
 ```
 
+该上限按“用户 + 环境”统计已经进入外部 delivery 的不同 Task。`null` 表示不限，
+`0` 表示不允许新的外部执行启动；queued/claimed submission 可以继续持久等待。
+为防止重复外调，acceptance 尚不确定的 `delivery_unknown` Task 在 reconciliation
+完成前仍计入并发槽。
+
 ## 项目协作者
 
 项目所有者可以添加协作者：

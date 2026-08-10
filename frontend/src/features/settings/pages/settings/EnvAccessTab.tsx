@@ -40,7 +40,7 @@ export function EnvAccessTab() {
     mutationFn: () =>
       grantEnvAccess(selectedEnv!, {
         user_id: grantUserId,
-        max_concurrent_tasks: maxTasks ? parseInt(maxTasks) : null,
+        max_concurrent_tasks: maxTasks ? Number(maxTasks) : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.envAccess.byEnv(selectedEnv) });
@@ -118,6 +118,9 @@ export function EnvAccessTab() {
             disabled={grantMutation.isPending}
             extraField={
               <input
+                type="number"
+                min={0}
+                step={1}
                 value={maxTasks}
                 onChange={(e) => setMaxTasks(e.target.value)}
                 placeholder={t('pages.settings.envAccess.maxTasks')}

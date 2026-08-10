@@ -113,6 +113,8 @@ def _upsert_environment_grant(
     explicit administrator grants always advance the version so a dispatcher
     can distinguish a fresh authorization decision from an earlier one.
     """
+    if max_tasks is not None and max_tasks < 0:
+        raise AuthError("max_concurrent_tasks must be zero or greater")
     reactivate_clause = "WHERE environment_access.status = 'revoked'" if reactivate_only else ""
     cursor = conn.execute(
         f"""
@@ -647,6 +649,36 @@ class AuthService:
                 (user_id,),
             ).fetchall()
         return [r["environment_id"] for r in rows]
+
+    def list_environment_access(self, env_id: str) -> list[dict[str, object]]:
+        """Return active grants with their authoritative concurrency limits."""
+
+        self.initialize()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT access.user_id, user.username, user.display_name,
+                       access.max_concurrent_tasks
+                FROM environment_access AS access
+                JOIN users AS user ON user.id = access.user_id
+                WHERE access.environment_id = ? AND access.status = 'active'
+                ORDER BY user.username, access.user_id
+                """,
+                (env_id,),
+            ).fetchall()
+        return [
+            {
+                "user_id": str(row["user_id"]),
+                "username": str(row["username"]),
+                "display_name": str(row["display_name"]),
+                "max_concurrent_tasks": (
+                    None
+                    if row["max_concurrent_tasks"] is None
+                    else int(row["max_concurrent_tasks"])
+                ),
+            }
+            for row in rows
+        ]
 
     # --- Change Password ---
 

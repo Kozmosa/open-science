@@ -1018,7 +1018,7 @@ class ProjectMemberListResponse(BaseModel):
 class EnvironmentAccessRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_id: str
-    max_concurrent_tasks: int | None = None
+    max_concurrent_tasks: int | None = Field(default=None, ge=0)
 
 
 class EnvironmentAccessResponse(BaseModel):
@@ -1026,7 +1026,7 @@ class EnvironmentAccessResponse(BaseModel):
     user_id: str
     username: str
     display_name: str
-    max_concurrent_tasks: int | None
+    max_concurrent_tasks: int | None = Field(ge=0)
 
 
 class EnvironmentAccessListResponse(BaseModel):

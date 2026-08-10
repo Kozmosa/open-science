@@ -110,6 +110,33 @@ class TestAdminApi:
             resp = await client.get("/api/admin/users")
             assert resp.status_code in (403, 404)
 
+    async def test_environment_access_round_trips_concurrency_limit(self, tmp_path: Path) -> None:
+        from tests.testutil import make_client_and_app
+
+        app, client, _ = make_client_and_app(tmp_path)
+        target_user_id = _ensure_user(app.state.auth_service, "quota_user", "quota-pass")
+        async with client:
+            granted = await client.put(
+                "/api/admin/environments/env-localhost/access",
+                json={"user_id": target_user_id, "max_concurrent_tasks": 2},
+            )
+            invalid = await client.put(
+                "/api/admin/environments/env-localhost/access",
+                json={"user_id": target_user_id, "max_concurrent_tasks": -1},
+            )
+            listed = await client.get("/api/admin/environments/env-localhost/access")
+
+        assert granted.status_code == 201
+        assert granted.json() == {
+            "user_id": target_user_id,
+            "username": "quota_user",
+            "display_name": "Quota_user",
+            "max_concurrent_tasks": 2,
+        }
+        assert invalid.status_code == 422
+        target = next(item for item in listed.json()["items"] if item["user_id"] == target_user_id)
+        assert target["max_concurrent_tasks"] == 2
+
 
 def _ensure_user(auth_svc, username, password):
     """Create and activate a user, return their id."""
@@ -175,6 +202,27 @@ class TestEnvironmentAccessCrud:
         svc.grant_environment(env_id="env1", user_id=uid, max_tasks=2, granted_by="admin")
         env_ids = svc.get_user_environment_ids(uid)
         assert "env1" in env_ids
+        assert svc.list_environment_access("env1") == [
+            {
+                "user_id": uid,
+                "username": "bob",
+                "display_name": "Bob",
+                "max_concurrent_tasks": 2,
+            }
+        ]
+
+    def test_negative_task_capacity_is_rejected(self):
+        from ainrf.auth.models import AuthError
+
+        svc = self._make_service()
+        uid = _ensure_user(svc, "bob", "bob123")
+        with pytest.raises(AuthError, match="zero or greater"):
+            svc.grant_environment(
+                env_id="env1",
+                user_id=uid,
+                max_tasks=-1,
+                granted_by="admin",
+            )
 
     def test_revoke(self):
         svc = self._make_service()

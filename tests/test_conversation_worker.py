@@ -446,6 +446,90 @@ async def test_worker_retries_adapter_construction_failure_before_start(
 
 
 @pytest.mark.anyio
+async def test_worker_reserves_environment_task_capacity_before_adapter_start(
+    state_root: Path,
+) -> None:
+    application = ConversationApplicationService(state_root)
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            """
+            INSERT INTO tasks (
+                task_id, project_id, workspace_id, environment_id, researcher_type,
+                harness_engine, title, prompt, created_at, updated_at, owner_user_id
+            ) SELECT 'task-2', project_id, workspace_id, environment_id, researcher_type,
+                     harness_engine, 'Second Conversation', 'second',
+                     '2026-08-11T00:00:01+00:00', '2026-08-11T00:00:01+00:00', owner_user_id
+              FROM tasks WHERE task_id = 'task-1'
+            """
+        )
+        conn.commit()
+    application.initialize_task("task-2", _USER)
+    second = application.create_turn(
+        "task-2",
+        _USER,
+        input={"text": "second"},
+        idempotency_key="create-second-task",
+    )
+    AuthService(state_root=state_root).grant_environment(
+        env_id="environment-1",
+        user_id="user-1",
+        max_tasks=1,
+        granted_by="admin",
+        reason="worker capacity test",
+    )
+    first_adapter = FailingSteerRuntimeAdapter()
+    second_starts = 0
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            nonlocal second_starts
+            second_starts += 1
+            await super().start_turn(context, emit)
+
+    def context_factory(claim: SubmissionClaim) -> ExecutionContext:
+        return ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        )
+
+    first_dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine: first_adapter,
+        context_factory=context_factory,
+    )
+    second_dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine: TrackingAdapter(),
+        context_factory=context_factory,
+    )
+    first_run = asyncio.create_task(first_dispatcher.run_once())
+    await first_adapter.accepted.wait()
+
+    assert await second_dispatcher.run_once() is True
+    assert second_starts == 0
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        second_submission = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (str(second["submission_id"]),),
+        ).fetchone()
+        active = conn.execute(
+            "SELECT COUNT(*) FROM runtime_executions "
+            "WHERE status IN ('starting', 'running', 'reconciling')"
+        ).fetchone()[0]
+    assert second_submission is not None and second_submission["status"] == "claimed"
+    assert active == 1
+
+    first_adapter.release.set()
+    assert await first_run is True
+    _make_claim_stale(state_root)
+    assert await second_dispatcher.run_once() is True
+    assert second_starts == 1
+
+
+@pytest.mark.anyio
 async def test_worker_cancellation_before_adapter_start_leaves_reclaimable_claim(
     state_root: Path,
 ) -> None:
