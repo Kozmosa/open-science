@@ -11,6 +11,7 @@ import hashlib
 import time
 import xml.etree.ElementTree as element_tree
 from dataclasses import dataclass
+from datetime import UTC
 from typing import Iterable
 
 import httpx
@@ -22,6 +23,12 @@ _RSS_BASE_URL = "https://rss.arxiv.org/rss"
 logger = structlog.get_logger(__name__).bind(component="arxiv-rss-provider")
 
 
+def normalize_categories(categories: Iterable[str]) -> list[str]:
+    """Return the exact category order and set used to build the RSS URL."""
+
+    return sorted(set(categories))
+
+
 @dataclass(frozen=True, slots=True)
 class RssFetchResult:
     status_code: int
@@ -30,6 +37,7 @@ class RssFetchResult:
     last_modified: str | None
     cache_control: str | None
     papers: list[DiscoveredPaper]
+    retry_after_seconds: int | None = None
 
 
 class ArxivRssProvider:
@@ -43,7 +51,7 @@ class ArxivRssProvider:
         last_modified: str | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> RssFetchResult:
-        normalized_categories = sorted(set(categories))
+        normalized_categories = normalize_categories(categories)
         scope = "+".join(normalized_categories)
         if not scope:
             raise ValueError("RSS discovery requires at least one category")
@@ -82,21 +90,6 @@ class ArxivRssProvider:
         body = response.content if response.status_code == 200 else None
         body_hash = hashlib.sha256(body).hexdigest() if body is not None else None
         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
-        try:
-            papers = parse_rss(body) if body else []
-        except Exception as exc:
-            logger.error(
-                "literature_provider_response_parse_failed",
-                provider=self.name,
-                scope=scope,
-                status_code=response.status_code,
-                response_hash=body_hash,
-                body_bytes=len(body) if body is not None else 0,
-                error_type=type(exc).__name__,
-                error=str(exc)[:500],
-                elapsed_ms=elapsed_ms,
-            )
-            raise
         event = (
             "literature_provider_response_received"
             if response.status_code in {200, 304}
@@ -108,7 +101,7 @@ class ArxivRssProvider:
             provider=self.name,
             scope=scope,
             status_code=response.status_code,
-            paper_count=len(papers),
+            paper_count=None,
             response_hash=body_hash,
             body_bytes=len(body) if body is not None else 0,
             elapsed_ms=elapsed_ms,
@@ -119,7 +112,8 @@ class ArxivRssProvider:
             etag=response.headers.get("ETag"),
             last_modified=response.headers.get("Last-Modified"),
             cache_control=response.headers.get("Cache-Control"),
-            papers=papers,
+            papers=[],
+            retry_after_seconds=_retry_after_seconds(response.headers.get("Retry-After")),
         )
 
 
@@ -167,6 +161,23 @@ def parse_rss(body: bytes) -> list[DiscoveredPaper]:
             )
         )
     return papers
+
+
+def _retry_after_seconds(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        seconds = int(value.strip())
+        return max(0, seconds)
+    except ValueError:
+        try:
+            retry_at = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        now = time.time()
+        return max(0, int(retry_at.timestamp() - now))
 
 
 def _children_named(element: element_tree.Element, name: str) -> list[element_tree.Element]:

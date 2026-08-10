@@ -9,6 +9,7 @@ import pytest
 from ainrf.db.migration import SchemaBaselineError, current_version, run_pending
 from ainrf.db.migrations.current import migration_034_conversation_cancellation_guards
 from ainrf.db.retire_legacy import migrate, preflight, verify
+from ainrf.literature.tracking import LiteratureTrackingService
 
 
 pytestmark = [pytest.mark.unit]
@@ -74,7 +75,7 @@ def _build_v34_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 35), ("literature", 8), ("terminal", 1)],
+    [("auth", 7), ("agentic_researcher", 35), ("literature", 9), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -89,12 +90,12 @@ def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_autho
 ) -> None:
     path = tmp_path / "literature.sqlite3"
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 2
+        assert run_pending(connection, "literature") == 3
         tables = {
             str(row["name"])
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
-        assert current_version(connection, "literature") == 8
+        assert current_version(connection, "literature") == 9
 
     assert {
         "literature_research_task_intents",
@@ -109,13 +110,13 @@ def test_literature_v7_empty_artifact_migrates_to_fresh_schema(tmp_path: Path) -
     fresh_path = tmp_path / "fresh.sqlite3"
     artifact_path = tmp_path / "v7-artifact.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "literature") == 2
+        assert run_pending(connection, "literature") == 3
         fresh_schema = _schema_objects(connection)
 
     _build_v7_literature_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "literature") == 1
-        assert current_version(connection, "literature") == 8
+        assert run_pending(connection, "literature") == 2
+        assert current_version(connection, "literature") == 9
         artifact_schema = _schema_objects(connection)
 
     assert artifact_schema == fresh_schema
@@ -128,8 +129,8 @@ def test_literature_v7_artifact_without_retired_tables_advances(tmp_path: Path) 
         include_task_sagas=False,
     )
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 1
-        assert current_version(connection, "literature") == 8
+        assert run_pending(connection, "literature") == 2
+        assert current_version(connection, "literature") == 9
 
 
 @pytest.mark.parametrize(
@@ -226,6 +227,214 @@ def test_literature_saga_retirement_version_failure_rolls_back_tables_and_versio
             ).fetchone()[0]
             == 2
         )
+
+
+def test_literature_api_attempt_migration_upgrades_v8_shape_and_adds_guards(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "v8-attempts.sqlite3"
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    old_attempt_table = """
+        CREATE TABLE literature_api_attempts (
+            attempt_id TEXT PRIMARY KEY,
+            check_id TEXT,
+            work_item_id TEXT,
+            provider TEXT NOT NULL,
+            request_fingerprint TEXT NOT NULL,
+            state TEXT NOT NULL,
+            status_code INTEGER,
+            retry_after_seconds INTEGER,
+            error_kind TEXT,
+            error_message TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            response_hash TEXT
+        )
+    """
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.execute("DROP TABLE literature_api_attempts")
+        connection.execute(old_attempt_table)
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 8)")
+        connection.commit()
+
+    with _connect(path) as connection:
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 9
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(literature_api_attempts)")
+        }
+        assert {
+            "operation",
+            "attempt_number",
+            "response_received_at",
+            "response_persisted_at",
+        } <= columns
+        trigger_names = {
+            str(row[1])
+            for row in connection.execute(
+                "SELECT type, name FROM sqlite_master WHERE type = 'trigger'"
+            )
+        }
+        assert {
+            "literature_api_attempts_state_insert_guard",
+            "literature_api_attempts_insert_evidence_guard",
+            "literature_api_attempts_state_transition_guard",
+            "literature_api_attempts_response_evidence_guard",
+        } <= trigger_names
+
+
+def test_literature_api_attempt_migration_rolls_back_on_alter_failure(tmp_path: Path) -> None:
+    path = tmp_path / "v8-attempts-failure.sqlite3"
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.execute("DROP TABLE literature_api_attempts")
+        connection.execute(
+            """
+            CREATE TABLE literature_api_attempts (
+                attempt_id TEXT PRIMARY KEY,
+                check_id TEXT,
+                work_item_id TEXT,
+                provider TEXT NOT NULL,
+                request_fingerprint TEXT NOT NULL,
+                state TEXT NOT NULL,
+                status_code INTEGER,
+                retry_after_seconds INTEGER,
+                error_kind TEXT,
+                error_message TEXT,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                response_hash TEXT
+            )
+            """
+        )
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 8)")
+        connection.commit()
+
+        def deny_alter(
+            action: int,
+            _arg1: str | None,
+            _arg2: str | None,
+            _database: str | None,
+            _source: str | None,
+        ) -> int:
+            return (
+                sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_ALTER_TABLE else sqlite3.SQLITE_OK
+            )
+
+        connection.set_authorizer(deny_alter)
+        with pytest.raises(sqlite3.DatabaseError):
+            run_pending(connection, "literature")
+        connection.set_authorizer(None)
+        assert current_version(connection, "literature") == 8
+
+
+def test_literature_api_attempt_migration_quarantines_legacy_succeeded_rows(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "v8-legacy-succeeded.sqlite3"
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.execute(
+            """
+            INSERT INTO literature_api_attempts (
+                attempt_id, provider, request_fingerprint, state, started_at,
+                completed_at, response_hash
+            ) VALUES ('legacy-1', 'anthropic', 'request-1', 'succeeded',
+                      '2026-01-01T00:00:00+00:00', '2026-01-01T00:01:00+00:00', 'hash-1')
+            """
+        )
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 8)")
+        connection.commit()
+
+    with _connect(path) as connection:
+        assert run_pending(connection, "literature") == 1
+        row = connection.execute(
+            "SELECT state, legacy_state, response_hash, completed_at FROM literature_api_attempts WHERE attempt_id = 'legacy-1'"
+        ).fetchone()
+        assert tuple(row) == (
+            "unknown",
+            "succeeded",
+            "hash-1",
+            "2026-01-01T00:01:00+00:00",
+        )
+
+
+@pytest.mark.parametrize("reconcile_kind", ["stale", "expired"])
+def test_migrated_literature_attempt_reconciliation_honors_response_guard(
+    tmp_path: Path, reconcile_kind: str
+) -> None:
+    root = tmp_path / "migrated-root"
+    path = root / "runtime" / "literature.sqlite3"
+    path.parent.mkdir(parents=True)
+    _build_v7_literature_artifact(path)
+    service = LiteratureTrackingService(root)
+    service.initialize()
+    topic = service.create_topic(
+        user_id="owner",
+        label="Agents",
+        include_terms=[],
+        exclude_terms=[],
+        categories=["cs.AI"],
+    )
+    service.create_check(user_id="owner", topic_ids=[topic["topic_id"]])
+    item = service.claim_work_item_by_id(
+        service.pending_outbox_work_ids()[0], worker_id="migration-recovery"
+    )
+    assert item is not None
+    attempt = service.begin_api_attempt(
+        provider="arxiv-rss",
+        operation="fetch",
+        request={"categories": ["cs.AI"]},
+        check_id=str(item.payload["check_id"]),
+        work_item_id=item.work_item_id,
+        attempt_number=item.attempt_count,
+    )
+    snapshot = service.persist_rss_snapshot(
+        attempt_id=attempt.attempt_id,
+        check_id=str(item.payload["check_id"]),
+        scope_id=str(item.payload["scope_id"]),
+        body=b"migrated raw rss evidence",
+        etag=None,
+        last_modified=None,
+        cache_control=None,
+        status_code=200,
+    )
+    with service._connect() as conn:
+        if reconcile_kind == "stale":
+            conn.execute(
+                "UPDATE literature_api_attempts SET started_at = '2020-01-01T00:00:00+00:00' WHERE attempt_id = ?",
+                (attempt.attempt_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE literature_work_items SET lease_expires_at = '2020-01-01T00:00:00+00:00' WHERE work_item_id = ?",
+                (item.work_item_id,),
+            )
+
+    if reconcile_kind == "stale":
+        service.reconcile_stale_api_attempts(stale_after_seconds=0)
+    else:
+        service.reconcile_expired_work_items()
+
+    recovered = service.api_attempt(attempt.attempt_id)
+    assert recovered is not None
+    assert recovered.state == "response_persisted"
+    assert recovered.response_received_at is not None
+    assert recovered.response_persisted_at is not None
+    assert recovered.status_code == 200
+    assert recovered.response_hash == snapshot["body_hash"]
 
 
 def test_fresh_domain_baseline_contains_current_authority_only(tmp_path: Path) -> None:

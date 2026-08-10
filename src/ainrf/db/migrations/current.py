@@ -98,6 +98,144 @@ def migration_008_retire_unused_literature_task_saga(conn: sqlite3.Connection) -
             conn.execute(f'DROP TABLE "{table_name}"')
 
 
+@registry.register("literature")
+def migration_009_harden_literature_api_attempts(conn: sqlite3.Connection) -> None:
+    """Add durable lifecycle columns and guards to external-call attempts.
+
+    Version 8 databases already have the table but predate operation identity,
+    response evidence, and response boundary timestamps.  ``ALTER TABLE``
+    keeps existing rows.  A historical ``succeeded`` row without the new
+    evidence is conservatively retained as ``legacy_state=succeeded`` while
+    moving its active state to ``unknown``; it must be reconciled explicitly.
+    """
+
+    if not _has_table(conn, "literature_api_attempts"):
+        raise RuntimeError("literature API attempt table is required by migration 009")
+
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(literature_api_attempts)")}
+    additions = {
+        "operation": "TEXT NOT NULL DEFAULT 'external'",
+        "attempt_number": "INTEGER NOT NULL DEFAULT 1",
+        "response_received_at": "TEXT",
+        "response_persisted_at": "TEXT",
+        "response_payload": "TEXT",
+        "legacy_state": "TEXT",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            conn.execute(f'ALTER TABLE literature_api_attempts ADD COLUMN "{name}" {definition}')
+
+    if _has_table(conn, "literature_source_snapshots"):
+        snapshot_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(literature_source_snapshots)")
+        }
+        snapshot_additions = {
+            "attempt_id": "TEXT",
+            "status_code": "INTEGER",
+            "cache_control": "TEXT",
+        }
+        for name, definition in snapshot_additions.items():
+            if name not in snapshot_columns:
+                conn.execute(
+                    f'ALTER TABLE literature_source_snapshots ADD COLUMN "{name}" {definition}'
+                )
+
+    conn.execute(
+        """
+        UPDATE literature_api_attempts
+        SET state = 'unknown', legacy_state = 'succeeded',
+            error_kind = 'legacy_unreconciled',
+            error_message = 'Legacy succeeded row lacks response persistence evidence'
+        WHERE state = 'succeeded' AND response_persisted_at IS NULL
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS literature_api_attempts_request_idx
+            ON literature_api_attempts (request_fingerprint, work_item_id, attempt_number)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS literature_api_attempts_state_insert_guard
+            BEFORE INSERT ON literature_api_attempts
+            WHEN NEW.state NOT IN (
+                'started', 'response_received', 'response_persisted', 'succeeded',
+                'retryable_failure', 'definitive_failure', 'unknown'
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid Literature API attempt state');
+            END
+        """
+    )
+    conn.execute("DROP TRIGGER IF EXISTS literature_api_attempts_insert_evidence_guard")
+    conn.execute(
+        """
+        CREATE TRIGGER literature_api_attempts_insert_evidence_guard
+            BEFORE INSERT ON literature_api_attempts
+            WHEN NEW.state IN ('response_persisted', 'succeeded')
+              AND length(trim(COALESCE(NEW.response_hash, ''))) = 0
+              AND length(trim(COALESCE(NEW.response_payload, ''))) = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM literature_source_snapshots AS snapshot
+                  WHERE snapshot.attempt_id = NEW.attempt_id
+                    AND length(snapshot.body) > 0
+                    AND length(trim(COALESCE(snapshot.body_hash, ''))) > 0
+              )
+            BEGIN
+                SELECT RAISE(ABORT, 'Literature API attempt lacks durable response evidence');
+            END
+        """
+    )
+    # Recreate the guards on every migration invocation so a database created
+    # by an earlier implementation cannot retain the unsafe started-to-
+    # response_persisted shortcut or permit success without evidence.
+    conn.execute("DROP TRIGGER IF EXISTS literature_api_attempts_state_transition_guard")
+    conn.execute("DROP TRIGGER IF EXISTS literature_api_attempts_response_evidence_guard")
+    conn.execute(
+        """
+        CREATE TRIGGER literature_api_attempts_state_transition_guard
+            BEFORE UPDATE OF state ON literature_api_attempts
+            WHEN OLD.state != NEW.state AND NOT (
+                (OLD.state = 'started' AND NEW.state IN (
+                    'response_received', 'retryable_failure',
+                    'definitive_failure', 'unknown'
+                ))
+                OR (OLD.state = 'response_received' AND NEW.state IN (
+                    'response_persisted', 'retryable_failure',
+                    'definitive_failure', 'unknown'
+                ))
+                OR (OLD.state = 'response_persisted' AND NEW.state IN (
+                    'succeeded', 'unknown', 'retryable_failure',
+                    'definitive_failure'
+                ))
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid Literature API attempt transition');
+            END
+        """
+    )
+    conn.execute(
+        """
+        CREATE TRIGGER literature_api_attempts_response_evidence_guard
+            BEFORE UPDATE OF state ON literature_api_attempts
+            WHEN NEW.state IN ('response_persisted', 'succeeded')
+              AND length(trim(COALESCE(NEW.response_hash, ''))) = 0
+              AND length(trim(COALESCE(NEW.response_payload, ''))) = 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM literature_source_snapshots AS snapshot
+                  WHERE snapshot.attempt_id = NEW.attempt_id
+                    AND length(snapshot.body) > 0
+                    AND length(trim(COALESCE(snapshot.body_hash, ''))) > 0
+              )
+            BEGIN
+                SELECT RAISE(ABORT, 'Literature API attempt lacks durable response evidence');
+            END
+        """
+    )
+
+
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])
 def agentic_researcher_baseline(conn: sqlite3.Connection) -> None:
     _apply_baseline(conn, "agentic_researcher")

@@ -22,6 +22,10 @@ import structlog
 
 from ainrf.db.connection import connect
 from ainrf.db.migration import run_pending
+from ainrf.literature.attempts import (
+    ExternalCallAttempt,
+    request_fingerprint as request_fingerprint_for_attempt,
+)
 
 _SUMMARY_RECIPE_VERSION = "v1"
 _DEFAULT_SUMMARY_MODEL = "claude-sonnet-4-6"
@@ -39,6 +43,50 @@ def _identifier(prefix: str) -> str:
 def _fingerprint(value: object) -> str:
     canonical = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _non_empty_evidence(value: object) -> bool:
+    """Return whether a persisted evidence field carries meaningful data."""
+
+    if isinstance(value, bytes):
+        return bool(value)
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _payload_hash_matches(payload: object, response_hash: object) -> bool:
+    """Return whether a persisted text payload matches its durable hash."""
+
+    return bool(
+        isinstance(payload, str)
+        and payload.strip()
+        and isinstance(response_hash, str)
+        and response_hash.strip()
+        and hashlib.sha256(payload.encode()).hexdigest() == response_hash
+    )
+
+
+def _snapshot_body_hash_matches(snapshot: sqlite3.Row | dict[str, Any] | None) -> bool:
+    """Return whether a persisted RSS body matches its durable body hash."""
+
+    if snapshot is None:
+        return False
+    body = snapshot["body"]
+    if isinstance(body, memoryview):
+        body = body.tobytes()
+    if not isinstance(body, bytes) or not body:
+        return False
+    body_hash = snapshot["body_hash"]
+    return bool(
+        isinstance(body_hash, str)
+        and body_hash.strip()
+        and hashlib.sha256(body).hexdigest() == body_hash
+    )
+
+
+def _snapshot_has_replay_evidence(snapshot: sqlite3.Row | dict[str, Any] | None) -> bool:
+    """Return whether a raw RSS snapshot is complete enough for replay."""
+
+    return _snapshot_body_hash_matches(snapshot)
 
 
 def canonical_arxiv_id(value: str) -> tuple[str, str]:
@@ -74,6 +122,7 @@ class WorkItem:
     work_item_id: str
     kind: str
     payload: dict[str, Any]
+    attempt_count: int = 1
 
 
 class LiteratureIdempotencyConflictError(ValueError):
@@ -99,6 +148,582 @@ class LiteratureTrackingService:
 
     def _connect(self) -> sqlite3.Connection:
         return connect(self._db_path)
+
+    def begin_api_attempt(
+        self,
+        *,
+        provider: str,
+        operation: str,
+        request: object,
+        check_id: str | None = None,
+        work_item_id: str | None = None,
+        attempt_number: int = 1,
+    ) -> ExternalCallAttempt:
+        """Create or reuse the durable row for one concrete external call.
+
+        The request fingerprint is stable across process retries while the
+        deterministic attempt ID additionally binds it to a durable work-item
+        claim.  ``INSERT OR IGNORE`` makes duplicate delivery of one claim
+        idempotent without turning Redis or an in-process lock into authority.
+        """
+
+        provider = provider.strip()
+        operation = operation.strip()
+        if not provider or not operation:
+            raise ValueError("provider and operation are required")
+        if attempt_number < 1:
+            raise ValueError("attempt_number must be positive")
+        request_fingerprint = request_fingerprint_for_attempt(provider, operation, request)
+        identity = "|".join(
+            (
+                work_item_id or "unbound",
+                provider,
+                operation,
+                request_fingerprint,
+                str(attempt_number),
+            )
+        )
+        attempt_id = f"attempt_{hashlib.sha256(identity.encode()).hexdigest()[:32]}"
+        now = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO literature_api_attempts (
+                    attempt_id, check_id, work_item_id, provider, operation,
+                    request_fingerprint, attempt_number, state, started_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'started', ?)
+                """,
+                (
+                    attempt_id,
+                    check_id,
+                    work_item_id,
+                    provider,
+                    operation,
+                    request_fingerprint,
+                    attempt_number,
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("failed to persist Literature API attempt")
+        return self._api_attempt_dict(row)
+
+    def record_api_response(
+        self,
+        attempt_id: str,
+        *,
+        status_code: int | None,
+        response_hash: str | None,
+        response_payload: str | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> ExternalCallAttempt:
+        """Persist that a response arrived before downstream parsing/storage."""
+
+        now = _now()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = 'response_received', status_code = ?, response_hash = ?,
+                    response_payload = COALESCE(?, response_payload),
+                    retry_after_seconds = COALESCE(?, retry_after_seconds),
+                    response_received_at = COALESCE(response_received_at, ?),
+                    error_kind = NULL, error_message = NULL
+                WHERE attempt_id = ? AND state IN ('started', 'response_received')
+                """,
+                (
+                    status_code,
+                    response_hash,
+                    response_payload,
+                    retry_after_seconds,
+                    now,
+                    attempt_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"API attempt cannot receive a response: {attempt_id}")
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        return self._api_attempt_dict(row)
+
+    @staticmethod
+    def _attempt_has_response_evidence(
+        conn: sqlite3.Connection,
+        row: sqlite3.Row,
+        *,
+        response_hash: str | None = None,
+    ) -> bool:
+        """Check the durable evidence required before response persistence.
+
+        A non-empty provider hash without raw payload is durable response
+        evidence for providers that intentionally do not retain bodies.  When
+        a payload or RSS snapshot is present, its bytes must match the stored
+        hash before the response boundary can advance.  Empty strings are
+        deliberately not treated as evidence; this prevents callers from
+        manufacturing a boundary with placeholder fields.
+        """
+
+        stored_hash = response_hash or row["response_hash"]
+        payload = row["response_payload"]
+        snapshot = conn.execute(
+            """
+            SELECT body, body_hash FROM literature_source_snapshots
+            WHERE attempt_id = ? LIMIT 1
+            """,
+            (row["attempt_id"],),
+        ).fetchone()
+        if _non_empty_evidence(payload):
+            if not _payload_hash_matches(payload, stored_hash):
+                return False
+            if response_hash is not None and row["response_hash"] != response_hash:
+                return False
+            if snapshot is not None:
+                if not _snapshot_body_hash_matches(snapshot):
+                    return False
+                if snapshot["body_hash"] != stored_hash:
+                    return False
+            return True
+        if _snapshot_body_hash_matches(snapshot):
+            snapshot_hash = snapshot["body_hash"]
+            if _non_empty_evidence(stored_hash) and stored_hash != snapshot_hash:
+                return False
+            return True
+        if snapshot is not None:
+            return False
+        return _non_empty_evidence(stored_hash)
+
+    @staticmethod
+    def _attempt_has_replay_evidence(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
+        """Return whether an attempt contains verified raw evidence for replay."""
+
+        payload = row["response_payload"]
+        snapshot = conn.execute(
+            """
+            SELECT body, body_hash FROM literature_source_snapshots
+            WHERE attempt_id = ? LIMIT 1
+            """,
+            (row["attempt_id"],),
+        ).fetchone()
+        if _non_empty_evidence(payload):
+            if not _payload_hash_matches(payload, row["response_hash"]):
+                return False
+            return snapshot is None or (
+                _snapshot_body_hash_matches(snapshot)
+                and snapshot["body_hash"] == row["response_hash"]
+            )
+        if not _snapshot_body_hash_matches(snapshot):
+            return False
+        snapshot_hash = snapshot["body_hash"]
+        return (
+            not _non_empty_evidence(row["response_hash"]) or row["response_hash"] == snapshot_hash
+        )
+
+    @staticmethod
+    def _promote_attempt_with_replay_evidence(
+        conn: sqlite3.Connection,
+        row: sqlite3.Row,
+        snapshot: sqlite3.Row | None,
+        *,
+        now: str,
+    ) -> sqlite3.Row:
+        """Promote an abandoned attempt through both durable response states.
+
+        Reconciliation runs inside its caller's transaction.  Keeping the
+        intermediate ``response_received`` update explicit satisfies the
+        lifecycle trigger and makes a crash roll back both transitions.
+        """
+
+        attempt_id = str(row["attempt_id"])
+        if row["state"] == "started":
+            snapshot_status = snapshot["status_code"] if snapshot is not None else None
+            snapshot_hash = snapshot["body_hash"] if snapshot is not None else None
+            conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = 'response_received',
+                    status_code = COALESCE(status_code, ?),
+                    response_hash = COALESCE(response_hash, ?),
+                    response_received_at = COALESCE(response_received_at, ?),
+                    error_kind = NULL, error_message = NULL
+                WHERE attempt_id = ? AND state = 'started'
+                """,
+                (snapshot_status, snapshot_hash, now, attempt_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        if row["state"] == "response_received":
+            if not LiteratureTrackingService._attempt_has_response_evidence(conn, row):
+                raise RuntimeError(
+                    f"API attempt cannot persist without durable response evidence: {attempt_id}"
+                )
+            conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = 'response_persisted',
+                    response_persisted_at = COALESCE(response_persisted_at, ?),
+                    error_kind = NULL, error_message = NULL
+                WHERE attempt_id = ? AND state = 'response_received'
+                """,
+                (now, attempt_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        return row
+
+    def mark_api_response_persisted(
+        self,
+        attempt_id: str,
+        *,
+        error_kind: str | None = None,
+        error_message: str | None = None,
+    ) -> ExternalCallAttempt:
+        """Record that a received source response reached durable SQLite state."""
+
+        now = _now()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Literature API attempt not found: {attempt_id}")
+            if row["state"] not in {"response_received", "response_persisted"}:
+                raise RuntimeError(f"API attempt response is not ready to persist: {attempt_id}")
+            if not self._attempt_has_response_evidence(conn, row):
+                raise RuntimeError(
+                    f"API attempt cannot persist without durable response evidence: {attempt_id}"
+                )
+            cursor = conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = 'response_persisted',
+                    response_persisted_at = COALESCE(response_persisted_at, ?),
+                    error_kind = ?, error_message = ?
+                WHERE attempt_id = ? AND state IN ('response_received', 'response_persisted')
+                """,
+                (
+                    now,
+                    error_kind[:100] if error_kind else None,
+                    error_message[:1000] if error_message else None,
+                    attempt_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"API attempt response is not ready to persist: {attempt_id}")
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        return self._api_attempt_dict(row)
+
+    def mark_api_succeeded(
+        self,
+        attempt_id: str,
+        *,
+        response_hash: str | None = None,
+        status_code: int | None = None,
+    ) -> ExternalCallAttempt:
+        """Finalize a call after its response or durable side effect succeeds."""
+
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Literature API attempt not found: {attempt_id}")
+            if row["state"] == "succeeded":
+                if (
+                    row["response_persisted_at"] is None
+                    or row["response_received_at"] is None
+                    or row["completed_at"] is None
+                ):
+                    raise RuntimeError(
+                        f"API attempt succeeded without persisted response evidence: {attempt_id}"
+                    )
+                if not self._attempt_has_response_evidence(conn, row, response_hash=response_hash):
+                    raise RuntimeError(
+                        f"API attempt succeeded without durable response evidence: {attempt_id}"
+                    )
+                if status_code is not None and row["status_code"] != status_code:
+                    raise RuntimeError(
+                        f"API attempt success replay mismatches status: {attempt_id}"
+                    )
+                if response_hash is not None and row["response_hash"] != response_hash:
+                    raise RuntimeError(f"API attempt success replay mismatches hash: {attempt_id}")
+                return self._api_attempt_dict(row)
+            if row["state"] != "response_persisted":
+                raise RuntimeError(
+                    f"API attempt cannot succeed before persisted response: {attempt_id}"
+                )
+            if row["response_persisted_at"] is None or row["response_received_at"] is None:
+                raise RuntimeError(
+                    f"API attempt persisted state lacks response timestamps: {attempt_id}"
+                )
+            if not self._attempt_has_response_evidence(conn, row, response_hash=response_hash):
+                raise RuntimeError(
+                    f"API attempt cannot succeed without durable response evidence: {attempt_id}"
+                )
+            now = _now()
+            cursor = conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = 'succeeded', status_code = COALESCE(?, status_code),
+                    response_hash = COALESCE(?, response_hash),
+                    completed_at = COALESCE(completed_at, ?),
+                    error_kind = NULL, error_message = NULL
+                WHERE attempt_id = ? AND state = 'response_persisted'
+                """,
+                (status_code, response_hash, now, attempt_id),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"API attempt cannot succeed: {attempt_id}")
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        return self._api_attempt_dict(row)
+
+    def latest_api_attempt(
+        self,
+        *,
+        work_item_id: str,
+        provider: str,
+        operation: str | None,
+        with_response_evidence: bool = False,
+    ) -> ExternalCallAttempt | None:
+        """Return the newest attempt that can be inspected during recovery."""
+
+        operation_clause = " AND operation = ?" if operation is not None else ""
+        params: tuple[object, ...] = (
+            (work_item_id, provider, operation)
+            if operation is not None
+            else (work_item_id, provider)
+        )
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM literature_api_attempts
+                WHERE work_item_id = ? AND provider = ?
+                """
+                + operation_clause
+                + " ORDER BY attempt_number DESC, started_at DESC"
+                + (" LIMIT 1" if not with_response_evidence else ""),
+                params,
+            ).fetchall()
+            for row in rows:
+                if not with_response_evidence or self._attempt_has_response_evidence(conn, row):
+                    return self._api_attempt_dict(row)
+        return None
+
+    def reconcile_stale_api_attempts(
+        self, stale_after_seconds: int = 300
+    ) -> list[ExternalCallAttempt]:
+        """Conservatively classify abandoned calls and promote durable evidence."""
+
+        cutoff = (datetime.now(UTC) - timedelta(seconds=stale_after_seconds)).isoformat()
+        reconciled: list[ExternalCallAttempt] = []
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT attempt.* FROM literature_api_attempts AS attempt
+                WHERE attempt.state IN ('started', 'response_received')
+                  AND attempt.started_at < ?
+                ORDER BY attempt.started_at
+                """,
+                (cutoff,),
+            ).fetchall()
+            for row in rows:
+                evidence = conn.execute(
+                    """
+                    SELECT body, body_hash, status_code FROM literature_source_snapshots
+                    WHERE attempt_id = ? LIMIT 1
+                    """,
+                    (row["attempt_id"],),
+                ).fetchone()
+                now = _now()
+                if self._attempt_has_replay_evidence(conn, row):
+                    self._promote_attempt_with_replay_evidence(
+                        conn,
+                        row,
+                        evidence,
+                        now=now,
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE literature_api_attempts
+                        SET state = 'unknown', error_kind = 'stale_attempt',
+                            error_message = 'Worker stopped before response evidence was durable',
+                            completed_at = COALESCE(completed_at, ?)
+                        WHERE attempt_id = ? AND state IN ('started', 'response_received')
+                        """,
+                        (now, row["attempt_id"]),
+                    )
+                updated = conn.execute(
+                    "SELECT * FROM literature_api_attempts WHERE attempt_id = ?",
+                    (row["attempt_id"],),
+                ).fetchone()
+                if updated is not None:
+                    reconciled.append(self._api_attempt_dict(updated))
+        return reconciled
+
+    def mark_api_retryable_failure(
+        self,
+        attempt_id: str,
+        *,
+        error_kind: str,
+        error_message: str,
+        retry_after_seconds: int | None = None,
+        status_code: int | None = None,
+    ) -> ExternalCallAttempt:
+        """Finalize a failed call that may be retried after a cooldown."""
+
+        return self._finish_api_attempt(
+            attempt_id,
+            state="retryable_failure",
+            error_kind=error_kind,
+            error_message=error_message,
+            retry_after_seconds=retry_after_seconds,
+            status_code=status_code,
+        )
+
+    def mark_api_definitive_failure(
+        self,
+        attempt_id: str,
+        *,
+        error_kind: str,
+        error_message: str,
+        status_code: int | None = None,
+    ) -> ExternalCallAttempt:
+        """Finalize a call that must not be automatically retried."""
+
+        return self._finish_api_attempt(
+            attempt_id,
+            state="definitive_failure",
+            error_kind=error_kind,
+            error_message=error_message,
+            status_code=status_code,
+        )
+
+    def mark_api_unknown(
+        self,
+        attempt_id: str,
+        *,
+        error_kind: str,
+        error_message: str,
+        retry_after_seconds: int | None = None,
+    ) -> ExternalCallAttempt:
+        """Record timeout/cancellation where the request may have been sent."""
+
+        return self._finish_api_attempt(
+            attempt_id,
+            state="unknown",
+            error_kind=error_kind,
+            error_message=error_message,
+            retry_after_seconds=retry_after_seconds,
+        )
+
+    def api_attempt(self, attempt_id: str) -> ExternalCallAttempt | None:
+        """Read one durable attempt for recovery and diagnostics."""
+
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        return self._api_attempt_dict(row) if row is not None else None
+
+    def api_attempt_has_replay_evidence(self, attempt_id: str) -> bool:
+        """Return whether an attempt has raw payload/snapshot evidence to replay."""
+
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            return self._attempt_has_replay_evidence(conn, row)
+
+    def list_api_attempts(
+        self,
+        *,
+        work_item_id: str | None = None,
+        request_fingerprint: str | None = None,
+    ) -> list[ExternalCallAttempt]:
+        """List durable attempts for recovery diagnostics without exposing SQL."""
+
+        clauses: list[str] = []
+        params: list[str] = []
+        if work_item_id is not None:
+            clauses.append("work_item_id = ?")
+            params.append(work_item_id)
+        if request_fingerprint is not None:
+            clauses.append("request_fingerprint = ?")
+            params.append(request_fingerprint)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM literature_api_attempts"
+                + where
+                + " ORDER BY started_at, attempt_number",
+                params,
+            ).fetchall()
+        return [self._api_attempt_dict(row) for row in rows]
+
+    def _finish_api_attempt(
+        self,
+        attempt_id: str,
+        *,
+        state: str,
+        error_kind: str,
+        error_message: str,
+        retry_after_seconds: int | None = None,
+        status_code: int | None = None,
+    ) -> ExternalCallAttempt:
+        now = _now()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE literature_api_attempts
+                SET state = ?, status_code = COALESCE(?, status_code),
+                    retry_after_seconds = ?, error_kind = ?, error_message = ?,
+                    completed_at = COALESCE(completed_at, ?)
+                WHERE attempt_id = ? AND state IN (
+                    'started', 'response_received', 'response_persisted',
+                    'retryable_failure', 'definitive_failure', 'unknown'
+                )
+                """,
+                (
+                    state,
+                    status_code,
+                    retry_after_seconds,
+                    error_kind[:100],
+                    error_message[:1000],
+                    now,
+                    attempt_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError(f"API attempt cannot transition to {state}: {attempt_id}")
+            row = conn.execute(
+                "SELECT * FROM literature_api_attempts WHERE attempt_id = ?", (attempt_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(f"Literature API attempt not found: {attempt_id}")
+        return self._api_attempt_dict(row)
 
     def create_topic(
         self,
@@ -752,8 +1377,133 @@ class LiteratureTrackingService:
                 (error[:1000], summary_id),
             )
 
+    def reconcile_expired_work_items(self) -> None:
+        """Recover expired leases without crossing an unknown external-call fence."""
+
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT work_item_id FROM literature_work_items
+                WHERE status = 'running' AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at < ?
+                """,
+                (now,),
+            ).fetchall()
+        for row in rows:
+            work_item_id = str(row["work_item_id"])
+            with self._connect() as conn:
+                attempt_row = conn.execute(
+                    """
+                    SELECT * FROM literature_api_attempts
+                    WHERE work_item_id = ?
+                    ORDER BY attempt_number DESC, started_at DESC LIMIT 1
+                    """,
+                    (work_item_id,),
+                ).fetchone()
+                snapshot = (
+                    conn.execute(
+                        """
+                        SELECT body, body_hash, status_code
+                        FROM literature_source_snapshots
+                        WHERE attempt_id = ? LIMIT 1
+                        """,
+                        (attempt_row["attempt_id"],),
+                    ).fetchone()
+                    if attempt_row is not None
+                    else None
+                )
+                attempt = self._api_attempt_dict(attempt_row) if attempt_row is not None else None
+                replay_evidence = bool(
+                    attempt is not None and self._attempt_has_replay_evidence(conn, attempt_row)
+                )
+                if attempt is not None and attempt.state in {"started", "response_received"}:
+                    if replay_evidence:
+                        attempt_row = self._promote_attempt_with_replay_evidence(
+                            conn,
+                            attempt_row,
+                            snapshot,
+                            now=now,
+                        )
+                        attempt = self._api_attempt_dict(attempt_row)
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE literature_api_attempts
+                            SET state = 'unknown', error_kind = 'expired_work_item',
+                                error_message = 'Work lease expired before response evidence was durable',
+                                completed_at = COALESCE(completed_at, ?)
+                            WHERE attempt_id = ? AND state IN ('started', 'response_received')
+                            """,
+                            (now, attempt.attempt_id),
+                        )
+                        attempt_row = conn.execute(
+                            "SELECT * FROM literature_api_attempts WHERE attempt_id = ?",
+                            (attempt.attempt_id,),
+                        ).fetchone()
+                        if attempt_row is None:
+                            raise KeyError(
+                                f"Literature API attempt not found: {attempt.attempt_id}"
+                            )
+                        attempt = self._api_attempt_dict(attempt_row)
+                elif (
+                    attempt is not None
+                    and attempt.state == "response_persisted"
+                    and not replay_evidence
+                ):
+                    conn.execute(
+                        """
+                        UPDATE literature_api_attempts
+                        SET state = 'unknown', error_kind = 'expired_work_item',
+                            error_message = 'Response-persisted boundary lacks durable response evidence',
+                            completed_at = COALESCE(completed_at, ?)
+                        WHERE attempt_id = ? AND state = 'response_persisted'
+                        """,
+                        (now, attempt.attempt_id),
+                    )
+                    attempt_row = conn.execute(
+                        "SELECT * FROM literature_api_attempts WHERE attempt_id = ?",
+                        (attempt.attempt_id,),
+                    ).fetchone()
+                    if attempt_row is None:
+                        raise KeyError(f"Literature API attempt not found: {attempt.attempt_id}")
+                    attempt = self._api_attempt_dict(attempt_row)
+                blocked = attempt is not None and attempt.state == "unknown" and not replay_evidence
+                available_at = now
+                if (
+                    attempt is not None
+                    and attempt.state == "retryable_failure"
+                    and attempt.retry_after_seconds is not None
+                ):
+                    try:
+                        retry_at = datetime.fromisoformat(attempt.completed_at or now) + timedelta(
+                            seconds=max(0, attempt.retry_after_seconds)
+                        )
+                        available_at = max(datetime.fromisoformat(now), retry_at).isoformat()
+                    except ValueError:
+                        available_at = now
+                conn.execute(
+                    """
+                    UPDATE literature_work_items
+                    SET status = ?, available_at = ?, lease_owner = NULL,
+                        lease_expires_at = NULL, last_error = ?, updated_at = ?
+                    WHERE work_item_id = ? AND status = 'running'
+                    """,
+                    (
+                        "failed" if blocked else "retrying",
+                        available_at,
+                        "external call outcome is unknown; manual reconciliation required"
+                        if blocked
+                        else "expired Literature work lease recovered",
+                        now,
+                        work_item_id,
+                    ),
+                )
+
     def claim_work_item(self, worker_id: str, lease_seconds: int = 120) -> WorkItem | None:
         now = datetime.now(UTC)
+        self.reconcile_stale_api_attempts()
+        self.reconcile_expired_work_items()
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -778,7 +1528,12 @@ class LiteratureTrackingService:
             )
             if updated.rowcount != 1:
                 return None
-        item = WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        item = WorkItem(
+            row["work_item_id"],
+            row["kind"],
+            json.loads(row["payload_json"]),
+            attempt_count=int(row["attempt_count"]) + 1,
+        )
         logger.debug(
             "literature_work_item_claimed",
             work_item_id=item.work_item_id,
@@ -793,6 +1548,8 @@ class LiteratureTrackingService:
     ) -> WorkItem | None:
         """Claim the durable item named by a broker message exactly once."""
         now = datetime.now(UTC)
+        self.reconcile_stale_api_attempts()
+        self.reconcile_expired_work_items()
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -815,7 +1572,12 @@ class LiteratureTrackingService:
             )
             if cursor.rowcount != 1:
                 return None
-        item = WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        item = WorkItem(
+            row["work_item_id"],
+            row["kind"],
+            json.loads(row["payload_json"]),
+            attempt_count=int(row["attempt_count"]) + 1,
+        )
         logger.debug(
             "literature_work_item_claimed",
             work_item_id=item.work_item_id,
@@ -828,12 +1590,178 @@ class LiteratureTrackingService:
     def work_item(self, work_item_id: str) -> WorkItem | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT work_item_id, kind, payload_json FROM literature_work_items WHERE work_item_id = ?",
+                "SELECT work_item_id, kind, payload_json, attempt_count FROM literature_work_items WHERE work_item_id = ?",
                 (work_item_id,),
             ).fetchone()
         if row is None:
             return None
-        return WorkItem(row["work_item_id"], row["kind"], json.loads(row["payload_json"]))
+        return WorkItem(
+            row["work_item_id"],
+            row["kind"],
+            json.loads(row["payload_json"]),
+            attempt_count=int(row["attempt_count"]) + 1,
+        )
+
+    def persist_rss_snapshot(
+        self,
+        *,
+        attempt_id: str,
+        check_id: str,
+        scope_id: str,
+        body: bytes,
+        etag: str | None,
+        last_modified: str | None,
+        cache_control: str | None,
+        status_code: int,
+    ) -> dict[str, Any]:
+        """Persist raw source evidence before parsing or catalog writes.
+
+        A checking scope keeps its last committed validators until the
+        catalog write completes.  That keeps the durable request fingerprint
+        applicable to recovery; response ETag/Last-Modified values are
+        advanced by ``complete_rss_response``.
+        """
+
+        body_hash = hashlib.sha256(body).hexdigest()
+        now = _now()
+        with self._connect() as conn:
+            attempt = conn.execute(
+                "SELECT request_fingerprint FROM literature_api_attempts WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            request_fp = str(attempt["request_fingerprint"]) if attempt is not None else body_hash
+            existing = conn.execute(
+                "SELECT * FROM literature_source_snapshots WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    """
+                    INSERT INTO literature_source_snapshots (
+                        snapshot_id, attempt_id, check_id, scope_id, provider,
+                        request_fingerprint, content_type, status_code, body, body_hash,
+                        etag, last_modified, cache_control, received_at
+                    ) VALUES (?, ?, ?, ?, 'arxiv-rss', ?, 'application/rss+xml', ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        _identifier("snapshot"),
+                        attempt_id,
+                        check_id,
+                        scope_id,
+                        request_fp,
+                        status_code,
+                        body,
+                        body_hash,
+                        etag,
+                        last_modified,
+                        cache_control,
+                        now,
+                    ),
+                )
+            conn.execute(
+                """
+                UPDATE literature_check_scopes
+                SET status = 'checking', response_hash = ?, last_error = NULL
+                WHERE scope_id = ?
+                """,
+                (body_hash, scope_id),
+            )
+            conn.execute(
+                "UPDATE literature_checks SET status = 'checking', started_at = COALESCE(started_at, ?) WHERE check_id = ?",
+                (now, check_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM literature_source_snapshots WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError(f"RSS snapshot was not persisted: {attempt_id}")
+        return dict(row)
+
+    def rss_snapshot_for_attempt(self, attempt_id: str) -> dict[str, Any] | None:
+        """Load the raw source evidence associated with one API attempt."""
+
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM literature_source_snapshots WHERE attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def complete_rss_response(
+        self,
+        *,
+        check_id: str,
+        scope_id: str,
+        papers: list[DiscoveredPaper],
+        is_truncated: bool,
+        response_hash: str,
+        etag: str | None = None,
+        last_modified: str | None = None,
+    ) -> None:
+        """Persist parsed catalog/matching output after a raw snapshot exists."""
+
+        self.store_discovered_papers(check_id, papers, complete_check=not is_truncated)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE literature_check_scopes
+                SET status = ?, item_count = ?, etag = ?, last_modified = ?,
+                    response_hash = ?, last_error = NULL
+                WHERE scope_id = ?
+                """,
+                (
+                    "partial" if is_truncated else "completed",
+                    len(papers),
+                    etag,
+                    last_modified,
+                    response_hash,
+                    scope_id,
+                ),
+            )
+
+    def complete_rss_not_modified(
+        self,
+        *,
+        check_id: str,
+        scope_id: str,
+        etag: str | None,
+        last_modified: str | None,
+        response_hash: str,
+    ) -> None:
+        """Persist semantic state for a 304 response after durable evidence."""
+
+        if not response_hash.strip():
+            raise ValueError("response_hash is required for a not-modified response")
+        self.store_discovered_papers(check_id, [], complete_check=True)
+        now = _now()
+        with self._connect() as conn:
+            scope = conn.execute(
+                "SELECT etag, last_modified FROM literature_check_scopes WHERE scope_id = ?",
+                (scope_id,),
+            ).fetchone()
+            if scope is None:
+                raise KeyError(f"Literature check scope not found: {scope_id}")
+            conn.execute(
+                """
+                UPDATE literature_check_scopes
+                SET status = 'completed', item_count = 0,
+                    etag = COALESCE(?, etag),
+                    last_modified = COALESCE(?, last_modified),
+                    response_hash = ?, next_attempt_at = NULL, last_error = NULL
+                WHERE scope_id = ?
+                """,
+                (etag, last_modified, response_hash, scope_id),
+            )
+            conn.execute(
+                """
+                UPDATE literature_checks
+                SET status = 'completed', completed_at = COALESCE(completed_at, ?),
+                    next_attempt_at = NULL, last_error = NULL
+                WHERE check_id = ?
+                """,
+                (now, check_id),
+            )
 
     def record_rss_response(
         self,
@@ -846,55 +1774,34 @@ class LiteratureTrackingService:
         papers: list[DiscoveredPaper],
         is_truncated: bool,
     ) -> None:
-        """Persist a raw feed before parsing results become user-visible."""
-        body_hash = hashlib.sha256(body).hexdigest()
-        now = _now()
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO literature_source_snapshots (
-                    snapshot_id, check_id, scope_id, provider, request_fingerprint, content_type,
-                    body, body_hash, etag, last_modified, received_at
-                ) VALUES (?, ?, ?, 'arxiv-rss', ?, 'application/rss+xml', ?, ?, ?, ?, ?)
-                """,
-                (
-                    _identifier("snapshot"),
-                    check_id,
-                    scope_id,
-                    body_hash,
-                    body,
-                    body_hash,
-                    etag,
-                    last_modified,
-                    now,
-                ),
-            )
-            conn.execute(
-                """
-                UPDATE literature_check_scopes SET status = ?, item_count = ?, etag = ?, last_modified = ?,
-                  response_hash = ?, last_error = NULL WHERE scope_id = ?
-                """,
-                (
-                    "partial" if is_truncated else "completed",
-                    len(papers),
-                    etag,
-                    last_modified,
-                    body_hash,
-                    scope_id,
-                ),
-            )
-            conn.execute(
-                "UPDATE literature_checks SET status = 'checking', started_at = COALESCE(started_at, ?) WHERE check_id = ?",
-                (now, check_id),
-            )
-        self.store_discovered_papers(check_id, papers, complete_check=not is_truncated)
+        """Compatibility wrapper for callers that already parsed the body."""
+
+        snapshot = self.persist_rss_snapshot(
+            attempt_id=_identifier("compat-attempt"),
+            check_id=check_id,
+            scope_id=scope_id,
+            body=body,
+            etag=etag,
+            last_modified=last_modified,
+            cache_control=None,
+            status_code=200,
+        )
+        self.complete_rss_response(
+            check_id=check_id,
+            scope_id=scope_id,
+            papers=papers,
+            is_truncated=is_truncated,
+            response_hash=str(snapshot["body_hash"]),
+            etag=etag,
+            last_modified=last_modified,
+        )
         logger.debug(
             "literature_rss_persisted",
             check_id=check_id,
             scope_id=scope_id,
             paper_count=len(papers),
             paper_id_sample=[f"{paper.provider}:{paper.external_id}" for paper in papers[:5]],
-            response_hash=body_hash,
+            response_hash=str(snapshot["body_hash"]),
             body_bytes=len(body),
             is_truncated=is_truncated,
         )
@@ -965,8 +1872,34 @@ class LiteratureTrackingService:
             )
         logger.debug("literature_work_item_completed", work_item_id=work_item_id)
 
-    def retry_work_item(self, work_item_id: str, error: str, delay_seconds: int = 60) -> None:
-        available_at = (datetime.now(UTC) + timedelta(seconds=delay_seconds)).isoformat()
+    def retry_work_item(
+        self, work_item_id: str, error: str, delay_seconds: int | None = None
+    ) -> None:
+        attempt = self.latest_api_attempt(
+            work_item_id=work_item_id,
+            provider="arxiv-rss",
+            operation=None,
+        ) or self.latest_api_attempt(
+            work_item_id=work_item_id,
+            provider="anthropic",
+            operation=None,
+        )
+        evidence = bool(
+            attempt is not None
+            and (
+                attempt.response_payload is not None
+                or self.rss_snapshot_for_attempt(attempt.attempt_id) is not None
+            )
+        )
+        persisted_delay = attempt.retry_after_seconds if attempt is not None else None
+        effective_delay = (
+            delay_seconds
+            if delay_seconds is not None
+            else persisted_delay
+            if persisted_delay is not None
+            else 60
+        )
+        available_at = (datetime.now(UTC) + timedelta(seconds=effective_delay)).isoformat()
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT attempt_count, max_attempts FROM literature_work_items WHERE work_item_id = ?",
@@ -974,7 +1907,16 @@ class LiteratureTrackingService:
             ).fetchone()
             if row is None:
                 return
-            state = "failed" if row["attempt_count"] >= row["max_attempts"] else "retrying"
+            blocked_without_evidence = (
+                attempt is not None
+                and attempt.state in {"unknown", "definitive_failure"}
+                and not evidence
+            )
+            state = (
+                "failed"
+                if blocked_without_evidence or row["attempt_count"] >= row["max_attempts"]
+                else "retrying"
+            )
             conn.execute(
                 """
                 UPDATE literature_work_items SET status = ?, available_at = ?, lease_owner = NULL,
@@ -991,7 +1933,7 @@ class LiteratureTrackingService:
             attempt_count=int(row["attempt_count"]),
             max_attempts=int(row["max_attempts"]),
             error=error[:500],
-            retry_delay_seconds=delay_seconds if state == "retrying" else None,
+            retry_delay_seconds=effective_delay if state == "retrying" else None,
         )
 
     def store_discovered_papers(
@@ -1363,6 +2305,42 @@ class LiteratureTrackingService:
             "error": row["error_message"],
             "version_id": row["version_id"],
         }
+
+    @staticmethod
+    def _api_attempt_dict(row: sqlite3.Row) -> ExternalCallAttempt:
+        return ExternalCallAttempt(
+            attempt_id=str(row["attempt_id"]),
+            provider=str(row["provider"]),
+            operation=str(row["operation"]),
+            request_fingerprint=str(row["request_fingerprint"]),
+            attempt_number=int(row["attempt_number"]),
+            state=str(row["state"]),
+            check_id=str(row["check_id"]) if row["check_id"] is not None else None,
+            work_item_id=str(row["work_item_id"]) if row["work_item_id"] is not None else None,
+            status_code=int(row["status_code"]) if row["status_code"] is not None else None,
+            retry_after_seconds=(
+                int(row["retry_after_seconds"]) if row["retry_after_seconds"] is not None else None
+            ),
+            error_kind=str(row["error_kind"]) if row["error_kind"] is not None else None,
+            error_message=str(row["error_message"]) if row["error_message"] is not None else None,
+            started_at=str(row["started_at"]),
+            response_received_at=(
+                str(row["response_received_at"])
+                if row["response_received_at"] is not None
+                else None
+            ),
+            response_persisted_at=(
+                str(row["response_persisted_at"])
+                if row["response_persisted_at"] is not None
+                else None
+            ),
+            completed_at=(str(row["completed_at"]) if row["completed_at"] is not None else None),
+            response_hash=(str(row["response_hash"]) if row["response_hash"] is not None else None),
+            response_payload=(
+                str(row["response_payload"]) if row["response_payload"] is not None else None
+            ),
+            legacy_state=(str(row["legacy_state"]) if row["legacy_state"] is not None else None),
+        )
 
     @staticmethod
     def _version_dict(row: sqlite3.Row) -> dict[str, Any]:

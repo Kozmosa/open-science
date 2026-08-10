@@ -4,15 +4,21 @@ CREATE TABLE literature_api_attempts (
             check_id TEXT,
             work_item_id TEXT,
             provider TEXT NOT NULL,
+            operation TEXT NOT NULL DEFAULT 'external',
             request_fingerprint TEXT NOT NULL,
+            attempt_number INTEGER NOT NULL DEFAULT 1,
             state TEXT NOT NULL,
             status_code INTEGER,
             retry_after_seconds INTEGER,
             error_kind TEXT,
             error_message TEXT,
             started_at TEXT NOT NULL,
+            response_received_at TEXT,
+            response_persisted_at TEXT,
             completed_at TEXT,
-            response_hash TEXT
+            response_hash TEXT,
+            response_payload TEXT,
+            legacy_state TEXT
         );
 CREATE TABLE literature_catalog_papers (
             paper_id TEXT PRIMARY KEY,
@@ -158,15 +164,18 @@ CREATE TABLE literature_research_task_links (
         );
 CREATE TABLE literature_source_snapshots (
             snapshot_id TEXT PRIMARY KEY,
+            attempt_id TEXT,
             check_id TEXT NOT NULL,
             scope_id TEXT,
             provider TEXT NOT NULL,
             request_fingerprint TEXT NOT NULL,
             content_type TEXT NOT NULL,
+            status_code INTEGER,
             body BLOB NOT NULL,
             body_hash TEXT NOT NULL,
             etag TEXT,
             last_modified TEXT,
+            cache_control TEXT,
             received_at TEXT NOT NULL,
             FOREIGN KEY (check_id) REFERENCES literature_checks(check_id)
         );

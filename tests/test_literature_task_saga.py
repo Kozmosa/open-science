@@ -784,7 +784,7 @@ def test_literature_summary_failure_never_rebuilds_completed_research_task(
         }
 
     class FailingSummarizer:
-        def __init__(self, *, batch_size: int) -> None:
+        def __init__(self, *, batch_size: int, attempt_adapter: object | None = None) -> None:
             assert batch_size == 1
 
         async def __aenter__(self) -> FailingSummarizer:

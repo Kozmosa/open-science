@@ -17,7 +17,7 @@ from ainrf.literature.fetcher import fetch_for_subscription
 from ainrf.literature.models import LiteraturePaper, LiteratureSubscription
 from ainrf.literature.scheduler import LiteratureScheduler
 from ainrf.literature.service import LiteratureService
-from ainrf.literature.summarizer import AnthropicSummarizer
+from ainrf.literature.summarizer import AnthropicSummarizer, ExternalCallFailure
 
 pytestmark = [pytest.mark.unit]
 
@@ -296,7 +296,8 @@ class TestSummarizeMetrics:
             side_effect=RuntimeError("internal"),
         ):
             async with AnthropicSummarizer() as summarizer:
-                await summarizer.summarize([paper])
+                with pytest.raises(ExternalCallFailure, match="internal"):
+                    await summarizer.summarize([paper])
 
         text = get_metrics_text()
         assert (
@@ -317,7 +318,8 @@ class TestSummarizeMetrics:
             side_effect=httpx.ConnectError("connection refused"),
         ):
             async with AnthropicSummarizer() as summarizer:
-                await summarizer.summarize([_paper()])
+                with pytest.raises(ExternalCallFailure, match="connection refused"):
+                    await summarizer.summarize([_paper()])
 
         text = get_metrics_text()
         assert (
