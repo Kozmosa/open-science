@@ -1000,6 +1000,54 @@ class _DomainWriteKernel:
                 conn, owner_id, "workspace.create", idempotency_key, request
             )
 
+    @classmethod
+    def _workspace_update_request(
+        cls,
+        workspace_id: str,
+        *,
+        label: str | None = None,
+        description: str | None | _Unset = _UNSET,
+        canonical_path: str | _Unset = _UNSET,
+        workspace_prompt: str | None | _Unset = _UNSET,
+    ) -> dict[str, object]:
+        request: dict[str, object] = {"workspace_id": workspace_id}
+        if label is not None:
+            request["label"] = label
+        if not isinstance(description, _Unset):
+            request["description"] = description
+        if not isinstance(canonical_path, _Unset):
+            request["canonical_path"] = cls.canonical_workspace_path(canonical_path)
+        if not isinstance(workspace_prompt, _Unset):
+            request["workspace_prompt"] = workspace_prompt
+        return request
+
+    def workspace_update_replay(
+        self,
+        workspace_id: str,
+        user: dict[str, object],
+        *,
+        label: str | None = None,
+        description: str | None | _Unset = _UNSET,
+        canonical_path: str | _Unset = _UNSET,
+        workspace_prompt: str | None | _Unset = _UNSET,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        """Return a completed update before repeating external path preflight."""
+
+        actor_user_id = self._user_id(user)
+        request = self._workspace_update_request(
+            workspace_id,
+            label=label,
+            description=description,
+            canonical_path=canonical_path,
+            workspace_prompt=workspace_prompt,
+        )
+        with closing(self._connect()) as conn:
+            DomainAuthorizationService(conn).require_workspace_registry_manager(workspace_id, user)
+            return self._idempotent_result(
+                conn, actor_user_id, "workspace.update", idempotency_key, request
+            )
+
     def create_workspace(
         self,
         user: dict[str, object],
@@ -1215,20 +1263,17 @@ class _DomainWriteKernel:
             existing = repository.workspace(workspace_id)
             if existing is None:
                 raise DomainNotFoundError(workspace_id)
-            normalized_path = (
-                str(Path(canonical_path).expanduser().resolve())
-                if not isinstance(canonical_path, _Unset)
-                else None
+            request = self._workspace_update_request(
+                workspace_id,
+                label=label,
+                description=description,
+                canonical_path=canonical_path,
+                workspace_prompt=workspace_prompt,
             )
-            request: dict[str, object] = {"workspace_id": workspace_id}
-            if label is not None:
-                request["label"] = label
-            if not isinstance(description, _Unset):
-                request["description"] = description
-            if normalized_path is not None:
-                request["canonical_path"] = normalized_path
-            if not isinstance(workspace_prompt, _Unset):
-                request["workspace_prompt"] = workspace_prompt
+            normalized_path_value = request.get("canonical_path")
+            normalized_path = (
+                normalized_path_value if isinstance(normalized_path_value, str) else None
+            )
             if idempotency_key is not None:
                 cached = self._idempotent_result(
                     conn, actor_user_id, "workspace.update", idempotency_key, request

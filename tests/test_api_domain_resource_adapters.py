@@ -8,8 +8,10 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+import ainrf.api.routes.domain as domain_routes
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.workspace_preflight import WorkspacePathPreflightError
 from ainrf.auth.service import AuthService
 from ainrf.domain.environment_facade import PersistentEnvironmentFacade
 from ainrf.environments.models import (
@@ -395,6 +397,216 @@ async def test_canonical_domain_workspace_mutations_cover_ui_contract(
     assert attached.status_code == 200
     assert detached.status_code == 204
     assert unregistered.status_code == 204
+
+
+@pytest.mark.anyio
+async def test_domain_workspace_path_update_preflights_as_workspace_owner(
+    state_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-update-owner", "role": "member"}
+    headers = _headers(app, "workspace-update-owner", "workspace-update-owner", "member")
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    original_path = state_root / "workspace-update-original"
+    target_path = state_root / "workspace-update-target"
+    original_path.mkdir()
+    target_path.mkdir()
+    workspace = app.state.workspace_module.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path=str(original_path),
+        label="Path update",
+    )
+    calls: list[tuple[str, str, str]] = []
+
+    async def preflight(
+        _request: object,
+        *,
+        environment_id: str,
+        canonical_path: str,
+        user_id: str,
+    ) -> None:
+        calls.append((environment_id, canonical_path, user_id))
+
+    monkeypatch.setattr(domain_routes, "validate_workspace_registration_path", preflight)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=_write_headers(headers, "workspace-update-path"),
+            json={"default_workdir": str(target_path)},
+        )
+
+    assert response.status_code == 200
+    assert calls == [(environment_id, str(target_path.resolve()), str(owner["id"]))]
+    assert app.state.workspace_module.workspace(str(workspace["workspace_id"]), owner)[
+        "canonical_path"
+    ] == str(target_path.resolve())
+
+
+@pytest.mark.anyio
+async def test_domain_workspace_path_update_preflight_failure_does_not_persist(
+    state_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-update-failure-owner", "role": "member"}
+    headers = _headers(app, "workspace-update-failure-owner", str(owner["id"]), "member")
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    original_path = state_root / "workspace-update-failure-original"
+    target_path = state_root / "workspace-update-failure-target"
+    original_path.mkdir()
+    target_path.mkdir()
+    workspace = app.state.workspace_module.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path=str(original_path),
+        label="Path update failure",
+    )
+
+    async def reject(
+        _request: object,
+        *,
+        environment_id: str,
+        canonical_path: str,
+        user_id: str,
+    ) -> None:
+        _ = environment_id, canonical_path, user_id
+        raise WorkspacePathPreflightError("path update preflight failed")
+
+    monkeypatch.setattr(domain_routes, "validate_workspace_registration_path", reject)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=_write_headers(headers, "workspace-update-failure"),
+            json={"default_workdir": str(target_path)},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "path update preflight failed"
+    assert app.state.workspace_module.workspace(str(workspace["workspace_id"]), owner)[
+        "canonical_path"
+    ] == str(original_path.resolve())
+
+
+@pytest.mark.anyio
+async def test_domain_workspace_path_update_replay_skips_preflight(
+    state_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-update-replay-owner", "role": "member"}
+    headers = _headers(app, "workspace-update-replay-owner", str(owner["id"]), "member")
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    original_path = state_root / "workspace-update-replay-original"
+    target_path = state_root / "workspace-update-replay-target"
+    original_path.mkdir()
+    target_path.mkdir()
+    workspace = app.state.workspace_module.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path=str(original_path),
+        label="Path update replay",
+    )
+    calls: list[str] = []
+
+    async def preflight(
+        _request: object,
+        *,
+        environment_id: str,
+        canonical_path: str,
+        user_id: str,
+    ) -> None:
+        _ = environment_id, user_id
+        calls.append(canonical_path)
+
+    monkeypatch.setattr(domain_routes, "validate_workspace_registration_path", preflight)
+    write_headers = _write_headers(headers, "workspace-update-replay")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        first = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=write_headers,
+            json={"default_workdir": str(target_path)},
+        )
+        target_path.rmdir()
+        replay = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=write_headers,
+            json={"default_workdir": str(target_path)},
+        )
+
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert calls == [str(target_path.resolve())]
+    assert replay.json() == first.json()
+
+
+@pytest.mark.anyio
+async def test_domain_workspace_non_path_and_same_path_updates_skip_preflight(
+    state_root: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    owner: dict[str, object] = {"id": "workspace-update-no-preflight-owner", "role": "member"}
+    headers = _headers(
+        app,
+        "workspace-no-preflight",
+        str(owner["id"]),
+        "member",
+    )
+    _, environment_id = _project_with_primary(app, state_root, owner)
+    workspace_path = state_root / "workspace-update-no-preflight"
+    workspace_path.mkdir()
+    workspace = app.state.workspace_module.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path=str(workspace_path),
+        label="No path preflight",
+    )
+    calls: list[str] = []
+
+    async def preflight(
+        _request: object,
+        *,
+        environment_id: str,
+        canonical_path: str,
+        user_id: str,
+    ) -> None:
+        _ = environment_id, user_id
+        calls.append(canonical_path)
+
+    monkeypatch.setattr(domain_routes, "validate_workspace_registration_path", preflight)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        metadata_update = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=_write_headers(headers, "workspace-update-description"),
+            json={"description": "Metadata only"},
+        )
+        same_path_update = await client.patch(
+            f"/api/domain/workspaces/{workspace['workspace_id']}",
+            headers=_write_headers(headers, "workspace-update-same-path"),
+            json={"default_workdir": str(workspace_path)},
+        )
+
+    assert metadata_update.status_code == 200
+    assert same_path_update.status_code == 200
+    assert calls == []
 
 
 @pytest.mark.anyio

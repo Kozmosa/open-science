@@ -572,10 +572,41 @@ async def update_domain_workspace(
             kwargs["workspace_prompt"] = payload.workspace_prompt
         module = _workspace_module(request)
         user = get_current_user(request)
+        idempotency_key = require_idempotency_key(request)
+        if "default_workdir" in fields and payload.default_workdir is not None:
+            existing = module.workspace(workspace_id, user)
+            canonical_path = module.canonical_workspace_path(payload.default_workdir)
+            kwargs["canonical_path"] = canonical_path
+            replay = module.workspace_update_replay(
+                workspace_id,
+                user,
+                idempotency_key=idempotency_key,
+                **kwargs,
+            )
+            if replay is not None:
+                return DomainWorkspaceResponse.model_validate(
+                    module.workspace_console_entry(workspace_id, user)
+                )
+            existing_path = existing.get("canonical_path")
+            environment_id = existing.get("environment_id")
+            owner_user_id = existing.get("owner_user_id")
+            if not isinstance(existing_path, str):
+                raise ValueError("Workspace canonical path is invalid")
+            if not isinstance(environment_id, str) or not environment_id:
+                raise ValueError("Workspace environment is invalid")
+            if not isinstance(owner_user_id, str) or not owner_user_id:
+                raise ValueError("Workspace owner is invalid")
+            if canonical_path != module.canonical_workspace_path(existing_path):
+                await validate_workspace_registration_path(
+                    request,
+                    environment_id=environment_id,
+                    canonical_path=canonical_path,
+                    user_id=owner_user_id,
+                )
         module.update_workspace(
             workspace_id,
             user,
-            idempotency_key=require_idempotency_key(request),
+            idempotency_key=idempotency_key,
             **kwargs,
         )
         return DomainWorkspaceResponse.model_validate(
