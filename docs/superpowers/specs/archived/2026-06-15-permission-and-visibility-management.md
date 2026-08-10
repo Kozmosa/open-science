@@ -4,7 +4,7 @@
 > 本文已归档，不再定义当前产品 contract。请以 `PROJECT_BASIS.md`、`docs-site/docs/`、代码与活跃 spec 为准；原文保留用于解释历史决策和迁移来源。
 
 > [!warning] Historical design
-> 本文基于旧 Workspace 单 owner/单 Project 结构和早期 Project collaborator 规则，当前权限能力表、Workspace 暂不共享及 Project–Workspace 关联权限以 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 为准。本文仅保留旧实现审计背景。
+> 本文基于旧 Workspace 单 owner/单 Project 结构和早期 Project collaborator 规则，当前权限能力表、Workspace 暂不共享及 Project–Workspace 关联权限以 [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md) 为准。本文仅保留旧实现审计背景。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` to implement this plan task-by-task.
 

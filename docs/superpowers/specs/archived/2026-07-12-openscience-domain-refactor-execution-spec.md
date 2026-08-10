@@ -6,7 +6,7 @@
 **Status:** Accepted execution specification
 **Date:** 2026-07-12
 **Scope:** Project、Workspace、Task、Attempt、Runtime Session、Project Context、权限、Literature 转 Task、`osci` 设计系统、Console 页面迁移、数据迁移、验证、发布与旧模型退役
-**Domain contract:** [`2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md)
+**Domain contract:** [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md)
 **Console contract:** [`2026-07-11-openscience-console-design.md`](../2026-07-11-openscience-console-design.md)
 **Design system contract:** [`2026-07-11-osci-design-system-design.md`](../2026-07-11-osci-design-system-design.md)
 **Literature contract:** [`2026-07-11-literature-tracking-service-redesign-design.md`](../2026-07-11-literature-tracking-service-redesign-design.md)

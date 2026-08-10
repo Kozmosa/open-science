@@ -19,7 +19,7 @@
 
 ## 2026-07-11 领域设计归档批次
 
-当前替代入口：[`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)；Project/Workspace/Context 当前 contract 见 [`docs-site/docs/architecture.md`](../../../docs-site/docs/architecture.md)。
+当前替代入口：[`2026-07-17-codex-aligned-conversation-domain-design.md`](2026-07-17-codex-aligned-conversation-domain-design.md)；Project/Workspace/Context 当前 contract 见 [`docs-site/docs/architecture.md`](../../../../docs-site/docs/architecture.md)。
 
 - `2026-05-17-ainrf-h2-brainstorm.md`：Humanize2 功能 brainstorm；其 Session Chain、Token Track 和 Timeline 前提已被 Conversation Domain 取代，visual companion 页面未保留。
 - `2026-05-17-ainrf-session-chain-design.md`：旧的独立 Session/Attempt 用户模型；由唯一 Task → Attempt → Runtime Session 模型取代。

@@ -17,8 +17,8 @@ superseded_by: 2026-07-17-codex-aligned-conversation-domain-design.md
 **Status:** Accepted domain design — 核心定义、关系、Context 首期、人工沉淀、任务关系、权限、移动和归档语义已确认
 **Date:** 2026-07-11
 **Scope:** Project、Task、Workspace、Environment 的职责、关系、生命周期、上下文层级与页面信息架构
-**Related:** WebUI 外壳与页面原型见 [`2026-07-11-openscience-console-design.md`](2026-07-11-openscience-console-design.md)
-**Supersedes:** 本文取代已归档的 [`Task Retry`](archived/2026-06-02-task-retry-design.md)、[`Task Retry E2E`](archived/2026-06-03-task-retry-e2e-design.md)、[`Session Chain`](archived/2026-05-17-ainrf-session-chain-design.md) 和 [`旧权限规范`](archived/2026-06-15-permission-and-visibility-management.md) 中与当前 Task/Attempt、角色、归档和 Workspace 关系冲突的契约
+**Related:** WebUI 外壳与页面原型见 [`2026-07-11-openscience-console-design.md`](../2026-07-11-openscience-console-design.md)
+**Supersedes:** 本文取代已归档的 [`Task Retry`](2026-06-02-task-retry-design.md)、[`Task Retry E2E`](2026-06-03-task-retry-e2e-design.md)、[`Session Chain`](2026-05-17-ainrf-session-chain-design.md) 和 [`旧权限规范`](2026-06-15-permission-and-visibility-management.md) 中与当前 Task/Attempt、角色、归档和 Workspace 关系冲突的契约
 
 ## 1. 已确认的核心定义
 

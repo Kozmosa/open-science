@@ -4,7 +4,7 @@
 > 本文已归档，不再定义当前产品 contract。请以 `PROJECT_BASIS.md`、`docs-site/docs/`、代码与活跃 spec 为准；原文保留用于解释历史决策和迁移来源。
 
 > [!warning] Historical design
-> 本文把 Session/Attempt 建成独立于 Task 的第二套用户会话模型，已被 [`../2026-07-11-project-task-workspace-domain-design.md`](../2026-07-11-project-task-workspace-domain-design.md) 的唯一 Task → Attempt → Runtime Session 权威模型取代。本文仅用于解释现有 legacy 表来源。
+> 本文把 Session/Attempt 建成独立于 Task 的第二套用户会话模型，已被 [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md) 的唯一 Task → Attempt → Runtime Session 权威模型取代。本文仅用于解释现有 legacy 表来源。
 
 Date: 2026-05-17 | Session: `ainrf-h2` | Status: draft
 
