@@ -185,14 +185,6 @@ class IdempotencyScope(StrEnum):
     MOVE_TASK = "move_task"
 
 
-class CompatibilityBehavior(StrEnum):
-    AUTHORITATIVE = "authoritative"
-    MAP_TO_NEW_TURN = "map_to_new_turn"
-    MAP_TO_RETRY_TURN = "map_to_retry_turn"
-    DEPRECATED_GONE = "deprecated_gone"
-    READ_ONLY = "read_only"
-
-
 class AdmissionFact(StrEnum):
     REQUEST_ACCEPTED = "request_accepted"
     PROVIDER_ACCEPTED = "provider_accepted"
@@ -476,48 +468,6 @@ class NativeReceipt:
     def __post_init__(self) -> None:
         if not self.task_id or not self.turn_id:
             raise ValueError("native receipts require task and turn identities")
-
-
-@dataclass(frozen=True, slots=True)
-class LegacyCompatibilityContract:
-    operation: str
-    behavior: CompatibilityBehavior
-    http_status: int
-    creates_canonical_turn: bool
-
-
-LEGACY_COMPATIBILITY: Final = (
-    LegacyCompatibilityContract(
-        operation="continue",
-        behavior=CompatibilityBehavior.MAP_TO_NEW_TURN,
-        http_status=202,
-        creates_canonical_turn=False,
-    ),
-    LegacyCompatibilityContract(
-        operation="retry",
-        behavior=CompatibilityBehavior.MAP_TO_RETRY_TURN,
-        http_status=202,
-        creates_canonical_turn=False,
-    ),
-    LegacyCompatibilityContract(
-        operation="pause",
-        behavior=CompatibilityBehavior.DEPRECATED_GONE,
-        http_status=410,
-        creates_canonical_turn=False,
-    ),
-    LegacyCompatibilityContract(
-        operation="resume",
-        behavior=CompatibilityBehavior.DEPRECATED_GONE,
-        http_status=410,
-        creates_canonical_turn=False,
-    ),
-    LegacyCompatibilityContract(
-        operation="sessions",
-        behavior=CompatibilityBehavior.READ_ONLY,
-        http_status=200,
-        creates_canonical_turn=False,
-    ),
-)
 
 
 _CODEX_TURN_STATUS: Final = {

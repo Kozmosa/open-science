@@ -3,11 +3,9 @@ from __future__ import annotations
 import pytest
 
 from ainrf.domain.conversation_contracts import (
-    LEGACY_COMPATIBILITY,
     ApprovalStatus,
     CapabilityDeclaration,
     CapabilitySupport,
-    CompatibilityBehavior,
     ConversationContractError,
     ConversationErrorCode,
     ControlKind,
@@ -220,17 +218,3 @@ def test_codex_wire_values_translate_to_canonical_values() -> None:
         translate_codex_turn_status("paused")
 
     assert caught.value.code is ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH
-
-
-def test_legacy_compatibility_never_claims_queued_input_is_provider_accepted() -> None:
-    contracts = {contract.operation: contract for contract in LEGACY_COMPATIBILITY}
-
-    assert contracts["continue"].behavior is CompatibilityBehavior.MAP_TO_NEW_TURN
-    assert contracts["continue"].creates_canonical_turn is False
-    assert contracts["retry"].behavior is CompatibilityBehavior.MAP_TO_RETRY_TURN
-    assert contracts["retry"].creates_canonical_turn is False
-    assert contracts["sessions"].behavior is CompatibilityBehavior.READ_ONLY
-
-    for operation in ("pause", "resume"):
-        assert contracts[operation].behavior is CompatibilityBehavior.DEPRECATED_GONE
-        assert contracts[operation].http_status == 410
