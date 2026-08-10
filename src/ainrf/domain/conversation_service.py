@@ -2171,6 +2171,142 @@ class ConversationApplicationService:
                 raise
         return result
 
+    @staticmethod
+    def _binding_matches_acceptance(
+        binding: sqlite3.Row,
+        *,
+        task_id: str,
+        engine_family: str,
+        engine_driver: str,
+        native_conversation_kind: str,
+        native_conversation_ref: str,
+        contract_version: int,
+        provider_profile_ref: str | None,
+        provider_profile_version: str | None,
+        provider_profile_fingerprint: str | None,
+    ) -> bool:
+        def optional_text(value: object) -> str | None:
+            return None if value is None else str(value)
+
+        return (
+            str(binding["task_id"]) == task_id
+            and str(binding["engine_family"]) == engine_family
+            and str(binding["engine_driver"]) == engine_driver
+            and str(binding["native_conversation_kind"]) == native_conversation_kind
+            and str(binding["native_conversation_ref"]) == native_conversation_ref
+            and int(binding["contract_version"]) == contract_version
+            and optional_text(binding["provider_profile_ref"]) == provider_profile_ref
+            and optional_text(binding["provider_profile_version"]) == provider_profile_version
+            and optional_text(binding["provider_profile_fingerprint"])
+            == provider_profile_fingerprint
+        )
+
+    def _resolve_acceptance_binding(
+        self,
+        conversations: SqliteConversationRepository,
+        *,
+        task_id: str,
+        requested_binding_id: str | None,
+        engine_family: str,
+        engine_driver: str,
+        native_conversation_kind: str,
+        native_conversation_ref: str,
+        contract_version: int,
+        provider_profile_ref: str | None,
+        provider_profile_version: str | None,
+        provider_profile_fingerprint: str | None,
+        delivery_evidence: Mapping[str, object],
+        accepted_at: str,
+    ) -> str:
+        """Resolve one acceptance to the Task's append-only binding lineage."""
+
+        existing = conversations.binding_by_native_identity(
+            engine_family=engine_family,
+            engine_driver=engine_driver,
+            native_conversation_kind=native_conversation_kind,
+            native_conversation_ref=native_conversation_ref,
+        )
+        active = conversations.active_binding(task_id)
+        if existing is not None:
+            existing_id = str(existing["binding_id"])
+            if (
+                str(existing["status"]) != "active"
+                or active is None
+                or str(active["binding_id"]) != existing_id
+                or not self._binding_matches_acceptance(
+                    existing,
+                    task_id=task_id,
+                    engine_family=engine_family,
+                    engine_driver=engine_driver,
+                    native_conversation_kind=native_conversation_kind,
+                    native_conversation_ref=native_conversation_ref,
+                    contract_version=contract_version,
+                    provider_profile_ref=provider_profile_ref,
+                    provider_profile_version=provider_profile_version,
+                    provider_profile_fingerprint=provider_profile_fingerprint,
+                )
+                or (requested_binding_id is not None and requested_binding_id != existing_id)
+            ):
+                raise ConversationContractError(
+                    ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                    "Native conversation identity contradicts binding lineage",
+                )
+            return existing_id
+
+        if requested_binding_id is not None:
+            raise ConversationContractError(
+                ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                "Acceptance binding does not match the native conversation identity",
+            )
+
+        binding_id = uuid4().hex
+        if active is not None:
+            if (
+                conversations.supersede_binding(
+                    binding_id=str(active["binding_id"]),
+                    superseded_at=accepted_at,
+                    validation_evidence_json=_canonical_json(
+                        {
+                            "reason": "native_conversation_replaced",
+                            "replacement": {
+                                "kind": native_conversation_kind,
+                                "ref": native_conversation_ref,
+                            },
+                        }
+                    ),
+                )
+                != 1
+            ):
+                raise DomainConflictError("Active engine binding could not be superseded")
+        conversations.insert_binding(
+            binding_id=binding_id,
+            task_id=task_id,
+            binding_seq=conversations.next_binding_seq(task_id),
+            engine_family=engine_family,
+            engine_driver=engine_driver,
+            native_conversation_kind=native_conversation_kind,
+            native_conversation_ref=native_conversation_ref,
+            contract_version=contract_version,
+            provider_profile_ref=provider_profile_ref,
+            provider_profile_version=provider_profile_version,
+            provider_profile_fingerprint=provider_profile_fingerprint,
+            provenance_json=_canonical_json(
+                {
+                    "source": "provider_acceptance",
+                    "delivery_evidence": dict(delivery_evidence),
+                }
+            ),
+            validation_evidence_json=_canonical_json(
+                {
+                    "source": "runtime_adapter",
+                    "native_identity_observed": True,
+                }
+            ),
+            created_at=accepted_at,
+            validated_at=accepted_at,
+        )
+        return binding_id
+
     def accept_submission(
         self,
         submission_id: str,
@@ -2182,15 +2318,33 @@ class ConversationApplicationService:
         contract_version: int,
         delivery_evidence: Mapping[str, object],
         binding_id: str | None = None,
+        native_conversation_kind: str | None = None,
+        native_conversation_ref: str | None = None,
         provider_profile_ref: str | None = None,
         provider_profile_version: str | None = None,
         provider_profile_fingerprint: str | None = None,
         model: str | None = None,
-        _post_accept_side_effect: Callable[[SqliteConversationExecutionRepository, str, str], None]
+        _post_accept_side_effect: Callable[
+            [SqliteConversationExecutionRepository, str, str, str | None], None
+        ]
         | None = None,
     ) -> dict[str, object]:
         """Materialize canonical history from a trusted provider-acceptance callback."""
         _require_sanitized(delivery_evidence, path="delivery_evidence")
+        if (native_conversation_kind is None) != (native_conversation_ref is None):
+            raise ConversationContractError(
+                ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                "Native conversation identity requires both kind and reference",
+            )
+        if native_conversation_kind is not None and (
+            not native_conversation_kind.strip()
+            or native_conversation_ref is None
+            or not native_conversation_ref.strip()
+        ):
+            raise ConversationContractError(
+                ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                "Native conversation identity must not be blank",
+            )
         accepted_at = _now()
         with closing(self._connect()) as conn:
             try:
@@ -2239,25 +2393,13 @@ class ConversationApplicationService:
                         ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
                         "Acceptance callback contradicts persisted engine lineage",
                     )
-                binding = conversations.active_binding(task_id)
-                if binding is not None:
-                    if (
-                        binding_id != str(binding["binding_id"])
-                        or engine_family != str(binding["engine_family"])
-                        or engine_driver != str(binding["engine_driver"])
-                        or contract_version != int(binding["contract_version"])
-                    ):
-                        raise ConversationContractError(
-                            ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
-                            "Acceptance callback contradicts the active engine binding",
-                        )
-                elif binding_id is not None:
-                    raise ConversationContractError(
-                        ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
-                        "Acceptance callback references an inactive engine binding",
-                    )
                 if submission_status == "delivered":
                     turn = conversations.turn_by_id(str(submission["reserved_turn_id"]))
+                    persisted_binding_id = (
+                        None
+                        if turn is None or turn["binding_id"] is None
+                        else str(turn["binding_id"])
+                    )
                     if (
                         turn is None
                         or str(turn["native_turn_kind"]) != native_turn_kind
@@ -2265,13 +2407,34 @@ class ConversationApplicationService:
                         or str(turn["engine_family"]) != engine_family
                         or str(turn["engine_driver"]) != engine_driver
                         or int(turn["contract_version"]) != contract_version
-                        or (None if turn["binding_id"] is None else str(turn["binding_id"]))
-                        != binding_id
+                        or (binding_id is not None and binding_id != persisted_binding_id)
                     ):
                         raise ConversationContractError(
                             ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
                             "Delivered callback replay contradicts canonical Turn identity",
                         )
+                    if (
+                        persisted_binding_id is not None
+                        and native_conversation_kind is not None
+                        and native_conversation_ref is not None
+                    ):
+                        persisted_binding = conversations.binding_by_id(persisted_binding_id)
+                        if persisted_binding is None or not self._binding_matches_acceptance(
+                            persisted_binding,
+                            task_id=task_id,
+                            engine_family=engine_family,
+                            engine_driver=engine_driver,
+                            native_conversation_kind=native_conversation_kind,
+                            native_conversation_ref=native_conversation_ref,
+                            contract_version=contract_version,
+                            provider_profile_ref=provider_profile_ref,
+                            provider_profile_version=provider_profile_version,
+                            provider_profile_fingerprint=provider_profile_fingerprint,
+                        ):
+                            raise ConversationContractError(
+                                ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                                "Delivered callback replay contradicts engine binding identity",
+                            )
                     result: dict[str, object] = {
                         "submission_id": submission_id,
                         "turn_id": str(submission["reserved_turn_id"]),
@@ -2283,6 +2446,7 @@ class ConversationApplicationService:
                             executions,
                             str(submission["reserved_turn_id"]),
                             accepted_at,
+                            persisted_binding_id,
                         )
                     conn.commit()
                     return result
@@ -2296,6 +2460,41 @@ class ConversationApplicationService:
                         ConversationErrorCode.ACTIVE_TURN_EXISTS,
                         "Task already has an active Turn",
                     )
+                if native_conversation_kind is not None and native_conversation_ref is not None:
+                    resolved_binding_id = self._resolve_acceptance_binding(
+                        conversations,
+                        task_id=task_id,
+                        requested_binding_id=binding_id,
+                        engine_family=engine_family,
+                        engine_driver=engine_driver,
+                        native_conversation_kind=native_conversation_kind,
+                        native_conversation_ref=native_conversation_ref,
+                        contract_version=contract_version,
+                        provider_profile_ref=provider_profile_ref,
+                        provider_profile_version=provider_profile_version,
+                        provider_profile_fingerprint=provider_profile_fingerprint,
+                        delivery_evidence=delivery_evidence,
+                        accepted_at=accepted_at,
+                    )
+                else:
+                    resolved_binding_id = binding_id
+                    active_binding = conversations.active_binding(task_id)
+                    if active_binding is not None:
+                        if (
+                            resolved_binding_id != str(active_binding["binding_id"])
+                            or engine_family != str(active_binding["engine_family"])
+                            or engine_driver != str(active_binding["engine_driver"])
+                            or contract_version != int(active_binding["contract_version"])
+                        ):
+                            raise ConversationContractError(
+                                ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                                "Acceptance callback contradicts the active engine binding",
+                            )
+                    elif resolved_binding_id is not None:
+                        raise ConversationContractError(
+                            ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
+                            "Acceptance callback references an inactive engine binding",
+                        )
                 turn_id = str(submission["reserved_turn_id"])
                 conversations.insert_turn(
                     turn_id=turn_id,
@@ -2312,7 +2511,7 @@ class ConversationApplicationService:
                         if submission["context_snapshot_ref"] is None
                         else str(submission["context_snapshot_ref"])
                     ),
-                    binding_id=binding_id,
+                    binding_id=resolved_binding_id,
                     engine_family=engine_family,
                     engine_driver=engine_driver,
                     contract_version=contract_version,
@@ -2362,7 +2561,12 @@ class ConversationApplicationService:
                 ):
                     raise DomainConflictError("Submission acceptance lost a state race")
                 if _post_accept_side_effect is not None:
-                    _post_accept_side_effect(executions, turn_id, accepted_at)
+                    _post_accept_side_effect(
+                        executions,
+                        turn_id,
+                        accepted_at,
+                        resolved_binding_id,
+                    )
                 conn.commit()
             except BaseException:
                 conn.rollback()

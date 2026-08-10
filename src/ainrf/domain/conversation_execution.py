@@ -472,6 +472,8 @@ class ConversationExecutionService:
         *,
         engine_family: str,
         engine_driver: str,
+        native_conversation_kind: str,
+        native_conversation_ref: str,
         native_turn_kind: str,
         native_turn_ref: str,
         native_runtime_kind: str | None,
@@ -486,6 +488,7 @@ class ConversationExecutionService:
             repository: SqliteConversationExecutionRepository,
             turn_id: str,
             accepted_at: str,
+            binding_id: str | None,
         ) -> None:
             nonlocal runtime_claim
             if native_runtime_kind is not None and native_runtime_ref is not None:
@@ -501,6 +504,7 @@ class ConversationExecutionService:
             for row in existing:
                 if (
                     str(row["task_id"]) != claim.task_id
+                    or (None if row["binding_id"] is None else str(row["binding_id"])) != binding_id
                     or str(row["native_turn_kind"]) != native_turn_kind
                     or str(row["native_turn_ref"]) != native_turn_ref
                     or str(row["native_runtime_kind"]) != str(native_runtime_kind)
@@ -555,7 +559,7 @@ class ConversationExecutionService:
                     turn_id=turn_id,
                     execution_seq=repository.next_execution_seq(turn_id),
                     runtime_generation=generation,
-                    binding_id=None,
+                    binding_id=binding_id,
                     native_runtime_kind=native_runtime_kind,
                     native_runtime_ref=native_runtime_ref,
                     native_turn_kind=native_turn_kind,
@@ -593,6 +597,8 @@ class ConversationExecutionService:
             native_turn_ref=native_turn_ref,
             engine_family=engine_family,
             engine_driver=engine_driver,
+            native_conversation_kind=native_conversation_kind,
+            native_conversation_ref=native_conversation_ref,
             contract_version=1,
             delivery_evidence=evidence,
             _post_accept_side_effect=persist_runtime,

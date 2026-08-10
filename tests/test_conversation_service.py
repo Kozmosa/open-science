@@ -587,6 +587,8 @@ def test_cancel_after_begin_fences_acceptance_without_turn_or_runtime(
             claim,
             engine_family="codex",
             engine_driver="codex-app-server",
+            native_conversation_kind="thread",
+            native_conversation_ref="thread-race",
             native_turn_kind="turn",
             native_turn_ref="native-race",
             native_runtime_kind="process",
@@ -1657,6 +1659,8 @@ def test_delivered_without_runtime_recovers_atomically_and_idempotently(
         claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-recover",
         native_turn_kind="turn",
         native_turn_ref="native-recover",
         native_runtime_kind="process",
@@ -1667,6 +1671,8 @@ def test_delivered_without_runtime_recovers_atomically_and_idempotently(
         claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-recover",
         native_turn_kind="turn",
         native_turn_ref="native-recover",
         native_runtime_kind="process",
@@ -1730,6 +1736,8 @@ def test_runtime_native_identity_conflict_is_domain_error_and_rolls_back(
         first_claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-runtime-owner",
         native_turn_kind="turn",
         native_turn_ref="native-runtime-owner",
         native_runtime_kind="process",
@@ -1751,6 +1759,8 @@ def test_runtime_native_identity_conflict_is_domain_error_and_rolls_back(
             second_claim,
             engine_family="codex",
             engine_driver="codex-app-server",
+            native_conversation_kind="thread",
+            native_conversation_ref="thread-runtime-conflict",
             native_turn_kind="turn",
             native_turn_ref="native-runtime-conflict",
             native_runtime_kind="process",
@@ -1760,6 +1770,7 @@ def test_runtime_native_identity_conflict_is_domain_error_and_rolls_back(
     with closing(connect(_db_path(state_root))) as conn:
         assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM engine_conversation_bindings").fetchone()[0] == 1
         submission = conn.execute(
             "SELECT status FROM turn_submissions WHERE submission_id = ?",
             (second["submission_id"],),

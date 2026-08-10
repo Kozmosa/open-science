@@ -102,6 +102,10 @@ class CodexAppServerEngine(HarnessEngine):
 
         if context.session_state_path and needs_checkpoint:
             self._restore_checkpoint(context, session)
+        # A restored checkpoint identifies the durable thread, but its Turn
+        # is historical.  Do not expose that stale native Turn to the
+        # Conversation acceptance seam while the next turn is starting.
+        session.turn_id = None
 
         prompt = self._resolve_prompt(context, session) or "Continue from where you left off."
         await self._ensure_connection(context, session, emit)

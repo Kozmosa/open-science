@@ -348,14 +348,19 @@ class ConversationDispatcher:
         terminal_status: TurnStatus | None = None
         failure_code: str | None = None
         cancellation_during_acceptance = False
+        pending_events: list[EngineEvent] = []
 
         async def emit(event: EngineEvent) -> None:
             nonlocal execution, terminal_status, failure_code, cancellation_during_acceptance
             if execution is None:
-                native_kind, native_ref = adapter.native_turn_identity(
+                pending_events.append(event)
+                identity = adapter.native_acceptance_identity(
                     runtime_launch_key=claim.submission_id,
+                    fallback_task_id=claim.task_id,
                     fallback_turn_id=claim.reserved_turn_id,
                 )
+                if identity is None:
+                    return
                 try:
                     execution = self._execution.accept_and_open_execution(
                         claim,
@@ -365,8 +370,10 @@ class ConversationDispatcher:
                             else "claude"
                         ),
                         engine_driver=context.engine_type,
-                        native_turn_kind=native_kind,
-                        native_turn_ref=native_ref,
+                        native_conversation_kind=identity.conversation_kind,
+                        native_conversation_ref=identity.conversation_ref,
+                        native_turn_kind=identity.turn_kind,
+                        native_turn_ref=identity.turn_ref,
                         native_runtime_kind="worker",
                         native_runtime_ref=claim.submission_id,
                         evidence={"source": "first_engine_event"},
@@ -375,28 +382,33 @@ class ConversationDispatcher:
                     if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
                         cancellation_during_acceptance = True
                     raise
-            if event.event_type == "status":
-                raw_status = event.payload.get("status")
-                if raw_status == "succeeded":
-                    terminal_status = TurnStatus.COMPLETED
-                elif raw_status in {"cancelled", "interrupted"}:
-                    terminal_status = TurnStatus.INTERRUPTED
-                elif raw_status == "failed":
-                    terminal_status = TurnStatus.FAILED
-                    failure_code = "engine_failed"
-            mapping = _EVENT_ITEM.get(event.event_type)
-            if mapping is not None and event.event_type != "status":
-                item_type, actor = mapping
-                payload: dict[str, object] = dict(event.payload)
-                if event.token_usage is not None:
-                    payload["usage"] = dict(event.token_usage)
-                self._execution.append_item(
-                    execution,
-                    item_type=item_type,
-                    actor=actor,
-                    payload=payload,
-                    native_provenance={"engine_event_type": event.event_type},
-                )
+                events_to_persist = list(pending_events)
+                pending_events.clear()
+            else:
+                events_to_persist = [event]
+            for current_event in events_to_persist:
+                if current_event.event_type == "status":
+                    raw_status = current_event.payload.get("status")
+                    if raw_status == "succeeded":
+                        terminal_status = TurnStatus.COMPLETED
+                    elif raw_status in {"cancelled", "interrupted"}:
+                        terminal_status = TurnStatus.INTERRUPTED
+                    elif raw_status == "failed":
+                        terminal_status = TurnStatus.FAILED
+                        failure_code = "engine_failed"
+                mapping = _EVENT_ITEM.get(current_event.event_type)
+                if mapping is not None and current_event.event_type != "status":
+                    item_type, actor = mapping
+                    payload: dict[str, object] = dict(current_event.payload)
+                    if current_event.token_usage is not None:
+                        payload["usage"] = dict(current_event.token_usage)
+                    self._execution.append_item(
+                        execution,
+                        item_type=item_type,
+                        actor=actor,
+                        payload=payload,
+                        native_provenance={"engine_event_type": current_event.event_type},
+                    )
 
         run = asyncio.create_task(adapter.start_turn(context, emit))
         cancelled_by_caller = False

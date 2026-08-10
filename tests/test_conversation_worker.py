@@ -29,7 +29,11 @@ from ainrf.domain.conversation_worker import ConversationDispatcher, Conversatio
 from ainrf.domain_control import DomainMaintenanceService
 from ainrf.domain.service import DomainConflictError
 from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngineType
-from ainrf.harness_engine.conversation_adapter import ControlReceipt, ConversationRuntimeAdapter
+from ainrf.harness_engine.conversation_adapter import (
+    ControlReceipt,
+    ConversationRuntimeAdapter,
+    NativeAcceptanceIdentity,
+)
 from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
 from ainrf.harness_engine.session_state import SessionCheckpoint
 
@@ -41,6 +45,30 @@ _USER: dict[str, object] = {"id": "user-1", "role": "user"}
 class FakeRuntimeAdapter(ConversationRuntimeAdapter):
     def __init__(self) -> None:
         super().__init__(CodexAppServerEngine())
+
+    def native_conversation_identity(
+        self,
+        *,
+        runtime_launch_key: str,
+        fallback_task_id: str,
+    ) -> tuple[str, str]:
+        _ = fallback_task_id
+        return "thread", f"thread-{runtime_launch_key}"
+
+    def native_acceptance_identity(
+        self,
+        *,
+        runtime_launch_key: str,
+        fallback_task_id: str,
+        fallback_turn_id: str,
+    ) -> NativeAcceptanceIdentity | None:
+        _ = fallback_task_id
+        return NativeAcceptanceIdentity(
+            conversation_kind="thread",
+            conversation_ref=f"thread-{runtime_launch_key}",
+            turn_kind="turn",
+            turn_ref=fallback_turn_id,
+        )
 
     async def start_turn(self, context: ExecutionContext, emit: object) -> None:
         callback = emit
@@ -396,6 +424,8 @@ def test_delivery_unknown_without_runtime_rejects_launch_but_acceptance_recovers
         claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-delivery-unknown",
         native_turn_kind="turn",
         native_turn_ref="native-delivery-unknown",
         native_runtime_kind="process",
@@ -406,6 +436,8 @@ def test_delivery_unknown_without_runtime_rejects_launch_but_acceptance_recovers
         claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-delivery-unknown",
         native_turn_kind="turn",
         native_turn_ref="native-delivery-unknown",
         native_runtime_kind="process",
@@ -510,6 +542,8 @@ def test_runtime_checkpoint_identity_is_stable_for_submission_and_isolated_for_r
         first_claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-first",
         native_turn_kind="turn",
         native_turn_ref="native-first",
         native_runtime_kind="process",
@@ -572,6 +606,84 @@ async def test_dispatcher_projects_engine_events_to_canonical_items(state_root: 
     assert task["runtime_status"] == "idle"
     assert turns[0]["status"] == "completed"
     assert [item["item_type"] for item in items] == ["user_message", "agent_message"]
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        binding = conn.execute(
+            "SELECT binding_id, native_conversation_kind, native_conversation_ref, status "
+            "FROM engine_conversation_bindings"
+        ).fetchone()
+        submission = conn.execute("SELECT submission_id FROM turn_submissions").fetchone()
+        turn = conn.execute("SELECT binding_id FROM task_turns").fetchone()
+        runtime = conn.execute("SELECT binding_id FROM runtime_executions").fetchone()
+    assert binding is not None
+    assert submission is not None
+    assert tuple(binding[1:]) == (
+        "thread",
+        f"thread-{submission['submission_id']}",
+        "active",
+    )
+    assert turn is not None and turn["binding_id"] == binding["binding_id"]
+    assert runtime is not None and runtime["binding_id"] == binding["binding_id"]
+
+
+@pytest.mark.anyio
+async def test_dispatcher_buffers_events_until_complete_acceptance_identity(
+    state_root: Path,
+) -> None:
+    class DelayedIdentityAdapter(FakeRuntimeAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.identity_ready = False
+
+        def native_acceptance_identity(
+            self,
+            *,
+            runtime_launch_key: str,
+            fallback_task_id: str,
+            fallback_turn_id: str,
+        ) -> NativeAcceptanceIdentity | None:
+            if not self.identity_ready:
+                return None
+            return super().native_acceptance_identity(
+                runtime_launch_key=runtime_launch_key,
+                fallback_task_id=fallback_task_id,
+                fallback_turn_id=fallback_turn_id,
+            )
+
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            await emit(  # type: ignore[operator]
+                EngineEvent(event_type="system", payload={"subtype": "thread_started"})
+            )
+            self.identity_ready = True
+            await emit(  # type: ignore[operator]
+                EngineEvent(
+                    event_type="message",
+                    payload={"role": "assistant", "content": "ready"},
+                )
+            )
+            await emit(  # type: ignore[operator]
+                EngineEvent(event_type="status", payload={"status": "succeeded"})
+            )
+
+    adapter = DelayedIdentityAdapter()
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine_type: adapter,
+        context_factory=lambda claim: ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        ),
+    )
+
+    assert await dispatcher.run_once() is True
+    items = ConversationApplicationService(state_root).list_items("task-1", _USER)
+    assert [item["item_type"] for item in items] == [
+        "user_message",
+        "system_notice",
+        "agent_message",
+    ]
 
 
 @pytest.mark.anyio
@@ -743,6 +855,8 @@ def _open_execution(
         claim,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-1",
         native_turn_kind="turn",
         native_turn_ref="native-turn-1",
         native_runtime_kind="process",

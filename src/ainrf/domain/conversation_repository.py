@@ -341,6 +341,34 @@ class SqliteConversationRepository:
             (task_id,),
         ).fetchone()
 
+    def binding_by_id(self, binding_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM engine_conversation_bindings WHERE binding_id = ?",
+            (binding_id,),
+        ).fetchone()
+
+    def binding_by_native_identity(
+        self,
+        *,
+        engine_family: str,
+        engine_driver: str,
+        native_conversation_kind: str,
+        native_conversation_ref: str,
+    ) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT * FROM engine_conversation_bindings
+            WHERE engine_family = ? AND engine_driver = ?
+              AND native_conversation_kind = ? AND native_conversation_ref = ?
+            """,
+            (
+                engine_family,
+                engine_driver,
+                native_conversation_kind,
+                native_conversation_ref,
+            ),
+        ).fetchone()
+
     def supersede_binding(
         self,
         *,

@@ -8,7 +8,12 @@ import pytest
 
 from ainrf.auth.service import AuthService
 from ainrf.db import connect, run_pending
-from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType
+from ainrf.domain.conversation_contracts import (
+    ConversationContractError,
+    TurnItemActor,
+    TurnItemType,
+    TurnStatus,
+)
 from ainrf.domain.conversation_execution import ConversationExecutionService
 from ainrf.domain.conversation_service import ConversationApplicationService
 
@@ -110,6 +115,8 @@ def test_submission_claim_is_single_winner_and_opens_canonical_execution(
         claimed,
         engine_family="codex",
         engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-1",
         native_turn_kind="turn",
         native_turn_ref="native-turn-1",
         native_runtime_kind="process",
@@ -129,3 +136,118 @@ def test_submission_claim_is_single_winner_and_opens_canonical_execution(
     assert execution.turn_id == claimed.reserved_turn_id
     assert item["task_item_seq"] == 2
     assert item["turn_item_seq"] == 2
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        turn = conn.execute(
+            "SELECT binding_id FROM task_turns WHERE turn_id = ?",
+            (execution.turn_id,),
+        ).fetchone()
+        runtime = conn.execute(
+            "SELECT binding_id FROM runtime_executions WHERE runtime_execution_id = ?",
+            (execution.runtime_execution_id,),
+        ).fetchone()
+        binding = conn.execute(
+            "SELECT binding_id, status, native_conversation_ref FROM engine_conversation_bindings"
+        ).fetchone()
+    assert binding is not None and tuple(binding[1:]) == ("active", "thread-1")
+    assert turn is not None and turn["binding_id"] == binding["binding_id"]
+    assert runtime is not None and runtime["binding_id"] == binding["binding_id"]
+
+
+def test_new_native_conversation_supersedes_binding_without_repointing_history(
+    state_root: Path,
+) -> None:
+    execution_service = ConversationExecutionService(state_root)
+    first_claim = execution_service.claim_next_submission()
+    assert first_claim is not None
+    execution_service.begin_delivery(first_claim.submission_id)
+    first = execution_service.accept_and_open_execution(
+        first_claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-first",
+        native_turn_kind="turn",
+        native_turn_ref="native-turn-first",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-first",
+        evidence={"source": "driver"},
+    )
+    execution_service.finish_execution(
+        first,
+        status=TurnStatus.COMPLETED,
+        evidence={"source": "driver"},
+    )
+
+    application = ConversationApplicationService(state_root)
+    application.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "next"},
+        idempotency_key="create-next",
+    )
+    second_claim = execution_service.claim_next_submission()
+    assert second_claim is not None
+    execution_service.begin_delivery(second_claim.submission_id)
+    second = execution_service.accept_and_open_execution(
+        second_claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-second",
+        native_turn_kind="turn",
+        native_turn_ref="native-turn-second",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-second",
+        evidence={"source": "driver"},
+    )
+    with pytest.raises(ConversationContractError, match="binding identity"):
+        application.accept_submission(
+            first_claim.submission_id,
+            native_turn_kind="turn",
+            native_turn_ref="native-turn-first",
+            engine_family="codex",
+            engine_driver="codex-app-server",
+            contract_version=1,
+            delivery_evidence={"source": "driver-replay"},
+            native_conversation_kind="thread",
+            native_conversation_ref="thread-wrong",
+        )
+    first_replay = application.accept_submission(
+        first_claim.submission_id,
+        native_turn_kind="turn",
+        native_turn_ref="native-turn-first",
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        contract_version=1,
+        delivery_evidence={"source": "driver-replay"},
+        native_conversation_kind="thread",
+        native_conversation_ref="thread-first",
+    )
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        bindings = conn.execute(
+            "SELECT binding_id, binding_seq, status, native_conversation_ref "
+            "FROM engine_conversation_bindings ORDER BY binding_seq"
+        ).fetchall()
+        turns = conn.execute(
+            "SELECT turn_id, binding_id FROM task_turns ORDER BY turn_seq"
+        ).fetchall()
+        runtimes = conn.execute(
+            "SELECT turn_id, binding_id FROM runtime_executions ORDER BY created_at"
+        ).fetchall()
+
+    assert [tuple(row[1:]) for row in bindings] == [
+        (1, "superseded", "thread-first"),
+        (2, "active", "thread-second"),
+    ]
+    assert first_replay["turn_id"] == first.turn_id
+    assert [row["turn_id"] for row in turns] == [first.turn_id, second.turn_id]
+    assert [row["binding_id"] for row in turns] == [
+        bindings[0]["binding_id"],
+        bindings[1]["binding_id"],
+    ]
+    assert [row["binding_id"] for row in runtimes] == [
+        bindings[0]["binding_id"],
+        bindings[1]["binding_id"],
+    ]
