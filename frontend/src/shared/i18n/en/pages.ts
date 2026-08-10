@@ -36,11 +36,7 @@ const pages = {
       projects: {
         eyebrow: 'Projects',
         title: 'Project management',
-        sidebarEyebrow: 'Projects',
-        sidebarTitle: 'Project Canvas',
-        sidebarCount: '{{count}} projects',
         newProject: 'New project',
-        searchPlaceholder: 'Search projects',
         newTask: 'New Task',
         resetLayout: 'Reset Layout',
         emptyCanvas: "Click 'New Task' to get started",

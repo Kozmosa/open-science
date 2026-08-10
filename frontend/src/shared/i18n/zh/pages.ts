@@ -36,11 +36,7 @@ const pages = {
       projects: {
         eyebrow: 'PROJECTS',
         title: '项目管理',
-        sidebarEyebrow: '项目',
-        sidebarTitle: '项目画布',
-        sidebarCount: '{{count}} 个项目',
         newProject: '新建项目',
-        searchPlaceholder: '搜索项目',
         newTask: '新建任务',
         resetLayout: '重置布局',
         emptyCanvas: "点击'新建任务'开始",
