@@ -33,9 +33,37 @@ def _build_v33_artifact(path: Path) -> None:
         connection.commit()
 
 
+def _build_v7_literature_artifact(
+    path: Path,
+    *,
+    include_task_sagas: bool = True,
+) -> None:
+    """Build the prior v7 shape with the removed saga DDL explicitly restored."""
+
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        if include_task_sagas:
+            connection.execute("CREATE TABLE literature_task_sagas (saga_id TEXT PRIMARY KEY)")
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 7)")
+        connection.commit()
+
+
+def _schema_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str | None]]:
+    return {
+        (str(row["type"]), str(row["name"]), row["sql"])
+        for row in connection.execute(
+            "SELECT type, name, sql FROM sqlite_master WHERE name != '_schema_version'"
+        )
+    }
+
+
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 34), ("literature", 7), ("terminal", 1)],
+    [("auth", 7), ("agentic_researcher", 34), ("literature", 8), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -43,6 +71,150 @@ def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, vers
         assert run_pending(connection, database) >= 1
         assert current_version(connection, database) == version
         assert run_pending(connection, database) == 0
+
+
+def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_authority(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "literature.sqlite3"
+    with _connect(path) as connection:
+        assert run_pending(connection, "literature") == 2
+        tables = {
+            str(row["name"])
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        assert current_version(connection, "literature") == 8
+
+    assert {
+        "literature_research_task_intents",
+        "literature_work_items",
+        "literature_outbox",
+    } <= tables
+    assert "literature_api_attempts" in tables
+    assert "literature_task_sagas" not in tables
+
+
+def test_literature_v7_empty_artifact_migrates_to_fresh_schema(tmp_path: Path) -> None:
+    fresh_path = tmp_path / "fresh.sqlite3"
+    artifact_path = tmp_path / "v7-artifact.sqlite3"
+    with _connect(fresh_path) as connection:
+        assert run_pending(connection, "literature") == 2
+        fresh_schema = _schema_objects(connection)
+
+    _build_v7_literature_artifact(artifact_path)
+    with _connect(artifact_path) as connection:
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 8
+        artifact_schema = _schema_objects(connection)
+
+    assert artifact_schema == fresh_schema
+
+
+def test_literature_v7_artifact_without_retired_tables_advances(tmp_path: Path) -> None:
+    path = tmp_path / "v7-without-retired-tables.sqlite3"
+    _build_v7_literature_artifact(
+        path,
+        include_task_sagas=False,
+    )
+    with _connect(path) as connection:
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 8
+
+
+@pytest.mark.parametrize(
+    ("table_name", "value"),
+    [("literature_task_sagas", "saga-1")],
+)
+def test_literature_v7_non_empty_retired_table_fails_closed(
+    tmp_path: Path, table_name: str, value: str
+) -> None:
+    path = tmp_path / f"non-empty-{table_name}.sqlite3"
+    _build_v7_literature_artifact(path)
+    column = "saga_id"
+    with _connect(path) as connection:
+        connection.execute(f'INSERT INTO "{table_name}" ("{column}") VALUES (?)', (value,))
+        connection.commit()
+        with pytest.raises(RuntimeError, match="refuses to retire non-empty"):
+            run_pending(connection, "literature")
+
+        assert current_version(connection, "literature") == 7
+        assert connection.execute(f'SELECT "{column}" FROM "{table_name}"').fetchone()[0] == value
+        table_names = {
+            name
+            for object_type, name, _sql in _schema_objects(connection)
+            if object_type == "table"
+        }
+        assert {"literature_api_attempts", "literature_task_sagas"} <= table_names
+
+
+def test_literature_saga_retirement_drop_failure_rolls_back_tables_and_version(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "drop-failure.sqlite3"
+    _build_v7_literature_artifact(path)
+    with _connect(path) as connection:
+
+        def deny_saga_drop(
+            action: int,
+            arg1: str | None,
+            _arg2: str | None,
+            _database: str | None,
+            _source: str | None,
+        ) -> int:
+            return (
+                sqlite3.SQLITE_DENY
+                if action == sqlite3.SQLITE_DROP_TABLE and arg1 == "literature_task_sagas"
+                else sqlite3.SQLITE_OK
+            )
+
+        connection.set_authorizer(deny_saga_drop)
+        with pytest.raises(sqlite3.DatabaseError):
+            run_pending(connection, "literature")
+        connection.set_authorizer(None)
+
+        assert current_version(connection, "literature") == 7
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' "
+                "AND name IN ('literature_api_attempts', 'literature_task_sagas')"
+            ).fetchone()[0]
+            == 2
+        )
+
+
+def test_literature_saga_retirement_version_failure_rolls_back_tables_and_version(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "version-failure.sqlite3"
+    _build_v7_literature_artifact(path)
+    with _connect(path) as connection:
+
+        def deny_schema_version_insert(
+            action: int,
+            arg1: str | None,
+            _arg2: str | None,
+            _database: str | None,
+            _source: str | None,
+        ) -> int:
+            return (
+                sqlite3.SQLITE_DENY
+                if action == sqlite3.SQLITE_INSERT and arg1 == "_schema_version"
+                else sqlite3.SQLITE_OK
+            )
+
+        connection.set_authorizer(deny_schema_version_insert)
+        with pytest.raises(sqlite3.DatabaseError):
+            run_pending(connection, "literature")
+        connection.set_authorizer(None)
+
+        assert current_version(connection, "literature") == 7
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' "
+                "AND name IN ('literature_api_attempts', 'literature_task_sagas')"
+            ).fetchone()[0]
+            == 2
+        )
 
 
 def test_fresh_domain_baseline_contains_current_authority_only(tmp_path: Path) -> None:

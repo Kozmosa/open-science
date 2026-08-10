@@ -212,21 +212,6 @@ CREATE TABLE literature_summaries (
             FOREIGN KEY (paper_id) REFERENCES literature_catalog_papers(paper_id),
             FOREIGN KEY (version_id) REFERENCES literature_paper_versions(version_id)
         );
-CREATE TABLE literature_task_sagas (
-            saga_id TEXT PRIMARY KEY,
-            subscription_id TEXT NOT NULL,
-            paper_id TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            project_id TEXT NOT NULL,
-            workspace_id TEXT NOT NULL,
-            task_id TEXT,
-            status TEXT NOT NULL CHECK (status IN ('pending', 'task_created', 'completed', 'failed')),
-            idempotency_key TEXT NOT NULL UNIQUE,
-            error_detail TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            UNIQUE(subscription_id, paper_id, project_id, workspace_id)
-        );
 CREATE TABLE literature_topic_matches (
             topic_id TEXT NOT NULL,
             paper_id TEXT NOT NULL,

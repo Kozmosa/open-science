@@ -187,7 +187,7 @@ _DURABLE_COUNTER_LABELS: dict[str, tuple[str, ...]] = {
 _CURRENT_MIN_SOURCE_SCHEMA_VERSION: dict[str, int] = {
     "agentic_researcher": 33,
     "auth": 7,
-    "literature": 7,
+    "literature": 8,
 }
 _CURRENT_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "_schema_version": ("database", "version"),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.resources import files
 import sqlite3
 
-from ainrf.db.migration import registry
+from ainrf.db.migration import _has_table, registry
 
 
 _BASELINE_VERSIONS = {
@@ -14,6 +14,7 @@ _BASELINE_VERSIONS = {
     "literature": 7,
     "terminal": 1,
 }
+_RETIRED_LITERATURE_TABLES = ("literature_task_sagas",)
 
 
 def _apply_baseline(conn: sqlite3.Connection, database_name: str) -> None:
@@ -52,6 +53,33 @@ def migration_034_conversation_cancellation_guards(conn: sqlite3.Connection) -> 
             BEGIN SELECT RAISE(ABORT, 'invalid next-Turn submission transition'); END
         """
     )
+
+
+@registry.register("literature")
+def migration_008_retire_unused_literature_task_saga(conn: sqlite3.Connection) -> None:
+    """Retire the empty Literature saga artifact left by the original v7 baseline.
+
+    The saga table was superseded by the durable research-task intent, work
+    item, and outbox records. A non-empty artifact is treated as an explicit
+    migration blocker so no data is silently discarded and the schema version
+    remains unchanged.
+    """
+
+    non_empty = [
+        table_name
+        for table_name in _RETIRED_LITERATURE_TABLES
+        if _has_table(conn, table_name)
+        and conn.execute(f'SELECT 1 FROM "{table_name}" LIMIT 1').fetchone() is not None
+    ]
+    if non_empty:
+        tables = ", ".join(non_empty)
+        raise RuntimeError(
+            "literature migration 008 refuses to retire non-empty unused tables: " + tables
+        )
+
+    for table_name in _RETIRED_LITERATURE_TABLES:
+        if _has_table(conn, table_name):
+            conn.execute(f'DROP TABLE "{table_name}"')
 
 
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])

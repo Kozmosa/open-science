@@ -34,7 +34,7 @@ flowchart TD
 - 正常 L0/L1 在 Python quality gate 开始时检查 product import cycle，以及 non-API Module 对 `ainrf.api` 的静态、惰性、动态和字符串入口依赖。
 - Project、Workspace、Environment、Task 等领域通过窄 application Interface 暴露能力；SQLite repository 与共享 write kernel 保持私有。
 - Release E 已完成 committed-v2 authority cutover。产品路径不得重新引入 legacy writer、legacy read fallback、双读或双写。
-- Issue #76 将已完成的 cutover、migration chain 和 legacy Attempt/RuntimeSession authority 退休。当前 fresh-install schema baseline 是 `agentic_researcher=33`、`auth=7`、`literature=7`、`terminal=1`；正常 startup 只注册 `src/ainrf/db/migrations/current.py` 和 `src/ainrf/db/baselines/*.sql`。
+- Issue #76 将已完成的 cutover、migration chain 和 legacy Attempt/RuntimeSession authority 退休。当前 fresh-install schema baseline 是 `agentic_researcher=33`、`auth=7`、`literature=7`、`terminal=1`；Literature baseline 后的 migration 008 会安全退休已被当前 research-task intent/work/outbox authority 替代的 `literature_task_sagas`，并把新安装和可安全升级的 v7 数据库推进到当前 version 8。`literature_api_attempts` 仍保留为外部调用 durable attempt 记录。正常 startup 只注册 `src/ainrf/db/migrations/current.py` 和 `src/ainrf/db/baselines/*.sql`。
 - 历史 `agentic_researcher` version 32 到 current baseline 33 的删除动作只存在于一次性的 `openscience migration retire-legacy preflight|apply|verify`；`apply` 同时删除 sidecar 中依赖旧 cutover/Attempt 模型的 snapshot 与 legacy-write counter，保留仍属当前契约的 durable counters。它不属于正常 import graph，也不承诺从任意历史版本升级。
 - Frontend 依赖方向为 `app -> features -> shared/design-system`。`shared` 与 `design-system` 不依赖 feature，page 只负责 composition。
 - UI 不直接消费 raw generated payload；feature adapter 将 transport type 映射为 view model。
