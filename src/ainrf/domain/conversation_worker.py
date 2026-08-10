@@ -15,7 +15,13 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from ainrf.db import connect
-from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType, TurnStatus
+from ainrf.domain.conversation_contracts import (
+    ConversationContractError,
+    ConversationErrorCode,
+    TurnItemActor,
+    TurnItemType,
+    TurnStatus,
+)
 from ainrf.domain.conversation_execution import (
     ConversationExecutionService,
     RuntimeExecutionClaim,
@@ -218,56 +224,112 @@ class ConversationDispatcher:
         claim = self._execution.claim_next_submission()
         if claim is None:
             return False
-        self._execution.begin_delivery(claim.submission_id)
+        try:
+            self._execution.begin_delivery(claim.submission_id)
+        except ConversationContractError as exc:
+            if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
+                # Cancellation won before delivery began.  The submission is
+                # already terminal and there is no external side effect to
+                # reconcile.
+                return True
+            raise
+        except DomainConflictError:
+            # A concurrent cancellation may have terminally consumed the
+            # claim.  Treat it as handled rather than killing the worker loop.
+            return True
+        try:
+            self._execution.ensure_submission_open(claim.submission_id)
+        except ConversationContractError as exc:
+            if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
+                with suppress(DomainConflictError, ConversationContractError):
+                    self._execution.mark_delivery_unknown(
+                        claim.submission_id,
+                        failure_code="task_cancelled_before_adapter",
+                        evidence={
+                            "source": "worker_preflight",
+                            "reason": "task_cancelled_before_adapter",
+                            "replay_forbidden": True,
+                        },
+                    )
+                return True
+            raise
+        except DomainConflictError:
+            return True
         try:
             context = self._context_factory(claim)
             adapter = self._adapter_factory(context.engine_type)
         except asyncio.CancelledError:
-            self._execution.mark_delivery_unknown(
-                claim.submission_id,
-                failure_code="worker_cancelled_before_acceptance",
-                evidence={
-                    "source": "worker_setup",
-                    "replay_forbidden": True,
-                },
-            )
+            with suppress(DomainConflictError, ConversationContractError):
+                self._execution.mark_delivery_unknown(
+                    claim.submission_id,
+                    failure_code="worker_cancelled_before_acceptance",
+                    evidence={
+                        "source": "worker_setup",
+                        "replay_forbidden": True,
+                    },
+                )
             raise
         except Exception as exc:
-            self._execution.mark_delivery_unknown(
-                claim.submission_id,
-                failure_code="worker_failed_before_acceptance",
-                evidence={
-                    "source": "worker_setup",
-                    "error_type": type(exc).__name__,
-                    "replay_forbidden": True,
-                },
-            )
+            with suppress(DomainConflictError, ConversationContractError):
+                self._execution.mark_delivery_unknown(
+                    claim.submission_id,
+                    failure_code="worker_failed_before_acceptance",
+                    evidence={
+                        "source": "worker_setup",
+                        "error_type": type(exc).__name__,
+                        "replay_forbidden": True,
+                    },
+                )
+            return True
+        try:
+            self._execution.ensure_submission_open(claim.submission_id)
+        except ConversationContractError as exc:
+            if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
+                with suppress(DomainConflictError, ConversationContractError):
+                    self._execution.mark_delivery_unknown(
+                        claim.submission_id,
+                        failure_code="task_cancelled_before_adapter_start",
+                        evidence={
+                            "source": "worker_preflight",
+                            "reason": "task_cancelled_before_adapter_start",
+                            "replay_forbidden": True,
+                        },
+                    )
+                return True
+            raise
+        except DomainConflictError:
             return True
         execution: RuntimeExecutionClaim | None = None
         terminal_status: TurnStatus | None = None
         failure_code: str | None = None
+        cancellation_during_acceptance = False
 
         async def emit(event: EngineEvent) -> None:
-            nonlocal execution, terminal_status, failure_code
+            nonlocal execution, terminal_status, failure_code, cancellation_during_acceptance
             if execution is None:
                 native_kind, native_ref = adapter.native_turn_identity(
                     runtime_launch_key=claim.submission_id,
                     fallback_turn_id=claim.reserved_turn_id,
                 )
-                execution = self._execution.accept_and_open_execution(
-                    claim,
-                    engine_family=(
-                        "codex"
-                        if context.engine_type is HarnessEngineType.CODEX_APP_SERVER
-                        else "claude"
-                    ),
-                    engine_driver=context.engine_type,
-                    native_turn_kind=native_kind,
-                    native_turn_ref=native_ref,
-                    native_runtime_kind="worker",
-                    native_runtime_ref=claim.submission_id,
-                    evidence={"source": "first_engine_event"},
-                )
+                try:
+                    execution = self._execution.accept_and_open_execution(
+                        claim,
+                        engine_family=(
+                            "codex"
+                            if context.engine_type is HarnessEngineType.CODEX_APP_SERVER
+                            else "claude"
+                        ),
+                        engine_driver=context.engine_type,
+                        native_turn_kind=native_kind,
+                        native_turn_ref=native_ref,
+                        native_runtime_kind="worker",
+                        native_runtime_ref=claim.submission_id,
+                        evidence={"source": "first_engine_event"},
+                    )
+                except ConversationContractError as exc:
+                    if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
+                        cancellation_during_acceptance = True
+                    raise
             if event.event_type == "status":
                 raw_status = event.payload.get("status")
                 if raw_status == "succeeded":
@@ -310,11 +372,24 @@ class ConversationDispatcher:
             terminal_status = TurnStatus.FAILED
             failure_code = failure_code or "runtime_error"
         if execution is None:
-            self._execution.mark_delivery_unknown(
-                claim.submission_id,
-                failure_code="provider_acceptance_unproven",
-                evidence={"source": "runtime_adapter", "replay_forbidden": True},
-            )
+            with suppress(DomainConflictError, ConversationContractError):
+                self._execution.mark_delivery_unknown(
+                    claim.submission_id,
+                    failure_code=(
+                        "task_cancelled_during_delivery"
+                        if cancellation_during_acceptance
+                        else "provider_acceptance_unproven"
+                    ),
+                    evidence={
+                        "source": "runtime_adapter",
+                        "reason": (
+                            "task_cancelled_during_delivery"
+                            if cancellation_during_acceptance
+                            else "provider_acceptance_unproven"
+                        ),
+                        "replay_forbidden": True,
+                    },
+                )
             if cancelled_by_caller:
                 raise asyncio.CancelledError
             return True

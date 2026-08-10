@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 
 class MigrationFn(Protocol):
@@ -192,17 +193,12 @@ def _has_user_tables(conn: sqlite3.Connection) -> bool:
     )
 
 
-def run_pending(
+def _run_pending_uncommitted(
     conn: sqlite3.Connection,
     database_name: str,
     reg: MigrationRegistry | None = None,
 ) -> int:
-    """Run all pending migrations for *database_name*.
-
-    Returns the number of migrations applied.  Each migration runs
-    inside the caller's transaction; if any migration raises the
-    caller is responsible for rolling back.
-    """
+    """Run pending migrations without committing the caller's transaction."""
     r = reg or registry
     if not r.knows_database(database_name):
         raise SchemaBaselineError(f"{database_name} is not a supported product database")
@@ -246,7 +242,6 @@ def run_pending(
             match = re.match(r"migration_(\d+)(?:_|$)", migration.__name__)
             assert match is not None
             set_version(conn, database_name, int(match.group(1)))
-        conn.commit()
         return len(pending) + int(baseline_applied)
 
     migration_count = r.supported_version(database_name)
@@ -270,5 +265,57 @@ def run_pending(
         match = re.match(r"migration_(\d+)(?:_|$)", migration.__name__)
         assert match is not None
         set_version(conn, database_name, int(match.group(1)))
-    conn.commit()
     return len(pending)
+
+
+def _rollback_migration_savepoint(conn: sqlite3.Connection, savepoint: str) -> None:
+    """Attempt to restore failed migration work without discarding the caller transaction.
+
+    A denied RELEASE leaves the rolled-back savepoint open.  The next run uses
+    a unique name, and the caller can still commit its unrelated outer work.
+    """
+
+    try:
+        conn.execute(f"ROLLBACK TO {savepoint}")
+    except sqlite3.Error:
+        return
+    try:
+        conn.execute(f"RELEASE {savepoint}")
+    except sqlite3.Error:
+        return
+
+
+def run_pending(
+    conn: sqlite3.Connection,
+    database_name: str,
+    reg: MigrationRegistry | None = None,
+) -> int:
+    """Run pending migrations atomically and return the count applied.
+
+    A fresh connection gets an explicit transaction.  When the caller already
+    owns a transaction, a uniquely named savepoint keeps migration DDL and its
+    schema-version write together without committing unrelated work.  Migration
+    and version-write failures roll back their migration scope; a denied nested
+    RELEASE leaves that rolled-back savepoint open so the caller's outer
+    transaction remains intact.
+    """
+
+    if conn.in_transaction:
+        savepoint = f"ainrf_run_pending_{uuid4().hex}"
+        conn.execute(f"SAVEPOINT {savepoint}")
+        try:
+            result = _run_pending_uncommitted(conn, database_name, reg)
+            conn.execute(f"RELEASE {savepoint}")
+        except BaseException:
+            _rollback_migration_savepoint(conn, savepoint)
+            raise
+        return result
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        result = _run_pending_uncommitted(conn, database_name, reg)
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    return result

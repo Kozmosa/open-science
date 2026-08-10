@@ -17,8 +17,41 @@ _BASELINE_VERSIONS = {
 
 
 def _apply_baseline(conn: sqlite3.Connection, database_name: str) -> None:
+    """Execute baseline statements without ``executescript``'s implicit commit."""
+
     resource = files("ainrf.db.baselines").joinpath(f"{database_name}.sql")
-    conn.executescript(resource.read_text(encoding="utf-8"))
+    script = resource.read_text(encoding="utf-8")
+    statement: list[str] = []
+    for character in script:
+        statement.append(character)
+        if character != ";":
+            continue
+        candidate = "".join(statement)
+        if not sqlite3.complete_statement(candidate):
+            continue
+        conn.execute(candidate)
+        statement.clear()
+    trailing = "".join(statement)
+    if trailing.strip():
+        conn.execute(trailing)
+
+
+@registry.register("agentic_researcher")
+def migration_034_conversation_cancellation_guards(conn: sqlite3.Connection) -> None:
+    """Allow promoted next-Turn reservations to transition from ready to cancelled."""
+
+    conn.execute("DROP TRIGGER IF EXISTS next_turn_transition_guard")
+    conn.execute(
+        """
+        CREATE TRIGGER next_turn_transition_guard
+            BEFORE UPDATE OF status ON next_turn_submissions
+            WHEN NOT (
+                (OLD.status = 'waiting' AND NEW.status IN ('ready', 'cancelled'))
+                OR (OLD.status = 'ready' AND NEW.status = 'cancelled')
+            )
+            BEGIN SELECT RAISE(ABORT, 'invalid next-Turn submission transition'); END
+        """
+    )
 
 
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])

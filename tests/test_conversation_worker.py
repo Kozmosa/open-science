@@ -9,7 +9,11 @@ import pytest
 
 from ainrf.db import connect, run_pending
 from ainrf.domain import OverviewSnapshotService
-from ainrf.domain.conversation_contracts import CapabilitySupport, TurnStatus
+from ainrf.domain.conversation_contracts import (
+    CapabilitySupport,
+    TaskWorkStatus,
+    TurnStatus,
+)
 from ainrf.domain.conversation_execution import (
     ConversationExecutionService,
     RuntimeExecutionClaim,
@@ -325,6 +329,43 @@ async def test_unproven_delivery_becomes_unknown_without_materializing_or_replay
     assert submission["status"] == "delivery_unknown"
     assert submission["failure_code"] == "provider_acceptance_unproven"
     assert turn_count == 0
+
+
+@pytest.mark.anyio
+async def test_cancelled_claim_is_skipped_without_starting_adapter_or_runtime(
+    state_root: Path,
+) -> None:
+    application = ConversationApplicationService(state_root)
+    execution = ConversationExecutionService(state_root)
+    claim = execution.claim_next_submission()
+    assert claim is not None
+    application.cancel_task("task-1", _USER, idempotency_key="cancel-claimed")
+    started = False
+
+    def adapter_factory(_: HarnessEngineType) -> ConversationRuntimeAdapter:
+        nonlocal started
+        started = True
+        raise AssertionError("cancelled claim must not construct an adapter")
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=adapter_factory,
+        context_factory=lambda _: (_ for _ in ()).throw(
+            AssertionError("cancelled claim must not construct execution context")
+        ),
+    )
+
+    assert await dispatcher.run_once() is False
+    assert started is False
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status FROM turn_submissions").fetchone()
+        task_state = conn.execute("SELECT work_status FROM conversation_task_states").fetchone()
+        turn_count = conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0]
+        runtime_count = conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0]
+    assert submission is not None and submission["status"] == "cancelled"
+    assert task_state is not None and task_state["work_status"] == TaskWorkStatus.CANCELLED
+    assert turn_count == 0
+    assert runtime_count == 0
 
 
 async def _wait_for_control_status(

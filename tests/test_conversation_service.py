@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
@@ -29,6 +30,7 @@ from ainrf.domain.conversation_execution_repository import (
 from ainrf.domain.conversation_execution import (
     ConversationExecutionService,
     RuntimeExecutionClaim,
+    SubmissionClaim,
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
@@ -289,6 +291,13 @@ def test_task_metadata_and_cancel_stay_inside_conversation_interface(
     service = _service(state_root)
     turn_id = _create_accepted_turn(state_root, service)
     _insert_runtime_and_approval(state_root, turn_id)
+    deferred = service.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "next"},
+        idempotency_key="cancel-next",
+        allow_next_turn=True,
+    )
 
     with pytest.raises(ConversationContractError) as active_archive:
         service.archive_task("task-1", _USER, idempotency_key="archive-active")
@@ -297,6 +306,7 @@ def test_task_metadata_and_cancel_stay_inside_conversation_interface(
     cancelled = service.cancel_task("task-1", _USER, idempotency_key="cancel-1")
     assert cancelled["work_status"] == TaskWorkStatus.CANCELLED
     assert isinstance(cancelled["control_request_id"], str)
+    assert cancelled["cancelled_submission_ids"] == [str(deferred["submission_id"])]
     titled = service.update_task_title(
         "task-1", _USER, title="Renamed Conversation", idempotency_key="title-1"
     )
@@ -309,11 +319,187 @@ def test_task_metadata_and_cancel_stay_inside_conversation_interface(
             == "cancelled"
         )
         control = conn.execute("SELECT kind, status FROM turn_control_requests").fetchone()
+        next_turn = conn.execute(
+            "SELECT status FROM next_turn_submissions WHERE submission_id = ?",
+            (deferred["submission_id"],),
+        ).fetchone()
         assert control is not None
         assert (control["kind"], control["status"]) == ("interrupt", "requested")
+        assert next_turn is not None and next_turn["status"] == "cancelled"
         assert conn.execute("SELECT title FROM tasks WHERE task_id = 'task-1'").fetchone()[0] == (
             "Renamed Conversation"
         )
+
+
+def test_cancel_task_cancels_queued_and_claimed_submissions_with_evidence(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    first = service.create_turn("task-1", _USER, input={"text": "first"}, idempotency_key="first")
+    second = service.create_turn(
+        "task-1", _USER, input={"text": "second"}, idempotency_key="second"
+    )
+    execution = ConversationExecutionService(state_root)
+    claimed = execution.claim_next_submission()
+    assert claimed is not None
+
+    result = service.cancel_task("task-1", _USER, idempotency_key="cancel-pending")
+    cancelled_submission_ids = result["cancelled_submission_ids"]
+    assert isinstance(cancelled_submission_ids, list)
+    assert set(cancelled_submission_ids) == {
+        str(first["submission_id"]),
+        str(second["submission_id"]),
+    }
+    with closing(connect(_db_path(state_root))) as conn:
+        rows = conn.execute(
+            "SELECT submission_id, status, finished_at, failure_code, "
+            "delivery_evidence_json FROM turn_submissions ORDER BY submission_id"
+        ).fetchall()
+        state = conn.execute(
+            "SELECT work_status FROM conversation_task_states WHERE task_id = 'task-1'"
+        ).fetchone()
+    assert state is not None and state["work_status"] == "cancelled"
+    assert len(rows) == 2
+    assert all(row["status"] == "cancelled" for row in rows)
+    assert all(row["finished_at"] is not None for row in rows)
+    assert all(row["failure_code"] == "task_cancelled_before_delivery" for row in rows)
+    assert all(
+        json.loads(str(row["delivery_evidence_json"]))["reason"] == "task_cancelled_before_delivery"
+        for row in rows
+    )
+
+
+def test_cancel_ready_next_turn_then_reopen_allows_new_admission(state_root: Path) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+    deferred = service.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "next"},
+        idempotency_key="next-ready",
+        allow_next_turn=True,
+    )
+    service.finish_turn("task-1", turn_id, status=TurnStatus.COMPLETED)
+
+    cancelled = service.cancel_task("task-1", _USER, idempotency_key="cancel-ready")
+    assert cancelled["cancelled_submission_ids"] == [str(deferred["submission_id"])]
+    with closing(connect(_db_path(state_root))) as conn:
+        next_turn = conn.execute(
+            "SELECT status FROM next_turn_submissions WHERE submission_id = ?",
+            (deferred["submission_id"],),
+        ).fetchone()
+        submission = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (deferred["submission_id"],),
+        ).fetchone()
+    assert next_turn is not None and next_turn["status"] == "cancelled"
+    assert submission is not None and submission["status"] == "cancelled"
+
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.OPEN, idempotency_key="reopen-ready"
+    )
+    replacement = service.create_turn(
+        "task-1", _USER, input={"text": "replacement"}, idempotency_key="replacement"
+    )
+    assert replacement["status"] == "queued"
+
+
+def test_cancel_and_claim_have_one_serialized_winner(state_root: Path) -> None:
+    service = _service(state_root)
+    admission = service.create_turn("task-1", _USER, input={"text": "race"}, idempotency_key="race")
+
+    def claim() -> object:
+        return ConversationExecutionService(state_root).claim_next_submission()
+
+    def cancel() -> dict[str, object]:
+        return service.cancel_task("task-1", _USER, idempotency_key="race-cancel")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claimed, cancelled = pool.map(lambda operation: operation(), (claim, cancel))
+
+    assert claimed is None or claimed.submission_id == admission["submission_id"]
+    assert cancelled["work_status"] == TaskWorkStatus.CANCELLED
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (admission["submission_id"],),
+        ).fetchone()
+    assert row is not None and row["status"] == "cancelled"
+
+
+def test_closed_task_submission_is_not_claimable(state_root: Path) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "closed"}, idempotency_key="closed-queue"
+    )
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.COMPLETED, idempotency_key="close-queue"
+    )
+
+    assert ConversationExecutionService(state_root).claim_next_submission() is None
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (admission["submission_id"],),
+        ).fetchone()
+    assert row is not None and row["status"] == "queued"
+
+
+def test_cancel_after_begin_fences_acceptance_without_turn_or_runtime(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "race"}, idempotency_key="accept-race"
+    )
+    execution = ConversationExecutionService(state_root)
+    claim = execution.claim_next_submission()
+    assert claim is not None
+    execution.begin_delivery(claim.submission_id)
+    service.cancel_task("task-1", _USER, idempotency_key="cancel-before-accept")
+
+    with pytest.raises(ConversationContractError) as closed:
+        execution.accept_and_open_execution(
+            claim,
+            engine_family="codex",
+            engine_driver="codex-app-server",
+            native_turn_kind="turn",
+            native_turn_ref="native-race",
+            native_runtime_kind="process",
+            native_runtime_ref="runtime-race",
+            evidence={"source": "race"},
+        )
+    assert closed.value.code is ConversationErrorCode.TASK_NOT_OPEN
+    with closing(connect(_db_path(state_root))) as conn:
+        before_fence = conn.execute(
+            "SELECT status, finished_at, failure_code FROM turn_submissions "
+            "WHERE submission_id = ?",
+            (admission["submission_id"],),
+        ).fetchone()
+    assert before_fence is not None
+    assert before_fence["status"] == "delivery_unknown"
+    assert before_fence["finished_at"] is None
+    assert before_fence["failure_code"] == "task_cancelled_during_delivery"
+    execution.mark_delivery_unknown(
+        claim.submission_id,
+        failure_code="task_cancelled_during_delivery",
+        evidence={
+            "source": "test",
+            "reason": "task_cancelled_during_delivery",
+            "replay_forbidden": True,
+        },
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        submission = conn.execute(
+            "SELECT status, failure_code FROM turn_submissions WHERE submission_id = ?",
+            (admission["submission_id"],),
+        ).fetchone()
+        turn_count = conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0]
+        runtime_count = conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0]
+    assert submission is not None
+    assert tuple(submission) == ("delivery_unknown", "task_cancelled_during_delivery")
+    assert turn_count == 0
+    assert runtime_count == 0
 
 
 def test_admission_is_durable_idempotent_and_not_canonical_history(
@@ -602,7 +788,7 @@ def test_terminal_evidence_validation_and_replay(state_root: Path) -> None:
     assert contradiction.value.code is ConversationErrorCode.TURN_NOT_ACTIVE
 
 
-def test_acceptance_validates_lineage_replay_and_survives_task_closure(
+def test_acceptance_rejects_delivery_after_task_closure(
     state_root: Path,
 ) -> None:
     service = _service(state_root)
@@ -625,29 +811,51 @@ def test_acceptance_validates_lineage_replay_and_survives_task_closure(
             contract_version=1,
             delivery_evidence={"receipt": "accepted"},
         )
-    assert wrong_engine.value.code is ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH
+    assert wrong_engine.value.code is ConversationErrorCode.TASK_NOT_OPEN
 
+    with closing(connect(_db_path(state_root))) as conn:
+        submission = conn.execute(
+            "SELECT status, finished_at, failure_code FROM turn_submissions "
+            "WHERE submission_id = ?",
+            (submission_id,),
+        ).fetchone()
+        assert submission is not None
+        assert tuple(submission) == ("delivering", None, None)
+        assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 0
+
+
+def test_delivered_acceptance_replay_survives_task_closure(state_root: Path) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "hello"}, idempotency_key="closed-replay"
+    )
+    submission_id = str(admission["submission_id"])
+    _submission_to_delivering(state_root, submission_id)
     accepted = service.accept_submission(
         submission_id,
         native_turn_kind="turn",
-        native_turn_ref="native-1",
+        native_turn_ref="native-closed-replay",
         engine_family="codex",
         engine_driver="codex-app-server",
         contract_version=1,
         delivery_evidence={"receipt": "accepted"},
     )
-    assert accepted["status"] == "delivered"
-    with pytest.raises(ConversationContractError) as contradiction:
-        service.accept_submission(
-            submission_id,
-            native_turn_kind="turn",
-            native_turn_ref="native-other",
-            engine_family="codex",
-            engine_driver="codex-app-server",
-            contract_version=1,
-            delivery_evidence={"receipt": "accepted"},
-        )
-    assert contradiction.value.code is ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.COMPLETED, idempotency_key="close-replay"
+    )
+
+    replay = service.accept_submission(
+        submission_id,
+        native_turn_kind="turn",
+        native_turn_ref="native-closed-replay",
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        contract_version=1,
+        delivery_evidence={"receipt": "accepted"},
+    )
+    assert replay == accepted
+    with closing(connect(_db_path(state_root))) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 1
 
 
 def test_acceptance_rejects_active_binding_mismatch(state_root: Path) -> None:
@@ -904,6 +1112,155 @@ def test_acceptance_materializes_once_and_rejects_secret_evidence(
         assert item is not None
         assert item["item_type"] == "user_message"
         assert item["payload_json"] == '{"text":"hello"}'
+
+
+def test_delivered_without_runtime_recovers_atomically_and_idempotently(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "recover"}, idempotency_key="recover-runtime"
+    )
+    submission_id = str(admission["submission_id"])
+    _submission_to_delivering(state_root, submission_id)
+    service.accept_submission(
+        submission_id,
+        native_turn_kind="turn",
+        native_turn_ref="native-recover",
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        contract_version=1,
+        delivery_evidence={"receipt": "accepted"},
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            "SELECT task_id, reserved_turn_id, input_json, context_snapshot_ref "
+            "FROM turn_submissions WHERE submission_id = ?",
+            (submission_id,),
+        ).fetchone()
+    assert row is not None
+    claim = SubmissionClaim(
+        submission_id=submission_id,
+        task_id=str(row["task_id"]),
+        reserved_turn_id=str(row["reserved_turn_id"]),
+        input=json.loads(str(row["input_json"])),
+        context_snapshot_ref=(
+            None if row["context_snapshot_ref"] is None else str(row["context_snapshot_ref"])
+        ),
+    )
+    execution = ConversationExecutionService(state_root)
+    first = execution.accept_and_open_execution(
+        claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-recover",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-recover",
+        evidence={"source": "recovery"},
+    )
+    second = execution.accept_and_open_execution(
+        claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-recover",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-recover",
+        evidence={"source": "recovery-replay"},
+    )
+    assert second == first
+    with closing(connect(_db_path(state_root))) as conn:
+        runtime_rows = conn.execute(
+            "SELECT runtime_execution_id, status FROM runtime_executions WHERE turn_id = ?",
+            (str(admission["reserved_turn_id"]),),
+        ).fetchall()
+    assert len(runtime_rows) == 1
+    assert runtime_rows[0]["status"] == "running"
+
+
+def test_cancel_reopen_permanently_fences_old_delivery_claim(state_root: Path) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "fenced"}, idempotency_key="fenced-delivery"
+    )
+    submission_id = str(admission["submission_id"])
+    _submission_to_delivering(state_root, submission_id)
+    cancelled = service.cancel_task("task-1", _USER, idempotency_key="fence-cancel")
+    assert cancelled["delivery_unknown_submission_ids"] == [submission_id]
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.OPEN, idempotency_key="fence-reopen"
+    )
+
+    with pytest.raises(ConversationContractError) as fenced:
+        service.accept_submission(
+            submission_id,
+            native_turn_kind="turn",
+            native_turn_ref="native-fenced",
+            engine_family="codex",
+            engine_driver="codex-app-server",
+            contract_version=1,
+            delivery_evidence={"receipt": "accepted"},
+        )
+    assert fenced.value.code is ConversationErrorCode.DELIVERY_UNKNOWN
+    with closing(connect(_db_path(state_root))) as conn:
+        submission = conn.execute(
+            "SELECT status, failure_code FROM turn_submissions WHERE submission_id = ?",
+            (submission_id,),
+        ).fetchone()
+        assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 0
+    assert submission is not None
+    assert tuple(submission) == ("delivery_unknown", "task_cancelled_during_delivery")
+
+
+def test_runtime_native_identity_conflict_is_domain_error_and_rolls_back(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    service.create_turn("task-1", _USER, input={"text": "first"}, idempotency_key="runtime-owner")
+    execution = ConversationExecutionService(state_root)
+    first_claim = execution.claim_next_submission()
+    assert first_claim is not None
+    execution.begin_delivery(first_claim.submission_id)
+    execution.accept_and_open_execution(
+        first_claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-runtime-owner",
+        native_runtime_kind="process",
+        native_runtime_ref="global-runtime-1",
+        evidence={"source": "owner"},
+    )
+
+    _insert_task(state_root, "task-2")
+    service.initialize_task("task-2", _USER)
+    second = service.create_turn(
+        "task-2", _USER, input={"text": "second"}, idempotency_key="runtime-conflict"
+    )
+    second_claim = execution.claim_next_submission()
+    assert second_claim is not None
+    assert second_claim.submission_id == second["submission_id"]
+    execution.begin_delivery(second_claim.submission_id)
+    with pytest.raises(DomainConflictError, match="another Turn"):
+        execution.accept_and_open_execution(
+            second_claim,
+            engine_family="codex",
+            engine_driver="codex-app-server",
+            native_turn_kind="turn",
+            native_turn_ref="native-runtime-conflict",
+            native_runtime_kind="process",
+            native_runtime_ref="global-runtime-1",
+            evidence={"source": "conflict"},
+        )
+    with closing(connect(_db_path(state_root))) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM task_turns").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 1
+        submission = conn.execute(
+            "SELECT status FROM turn_submissions WHERE submission_id = ?",
+            (second["submission_id"],),
+        ).fetchone()
+    assert submission is not None and submission["status"] == "delivering"
 
 
 def test_active_turn_retry_and_next_turn_semantics(state_root: Path) -> None:

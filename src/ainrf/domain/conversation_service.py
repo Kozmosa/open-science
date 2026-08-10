@@ -975,6 +975,65 @@ class ConversationApplicationService:
                         != 1
                     ):
                         raise DomainConflictError("Task cancellation lost a state race")
+                cancellation_evidence = {
+                    "source": "conversation.cancel_task",
+                    "task_id": task_id,
+                    "reason": "task_cancelled_before_delivery",
+                    "replay_forbidden": True,
+                }
+                delivery_cancellation_evidence = {
+                    "source": "conversation.cancel_task",
+                    "task_id": task_id,
+                    "reason": "task_cancelled_during_delivery",
+                    "replay_forbidden": True,
+                }
+                cancelled_submissions: list[str] = []
+                delivery_unknown_submissions: list[str] = []
+                for submission in executions.pending_submission_rows(task_id):
+                    submission_id = str(submission["submission_id"])
+                    if submission["next_turn_status"] in {"waiting", "ready"}:
+                        if (
+                            executions.cancel_next_turn(
+                                submission_id=submission_id,
+                                updated_at=updated_at,
+                            )
+                            != 1
+                        ):
+                            raise DomainConflictError(
+                                "Waiting next-Turn cancellation lost a state race"
+                            )
+                    submission_status = str(submission["status"])
+                    if (
+                        executions.transition_submission(
+                            submission_id=submission_id,
+                            expected_status=submission_status,
+                            status=(
+                                "delivery_unknown"
+                                if submission_status == "delivering"
+                                else "cancelled"
+                            ),
+                            updated_at=updated_at,
+                            finished_at=(None if submission_status == "delivering" else updated_at),
+                            delivery_evidence_json=_canonical_json(
+                                delivery_cancellation_evidence
+                                if submission_status == "delivering"
+                                else cancellation_evidence
+                            ),
+                            failure_code=(
+                                "task_cancelled_during_delivery"
+                                if submission_status == "delivering"
+                                else "task_cancelled_before_delivery"
+                            ),
+                        )
+                        != 1
+                    ):
+                        raise DomainConflictError(
+                            "Pending submission cancellation lost a state race"
+                        )
+                    if submission_status == "delivering":
+                        delivery_unknown_submissions.append(submission_id)
+                    else:
+                        cancelled_submissions.append(submission_id)
                 conn.execute(
                     "UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE task_id = ?",
                     (updated_at, task_id),
@@ -983,6 +1042,8 @@ class ConversationApplicationService:
                     "task_id": task_id,
                     "work_status": TaskWorkStatus.CANCELLED,
                     "control_request_id": control_request_id,
+                    "cancelled_submission_ids": cancelled_submissions,
+                    "delivery_unknown_submission_ids": delivery_unknown_submissions,
                 }
                 self._store(
                     domain,
@@ -1838,6 +1899,8 @@ class ConversationApplicationService:
         provider_profile_version: str | None = None,
         provider_profile_fingerprint: str | None = None,
         model: str | None = None,
+        _post_accept_side_effect: Callable[[SqliteConversationExecutionRepository, str, str], None]
+        | None = None,
     ) -> dict[str, object]:
         """Materialize canonical history from a trusted provider-acceptance callback."""
         _require_sanitized(delivery_evidence, path="delivery_evidence")
@@ -1852,7 +1915,30 @@ class ConversationApplicationService:
                 if submission is None or intent is None:
                     raise DomainNotFoundError(submission_id)
                 task_id = str(submission["task_id"])
-                self._require_current_conversation(conversations, task_id)
+                state = self._require_current_conversation(conversations, task_id)
+                submission_status = str(submission["status"])
+                if submission_status != "delivered":
+                    self._require_open(state)
+                if submission_status == "delivery_unknown":
+                    failure_code = (
+                        None
+                        if submission["failure_code"] is None
+                        else str(submission["failure_code"])
+                    )
+                    try:
+                        delivery_evidence = json.loads(str(submission["delivery_evidence_json"]))
+                    except (TypeError, ValueError):
+                        delivery_evidence = {}
+                    if not isinstance(delivery_evidence, Mapping):
+                        delivery_evidence = {}
+                    if failure_code == "task_cancelled_during_delivery" or any(
+                        delivery_evidence.get(key) == "task_cancelled_during_delivery"
+                        for key in ("reason", "failure_code", "code")
+                    ):
+                        raise ConversationContractError(
+                            ConversationErrorCode.DELIVERY_UNKNOWN,
+                            "Task cancellation permanently fenced this submission delivery",
+                        )
                 harness_engine = conversations.task_harness_engine(task_id)
                 try:
                     persisted_family = _ENGINE_FAMILY_BY_HARNESS[HarnessEngineType(harness_engine)]
@@ -1883,7 +1969,7 @@ class ConversationApplicationService:
                         ConversationErrorCode.PROVIDER_CONTRACT_MISMATCH,
                         "Acceptance callback references an inactive engine binding",
                     )
-                if str(submission["status"]) == "delivered":
+                if submission_status == "delivered":
                     turn = conversations.turn_by_id(str(submission["reserved_turn_id"]))
                     if (
                         turn is None
@@ -1904,9 +1990,16 @@ class ConversationApplicationService:
                         "turn_id": str(submission["reserved_turn_id"]),
                         "status": "delivered",
                     }
+                    if _post_accept_side_effect is not None:
+                        self._require_open(state)
+                        _post_accept_side_effect(
+                            executions,
+                            str(submission["reserved_turn_id"]),
+                            accepted_at,
+                        )
                     conn.commit()
                     return result
-                if str(submission["status"]) not in {"delivering", "delivery_unknown"}:
+                if submission_status not in {"delivering", "delivery_unknown"}:
                     raise ConversationContractError(
                         ConversationErrorCode.INVALID_STATE_TRANSITION,
                         "Only a delivering or delivery-unknown submission can be accepted",
@@ -1969,7 +2062,7 @@ class ConversationApplicationService:
                 if (
                     executions.transition_submission(
                         submission_id=submission_id,
-                        expected_status=str(submission["status"]),
+                        expected_status=submission_status,
                         status="delivered",
                         updated_at=accepted_at,
                         accepted_at=accepted_at,
@@ -1981,6 +2074,8 @@ class ConversationApplicationService:
                     != 1
                 ):
                     raise DomainConflictError("Submission acceptance lost a state race")
+                if _post_accept_side_effect is not None:
+                    _post_accept_side_effect(executions, turn_id, accepted_at)
                 conn.commit()
             except BaseException:
                 conn.rollback()

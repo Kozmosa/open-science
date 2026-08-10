@@ -87,6 +87,9 @@ class SqliteConversationExecutionRepository:
             """
             SELECT submission.*
             FROM turn_submissions AS submission
+            JOIN conversation_task_states AS task_state
+              ON task_state.task_id = submission.task_id
+             AND task_state.work_status = 'open'
             LEFT JOIN next_turn_submissions AS next_turn
               ON next_turn.submission_id = submission.submission_id
             WHERE submission.status = 'queued'
@@ -95,6 +98,23 @@ class SqliteConversationExecutionRepository:
             LIMIT 1
             """
         ).fetchone()
+
+    def pending_submission_rows(self, task_id: str) -> list[sqlite3.Row]:
+        """Return pre-delivery submissions that can be cancelled atomically."""
+
+        return self._conn.execute(
+            """
+            SELECT submission.*, next_turn.status AS next_turn_status
+            FROM turn_submissions AS submission
+            LEFT JOIN next_turn_submissions AS next_turn
+              ON next_turn.submission_id = submission.submission_id
+             AND next_turn.task_id = submission.task_id
+            WHERE submission.task_id = ?
+              AND submission.status IN ('queued', 'claimed', 'delivering')
+            ORDER BY submission.created_at, submission.submission_id
+            """,
+            (task_id,),
+        ).fetchall()
 
     def submission_by_task_key(
         self, *, task_id: str, actor_user_id: str, idempotency_key: str
@@ -129,12 +149,17 @@ class SqliteConversationExecutionRepository:
             SET status = ?, claimed_at = COALESCE(?, claimed_at),
                 delivering_at = COALESCE(?, delivering_at),
                 accepted_at = COALESCE(?, accepted_at),
-                finished_at = COALESCE(?, finished_at),
+                finished_at = CASE
+                    WHEN ? = 'delivered' THEN COALESCE(?, ?, finished_at)
+                    ELSE COALESCE(?, finished_at) END,
                 native_turn_kind = COALESCE(?, native_turn_kind),
                 native_turn_ref = COALESCE(?, native_turn_ref),
                 delivery_evidence_json = CASE
                     WHEN ? = '{}' THEN delivery_evidence_json ELSE ? END,
-                failure_code = COALESCE(?, failure_code), updated_at = ?
+                failure_code = CASE
+                    WHEN ? = 'delivered' THEN NULL
+                    ELSE COALESCE(?, failure_code) END,
+                updated_at = ?
             WHERE submission_id = ? AND status = ?
             """,
             (
@@ -142,11 +167,15 @@ class SqliteConversationExecutionRepository:
                 claimed_at,
                 delivering_at,
                 accepted_at,
+                status,
+                finished_at,
+                accepted_at,
                 finished_at,
                 native_turn_kind,
                 native_turn_ref,
                 delivery_evidence_json,
                 delivery_evidence_json,
+                status,
                 failure_code,
                 updated_at,
                 submission_id,
@@ -221,6 +250,24 @@ class SqliteConversationExecutionRepository:
             "SELECT * FROM runtime_executions WHERE runtime_execution_id = ?",
             (runtime_execution_id,),
         ).fetchone()
+
+    def runtime_execution_by_native_identity(
+        self, *, native_runtime_kind: str, native_runtime_ref: str
+    ) -> sqlite3.Row | None:
+        return self._conn.execute(
+            """
+            SELECT * FROM runtime_executions
+            WHERE native_runtime_kind = ? AND native_runtime_ref = ?
+            """,
+            (native_runtime_kind, native_runtime_ref),
+        ).fetchone()
+
+    def runtime_executions_for_turn(self, turn_id: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM runtime_executions WHERE turn_id = "
+            "? ORDER BY runtime_generation, execution_seq",
+            (turn_id,),
+        ).fetchall()
 
     def active_runtime_execution(self, turn_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
@@ -334,8 +381,8 @@ class SqliteConversationExecutionRepository:
         return self._conn.execute(
             """
             UPDATE next_turn_submissions
-            SET status = 'cancelled', updated_at = ?
-            WHERE submission_id = ? AND status = 'waiting'
+            SET status = 'cancelled', promoted_at = NULL, updated_at = ?
+            WHERE submission_id = ? AND status IN ('waiting', 'ready')
             """,
             (updated_at, submission_id),
         ).rowcount

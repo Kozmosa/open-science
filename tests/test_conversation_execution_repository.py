@@ -247,6 +247,64 @@ def test_delivery_unknown_converges_without_replay_or_failed_turn(tmp_path: Path
             )
 
 
+def test_delivery_unknown_reconciliation_clears_failure_code(tmp_path: Path) -> None:
+    with closing(_database(tmp_path)) as conn:
+        repository = SqliteConversationExecutionRepository(conn)
+        repository.insert_submission(
+            submission_id="submission-1",
+            task_id="task-1",
+            reserved_turn_id="turn-1",
+            actor_user_id="user-1",
+            idempotency_key="create-1",
+            request_hash="hash-1",
+            input_json='{"text":"hello"}',
+            context_snapshot_ref=None,
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        repository.transition_submission(
+            submission_id="submission-1",
+            expected_status="queued",
+            status="claimed",
+            claimed_at=_NOW,
+            updated_at=_NOW,
+        )
+        repository.transition_submission(
+            submission_id="submission-1",
+            expected_status="claimed",
+            status="delivering",
+            delivering_at=_NOW,
+            updated_at=_NOW,
+        )
+        repository.transition_submission(
+            submission_id="submission-1",
+            expected_status="delivering",
+            status="delivery_unknown",
+            failure_code="acceptance_unknown",
+            delivery_evidence_json='{"probe":"required"}',
+            updated_at=_LATER,
+        )
+        _accepted_turn(conn)
+        assert (
+            repository.transition_submission(
+                submission_id="submission-1",
+                expected_status="delivery_unknown",
+                status="delivered",
+                accepted_at=_LATER,
+                native_turn_kind="turn",
+                native_turn_ref="native-turn-1",
+                delivery_evidence_json='{"accepted":true}',
+                updated_at=_LATER,
+            )
+            == 1
+        )
+        submission = repository.submission_by_id("submission-1")
+        assert submission is not None
+        assert submission["status"] == "delivered"
+        assert submission["failure_code"] is None
+        assert submission["finished_at"] == _LATER
+
+
 def test_runtime_lifecycle_generation_and_terminal_immutability(tmp_path: Path) -> None:
     with closing(_database(tmp_path)) as conn:
         _accepted_turn(conn)

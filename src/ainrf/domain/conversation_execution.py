@@ -17,7 +17,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from ainrf.db import connect, run_pending
-from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType, TurnStatus
+from ainrf.domain.conversation_contracts import (
+    ConversationContractError,
+    ConversationErrorCode,
+    TaskWorkStatus,
+    TurnItemActor,
+    TurnItemType,
+    TurnStatus,
+)
 from ainrf.domain.conversation_execution_repository import (
     SqliteConversationExecutionRepository,
 )
@@ -120,6 +127,9 @@ class ConversationExecutionService:
                     row = conn.execute(
                         """
                         SELECT submission.* FROM turn_submissions AS submission
+                        JOIN conversation_task_states AS task_state
+                          ON task_state.task_id = submission.task_id
+                         AND task_state.work_status = 'open'
                         LEFT JOIN next_turn_submissions AS next_turn
                           ON next_turn.submission_id = submission.submission_id
                         WHERE submission.status = 'claimed' AND submission.claimed_at < ?
@@ -134,6 +144,11 @@ class ConversationExecutionService:
                             """
                             UPDATE turn_submissions SET claimed_at = ?, updated_at = ?
                             WHERE submission_id = ? AND status = 'claimed' AND claimed_at = ?
+                              AND EXISTS (
+                                  SELECT 1 FROM conversation_task_states AS task_state
+                                  WHERE task_state.task_id = turn_submissions.task_id
+                                    AND task_state.work_status = 'open'
+                              )
                             """,
                             (claimed_at, claimed_at, row["submission_id"], row["claimed_at"]),
                         ).rowcount
@@ -216,8 +231,17 @@ class ConversationExecutionService:
             try:
                 self._begin(conn)
                 repository = SqliteConversationExecutionRepository(conn)
-                if repository.submission_by_id(submission_id) is None:
+                submission = repository.submission_by_id(submission_id)
+                if submission is None:
                     raise DomainNotFoundError(submission_id)
+                task_state = SqliteConversationRepository(conn).task_state(
+                    str(submission["task_id"])
+                )
+                if task_state is None or str(task_state["work_status"]) != TaskWorkStatus.OPEN:
+                    raise ConversationContractError(
+                        ConversationErrorCode.TASK_NOT_OPEN,
+                        "Task was closed before submission delivery began",
+                    )
                 if (
                     repository.transition_submission(
                         submission_id=submission_id,
@@ -234,6 +258,22 @@ class ConversationExecutionService:
                 conn.rollback()
                 raise
 
+    def ensure_submission_open(self, submission_id: str) -> None:
+        """Recheck the Task gate immediately before an external adapter starts."""
+
+        with closing(connect(self._db_path)) as conn:
+            submission = SqliteConversationExecutionRepository(conn).submission_by_id(submission_id)
+            if submission is None:
+                raise DomainNotFoundError(submission_id)
+            state = SqliteConversationRepository(conn).task_state(str(submission["task_id"]))
+            if state is None or str(state["work_status"]) != TaskWorkStatus.OPEN:
+                raise ConversationContractError(
+                    ConversationErrorCode.TASK_NOT_OPEN,
+                    "Task was closed before the external adapter started",
+                )
+            if str(submission["status"]) != "delivering":
+                raise DomainConflictError("Submission is no longer delivering")
+
     def accept_and_open_execution(
         self,
         claim: SubmissionClaim,
@@ -246,23 +286,77 @@ class ConversationExecutionService:
         native_runtime_ref: str | None,
         evidence: Mapping[str, object],
     ) -> RuntimeExecutionClaim:
-        accepted = self._application.accept_submission(
-            claim.submission_id,
-            native_turn_kind=native_turn_kind,
-            native_turn_ref=native_turn_ref,
-            engine_family=engine_family,
-            engine_driver=engine_driver,
-            contract_version=1,
-            delivery_evidence=evidence,
-        )
-        turn_id = str(accepted["turn_id"])
-        created_at = _now()
         runtime_execution_id = uuid4().hex
-        with closing(connect(self._db_path)) as conn:
+
+        runtime_claim: RuntimeExecutionClaim | None = None
+
+        def persist_runtime(
+            repository: SqliteConversationExecutionRepository,
+            turn_id: str,
+            accepted_at: str,
+        ) -> None:
+            nonlocal runtime_claim
+            if native_runtime_kind is not None and native_runtime_ref is not None:
+                global_identity = repository.runtime_execution_by_native_identity(
+                    native_runtime_kind=native_runtime_kind,
+                    native_runtime_ref=native_runtime_ref,
+                )
+                if global_identity is not None and str(global_identity["turn_id"]) != turn_id:
+                    raise DomainConflictError(
+                        "Native RuntimeExecution identity is already bound to another Turn"
+                    )
+            existing = repository.runtime_executions_for_turn(turn_id)
+            for row in existing:
+                if (
+                    str(row["task_id"]) != claim.task_id
+                    or str(row["native_turn_kind"]) != native_turn_kind
+                    or str(row["native_turn_ref"]) != native_turn_ref
+                    or str(row["native_runtime_kind"]) != str(native_runtime_kind)
+                    or str(row["native_runtime_ref"]) != str(native_runtime_ref)
+                ):
+                    raise DomainConflictError(
+                        "Runtime execution native identity contradicts the accepted Turn"
+                    )
+            terminal = [
+                row
+                for row in existing
+                if str(row["status"]) in {"completed", "interrupted", "failed", "unknown"}
+            ]
+            if terminal:
+                raise DomainConflictError("Accepted Turn already has a terminal RuntimeExecution")
+            active = [
+                row
+                for row in existing
+                if str(row["status"]) in {"starting", "running", "reconciling"}
+            ]
+            if len(active) > 1:
+                raise DomainConflictError("Accepted Turn has multiple active RuntimeExecutions")
+            if active:
+                row = active[0]
+                existing_runtime_execution_id = str(row["runtime_execution_id"])
+                if str(row["status"]) == "starting":
+                    if (
+                        repository.transition_runtime_execution(
+                            runtime_execution_id=existing_runtime_execution_id,
+                            expected_status="starting",
+                            status="running",
+                            evidence_json=str(row["evidence_json"]),
+                            updated_at=accepted_at,
+                        )
+                        != 1
+                    ):
+                        raise DomainConflictError(
+                            "Existing RuntimeExecution could not enter running state"
+                        )
+                runtime_claim = RuntimeExecutionClaim(
+                    runtime_execution_id=existing_runtime_execution_id,
+                    task_id=claim.task_id,
+                    turn_id=turn_id,
+                    runtime_generation=int(row["runtime_generation"]),
+                )
+                return
+            generation = repository.next_runtime_generation(turn_id)
             try:
-                self._begin(conn)
-                repository = SqliteConversationExecutionRepository(conn)
-                generation = repository.next_runtime_generation(turn_id)
                 repository.insert_runtime_execution(
                     runtime_execution_id=runtime_execution_id,
                     task_id=claim.task_id,
@@ -275,31 +369,45 @@ class ConversationExecutionService:
                     native_turn_kind=native_turn_kind,
                     native_turn_ref=native_turn_ref,
                     evidence_json=_canonical_json(evidence),
-                    created_at=created_at,
-                    started_at=created_at,
-                    updated_at=created_at,
+                    created_at=accepted_at,
+                    started_at=accepted_at,
+                    updated_at=accepted_at,
                 )
-                if (
-                    repository.transition_runtime_execution(
-                        runtime_execution_id=runtime_execution_id,
-                        expected_status="starting",
-                        status="running",
-                        evidence_json=_canonical_json(evidence),
-                        updated_at=created_at,
-                    )
-                    != 1
-                ):
-                    raise DomainConflictError("Runtime execution could not enter running state")
-                conn.commit()
-            except BaseException:
-                conn.rollback()
-                raise
-        return RuntimeExecutionClaim(
-            runtime_execution_id=runtime_execution_id,
-            task_id=claim.task_id,
-            turn_id=turn_id,
-            runtime_generation=generation,
+            except sqlite3.IntegrityError as exc:
+                raise DomainConflictError(
+                    "Native RuntimeExecution identity could not be claimed"
+                ) from exc
+            if (
+                repository.transition_runtime_execution(
+                    runtime_execution_id=runtime_execution_id,
+                    expected_status="starting",
+                    status="running",
+                    evidence_json=_canonical_json(evidence),
+                    updated_at=accepted_at,
+                )
+                != 1
+            ):
+                raise DomainConflictError("Runtime execution could not enter running state")
+            runtime_claim = RuntimeExecutionClaim(
+                runtime_execution_id=runtime_execution_id,
+                task_id=claim.task_id,
+                turn_id=turn_id,
+                runtime_generation=generation,
+            )
+
+        self._application.accept_submission(
+            claim.submission_id,
+            native_turn_kind=native_turn_kind,
+            native_turn_ref=native_turn_ref,
+            engine_family=engine_family,
+            engine_driver=engine_driver,
+            contract_version=1,
+            delivery_evidence=evidence,
+            _post_accept_side_effect=persist_runtime,
         )
+        if runtime_claim is None:
+            raise DomainConflictError("Accepted Turn did not persist its RuntimeExecution")
+        return runtime_claim
 
     def append_item(
         self,
