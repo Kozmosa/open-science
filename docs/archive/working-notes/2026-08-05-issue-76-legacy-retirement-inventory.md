@@ -7,6 +7,9 @@ tags:
   - cleanup
 issue: 76
 date: 2026-08-05
+doc_state: historical
+source_path: docs/LLM-Working/legacy-retirement-inventory-2026-08-05.md
+archive_note: "Completed Issue #76 caller and retirement inventory; current contract is maintained by architecture docs, code, and tests."
 ---
 
 # Issue #76 legacy retirement inventory
