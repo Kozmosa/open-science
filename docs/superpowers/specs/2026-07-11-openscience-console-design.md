@@ -12,7 +12,7 @@ review_by: 2026-08-29
 **Scope:** OpenScience WebUI 的品牌表达、导航与页面外壳、视觉语言、核心交互组件和后续重构边界
 **Supersedes:** 当本文与 [`2026-06-14-frontend-redesign-proposal.md`](../../archive/working-notes/2026-06-14-frontend-redesign-proposal.md) 的品牌、视觉或页面外壳方向冲突时，以本文为准；该旧提案保留为重构历史与已完成工作记录。
 **Related:** 视觉 token、主题、字体、组件状态与 shadcn 采用边界由 [`2026-07-11-osci-design-system-design.md`](2026-07-11-osci-design-system-design.md) 统一定义。
-**Domain model:** Project、Task、Workspace 与共享 Context 的职责见 [`2026-07-11-project-task-workspace-domain-design.md`](2026-07-11-project-task-workspace-domain-design.md)。
+**Domain model:** Project、Task、Workspace 与共享 Context 的职责见 [`2026-07-11-project-task-workspace-domain-design.md`](archived/2026-07-11-project-task-workspace-domain-design.md)。
 
 ## 1. 背景与结论
 
