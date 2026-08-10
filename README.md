@@ -99,7 +99,7 @@
 ### CLI / API / WebUI
 
 - `openscience` CLI 作为本地 runtime 入口。
-- FastAPI backend 以 `/api` 作为 canonical API prefix；root 与 `/v1` 仅作为受监控的兼容 alias 保留。
+- FastAPI backend 以 `/api` 作为 canonical API prefix；root 与 product `/v1` aliases 已删除，`/v1/models` 与 `/v1/messages` 是独立、长期支持的外部模型协议接口。
 - React + Vite + Tailwind WebUI 提供统一控制台。
 - `scripts/webui.sh` 串联前后端本地开发体验。
 
@@ -147,7 +147,7 @@ UV_CACHE_DIR=/tmp/uv-cache uv run openscience serve
 scripts/webui.sh
 ```
 
-兼容性说明：本阶段 Python 包名、部分状态目录、旧 CLI `ainrf`、root/`/v1` route aliases 和已记录的 Task 字段仍保留，便于现有部署平滑迁移；新增对外入口优先使用 `openscience`、`OPENSCIENCE_*` 和 `/api`。删除这些 surface 必须有完整发布观察窗口的零调用 telemetry，详见[架构与兼容契约](docs-site/docs/architecture.md)。
+兼容性说明：本阶段 Python 包名、部分状态目录、旧 CLI `ainrf` 和已记录的 Task 字段仍保留，便于现有部署平滑迁移；产品 HTTP 入口使用 `/api`，`/v1/models` 与 `/v1/messages` 是独立、长期支持的外部模型协议接口，不是产品 route aliases。新增对外入口优先使用 `openscience`、`OPENSCIENCE_*` 和 `/api`。其余仍保留的兼容 surface 删除必须有完整发布观察窗口的零调用 telemetry，详见[架构与兼容契约](docs-site/docs/architecture.md)。
 
 前端单独开发：
 
