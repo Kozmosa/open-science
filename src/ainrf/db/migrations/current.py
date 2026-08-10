@@ -71,6 +71,43 @@ def migration_035_context_snapshot_provenance(conn: sqlite3.Connection) -> None:
     )
 
 
+@registry.register("agentic_researcher")
+def migration_036_retire_legacy_task_status(conn: sqlite3.Connection) -> None:
+    """Remove the superseded Task lifecycle shadow after Conversation cutover."""
+
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(tasks)")}
+    if "status" not in columns:
+        return
+    missing_authority = conn.execute(
+        """
+        SELECT task.task_id
+        FROM tasks AS task
+        LEFT JOIN conversation_task_authorities AS authority
+          ON authority.task_id = task.task_id AND authority.authority = 'conversation_v3'
+        LEFT JOIN conversation_task_states AS state ON state.task_id = task.task_id
+        WHERE authority.task_id IS NULL OR state.task_id IS NULL
+        ORDER BY task.task_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if missing_authority is not None:
+        raise RuntimeError(
+            "agentic_researcher migration 036 refuses to drop tasks.status before "
+            f"Conversation authority is complete: {missing_authority[0]}"
+        )
+
+    conn.execute("DROP INDEX IF EXISTS idx_tasks_status")
+    conn.execute("DROP INDEX IF EXISTS idx_tasks_project_status")
+    conn.execute("DROP INDEX IF EXISTS idx_tasks_project_lifecycle")
+    conn.execute("ALTER TABLE tasks DROP COLUMN status")
+    conn.execute(
+        """
+        CREATE INDEX idx_tasks_project_lifecycle
+        ON tasks(project_id, archived_at, updated_at, task_id)
+        """
+    )
+
+
 @registry.register("literature")
 def migration_008_retire_unused_literature_task_saga(conn: sqlite3.Connection) -> None:
     """Retire the empty Literature saga artifact left by the original v7 baseline.

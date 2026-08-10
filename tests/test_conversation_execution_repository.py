@@ -29,9 +29,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+                harness_engine, title, prompt, created_at, updated_at, owner_user_id
             ) VALUES (?, 'project-legacy', 'workspace-legacy', 'environment-legacy',
-                'general', 'codex_app_server', 'queued', 'Conversation', 'test', ?, ?, 'user-1')
+                'general', 'codex_app_server', 'Conversation', 'test', ?, ?, 'user-1')
             """,
             (task_id, _NOW, _NOW),
         )
@@ -39,9 +39,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
         """
         INSERT INTO tasks (
             task_id, project_id, workspace_id, environment_id, researcher_type,
-            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            harness_engine, title, prompt, created_at, updated_at, owner_user_id
         ) VALUES ('task-legacy', 'project-legacy', 'workspace-legacy', 'environment-legacy',
-            'general', 'codex_app_server', 'queued', 'Legacy', 'test', ?, ?, 'user-1')
+            'general', 'codex_app_server', 'Legacy', 'test', ?, ?, 'user-1')
         """,
         (_NOW, _NOW),
     )

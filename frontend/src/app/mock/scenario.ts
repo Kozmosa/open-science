@@ -315,7 +315,7 @@ function makeTask(
   status: TaskStatus = 'queued',
   workStatus: TaskWorkStatus = 'open',
 ): TaskSummary {
-  const isFinished = status === 'succeeded' || status === 'failed' || status === 'cancelled';
+  const isFinished = ['succeeded', 'failed', 'cancelled', 'completed'].includes(status);
   return {
     task_id: taskId,
     project_id: projectId,
@@ -760,7 +760,7 @@ function projectWithCounts(project: DomainProjectProjection): DomainProjectProje
     workspace_count: workspaces.length,
     executable_workspace_count: workspaces.filter((workspace) => workspace.can_execute).length,
     task_count: tasks.length,
-    active_task_count: tasks.filter((task) => ['queued', 'starting', 'running', 'paused'].includes(task.status)).length,
+    active_task_count: tasks.filter((task) => ['queued', 'running'].includes(task.status)).length,
     running_task_count: tasks.filter((task) => task.status === 'running').length,
   };
 }
@@ -770,7 +770,7 @@ function workspaceWithCounts(workspace: DomainWorkspaceProjection): DomainWorksp
   return {
     ...workspace,
     task_count: tasks.length,
-    active_task_count: tasks.filter((task) => ['queued', 'starting', 'running', 'paused'].includes(task.status)).length,
+    active_task_count: tasks.filter((task) => ['queued', 'running'].includes(task.status)).length,
   };
 }
 
@@ -1189,6 +1189,7 @@ export const frontendV2MockHandlers = [
     if (!task) return notFound('Task', taskId);
     if (task.work_status !== 'open') return HttpResponse.json({ detail: 'Task is not open' }, { status: 409 });
     task.work_status = 'completed';
+    if (task.status === 'queued') task.status = 'completed';
     task.updated_at = LATER_TIME;
     return HttpResponse.json(task);
   }),
@@ -1198,6 +1199,7 @@ export const frontendV2MockHandlers = [
     if (!task) return notFound('Task', taskId);
     if (task.work_status === 'open') return HttpResponse.json({ detail: 'Task is already open' }, { status: 409 });
     task.work_status = 'open';
+    if (task.status === 'completed') task.status = 'queued';
     task.updated_at = LATER_TIME;
     return HttpResponse.json(task);
   }),

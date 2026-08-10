@@ -16,9 +16,14 @@ function isBoolean(value: unknown): value is boolean {
 
 function buildTaskStatusSummary(t: ReturnType<typeof useT>, tasks: TaskSummary[] | null): string | null {
   if (tasks === null) return null;
-  const running = tasks.filter((task) => task.status === 'running' || task.status === 'starting').length;
+  const running = tasks.filter((task) => task.status === 'running').length;
   const pending = tasks.filter((task) => task.status === 'queued').length;
-  const finished = tasks.filter((task) => task.status === 'succeeded' || task.status === 'failed').length;
+  const finished = tasks.filter((task) => (
+    task.status === 'succeeded'
+    || task.status === 'failed'
+    || task.status === 'cancelled'
+    || task.status === 'completed'
+  )).length;
   return t('common.taskStatusSummary', { total: tasks.length, running, pending, finished });
 }
 

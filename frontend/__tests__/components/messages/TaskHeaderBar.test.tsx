@@ -30,10 +30,8 @@ describe('TaskHeaderBar', () => {
     expect(screen.getByText(/running/i)).toBeInTheDocument();
   });
 
-  it('humanizes an unknown runtime status instead of exposing an i18n key', () => {
-    renderWithProviders(
-      <TaskHeaderBar task={makeTask({ status: 'completed' as TaskSummary['status'] })} />
-    );
+  it('renders the canonical completed status label', () => {
+    renderWithProviders(<TaskHeaderBar task={makeTask({ status: 'completed' })} />);
 
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.queryByText('pages.tasks.status.completed')).not.toBeInTheDocument();

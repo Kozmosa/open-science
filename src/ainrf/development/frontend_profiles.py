@@ -348,19 +348,18 @@ def _seed_representative_tasks(
                 """
                 INSERT OR IGNORE INTO tasks (
                     task_id, project_id, workspace_id, environment_id, researcher_type,
-                    harness_engine, status, title, prompt, created_at, updated_at,
+                    harness_engine, title, prompt, created_at, updated_at,
                     started_at, completed_at, owner_user_id, error_summary,
                     project_context_version_id, project_context_snapshot_id, token_usage_json
                 ) VALUES (
                     ?, 'project-frontend-dev', 'workspace-frontend-primary',
-                    'environment-frontend-dev', 'vsa', 'codex-app-server', ?, ?, ?,
+                    'environment-frontend-dev', 'vsa', 'codex-app-server', ?, ?,
                     ?, ?, ?, ?, ?, ?, 'context-version-frontend-dev',
                     'context-snapshot-frontend-dev', ?
                 )
                 """,
                 (
                     task_id,
-                    task_status,
                     f"Frontend {task_status.replace('_', ' ').title()} Task",
                     f"Synthetic {task_status} Task for frontend state coverage.",
                     _NOW,
@@ -925,6 +924,7 @@ def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> Fronten
                     """,
                     (project_id, workspace_id, int(workspace_index == 0), _NOW, _LATER),
                 )
+        conversations = SqliteConversationRepository(conn)
         for task_index in range(500):
             project_index = task_index % 40
             workspace_ordinal = project_index * 3 + task_index % 3 + 1
@@ -932,15 +932,14 @@ def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> Fronten
                 """
                 INSERT OR IGNORE INTO tasks (
                     task_id, project_id, workspace_id, environment_id, researcher_type,
-                    harness_engine, status, title, prompt, created_at, updated_at,
+                    harness_engine, title, prompt, created_at, updated_at,
                     completed_at, owner_user_id
-                ) VALUES (?, ?, ?, 'environment-large', 'vsa', 'codex-app-server', ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, 'environment-large', 'vsa', 'codex-app-server', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     f"task-large-{task_index + 1:04d}",
                     f"project-large-{project_index + 1:03d}",
                     f"workspace-large-{workspace_ordinal:03d}",
-                    "succeeded" if task_index % 5 else "failed",
                     f"Large Task {task_index + 1:04d}",
                     "Synthetic terminal Task for large-list coverage.",
                     _NOW,
@@ -949,6 +948,10 @@ def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> Fronten
                     users.owner_user_id,
                 ),
             )
+            task_id = f"task-large-{task_index + 1:04d}"
+            if conversations.task_authority(task_id) is None:
+                conversations.insert_task_authority(task_id=task_id, created_at=_NOW)
+                conversations.insert_task_state(task_id=task_id, created_at=_NOW)
         conn.commit()
     auth = AuthService(state_root=state_root)
     for user_id in (

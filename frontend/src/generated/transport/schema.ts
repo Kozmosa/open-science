@@ -226,6 +226,13 @@ export type ConversationTaskMutationResponse = {
 };
 
 /**
+ * ConversationTaskStatus
+ *
+ * Canonical Task summary status derived from Conversation facts.
+ */
+export type ConversationTaskStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'completed';
+
+/**
  * CpuInfo
  */
 export type CpuInfo = {
@@ -3317,10 +3324,7 @@ export type TaskSummaryResponse = {
      * Started At
      */
     started_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
+    status: ConversationTaskStatus;
     /**
      * Task Id
      */
@@ -3337,10 +3341,7 @@ export type TaskSummaryResponse = {
      * Updated At
      */
     updated_at: string;
-    /**
-     * Work Status
-     */
-    work_status: 'open' | 'completed' | 'cancelled';
+    work_status: TaskWorkStatus;
     /**
      * Working Directory
      */
@@ -3418,6 +3419,11 @@ export type TaskUpdateRequest = {
      */
     title?: string | null;
 };
+
+/**
+ * TaskWorkStatus
+ */
+export type TaskWorkStatus = 'open' | 'completed' | 'cancelled';
 
 /**
  * TerminalExecRequest

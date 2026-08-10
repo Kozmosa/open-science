@@ -14,6 +14,17 @@ class TaskWorkStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class ConversationTaskStatus(StrEnum):
+    """Canonical Task summary status derived from Conversation facts."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+
+
 class TurnStatus(StrEnum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"

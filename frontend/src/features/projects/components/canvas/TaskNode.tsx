@@ -13,12 +13,11 @@ type TaskNodeType = Node<TaskNodeData>;
 function StatusDot({ status }: { status: string }) {
   const colorMap: Record<string, string> = {
     queued: semanticDotClasses.muted,
-    starting: semanticDotClasses.info,
     running: semanticDotClasses.success,
     succeeded: semanticDotClasses.success,
     failed: semanticDotClasses.danger,
     cancelled: semanticDotClasses.warning,
-    paused: semanticDotClasses.info,
+    completed: semanticDotClasses.muted,
   };
   return <span className={`inline-block h-2 w-2 rounded-full ${colorMap[status] ?? semanticDotClasses.muted}`} />;
 }

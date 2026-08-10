@@ -606,10 +606,10 @@ class ConversationApplicationService:
                     """
                     INSERT INTO tasks (
                         task_id, project_id, workspace_id, environment_id, researcher_type,
-                        harness_engine, user_skills, user_mcp_servers, status, title, prompt,
+                        harness_engine, user_skills, user_mcp_servers, title, prompt,
                         created_at, updated_at, owner_user_id, project_context_version_id,
                         project_context_snapshot_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         task_id,
@@ -1317,7 +1317,7 @@ class ConversationApplicationService:
                     else:
                         cancelled_submissions.append(submission_id)
                 conn.execute(
-                    "UPDATE tasks SET status = 'cancelled', updated_at = ? WHERE task_id = ?",
+                    "UPDATE tasks SET updated_at = ? WHERE task_id = ?",
                     (updated_at, task_id),
                 )
                 result: dict[str, object] = {
@@ -2046,10 +2046,10 @@ class ConversationApplicationService:
                     """
                     INSERT INTO tasks (
                         task_id, project_id, workspace_id, environment_id, researcher_type,
-                        harness_engine, user_skills, user_mcp_servers, status, title, prompt,
+                        harness_engine, user_skills, user_mcp_servers, title, prompt,
                         created_at, updated_at, owner_user_id, project_context_version_id,
                         project_context_snapshot_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         new_task_id,

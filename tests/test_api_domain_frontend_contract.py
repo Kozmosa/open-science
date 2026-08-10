@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 from typing import cast
 
@@ -13,6 +14,7 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.schemas import ForkConfirmResponse, ForkPreviewResponse, TaskSummaryResponse
 from ainrf.auth.service import AuthService
+from ainrf.db import connect
 from ainrf.domain import ConversationApplicationService, ProjectContextService
 from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
 
@@ -22,6 +24,18 @@ pytestmark = [pytest.mark.api]
 _API_KEY = "frontend-contract-key"
 _API_USER = {"id": "api-key-user", "role": "user"}
 _ADMIN = {"id": "admin", "role": "admin"}
+
+
+def test_task_summary_schema_exposes_conversation_status_union() -> None:
+    schema = TaskSummaryResponse.model_json_schema()
+    assert schema["$defs"]["ConversationTaskStatus"]["enum"] == [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "completed",
+    ]
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
@@ -268,6 +282,54 @@ async def test_task_work_lifecycle_returns_explicit_projection_and_requires_idem
     assert reopened.status_code == 200
     assert reopened.json()["work_status"] == "open"
     assert reopened.json()["updated_at"] != completed.json()["updated_at"]
+
+
+@pytest.mark.anyio
+async def test_task_surfaces_use_conversation_status_without_legacy_shadow(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    ids = _seed_frontend_contract(app, state_root)
+    headers = {"X-API-Key": _API_KEY}
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        task = conn.execute(
+            "SELECT task_id FROM tasks WHERE project_id = ?",
+            (ids["project_id"],),
+        ).fetchone()
+        assert task is not None
+        task_id = str(task["task_id"])
+        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(tasks)")}
+        assert "status" not in columns
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        listed = await client.get("/api/tasks?sort=status", headers=headers)
+        detail = await client.get(f"/api/tasks/{task_id}", headers=headers)
+        health = await client.get(f"/api/tasks/{task_id}/health", headers=headers)
+        projects = await client.get("/api/domain/projects", headers=headers)
+        workspaces = await client.get("/api/domain/workspaces", headers=headers)
+        cancelled = await client.post(
+            f"/api/tasks/{task_id}/cancel",
+            headers={**headers, "Idempotency-Key": "cancel-shadow-status"},
+        )
+        cancelled_detail = await client.get(f"/api/tasks/{task_id}", headers=headers)
+
+    listed_task = next(item for item in listed.json()["items"] if item["task_id"] == task_id)
+    project = next(
+        item for item in projects.json()["items"] if item["project_id"] == ids["project_id"]
+    )
+    workspace = next(
+        item for item in workspaces.json()["items"] if item["workspace_id"] == ids["workspace_id"]
+    )
+    assert listed_task["status"] == "queued"
+    assert detail.json()["status"] == "queued"
+    assert health.json()["status"] == "queued"
+    assert project["active_task_count"] == 1
+    assert workspace["active_task_count"] == 1
+    assert cancelled.status_code == 204
+    assert cancelled_detail.json()["status"] == "cancelled"
 
 
 @pytest.mark.anyio

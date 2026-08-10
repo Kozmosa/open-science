@@ -70,9 +70,9 @@ def _seed_control_plane(state_root: Path) -> None:
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine,
-                status, title, prompt, created_at, updated_at, owner_user_id
+                title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('telemetry-task', 'telemetry-project', 'telemetry-workspace',
-                      'telemetry-environment', 'general', 'codex-app-server', 'queued', 'Telemetry',
+                      'telemetry-environment', 'general', 'codex-app-server', 'Telemetry',
                       'collect telemetry', ?, ?, 'telemetry-user')
             """,
             (_timestamp(minutes_ago=12), _timestamp(minutes_ago=12)),
@@ -797,9 +797,9 @@ def test_accepted_running_execution_is_not_counted_as_submission_backlog(tmp_pat
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type, harness_engine,
-                status, title, prompt, created_at, updated_at, owner_user_id
+                title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('normal-runtime-task', 'telemetry-project', 'telemetry-workspace',
-                      'telemetry-environment', 'general', 'codex-app-server', 'running',
+                      'telemetry-environment', 'general', 'codex-app-server',
                       'Normal runtime',
                       'do not alert', ?, ?, 'telemetry-user')
             """,

@@ -49,10 +49,10 @@ def _insert_active_turn_and_pending_submission(state_root: Path) -> tuple[str, s
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, user_skills, user_mcp_servers, status, title, prompt,
+                harness_engine, user_skills, user_mcp_servers, title, prompt,
                 created_at, updated_at, latest_output_seq, owner_user_id
             ) VALUES (?, 'project-1', 'workspace-1', 'environment-1', 'general',
-                'claude_code', '[]', '[]', 'running', 'Preflight task', 'test',
+                'claude_code', '[]', '[]', 'Preflight task', 'test',
                 '2026-07-12T00:00:00+00:00', '2026-07-12T00:00:00+00:00', 0, 'user-1')
             """,
             (task_id,),

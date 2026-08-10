@@ -191,8 +191,9 @@ _CURRENT_MIN_SOURCE_SCHEMA_VERSION: dict[str, int] = {
 }
 _CURRENT_CONTROL_SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "_schema_version": ("database", "version"),
-    "tasks": ("task_id", "status", "updated_at"),
+    "tasks": ("task_id", "updated_at"),
     "conversation_task_authorities": ("task_id", "authority"),
+    "conversation_task_states": ("task_id", "work_status", "updated_at"),
     "task_turns": ("turn_id", "task_id", "status", "updated_at"),
     "turn_submissions": (
         "submission_id",

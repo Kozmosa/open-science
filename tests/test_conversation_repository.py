@@ -26,9 +26,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
         """
         INSERT INTO tasks (
             task_id, project_id, workspace_id, environment_id, researcher_type,
-            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            harness_engine, title, prompt, created_at, updated_at, owner_user_id
         ) VALUES ('task-1', 'project-legacy', 'workspace-legacy', 'environment-legacy',
-            'general', 'codex-app-server', 'queued', 'Conversation', 'test', ?, ?, 'user-1')
+            'general', 'codex-app-server', 'Conversation', 'test', ?, ?, 'user-1')
         """,
         (_NOW, _NOW),
     )
@@ -36,9 +36,9 @@ def _database(tmp_path: Path) -> sqlite3.Connection:
         """
         INSERT INTO tasks (
             task_id, project_id, workspace_id, environment_id, researcher_type,
-            harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+            harness_engine, title, prompt, created_at, updated_at, owner_user_id
         ) VALUES ('task-2', 'project-legacy', 'workspace-legacy', 'environment-legacy',
-            'general', 'codex-app-server', 'queued', 'Other', 'test', ?, ?, 'user-1')
+            'general', 'codex-app-server', 'Other', 'test', ?, ?, 'user-1')
         """,
         (_NOW, _NOW),
     )
@@ -351,9 +351,9 @@ def test_task_without_current_authority_rejects_conversation_writes(tmp_path: Pa
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+                harness_engine, title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('task-legacy', 'project-legacy', 'workspace-legacy',
-                'environment-legacy', 'general', 'codex_app_server', 'queued',
+                'environment-legacy', 'general', 'codex_app_server',
                 'Legacy', 'test', ?, ?, 'user-1')
             """,
             (_NOW, _NOW),
@@ -414,9 +414,9 @@ def test_task_state_requires_current_authority_and_guards_transitions(tmp_path: 
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at, owner_user_id
+                harness_engine, title, prompt, created_at, updated_at, owner_user_id
             ) VALUES ('task-legacy-state', 'project-legacy', 'workspace-legacy',
-                'environment-legacy', 'general', 'codex-app-server', 'queued',
+                'environment-legacy', 'general', 'codex-app-server',
                 'Legacy state', 'test', ?, ?, 'user-1')
             """,
             (_NOW, _NOW),

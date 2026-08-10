@@ -11,6 +11,24 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping
+from typing import TypedDict
+
+from ainrf.domain.conversation_contracts import ConversationTaskStatus
+from ainrf.domain.conversation_projection import ConversationProjectionService
+
+
+class ProjectActivitySummary(TypedDict):
+    task_count: int
+    active_task_count: int
+    running_task_count: int
+    failed_task_count: int
+    latest_task_activity_at: str | None
+
+
+class WorkspaceActivitySummary(TypedDict):
+    task_count: int
+    active_task_count: int
+    latest_task_activity_at: str | None
 
 
 class _SqliteDomainRepository:
@@ -164,29 +182,40 @@ class _SqliteDomainRepository:
             (project_id,),
         ).fetchall()
 
-    def project_activity_summary(self, project_id: str) -> sqlite3.Row:
-        row = self._conn.execute(
-            """
-            SELECT COUNT(*) AS task_count,
-                   COALESCE(SUM(CASE
-                       WHEN archived_at IS NULL
-                        AND status IN ('queued', 'starting', 'running', 'paused')
-                       THEN 1 ELSE 0 END), 0) AS active_task_count,
-                   COALESCE(SUM(CASE
-                       WHEN archived_at IS NULL AND status IN ('starting', 'running')
-                       THEN 1 ELSE 0 END), 0) AS running_task_count,
-                   COALESCE(SUM(CASE
-                       WHEN archived_at IS NULL AND status = 'failed'
-                       THEN 1 ELSE 0 END), 0) AS failed_task_count,
-                   MAX(updated_at) AS latest_task_activity_at
-            FROM tasks
-            WHERE project_id = ?
-            """,
+    def project_activity_summary(self, project_id: str) -> ProjectActivitySummary:
+        rows = self._conn.execute(
+            "SELECT task_id, archived_at, updated_at FROM tasks WHERE project_id = ?",
             (project_id,),
-        ).fetchone()
-        if row is None:  # pragma: no cover - aggregate queries always return one row
-            raise RuntimeError("Project activity summary query returned no row")
-        return row
+        ).fetchall()
+        projections = ConversationProjectionService().projections_for_tasks(
+            self._conn,
+            [str(row["task_id"]) for row in rows],
+        )
+        active = {ConversationTaskStatus.QUEUED, ConversationTaskStatus.RUNNING}
+        statuses = {
+            str(row["task_id"]): (
+                projections[str(row["task_id"])].status
+                if str(row["task_id"]) in projections
+                else ConversationTaskStatus.QUEUED
+            )
+            for row in rows
+        }
+        unarchived = [row for row in rows if row["archived_at"] is None]
+        return {
+            "task_count": len(rows),
+            "active_task_count": sum(statuses[str(row["task_id"])] in active for row in unarchived),
+            "running_task_count": sum(
+                statuses[str(row["task_id"])] is ConversationTaskStatus.RUNNING
+                for row in unarchived
+            ),
+            "failed_task_count": sum(
+                statuses[str(row["task_id"])] is ConversationTaskStatus.FAILED for row in unarchived
+            ),
+            "latest_task_activity_at": max(
+                (str(row["updated_at"]) for row in rows),
+                default=None,
+            ),
+        }
 
     def project_tasks_exist(
         self,
@@ -485,32 +514,52 @@ class _SqliteDomainRepository:
         ).fetchall()
 
     def workspace_active_task_count(self, workspace_id: str) -> int:
-        row = self._conn.execute(
-            """
-            SELECT COUNT(*) FROM tasks
-            WHERE workspace_id = ? AND status IN ('queued', 'starting', 'running')
-            """,
+        rows = self._conn.execute(
+            "SELECT task_id FROM tasks WHERE workspace_id = ?",
             (workspace_id,),
-        ).fetchone()
-        return int(row[0]) if row is not None else 0
+        ).fetchall()
+        projections = ConversationProjectionService().projections_for_tasks(
+            self._conn,
+            [str(row["task_id"]) for row in rows],
+        )
+        active = {ConversationTaskStatus.QUEUED, ConversationTaskStatus.RUNNING}
+        return sum(
+            (
+                projections[str(row["task_id"])].status
+                if str(row["task_id"]) in projections
+                else ConversationTaskStatus.QUEUED
+            )
+            in active
+            for row in rows
+        )
 
-    def workspace_activity_summary(self, workspace_id: str) -> sqlite3.Row:
-        row = self._conn.execute(
-            """
-            SELECT COUNT(*) AS task_count,
-                   COALESCE(SUM(CASE
-                       WHEN archived_at IS NULL
-                        AND status IN ('queued', 'starting', 'running', 'paused')
-                       THEN 1 ELSE 0 END), 0) AS active_task_count,
-                   MAX(updated_at) AS latest_task_activity_at
-            FROM tasks
-            WHERE workspace_id = ?
-            """,
+    def workspace_activity_summary(self, workspace_id: str) -> WorkspaceActivitySummary:
+        rows = self._conn.execute(
+            "SELECT task_id, archived_at, updated_at FROM tasks WHERE workspace_id = ?",
             (workspace_id,),
-        ).fetchone()
-        if row is None:  # pragma: no cover - aggregate queries always return one row
-            raise RuntimeError("Workspace activity summary query returned no row")
-        return row
+        ).fetchall()
+        projections = ConversationProjectionService().projections_for_tasks(
+            self._conn,
+            [str(row["task_id"]) for row in rows],
+        )
+        active = {ConversationTaskStatus.QUEUED, ConversationTaskStatus.RUNNING}
+        return {
+            "task_count": len(rows),
+            "active_task_count": sum(
+                (
+                    projections[str(row["task_id"])].status
+                    if str(row["task_id"]) in projections
+                    else ConversationTaskStatus.QUEUED
+                )
+                in active
+                for row in rows
+                if row["archived_at"] is None
+            ),
+            "latest_task_activity_at": max(
+                (str(row["updated_at"]) for row in rows),
+                default=None,
+            ),
+        }
 
     def project_workspace_link(self, project_id: str, workspace_id: str) -> sqlite3.Row | None:
         return self._conn.execute(

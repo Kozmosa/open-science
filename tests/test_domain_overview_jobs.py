@@ -88,9 +88,9 @@ def _seed_domain(state_root: Path, owner_user_id: str) -> None:
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at,
+                harness_engine, title, prompt, created_at, updated_at,
                 latest_output_seq, owner_user_id
-            ) VALUES (?, ?, ?, ?, 'vanilla', 'claude-code', 'queued', ?, 'Prompt', ?, ?, 0, ?)
+            ) VALUES (?, ?, ?, ?, 'vanilla', 'claude-code', ?, 'Prompt', ?, ?, 0, ?)
             """,
             (
                 f"task-{owner_user_id}",
@@ -661,6 +661,55 @@ def test_overview_keeps_per_card_and_whole_snapshot_last_success(
     assert completed_job["status"] == "failed"
     assert completed_job["next_retry_at"] is None
     assert completed_job["retry_count"] == 4
+
+
+def test_overview_uses_conversation_status_instead_of_legacy_task_shadow(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    service = _service(state_root, committed_v2_state)
+    _seed_domain(state_root, "owner")
+    now = _instant(0).isoformat()
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(tasks)")}
+        assert "status" not in columns
+        conn.execute(
+            """
+            INSERT INTO conversation_task_authorities (task_id, authority, created_at)
+            VALUES ('task-owner', 'conversation_v3', ?)
+            """,
+            (now,),
+        )
+        conn.execute(
+            """
+            INSERT INTO conversation_task_states (task_id, created_at, updated_at)
+            VALUES ('task-owner', ?, ?)
+            """,
+            (now, now),
+        )
+        conn.commit()
+
+    job = service.request_refresh("owner", now=_instant(1))
+    result = service.run_job(str(job["job_id"]), "overview-test", now=_instant(1))
+
+    assert result.outcome == "partial"
+    snapshot = service.latest("owner")
+    assert snapshot is not None
+    domain = _card(snapshot, "domain")
+    data = cast(dict[str, object], domain["data"])
+    assert data["tasks_by_status"] == {"queued": 1}
+    assert data["recent_tasks"] == [
+        {
+            "task_id": "task-owner",
+            "project_id": "project-owner",
+            "workspace_id": "workspace-owner",
+            "title": "Task",
+            "status": "queued",
+            "updated_at": now,
+            "error_summary": None,
+        }
+    ]
+    assert data["attention_items"] == []
 
 
 def test_overview_partial_resource_card_preserves_complete_last_success(

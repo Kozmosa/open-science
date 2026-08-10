@@ -588,7 +588,6 @@ CREATE TABLE tasks (
             harness_engine TEXT NOT NULL,
             user_skills TEXT,
             user_mcp_servers TEXT,
-            status TEXT NOT NULL,
             title TEXT NOT NULL,
             prompt TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -746,12 +745,10 @@ CREATE TABLE workspaces (
         );
 CREATE INDEX idx_tasks_project ON tasks(project_id);
 CREATE INDEX idx_tasks_owner ON tasks(owner_user_id);
-CREATE INDEX idx_tasks_status ON tasks(status);
 CREATE INDEX idx_tasks_workspace ON tasks(workspace_id);
 CREATE INDEX idx_tasks_environment ON tasks(environment_id);
 CREATE INDEX idx_tasks_created ON tasks(created_at);
 CREATE INDEX idx_tasks_updated ON tasks(updated_at);
-CREATE INDEX idx_tasks_project_status ON tasks(project_id, status);
 CREATE INDEX idx_session_transcripts_lookup
         ON session_transcripts(project_key, session_id, subpath)
         ;
@@ -802,7 +799,7 @@ CREATE TRIGGER context_fragment_delete_forbidden
         BEFORE DELETE ON project_context_fragments
         BEGIN SELECT RAISE(ABORT, 'context fragments are append-only'); END;
 CREATE INDEX idx_tasks_project_lifecycle
-        ON tasks(project_id, archived_at, status, updated_at, task_id);
+        ON tasks(project_id, archived_at, updated_at, task_id);
 CREATE UNIQUE INDEX idx_overview_refresh_jobs_schedule_slot
         ON overview_refresh_jobs(owner_user_id, scheduled_for_date)
         WHERE scheduled_for_date IS NOT NULL;

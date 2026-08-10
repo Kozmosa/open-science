@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
 from ainrf.terminal.models import TerminalAttachmentMode
 
@@ -27,18 +28,6 @@ class CodeServerLifecycleStatus(StrEnum):
     STARTING = "starting"
     READY = "ready"
     UNAVAILABLE = "unavailable"
-
-
-class TaskStatus(StrEnum):
-    QUEUED = "queued"
-    STARTING = "starting"
-    RUNNING = "running"
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    LAUNCH_UNKNOWN = "launch_unknown"
-    STOPPED_PERMISSION_REVOKED = "stopped_permission_revoked"
 
 
 class TaskTerminalBindingStatus(StrEnum):
@@ -560,8 +549,8 @@ class TaskSummaryResponse(BaseModel):
     environment_id: str
     researcher_type: str
     harness_engine: str
-    status: str
-    work_status: Literal["open", "completed", "cancelled"]
+    status: ConversationTaskStatus
+    work_status: TaskWorkStatus
     title: str
     prompt: str
     created_at: str

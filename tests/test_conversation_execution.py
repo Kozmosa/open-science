@@ -67,11 +67,11 @@ def state_root(tmp_path: Path) -> Path:
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at,
+                harness_engine, title, prompt, created_at, updated_at,
                 owner_user_id
             ) VALUES (
                 'task-1', 'project-1', 'workspace-1', 'environment-1', 'general',
-                'codex-app-server', 'queued', 'Conversation', 'hello',
+                'codex-app-server', 'Conversation', 'hello',
                 '2026-08-01T00:00:00+00:00', '2026-08-01T00:00:00+00:00', 'user-1'
             )
             """

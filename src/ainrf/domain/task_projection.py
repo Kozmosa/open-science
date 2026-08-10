@@ -12,6 +12,7 @@ from ainrf.domain.conversation_projection import (
     ConversationProjectionService,
     ConversationTaskProjection,
 )
+from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
 from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
 
@@ -52,18 +53,23 @@ class TaskProjectionService:
             params.extend(visibility_params)
         if not include_archived:
             clauses.append("archived_at IS NULL")
+        status_sort = sort == "status"
         order_by = {
             "updated": "updated_at DESC, task_id ASC",
             "created": "created_at DESC, task_id ASC",
-            "status": "status ASC, updated_at DESC, task_id ASC",
+            "status": "updated_at DESC, task_id ASC",
         }.get(sort, "updated_at DESC, task_id ASC")
-        query = f"SELECT * FROM tasks WHERE {' AND '.join(clauses)} ORDER BY {order_by} LIMIT ?"
+        limit_clause = "" if status_sort else " LIMIT ?"
+        query = (
+            f"SELECT * FROM tasks WHERE {' AND '.join(clauses)} ORDER BY {order_by}{limit_clause}"
+        )
         with closing(self._connect()) as conn:
             if project_id:
                 DomainAuthorizationService(conn).require_project_viewer(project_id, dict(user))
-            rows = conn.execute(query, (*params, limit)).fetchall()
+            query_params = tuple(params) if status_sort else (*params, limit)
+            rows = conn.execute(query, query_params).fetchall()
             projections = self._projection_inputs(conn, rows)
-        return [
+        summaries = [
             self._task_dict(
                 row,
                 conversation=projections.get(str(row["task_id"])),
@@ -71,6 +77,7 @@ class TaskProjectionService:
             )
             for row in rows
         ]
+        return self._sort_status_summaries(summaries)[:limit] if status_sort else summaries
 
     def list_project_tasks(
         self,
@@ -83,10 +90,11 @@ class TaskProjectionService:
     ) -> dict[str, object]:
         if limit <= 0:
             raise ValueError("limit must be positive")
+        status_sort = sort == "status"
         order_by = {
             "updated": "updated_at DESC, task_id ASC",
             "created": "created_at DESC, task_id ASC",
-            "status": "status ASC, updated_at DESC, task_id ASC",
+            "status": "updated_at DESC, task_id ASC",
         }.get(sort, "updated_at DESC, task_id ASC")
         clauses = ["project_id = ?"]
         params: list[object] = [project_id]
@@ -98,20 +106,25 @@ class TaskProjectionService:
             total_row = conn.execute(
                 f"SELECT COUNT(*) AS count FROM tasks WHERE {where}", params
             ).fetchone()
+            limit_clause = "" if status_sort else " LIMIT ?"
+            query_params = tuple(params) if status_sort else (*params, limit)
             rows = conn.execute(
-                f"SELECT * FROM tasks WHERE {where} ORDER BY {order_by} LIMIT ?",
-                (*params, limit),
+                f"SELECT * FROM tasks WHERE {where} ORDER BY {order_by}{limit_clause}",
+                query_params,
             ).fetchall()
             projections = self._projection_inputs(conn, rows)
+        summaries = [
+            self._task_dict(
+                row,
+                conversation=projections.get(str(row["task_id"])),
+                include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
+            )
+            for row in rows
+        ]
+        if status_sort:
+            summaries = self._sort_status_summaries(summaries)[:limit]
         return {
-            "items": [
-                self._task_dict(
-                    row,
-                    conversation=projections.get(str(row["task_id"])),
-                    include_private_task_diagnostics=self._can_view_unredacted_output(row, user),
-                )
-                for row in rows
-            ],
+            "items": summaries,
             "total": 0 if total_row is None else int(total_row["count"]),
         }
 
@@ -140,7 +153,7 @@ class TaskProjectionService:
         if projection is None:
             return {
                 "task_id": task_id,
-                "status": str(task["status"]),
+                "status": ConversationTaskStatus.QUEUED,
                 "engine_alive": False,
                 "last_event_at": str(task["updated_at"]),
             }
@@ -242,8 +255,12 @@ class TaskProjectionService:
             "environment_id": str(row["environment_id"]),
             "researcher_type": str(row["researcher_type"]),
             "harness_engine": str(row["harness_engine"]),
-            "status": conversation.status if conversation is not None else str(row["status"]),
-            "work_status": conversation.work_status if conversation is not None else "open",
+            "status": (
+                conversation.status if conversation is not None else ConversationTaskStatus.QUEUED
+            ),
+            "work_status": (
+                conversation.work_status if conversation is not None else TaskWorkStatus.OPEN
+            ),
             "title": str(row["title"]),
             "prompt": str(row["prompt"]),
             "created_at": str(row["created_at"]),
@@ -283,6 +300,17 @@ class TaskProjectionService:
                 else None
             ),
         }
+
+    @staticmethod
+    def _sort_status_summaries(
+        summaries: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        """Match status/updated/task ordering without consulting ``tasks.status``."""
+
+        ordered = sorted(summaries, key=lambda item: str(item["task_id"]))
+        ordered.sort(key=lambda item: str(item["updated_at"]), reverse=True)
+        ordered.sort(key=lambda item: str(item["status"]))
+        return ordered
 
     def _projection_inputs(
         self, conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]

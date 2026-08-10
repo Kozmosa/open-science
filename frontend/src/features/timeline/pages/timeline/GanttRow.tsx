@@ -8,12 +8,11 @@ interface Props {
 
 const STATUS_BAR_CLASSES: Record<string, string> = {
   queued: 'bg-[var(--text-tertiary)]',
-  starting: 'bg-[var(--warning)]',
   running: 'bg-[var(--info)]',
-  paused: 'bg-[var(--warning)]',
   succeeded: 'bg-[var(--success)]',
   failed: 'bg-[var(--danger)]',
   cancelled: 'bg-[var(--text-tertiary)]',
+  completed: 'bg-[var(--text-tertiary)]',
 };
 
 function taskStart(task: TaskSummary): number {

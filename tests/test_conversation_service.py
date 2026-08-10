@@ -117,10 +117,10 @@ def _insert_task(state_root: Path, task_id: str = "task-1") -> None:
             """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
-                harness_engine, status, title, prompt, created_at, updated_at,
+                harness_engine, title, prompt, created_at, updated_at,
                 owner_user_id
             ) VALUES (?, 'project-legacy', 'workspace-legacy', 'environment-legacy',
-                'general', 'codex-app-server', 'queued', 'Conversation', 'test',
+                'general', 'codex-app-server', 'Conversation', 'test',
                 ?, ?, 'user-1')
             """,
             (task_id, _NOW, _NOW),
@@ -1493,6 +1493,9 @@ def test_work_status_rejects_noop_and_turn_completion_does_not_change_it(
         ).fetchone()
         assert state is not None
         assert (state["work_status"], state["revision"]) == ("open", 1)
+    task = TaskProjectionService(state_root).task("task-1", _USER)
+    assert task["status"] == "succeeded"
+    assert task["work_status"] == "open"
 
 
 def test_explicit_complete_reopen_preserves_pending_submission_and_idempotency(
@@ -2074,7 +2077,7 @@ def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(
     assert confirmed["status"] == "transferred"
     with closing(connect(_db_path(state_root))) as conn:
         target = conn.execute(
-            "SELECT harness_engine, status FROM tasks WHERE task_id = ?",
+            "SELECT harness_engine FROM tasks WHERE task_id = ?",
             (confirmed["target_task_id"],),
         ).fetchone()
         submission = conn.execute(
@@ -2082,7 +2085,6 @@ def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(
             (confirmed["submission_id"],),
         ).fetchone()
     assert target["harness_engine"] == "agent-sdk"
-    assert target["status"] == "queued"
     assert submission["task_id"] == confirmed["target_task_id"]
     assert submission["status"] == "queued"
 

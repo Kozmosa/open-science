@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
 
+from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
+
 TOKEN_TOTAL_FIELDS: tuple[str, ...] = (
     "input_tokens",
     "output_tokens",
@@ -53,8 +55,8 @@ def _duration_ms(started_at: object, finished_at: object) -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class ConversationTaskProjection:
-    work_status: str
-    status: str
+    work_status: TaskWorkStatus
+    status: ConversationTaskStatus
     started_at: str | None
     completed_at: str | None
     latest_item_seq: int
@@ -78,7 +80,7 @@ class ConversationProjectionService:
             return {}
         placeholders = ", ".join("?" for _ in unique)
         states = {
-            str(row["task_id"]): str(row["work_status"])
+            str(row["task_id"]): TaskWorkStatus(str(row["work_status"]))
             for row in conn.execute(
                 f"SELECT task_id, work_status FROM conversation_task_states "
                 f"WHERE task_id IN ({placeholders})",
@@ -131,7 +133,7 @@ class ConversationProjectionService:
                 str(row["status"]) in self._PENDING_SUBMISSION
                 for row in submissions_by_task[task_id]
             )
-            work_status = states.get(task_id, "open")
+            work_status = states[task_id]
             latest_turn = turns[-1] if turns else None
             status = self._task_status(
                 work_status=work_status,
@@ -178,26 +180,30 @@ class ConversationProjectionService:
     @staticmethod
     def _task_status(
         *,
-        work_status: str,
+        work_status: TaskWorkStatus,
         latest_turn: sqlite3.Row | None,
         execution_alive: bool,
         submission_pending: bool,
-    ) -> str:
+    ) -> ConversationTaskStatus:
         if execution_alive:
-            return "running"
+            return ConversationTaskStatus.RUNNING
         if submission_pending:
-            return "queued"
-        if work_status == "cancelled":
-            return "cancelled"
+            return ConversationTaskStatus.QUEUED
+        if work_status is TaskWorkStatus.CANCELLED:
+            return ConversationTaskStatus.CANCELLED
         if latest_turn is not None:
             turn_status = str(latest_turn["status"])
             if turn_status == "failed":
-                return "failed"
+                return ConversationTaskStatus.FAILED
             if turn_status == "interrupted":
-                return "cancelled"
-            if turn_status == "completed" and work_status == "completed":
-                return "succeeded"
-        return "completed" if work_status == "completed" else "queued"
+                return ConversationTaskStatus.CANCELLED
+            if turn_status == "completed":
+                return ConversationTaskStatus.SUCCEEDED
+        return (
+            ConversationTaskStatus.COMPLETED
+            if work_status is TaskWorkStatus.COMPLETED
+            else ConversationTaskStatus.QUEUED
+        )
 
     @staticmethod
     def _turn_projection(
@@ -400,7 +406,11 @@ class ConversationProjectionService:
                     {
                         "task_id": task_id,
                         "title": str(row["title"]),
-                        "status": str(row["status"]),
+                        "status": str(
+                            projection.status
+                            if projection is not None
+                            else ConversationTaskStatus.QUEUED
+                        ),
                         "harness_engine": engine,
                         "total_tokens": task_tokens,
                         "cost_usd": task_cost,

@@ -206,7 +206,7 @@ describe('App routes', () => {
     mockGetTasks.mockResolvedValue({
       items: [
         { ...taskBase, task_id: 'task-running', status: 'running' },
-        { ...taskBase, task_id: 'task-starting', status: 'starting' },
+        { ...taskBase, task_id: 'task-completed', status: 'completed' },
         { ...taskBase, task_id: 'task-queued', status: 'queued' },
         { ...taskBase, task_id: 'task-succeeded', status: 'succeeded' },
         { ...taskBase, task_id: 'task-failed', status: 'failed' },

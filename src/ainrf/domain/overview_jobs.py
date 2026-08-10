@@ -23,6 +23,8 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from ainrf.db import connect, run_pending
+from ainrf.domain.conversation_contracts import ConversationTaskStatus
+from ainrf.domain.conversation_projection import ConversationProjectionService
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_telemetry import record_overview_event, record_permission_denied
 from ainrf.domain_control import (
@@ -799,16 +801,39 @@ class OverviewSnapshotService:
                     (owner_user_id,),
                 ).fetchone()[0]
             )
-            task_statuses = {
-                str(row["status"]): int(row["count"])
-                for row in conn.execute(
-                    """
-                    SELECT status, COUNT(*) AS count FROM tasks
-                    WHERE owner_user_id = ? GROUP BY status
-                    """,
-                    (owner_user_id,),
+            task_rows = conn.execute(
+                """
+                SELECT task_id, project_id, workspace_id, title, updated_at
+                FROM tasks WHERE owner_user_id = ?
+                """,
+                (owner_user_id,),
+            ).fetchall()
+            task_projections = ConversationProjectionService().projections_for_tasks(
+                conn,
+                [str(row["task_id"]) for row in task_rows],
+            )
+            projected_tasks: list[dict[str, object]] = []
+            task_statuses: dict[str, int] = {}
+            for row in task_rows:
+                task_id = str(row["task_id"])
+                projection = task_projections.get(task_id)
+                status = (
+                    projection.status if projection is not None else ConversationTaskStatus.QUEUED
                 )
-            }
+                task_statuses[status] = task_statuses.get(status, 0) + 1
+                projected_tasks.append(
+                    {
+                        "task_id": task_id,
+                        "project_id": str(row["project_id"]),
+                        "workspace_id": str(row["workspace_id"]),
+                        "title": str(row["title"]),
+                        "status": status,
+                        "updated_at": str(row["updated_at"]),
+                        "error_summary": (
+                            projection.error_summary if projection is not None else None
+                        ),
+                    }
+                )
             active_turns = int(
                 conn.execute(
                     """
@@ -819,40 +844,21 @@ class OverviewSnapshotService:
                     (owner_user_id,),
                 ).fetchone()[0]
             )
-            recent_tasks = [
-                {
-                    "task_id": str(row["task_id"]),
-                    "project_id": str(row["project_id"]),
-                    "workspace_id": str(row["workspace_id"]),
-                    "title": str(row["title"]),
-                    "status": str(row["status"]),
-                    "updated_at": str(row["updated_at"]),
-                    "error_summary": self._optional_str(row["error_summary"]),
-                }
-                for row in conn.execute(
-                    """
-                    SELECT task_id, project_id, workspace_id, title, status, updated_at,
-                           error_summary
-                    FROM tasks WHERE owner_user_id = ?
-                    ORDER BY CASE WHEN status IN ('queued', 'starting', 'running', 'paused')
-                                      THEN 0 ELSE 1 END,
-                             updated_at DESC, task_id DESC
-                    LIMIT 5
-                    """,
-                    (owner_user_id,),
+            recent_tasks = sorted(
+                projected_tasks,
+                key=lambda item: str(item["task_id"]),
+                reverse=True,
+            )
+            recent_tasks.sort(key=lambda item: str(item["updated_at"]), reverse=True)
+            recent_tasks.sort(
+                key=lambda item: (
+                    item["status"]
+                    not in {ConversationTaskStatus.QUEUED, ConversationTaskStatus.RUNNING}
                 )
-            ]
+            )
+            recent_tasks = recent_tasks[:5]
             task_attention = [
-                item
-                for item in recent_tasks
-                if item["status"]
-                in {
-                    "failed",
-                    "launch_unknown",
-                    "stopped_by_project_archive",
-                    "stopped_permission_revoked",
-                    "stopped_runtime_unknown",
-                }
+                item for item in recent_tasks if item["status"] is ConversationTaskStatus.FAILED
             ]
             project_attention = [
                 {

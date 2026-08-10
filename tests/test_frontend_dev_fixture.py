@@ -18,6 +18,7 @@ from ainrf.auth.service import AuthService
 from ainrf.api.cli import app
 from ainrf.db import connect
 from ainrf.domain import build_domain_modules
+from ainrf.domain.conversation_projection import ConversationProjectionService
 
 
 pytestmark = [pytest.mark.cli]
@@ -267,8 +268,13 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
         assert archived["status"] == "archived"
 
     with closing(connect(failures_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        task_ids = [str(row["task_id"]) for row in conn.execute("SELECT task_id FROM tasks")]
+        projections = ConversationProjectionService().projections_for_tasks(conn, task_ids)
         task_statuses = {
-            str(row["status"]) for row in conn.execute("SELECT status FROM tasks").fetchall()
+            str(projections[task_id].status) for task_id in task_ids if task_id in projections
+        }
+        assert "status" not in {
+            str(row["name"]) for row in conn.execute("PRAGMA table_info(tasks)")
         }
         turn_statuses = {
             str(row["status"]) for row in conn.execute("SELECT status FROM task_turns").fetchall()
@@ -280,10 +286,7 @@ def test_permissions_and_failures_profiles_expose_expected_projection_states(
             "succeeded",
             "failed",
             "cancelled",
-            "stopped",
-            "launch_unknown",
-            "stopped_by_project_archive",
-            "stopped_permission_revoked",
+            "queued",
         }
         assert turn_statuses == {"completed", "failed", "interrupted"}
         assert snapshot["source_status"] == "partial"

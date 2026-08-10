@@ -27,14 +27,8 @@ interface TaskActionsMenuProps {
   onFork: () => void;
 }
 
-const activeStatuses = new Set(['queued', 'starting', 'running', 'paused', 'launch_unknown']);
-const retryStatuses = new Set([
-  'failed',
-  'cancelled',
-  'stopped_by_project_archive',
-  'stopped_permission_revoked',
-  'stopped_runtime_unknown',
-]);
+const activeStatuses = new Set(['queued', 'running']);
+const retryStatuses = new Set(['failed', 'cancelled']);
 
 export default function TaskActionsMenu({
   task,
