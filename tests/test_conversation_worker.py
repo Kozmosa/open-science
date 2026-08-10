@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import closing
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,8 @@ from ainrf.db import connect, run_pending
 from ainrf.domain import OverviewSnapshotService
 from ainrf.domain.conversation_contracts import (
     CapabilitySupport,
+    ConversationContractError,
+    ConversationErrorCode,
     TaskWorkStatus,
     TurnStatus,
 )
@@ -23,9 +26,11 @@ from ainrf.domain.conversation_execution_repository import SqliteConversationExe
 from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.conversation_worker import ConversationDispatcher, ConversationWorkerRuntime
 from ainrf.domain_control import DomainMaintenanceService
+from ainrf.domain.service import DomainConflictError
 from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngineType
 from ainrf.harness_engine.conversation_adapter import ControlReceipt, ConversationRuntimeAdapter
-from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine
+from ainrf.harness_engine.engines.codex_app_server import CodexAppServerEngine, CodexSession
+from ainrf.harness_engine.session_state import SessionCheckpoint
 
 pytestmark = [pytest.mark.engine]
 
@@ -266,6 +271,209 @@ def test_worker_renders_the_persisted_submission_context_snapshot(state_root: Pa
     assert claim.submission_id == admission["submission_id"]
     context = dispatcher._execution_context(claim)
     assert context.rendered_prompt == "Worker Context\n\nUser Turn:\ncontext turn"
+
+
+def test_worker_scopes_checkpoint_to_submission_runtime_identity(state_root: Path) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+
+    context = dispatcher._execution_context(claim)
+
+    assert context.runtime_launch_key == claim.submission_id
+    assert context.runtime_execution_id is not None
+    assert context.session_state_path == str(
+        state_root / "session-states" / context.runtime_execution_id / "checkpoint.json"
+    )
+    checkpoint = SessionCheckpoint(
+        task_id=claim.task_id,
+        runtime_launch_key=claim.submission_id,
+        runtime_execution_id=context.runtime_execution_id,
+        session_id="session-for-submission",
+    )
+    assert context.session_state_path is not None
+    checkpoint_path = Path(context.session_state_path)
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_path.write_text(json.dumps(asdict(checkpoint)), encoding="utf-8")
+
+    CodexAppServerEngine()._restore_checkpoint(
+        context,
+        CodexSession(task_id=claim.task_id),
+    )
+
+
+def test_delivery_unknown_without_runtime_rejects_launch_but_acceptance_recovers(
+    state_root: Path,
+) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+    dispatcher._execution.begin_delivery(claim.submission_id)
+    dispatcher._execution.mark_delivery_unknown(
+        claim.submission_id,
+        failure_code="acceptance_unknown",
+        evidence={"source": "identity-recovery-test"},
+    )
+
+    with pytest.raises(ConversationContractError) as launch_rejected:
+        dispatcher._execution_context(claim)
+    assert launch_rejected.value.code is ConversationErrorCode.INVALID_STATE_TRANSITION
+    assert not (state_root / "session-states").exists()
+
+    execution = dispatcher._execution.accept_and_open_execution(
+        claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-delivery-unknown",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-delivery-unknown",
+        evidence={"source": "identity-recovery-test"},
+    )
+    replay = dispatcher._execution.accept_and_open_execution(
+        claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-delivery-unknown",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-delivery-unknown",
+        evidence={"source": "identity-recovery-replay"},
+    )
+
+    assert replay == execution
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("submission_id", "wrong-submission"),
+        ("task_id", "wrong-task"),
+        ("reserved_turn_id", "wrong-turn"),
+    ],
+)
+def test_worker_rejects_claim_identity_mismatch_before_context_path(
+    state_root: Path,
+    field: str,
+    value: str,
+) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+
+    with pytest.raises(DomainConflictError, match="authoritative|claimed"):
+        dispatcher._execution_context(replace(claim, **{field: value}))
+
+    assert not (state_root / "session-states").exists()
+
+
+def test_worker_rejects_unrelated_runtime_row_before_context_path(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+    deterministic = dispatcher._execution.runtime_identity_for_launch_context(claim)
+    unrelated = {
+        "runtime_execution_id": deterministic.runtime_execution_id,
+        "task_id": "unrelated-task",
+        "turn_id": "unrelated-turn",
+        "status": "running",
+    }
+    monkeypatch.setattr(
+        SqliteConversationExecutionRepository,
+        "runtime_execution_by_id",
+        lambda _repository, _runtime_execution_id: unrelated,
+    )
+
+    with pytest.raises(DomainConflictError, match="does not belong"):
+        dispatcher._execution_context(claim)
+
+    assert not (state_root / "session-states").exists()
+
+
+def test_worker_rejects_terminal_runtime_before_context_path(
+    state_root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+    terminal = {
+        "runtime_execution_id": "terminal-execution",
+        "task_id": claim.task_id,
+        "turn_id": claim.reserved_turn_id,
+        "status": "completed",
+    }
+    monkeypatch.setattr(
+        SqliteConversationExecutionRepository,
+        "runtime_executions_for_turn",
+        lambda _repository, _turn_id: [terminal],
+    )
+
+    with pytest.raises(ConversationContractError) as rejected:
+        dispatcher._execution_context(claim)
+
+    assert rejected.value.code is ConversationErrorCode.INVALID_STATE_TRANSITION
+    assert not (state_root / "session-states").exists()
+
+
+def test_runtime_checkpoint_identity_is_stable_for_submission_and_isolated_for_retry(
+    state_root: Path,
+) -> None:
+    dispatcher = ConversationDispatcher(state_root)
+    first_claim = dispatcher._execution.claim_next_submission()
+    assert first_claim is not None
+    first = dispatcher._execution.runtime_identity_for_launch_context(first_claim)
+    repeated = dispatcher._execution.runtime_identity_for_launch_context(first_claim)
+
+    assert repeated == first
+
+    application = ConversationApplicationService(state_root)
+    dispatcher._execution.begin_delivery(first_claim.submission_id)
+    execution = dispatcher._execution.accept_and_open_execution(
+        first_claim,
+        engine_family="codex",
+        engine_driver="codex-app-server",
+        native_turn_kind="turn",
+        native_turn_ref="native-first",
+        native_runtime_kind="process",
+        native_runtime_ref="runtime-first",
+        evidence={"source": "identity-test"},
+    )
+    restarted = ConversationDispatcher(state_root)
+    assert restarted._execution.runtime_identity_for_launch_context(
+        first_claim
+    ).runtime_execution_id == (execution.runtime_execution_id)
+    restarted_context = restarted._execution_context(first_claim)
+    assert restarted_context.runtime_execution_id == execution.runtime_execution_id
+    assert restarted_context.session_state_path == str(
+        state_root / "session-states" / execution.runtime_execution_id / "checkpoint.json"
+    )
+    dispatcher._execution.finish_execution(
+        execution,
+        status=TurnStatus.COMPLETED,
+        evidence={"source": "identity-test-finished"},
+    )
+    with pytest.raises(ConversationContractError) as terminal:
+        dispatcher._execution.runtime_identity_for_launch_context(first_claim)
+    assert terminal.value.code is ConversationErrorCode.INVALID_STATE_TRANSITION
+    retry = application.retry_turn(
+        "task-1",
+        first_claim.reserved_turn_id,
+        _USER,
+        input={"text": "retry"},
+        idempotency_key="identity-retry",
+    )
+    second_claim = dispatcher._execution.claim_next_submission()
+    assert second_claim is not None
+    second = dispatcher._execution.runtime_identity_for_launch_context(second_claim)
+
+    assert second.submission_id == retry["submission_id"]
+    assert second.runtime_execution_id != first.runtime_execution_id
 
 
 @pytest.mark.anyio

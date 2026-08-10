@@ -77,23 +77,30 @@ class ExecutionContext:
     # supposed to be alive.  When exceeded and the engine is not alive, the
     # service watchdog marks the task FAILED.
     engine_inactivity_timeout_seconds: int | None = None
-    # Set by the durable dispatcher before external startup.  Existing callers
+    # Set by the durable dispatcher before external startup. Existing callers
     # can omit it; engines must not infer a launch key from task_id because a
-    # Task may have multiple Attempts.
+    # Task may have multiple Turn submissions.
     runtime_launch_key: str | None = None
-    # Durable attempt identity paired with ``runtime_launch_key``.  It keeps
-    # checkpoints and engine-local state from colliding across Task retries.
-    attempt_id: str | None = None
+    # Durable RuntimeExecution identity paired with ``runtime_launch_key``.
+    # It keeps checkpoints and engine-local state from colliding across
+    # independent RuntimeExecutions while remaining stable for one submission.
+    runtime_execution_id: str | None = None
 
     @property
     def runtime_identity(self) -> str:
-        """Return the attempt-scoped key for engine-local state.
+        """Return the launch-scoped key for engine-local engine state.
 
-        Legacy callers omit ``runtime_launch_key`` and preserve the historical
-        task-scoped identity.  Durable v2 dispatch always provides it.
+        The worker uses the TurnSubmission identity as the launch key. Legacy
+        callers omit it and preserve the historical task-scoped identity.
         """
 
         return self.runtime_launch_key or self.task_id
+
+    @property
+    def checkpoint_runtime_identity(self) -> str | None:
+        """Return the durable identity used to validate a checkpoint."""
+
+        return self.runtime_execution_id or self.runtime_launch_key
 
     @property
     def prompt(self) -> str:
@@ -186,8 +193,8 @@ class HarnessEngine(ABC):
         """Bind durable local state before probing a recovered launch.
 
         The dispatcher constructs a fresh engine instance after a process
-        crash.  It therefore supplies the Attempt-scoped checkpoint location
-        before :meth:`probe_runtime`; adapters that persist engine-local launch
+        crash.  It therefore supplies the RuntimeExecution-scoped checkpoint
+        location before :meth:`probe_runtime`; adapters that persist engine-local launch
         evidence override this hook.  The base implementation keeps legacy and
         third-party engines source-compatible.
         """

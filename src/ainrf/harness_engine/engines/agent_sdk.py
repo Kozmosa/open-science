@@ -113,7 +113,7 @@ def _build_token_usage(sdk_msg: object) -> dict[str, Any] | None:
 class AgentSession:
     task_id: str
     # ``task_id`` remains the logical Task correlation id used in events.
-    # The engine map itself is keyed by this per-Attempt identity.
+    # The engine map itself is keyed by this per-RuntimeExecution identity.
     runtime_identity: str | None = None
     abort_event: asyncio.Event = field(default_factory=asyncio.Event)
     should_pause_after_turn: bool = False
@@ -209,10 +209,10 @@ class AgentSdkEngine(HarnessEngine):
             checkpoint_path = Path(context.session_state_path)
             if checkpoint_path.exists():
                 data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-                checkpoint = SessionCheckpoint(**data)
+                checkpoint = SessionCheckpoint.from_payload(data)
                 checkpoint.assert_matches_runtime(
                     task_id=context.task_id,
-                    attempt_id=context.attempt_id,
+                    runtime_execution_id=context.checkpoint_runtime_identity,
                     runtime_launch_key=context.runtime_launch_key,
                 )
                 session.session_id = checkpoint.session_id
@@ -873,7 +873,7 @@ class AgentSdkEngine(HarnessEngine):
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = SessionCheckpoint(
             task_id=session.task_id,
-            attempt_id=context.attempt_id,
+            runtime_execution_id=context.checkpoint_runtime_identity,
             runtime_launch_key=context.runtime_launch_key,
             session_id=session.session_id,
             cwd=context.working_directory,

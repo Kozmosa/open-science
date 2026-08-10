@@ -98,9 +98,9 @@ async def test_real_engines_prove_armed_launches_absent_after_dispatcher_crash(
         task_id="task-arm",
         working_directory="/tmp",
         rendered_prompt="recover safely",
-        attempt_id="attempt-arm",
+        runtime_execution_id="execution-arm",
         runtime_launch_key="launch-attempt-arm",
-        session_state_path=str(tmp_path / "session-states" / "attempt-arm" / "checkpoint.json"),
+        session_state_path=str(tmp_path / "session-states" / "execution-arm" / "checkpoint.json"),
     )
     predecessor = engine_factory()
     predecessor.bind_runtime_context(context)
@@ -137,9 +137,9 @@ async def test_real_engines_never_fake_adoption_of_observed_process(
         task_id="task-live",
         working_directory="/tmp",
         rendered_prompt="recover safely",
-        attempt_id="attempt-live",
+        runtime_execution_id="execution-live",
         runtime_launch_key="launch-attempt-live",
-        session_state_path=str(tmp_path / "session-states" / "attempt-live" / "checkpoint.json"),
+        session_state_path=str(tmp_path / "session-states" / "execution-live" / "checkpoint.json"),
     )
     engine_type = engine_factory().engine_type.value
     registry = RuntimeLaunchRegistry(Path(context.session_state_path or ""))
@@ -187,9 +187,11 @@ async def test_corrupt_durable_engine_record_is_never_misclassified_as_absent(
         task_id="task-corrupt",
         working_directory="/tmp",
         rendered_prompt="recover safely",
-        attempt_id="attempt-corrupt",
+        runtime_execution_id="execution-corrupt",
         runtime_launch_key="launch-attempt-corrupt",
-        session_state_path=str(tmp_path / "session-states" / "attempt-corrupt" / "checkpoint.json"),
+        session_state_path=str(
+            tmp_path / "session-states" / "execution-corrupt" / "checkpoint.json"
+        ),
     )
     registry = RuntimeLaunchRegistry(Path(context.session_state_path or ""))
     registry.arm(
@@ -227,10 +229,10 @@ async def test_agent_sdk_marker_evidence_is_positive_only_after_restart(
         task_id="task-sdk-marker",
         working_directory="/tmp",
         rendered_prompt="recover safely",
-        attempt_id="attempt-sdk-marker",
+        runtime_execution_id="execution-sdk-marker",
         runtime_launch_key="launch-attempt-sdk-marker",
         session_state_path=str(
-            tmp_path / "session-states" / "attempt-sdk-marker" / "checkpoint.json"
+            tmp_path / "session-states" / "execution-sdk-marker" / "checkpoint.json"
         ),
     )
     predecessor = AgentSdkEngine()

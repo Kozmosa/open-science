@@ -125,7 +125,7 @@ class ClaudeCodeEngine(HarnessEngine):
         started_at: float,
         mcp_path: str | None,
     ) -> None:
-        # A durable Task can have more than one Attempt.  The launch key is
+        # A durable Task can have more than one RuntimeExecution.  The launch key is
         # therefore the only safe identity for engine-local maps and Claude's
         # transcript id.  Legacy callers omit it and retain task-scoped maps.
         runtime_identity = context.runtime_identity

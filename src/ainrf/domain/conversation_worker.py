@@ -39,6 +39,7 @@ from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngi
 from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
 from ainrf.harness_engine.factory import create_engine
 from ainrf.harness_engine.mcp_servers import resolve_mcp_servers_for_task
+from ainrf.harness_engine.session_state import SessionStateStore
 from ainrf.literature.planner import run_planner_cycle
 from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.runtime import tenant_identity
@@ -73,6 +74,7 @@ class ConversationDispatcher:
         self._db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
         self._auth_db_path = state_root / "runtime" / "auth.sqlite3"
         self._execution = ConversationExecutionService(state_root, artifact_sha=artifact_sha)
+        self._checkpoint_store = SessionStateStore(state_root)
         self._adapter_factory = adapter_factory or self._default_adapter
         self._context_factory = context_factory or self._execution_context
 
@@ -80,6 +82,7 @@ class ConversationDispatcher:
         return ConversationRuntimeAdapter(create_engine(engine_type, state_root=self._state_root))
 
     def _execution_context(self, claim: SubmissionClaim) -> ExecutionContext:
+        runtime_identity = self._execution.runtime_identity_for_launch_context(claim)
         with closing(connect(self._db_path)) as conn:
             row = conn.execute(
                 """
@@ -146,9 +149,12 @@ class ConversationDispatcher:
                 or None
             ),
             runtime_launch_key=claim.submission_id,
-            attempt_id=None,
+            runtime_execution_id=runtime_identity.runtime_execution_id,
             session_state_path=str(
-                self._state_root / "session-states" / claim.task_id / "checkpoint.json"
+                self._checkpoint_store.checkpoint_path(
+                    claim.task_id,
+                    runtime_execution_id=runtime_identity.runtime_execution_id,
+                )
             ),
             api_base_url=self._optional_string(row, "api_base_url"),
             api_key=self._optional_string(row, "api_key"),

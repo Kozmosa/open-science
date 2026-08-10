@@ -32,7 +32,7 @@ class RuntimeLaunchRecord:
     therefore deliberately uncertain until a PID/start-time pair or marker
     proves it is still alive.
 
-    It is intentionally local to an Attempt's checkpoint directory.  It does
+    It is intentionally local to one RuntimeExecution's checkpoint directory. It does
     not make a stdio process reconnectable; it only gives recovery code enough
     durable evidence to avoid treating uncertainty as absence.
     """
@@ -116,7 +116,7 @@ class RuntimeLaunchInspection:
 
 
 class RuntimeLaunchRegistry:
-    """Atomic per-Attempt launch evidence for a harness engine.
+    """Atomic per-RuntimeExecution launch evidence for a harness engine.
 
     A registry is rooted beside the existing checkpoint file.  The dispatcher
     binds the same :class:`~ainrf.harness_engine.base.ExecutionContext` before
@@ -137,7 +137,7 @@ class RuntimeLaunchRegistry:
 
         This must be called before the dispatcher commits its launch fence.
         Repeating it for the same identity is safe; changing the identity is
-        rejected instead of overwriting evidence for another Attempt.
+        rejected instead of overwriting evidence for another RuntimeExecution.
         """
 
         existing = self.load()
@@ -356,13 +356,23 @@ class RuntimeLaunchTracker:
     def __init__(self, engine_type: str) -> None:
         self._engine_type = engine_type
         self._registries: dict[str, RuntimeLaunchRegistry] = {}
+        self._launch_bindings: dict[str, str | None] = {}
 
     def bind(self, context: ExecutionContext) -> None:
-        if not (context.runtime_launch_key and context.session_state_path):
+        identity = context.checkpoint_runtime_identity
+        if not (identity and context.session_state_path):
             return
-        self._registries[context.runtime_launch_key] = RuntimeLaunchRegistry(
-            Path(context.session_state_path)
-        )
+        self._registries[identity] = RuntimeLaunchRegistry(Path(context.session_state_path))
+        if context.runtime_launch_key is not None:
+            previous = self._launch_bindings.get(context.runtime_launch_key)
+            if context.runtime_launch_key not in self._launch_bindings:
+                self._launch_bindings[context.runtime_launch_key] = identity
+            elif previous != identity:
+                # A launch key is normally one submission. If a recovery
+                # generation reuses it, do not let a public probe select the
+                # wrong RuntimeExecution; direct context operations still use
+                # the full execution identity.
+                self._launch_bindings[context.runtime_launch_key] = None
 
     def arm(self, context: ExecutionContext) -> None:
         registry = self._registry_for_context(context)
@@ -435,11 +445,20 @@ class RuntimeLaunchTracker:
         )
 
     def inspect(self, *, task_id: str, launch_key: str) -> RuntimeLaunchInspection:
-        registry = self._registries.get(launch_key)
+        if launch_key in self._launch_bindings:
+            identity = self._launch_bindings[launch_key]
+            if identity is None:
+                return RuntimeLaunchInspection(
+                    status="unknown",
+                    reason="Launch key is shared by multiple RuntimeExecutions",
+                )
+        else:
+            identity = launch_key
+        registry = self._registries.get(identity)
         if registry is None:
             return RuntimeLaunchInspection(
                 status="unknown",
-                reason="No Attempt-scoped runtime context was bound before probing",
+                reason="No RuntimeExecution-scoped context was bound before probing",
             )
         return registry.inspect(
             engine_type=self._engine_type,
@@ -448,9 +467,10 @@ class RuntimeLaunchTracker:
         )
 
     def _registry_for_context(self, context: ExecutionContext) -> RuntimeLaunchRegistry | None:
-        if context.runtime_launch_key is None:
+        identity = context.checkpoint_runtime_identity
+        if identity is None:
             return None
-        return self._registries.get(context.runtime_launch_key)
+        return self._registries.get(identity)
 
 
 def _utc_now() -> str:
@@ -531,10 +551,9 @@ def _find_marked_process(probe_token: str) -> int | None:
 class SessionCheckpoint:
     version: int = 2
     task_id: str = ""
-    # A v2 Task can have multiple Attempts.  These fields bind a checkpoint
-    # to the one durable launch that wrote it instead of letting a retry
-    # accidentally resume another Attempt's external session.
-    attempt_id: str | None = None
+    # These fields bind a checkpoint to one durable RuntimeExecution instead
+    # of letting a retry accidentally resume another execution's session.
+    runtime_execution_id: str | None = None
     runtime_launch_key: str | None = None
     session_id: str | None = None
     cwd: str = ""
@@ -544,58 +563,111 @@ class SessionCheckpoint:
     pending_prompts: list[str] | None = None
     metadata: dict[str, object] | None = None
 
+    @classmethod
+    def from_payload(cls, payload: object) -> SessionCheckpoint:
+        """Parse a checkpoint payload, translating the retired identity name.
+
+        Existing local files may still contain ``attempt_id`` from before the
+        Conversation Domain cutover. The value is treated as an opaque runtime
+        identity only; no legacy domain object or table is recreated.
+        """
+
+        if not isinstance(payload, dict):
+            raise ValueError("Session checkpoint must be an object")
+        data = dict(payload)
+        legacy_identity = data.pop("attempt_id", None)
+        if isinstance(legacy_identity, str):
+            current_identity = data.get("runtime_execution_id")
+            if current_identity is not None and current_identity != legacy_identity:
+                raise ValueError("Session checkpoint contains conflicting runtime identities")
+            data.setdefault("runtime_execution_id", legacy_identity)
+        return cls(**data)
+
     def assert_matches_runtime(
         self,
         *,
         task_id: str,
-        attempt_id: str | None,
-        runtime_launch_key: str | None,
+        runtime_execution_id: str | None = None,
+        runtime_launch_key: str | None = None,
     ) -> None:
-        """Reject a v2 checkpoint that belongs to another runtime identity.
+        """Reject a checkpoint that belongs to another runtime identity.
 
-        Legacy callers deliberately omit ``runtime_launch_key`` and retain
-        their historical task-scoped checkpoint behavior.  A durable context,
-        however, must have both an Attempt and launch key and may only restore
-        a checkpoint written by that exact pair.
+        New durable contexts identify themselves with a RuntimeExecution ID
+        and TurnSubmission launch key. A missing launch identity preserves the
+        legacy task-scoped behaviour for non-durable harness callers.
         """
 
-        if runtime_launch_key is None:
+        if runtime_launch_key is None and runtime_execution_id is None:
             return
-        if attempt_id is None:
-            raise ValueError("Durable runtime checkpoint validation requires an attempt ID")
+        expected_execution_id = runtime_execution_id or runtime_launch_key
+        checkpoint_execution_id = self.runtime_execution_id or self.runtime_launch_key
         if (
             self.task_id != task_id
-            or self.attempt_id != attempt_id
-            or self.runtime_launch_key != runtime_launch_key
+            or checkpoint_execution_id != expected_execution_id
+            or (runtime_launch_key is not None and self.runtime_launch_key != runtime_launch_key)
         ):
-            raise ValueError("Checkpoint runtime identity does not match this durable Attempt")
+            raise ValueError("Checkpoint runtime identity does not match this RuntimeExecution")
 
 
 class SessionStateStore:
     def __init__(self, state_root: Path) -> None:
         self._root = state_root / "session-states"
 
-    def checkpoint_path(self, task_id: str, *, attempt_id: str | None = None) -> Path:
-        """Return the legacy Task or durable Attempt checkpoint path."""
+    def checkpoint_path(
+        self,
+        task_id: str,
+        *,
+        runtime_execution_id: str | None = None,
+        runtime_launch_key: str | None = None,
+    ) -> Path:
+        """Return a RuntimeExecution-scoped checkpoint path.
 
-        identity = attempt_id or task_id
+        Current callers should pass the formal RuntimeExecution ID. A launch
+        key is a safe fallback for pre-materialization contexts.
+        """
+
+        identity = runtime_execution_id or runtime_launch_key or task_id
         return self._root / identity / "checkpoint.json"
 
     def save(self, checkpoint: SessionCheckpoint) -> None:
         from ainrf.db.connection import atomic_write_json
 
-        path = self.checkpoint_path(checkpoint.task_id, attempt_id=checkpoint.attempt_id)
+        path = self.checkpoint_path(
+            checkpoint.task_id,
+            runtime_execution_id=checkpoint.runtime_execution_id,
+            runtime_launch_key=checkpoint.runtime_launch_key,
+        )
         path.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(path, asdict(checkpoint))
 
-    def load(self, task_id: str, *, attempt_id: str | None = None) -> SessionCheckpoint | None:
-        path = self.checkpoint_path(task_id, attempt_id=attempt_id)
+    def load(
+        self,
+        task_id: str,
+        *,
+        runtime_execution_id: str | None = None,
+        runtime_launch_key: str | None = None,
+    ) -> SessionCheckpoint | None:
+        path = self.checkpoint_path(
+            task_id,
+            runtime_execution_id=runtime_execution_id,
+            runtime_launch_key=runtime_launch_key,
+        )
         if not path.exists():
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
-        return SessionCheckpoint(**data)
+        return SessionCheckpoint.from_payload(data)
 
-    def delete(self, task_id: str, *, attempt_id: str | None = None) -> None:
-        path = self.checkpoint_path(task_id, attempt_id=attempt_id)
+    def delete(
+        self,
+        task_id: str,
+        *,
+        runtime_execution_id: str | None = None,
+        runtime_launch_key: str | None = None,
+    ) -> None:
+        path = self.checkpoint_path(
+            task_id,
+            runtime_execution_id=runtime_execution_id,
+            runtime_launch_key=runtime_launch_key,
+        )
         if path.exists():
             path.unlink()

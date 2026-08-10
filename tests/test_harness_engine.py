@@ -70,24 +70,28 @@ def test_execution_context_creation() -> None:
     assert ctx.system_prompt is None
 
 
-def test_session_state_store_scopes_durable_checkpoint_by_attempt(tmp_path: Path) -> None:
+def test_session_state_store_scopes_durable_checkpoint_by_runtime_execution(
+    tmp_path: Path,
+) -> None:
     store = SessionStateStore(tmp_path)
     checkpoint = SessionCheckpoint(
         task_id="task-identity",
-        attempt_id="attempt-identity",
+        runtime_execution_id="execution-identity",
         runtime_launch_key="launch-attempt-identity",
         session_id="sdk-session-identity",
     )
 
     store.save(checkpoint)
 
-    assert store.checkpoint_path("task-identity", attempt_id="attempt-identity") == (
-        tmp_path / "session-states" / "attempt-identity" / "checkpoint.json"
+    assert store.checkpoint_path("task-identity", runtime_execution_id="execution-identity") == (
+        tmp_path / "session-states" / "execution-identity" / "checkpoint.json"
     )
-    restored = store.load("task-identity", attempt_id="attempt-identity")
+    restored = store.load("task-identity", runtime_execution_id="execution-identity")
     assert restored is not None
     assert restored.runtime_launch_key == "launch-attempt-identity"
     assert store.load("task-identity") is None
+    store.delete("task-identity", runtime_execution_id="execution-identity")
+    assert store.load("task-identity", runtime_execution_id="execution-identity") is None
 
 
 @pytest.mark.anyio
@@ -97,14 +101,14 @@ async def test_claude_code_scopes_maps_and_session_ids_by_runtime_identity() -> 
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="first prompt",
-        attempt_id="attempt-1",
+        runtime_execution_id="execution-1",
         runtime_launch_key="launch-attempt-1",
     )
     second = ExecutionContext(
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="second prompt",
-        attempt_id="attempt-2",
+        runtime_execution_id="execution-2",
         runtime_launch_key="launch-attempt-2",
     )
     commands: list[list[str]] = []
@@ -296,14 +300,14 @@ async def test_agent_sdk_scopes_sessions_by_durable_runtime_identity() -> None:
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="first prompt",
-        attempt_id="attempt-1",
+        runtime_execution_id="execution-1",
         runtime_launch_key="launch-attempt-1",
     )
     second = ExecutionContext(
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="second prompt",
-        attempt_id="attempt-2",
+        runtime_execution_id="execution-2",
         runtime_launch_key="launch-attempt-2",
     )
     seen: list[AgentSession] = []
@@ -338,7 +342,7 @@ async def test_agent_sdk_rejects_checkpoint_for_another_durable_attempt(tmp_path
             {
                 "version": 2,
                 "task_id": "task-shared",
-                "attempt_id": "attempt-old",
+                "runtime_execution_id": "execution-old",
                 "runtime_launch_key": "launch-attempt-old",
                 "session_id": "sdk-session-old",
             }
@@ -349,7 +353,7 @@ async def test_agent_sdk_rejects_checkpoint_for_another_durable_attempt(tmp_path
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="new attempt",
-        attempt_id="attempt-new",
+        runtime_execution_id="execution-new",
         runtime_launch_key="launch-attempt-new",
         session_state_path=str(checkpoint_path),
     )
@@ -365,7 +369,7 @@ async def test_agent_sdk_checkpoint_records_durable_runtime_identity(tmp_path: P
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="prompt",
-        attempt_id="attempt-current",
+        runtime_execution_id="execution-current",
         runtime_launch_key="launch-attempt-current",
         session_state_path=str(checkpoint_path),
     )
@@ -374,7 +378,7 @@ async def test_agent_sdk_checkpoint_records_durable_runtime_identity(tmp_path: P
     await AgentSdkEngine()._save_checkpoint(context, session)
 
     saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-    assert saved["attempt_id"] == "attempt-current"
+    assert saved["runtime_execution_id"] == "execution-current"
     assert saved["runtime_launch_key"] == "launch-attempt-current"
 
 
@@ -796,14 +800,14 @@ async def test_codex_scopes_sessions_by_durable_runtime_identity() -> None:
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="first prompt",
-        attempt_id="attempt-1",
+        runtime_execution_id="execution-1",
         runtime_launch_key="launch-attempt-1",
     )
     second = ExecutionContext(
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="second prompt",
-        attempt_id="attempt-2",
+        runtime_execution_id="execution-2",
         runtime_launch_key="launch-attempt-2",
     )
     ensure_connection = AsyncMock()
@@ -848,7 +852,7 @@ def test_codex_rejects_checkpoint_for_another_durable_attempt(tmp_path: Path) ->
             {
                 "version": 2,
                 "task_id": "task-shared",
-                "attempt_id": "attempt-old",
+                "runtime_execution_id": "execution-old",
                 "runtime_launch_key": "launch-attempt-old",
                 "metadata": {"thread_id": "thread-old"},
             }
@@ -859,7 +863,7 @@ def test_codex_rejects_checkpoint_for_another_durable_attempt(tmp_path: Path) ->
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="new attempt",
-        attempt_id="attempt-new",
+        runtime_execution_id="execution-new",
         runtime_launch_key="launch-attempt-new",
         session_state_path=str(checkpoint_path),
     )
@@ -875,7 +879,7 @@ async def test_codex_checkpoint_records_durable_runtime_identity(tmp_path: Path)
         task_id="task-shared",
         working_directory="/tmp",
         rendered_prompt="prompt",
-        attempt_id="attempt-current",
+        runtime_execution_id="execution-current",
         runtime_launch_key="launch-attempt-current",
         session_state_path=str(checkpoint_path),
     )
@@ -884,7 +888,7 @@ async def test_codex_checkpoint_records_durable_runtime_identity(tmp_path: Path)
     await CodexAppServerEngine()._save_checkpoint(context, session)
 
     saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-    assert saved["attempt_id"] == "attempt-current"
+    assert saved["runtime_execution_id"] == "execution-current"
     assert saved["runtime_launch_key"] == "launch-attempt-current"
 
 

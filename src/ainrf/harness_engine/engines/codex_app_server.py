@@ -38,7 +38,7 @@ _CLIENT_INFO = {
 class CodexSession:
     task_id: str
     # The logical Task id remains available for user-visible events while the
-    # enclosing engine map uses this Attempt/launch-key identity.
+    # enclosing engine map uses this RuntimeExecution/launch-key identity.
     runtime_identity: str | None = None
     abort_event: asyncio.Event = field(default_factory=asyncio.Event)
     pause_requested: bool = False
@@ -290,10 +290,10 @@ class CodexAppServerEngine(HarnessEngine):
         if not checkpoint_path.exists():
             return
         data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-        checkpoint = SessionCheckpoint(**data)
+        checkpoint = SessionCheckpoint.from_payload(data)
         checkpoint.assert_matches_runtime(
             task_id=context.task_id,
-            attempt_id=context.attempt_id,
+            runtime_execution_id=context.checkpoint_runtime_identity,
             runtime_launch_key=context.runtime_launch_key,
         )
         metadata = checkpoint.metadata or {}
@@ -737,7 +737,7 @@ class CodexAppServerEngine(HarnessEngine):
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint = SessionCheckpoint(
             task_id=session.task_id,
-            attempt_id=context.attempt_id,
+            runtime_execution_id=context.checkpoint_runtime_identity,
             runtime_launch_key=context.runtime_launch_key,
             session_id=session.thread_id,
             cwd=context.working_directory,

@@ -14,7 +14,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.conversation_contracts import (
@@ -48,6 +48,32 @@ def _json_object(value: object) -> dict[str, object]:
     except (TypeError, ValueError):
         return {}
     return dict(decoded) if isinstance(decoded, Mapping) else {}
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeExecutionIdentity:
+    """Stable runtime identity reserved by one TurnSubmission.
+
+    A submission is the only durable identity available before provider
+    acceptance materializes a ``RuntimeExecution`` row. Deriving the row key
+    here keeps worker callers from inventing their own checkpoint/session
+    identity and makes retries (new submissions) naturally isolated.
+    """
+
+    submission_id: str
+    runtime_execution_id: str
+
+    @classmethod
+    def for_submission(cls, submission_id: str) -> RuntimeExecutionIdentity:
+        if not submission_id.strip():
+            raise ValueError("submission_id must not be empty")
+        return cls(
+            submission_id=submission_id,
+            runtime_execution_id=uuid5(
+                NAMESPACE_URL,
+                f"openscience-runtime-execution:{submission_id}",
+            ).hex,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +214,172 @@ class ConversationExecutionService:
             ),
         )
 
+    def runtime_identity_for_launch_context(
+        self, claim: SubmissionClaim
+    ) -> RuntimeExecutionIdentity:
+        """Resolve identity for a worker launch/checkpoint context.
+
+        Claimed/delivering submissions without a persisted execution are the
+        normal pre-launch path and receive a deterministic identity. A
+        delivered/delivery-unknown submission may only reconnect to one
+        persisted active execution; without that durable evidence, launching
+        again would cross an unknown external side-effect boundary.
+        """
+
+        submission_status, deterministic, rows = self._validated_runtime_identity_inputs(claim)
+        active, terminal = self._partition_runtime_rows(rows)
+        if terminal:
+            raise ConversationContractError(
+                ConversationErrorCode.INVALID_STATE_TRANSITION,
+                "Terminal RuntimeExecution cannot establish a new context",
+            )
+        if len(active) > 1:
+            raise DomainConflictError("Submission Turn has multiple active RuntimeExecutions")
+        if submission_status in {"claimed", "delivering"}:
+            if active:
+                raise ConversationContractError(
+                    ConversationErrorCode.INVALID_STATE_TRANSITION,
+                    "Active RuntimeExecution requires delivered recovery evidence",
+                )
+            return deterministic
+        if submission_status in {"delivered", "delivery_unknown"} and active:
+            return RuntimeExecutionIdentity(
+                submission_id=claim.submission_id,
+                runtime_execution_id=str(active[0]["runtime_execution_id"]),
+            )
+        raise ConversationContractError(
+            ConversationErrorCode.INVALID_STATE_TRANSITION,
+            "Submission has no persisted RuntimeExecution to establish a launch context",
+        )
+
+    def _runtime_identity_for_acceptance(self, claim: SubmissionClaim) -> RuntimeExecutionIdentity:
+        """Resolve identity for atomic provider-acceptance materialization.
+
+        Acceptance recovery is intentionally narrower in visibility but wider
+        in materialization authority than launch-context resolution: a
+        delivered/delivery-unknown callback may prove acceptance while its
+        RuntimeExecution row is still absent, so the deterministic identity is
+        allowed here and immediately persisted by ``accept_and_open_execution``.
+        """
+
+        submission_status, deterministic, rows = self._validated_runtime_identity_inputs(claim)
+        if submission_status not in {"delivering", "delivered", "delivery_unknown"}:
+            raise ConversationContractError(
+                ConversationErrorCode.INVALID_STATE_TRANSITION,
+                "Only a delivering or reconciliable submission can materialize acceptance",
+            )
+        active, terminal = self._partition_runtime_rows(rows)
+        if terminal:
+            raise ConversationContractError(
+                ConversationErrorCode.INVALID_STATE_TRANSITION,
+                "Terminal RuntimeExecution cannot establish a new context",
+            )
+        if len(active) > 1:
+            raise DomainConflictError("Submission Turn has multiple active RuntimeExecutions")
+        if active:
+            if submission_status not in {"delivered", "delivery_unknown"}:
+                raise ConversationContractError(
+                    ConversationErrorCode.INVALID_STATE_TRANSITION,
+                    "Active RuntimeExecution requires delivered recovery evidence",
+                )
+            return RuntimeExecutionIdentity(
+                submission_id=claim.submission_id,
+                runtime_execution_id=str(active[0]["runtime_execution_id"]),
+            )
+        return deterministic
+
+    def _validated_runtime_identity_inputs(
+        self, claim: SubmissionClaim
+    ) -> tuple[str, RuntimeExecutionIdentity, list[sqlite3.Row]]:
+        """Validate claim ownership and collect all rows relevant to identity."""
+
+        with closing(connect(self._db_path)) as conn:
+            repository = SqliteConversationExecutionRepository(conn)
+            submission = repository.submission_by_id(claim.submission_id)
+            if submission is None:
+                raise DomainConflictError("Submission claim has no authoritative submission record")
+            authoritative_task_id = str(submission["task_id"])
+            authoritative_turn_id = str(submission["reserved_turn_id"])
+            if (
+                authoritative_task_id != claim.task_id
+                or authoritative_turn_id != claim.reserved_turn_id
+            ):
+                raise DomainConflictError(
+                    "Submission claim does not match its authoritative Task and Turn"
+                )
+            submission_status = str(submission["status"])
+            if submission_status in {"cancelled", "failed_delivery"}:
+                raise ConversationContractError(
+                    ConversationErrorCode.INVALID_STATE_TRANSITION,
+                    "Terminal submission cannot establish a RuntimeExecution context",
+                )
+            if submission_status not in {
+                "queued",
+                "claimed",
+                "delivering",
+                "delivered",
+                "delivery_unknown",
+            }:
+                raise DomainConflictError("Submission has an unknown durable status")
+
+            deterministic = RuntimeExecutionIdentity.for_submission(claim.submission_id)
+            rows = repository.runtime_executions_for_turn(authoritative_turn_id)
+            persisted_deterministic = repository.runtime_execution_by_id(
+                deterministic.runtime_execution_id
+            )
+            if persisted_deterministic is not None and all(
+                str(row["runtime_execution_id"]) != deterministic.runtime_execution_id
+                for row in rows
+            ):
+                rows.append(persisted_deterministic)
+
+            for row in rows:
+                runtime_task_id = str(row["task_id"])
+                runtime_turn_id = str(row["turn_id"])
+                raw_runtime_execution_id = row["runtime_execution_id"]
+                runtime_execution_id = (
+                    raw_runtime_execution_id.strip()
+                    if isinstance(raw_runtime_execution_id, str)
+                    else ""
+                )
+                if (
+                    runtime_task_id != authoritative_task_id
+                    or runtime_turn_id != authoritative_turn_id
+                    or not runtime_execution_id
+                    or runtime_execution_id != raw_runtime_execution_id
+                ):
+                    raise DomainConflictError(
+                        "RuntimeExecution does not belong to the claimed Task and Turn"
+                    )
+                status = str(row["status"])
+                if status not in {
+                    "starting",
+                    "running",
+                    "reconciling",
+                    "completed",
+                    "interrupted",
+                    "failed",
+                    "unknown",
+                }:
+                    raise DomainConflictError("RuntimeExecution has an unknown durable status")
+            return submission_status, deterministic, rows
+
+    @staticmethod
+    def _partition_runtime_rows(
+        rows: list[sqlite3.Row],
+    ) -> tuple[list[sqlite3.Row], list[sqlite3.Row]]:
+        active: list[sqlite3.Row] = []
+        terminal: list[sqlite3.Row] = []
+        for row in rows:
+            status = str(row["status"])
+            if status in {"starting", "running", "reconciling"}:
+                active.append(row)
+            elif status in {"completed", "interrupted", "failed", "unknown"}:
+                terminal.append(row)
+            else:
+                raise DomainConflictError("RuntimeExecution has an unknown durable status")
+        return active, terminal
+
     def mark_delivery_unknown(
         self,
         submission_id: str,
@@ -286,7 +478,7 @@ class ConversationExecutionService:
         native_runtime_ref: str | None,
         evidence: Mapping[str, object],
     ) -> RuntimeExecutionClaim:
-        runtime_execution_id = uuid4().hex
+        runtime_execution_id = self._runtime_identity_for_acceptance(claim).runtime_execution_id
 
         runtime_claim: RuntimeExecutionClaim | None = None
 
