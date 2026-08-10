@@ -1,5 +1,4 @@
 import { useT } from '@/shared/i18n';
-import { useTaskActions } from '../hooks/useTaskActions';
 import { useTaskMessages } from '../hooks/useTaskMessages';
 import { groupMessages, ChatInputBar, ChatMessageList } from '../components/chat';
 import TaskHeaderBar from '../components/messages/TaskHeaderBar';
@@ -20,6 +19,10 @@ interface TaskDetailPageProps {
   canMutate?: boolean;
   mutationDisabledReason?: string | null;
   headerActions?: ReactNode;
+  onInterrupt?: () => void;
+  interruptPending?: boolean;
+  onSendPrompt?: (prompt: string) => Promise<unknown> | unknown;
+  actionsPending?: boolean;
 }
 
 export default function TaskDetailPage({
@@ -34,10 +37,13 @@ export default function TaskDetailPage({
   canMutate = false,
   mutationDisabledReason = null,
   headerActions,
+  onInterrupt,
+  interruptPending = false,
+  onSendPrompt,
+  actionsPending = false,
 }: TaskDetailPageProps) {
   const t = useT();
   const { messages, isLoading, error } = useTaskMessages(taskId, selectedTask?.prompt ?? null);
-  const actions = useTaskActions(taskId);
   const chatMessages = groupMessages(messages);
 
   if (detailError) {
@@ -74,7 +80,8 @@ export default function TaskDetailPage({
       <TaskHeaderBar
         task={selectedTask}
         showInterrupt={showInterrupt}
-        onInterrupt={() => actions.interrupt()}
+        onInterrupt={onInterrupt}
+        interruptPending={interruptPending}
         taskSidebarCollapsed={taskSidebarCollapsed}
         metadataSidebarOpen={metadataSidebarOpen}
         onToggleTaskSidebar={onToggleTaskSidebar}
@@ -106,7 +113,7 @@ export default function TaskDetailPage({
 
       {showInput && (
         <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <ChatInputBar onSubmit={actions.sendPrompt} disabled={actions.isPending} />
+          <ChatInputBar onSubmit={onSendPrompt ?? (() => undefined)} disabled={actionsPending} />
         </div>
       )}
       {!canMutate && mutationDisabledReason ? (

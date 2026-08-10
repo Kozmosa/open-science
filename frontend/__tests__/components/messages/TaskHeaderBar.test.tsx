@@ -98,6 +98,18 @@ describe('TaskHeaderBar', () => {
     expect(onInterrupt).toHaveBeenCalledTimes(1);
   });
 
+  it('disables the shared interrupt control while it is pending', () => {
+    const onInterrupt = vi.fn();
+    renderWithProviders(
+      <TaskHeaderBar task={makeTask()} showInterrupt onInterrupt={onInterrupt} interruptPending />,
+    );
+
+    const button = screen.getByRole('button', { name: /interrupt/i });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onInterrupt).not.toHaveBeenCalled();
+  });
+
   it('renders toggle sidebar button when onToggleTaskSidebar is provided', () => {
     const toggle = vi.fn();
     renderWithProviders(

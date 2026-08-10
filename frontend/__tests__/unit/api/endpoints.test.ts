@@ -95,6 +95,34 @@ describe('api endpoints', () => {
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('turn.submit:test');
   });
 
+  it('interrupts a concrete active Turn without using the Task cancel endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        control_request_id: 'control-1',
+        expected_turn_id: 'turn-1',
+        kind: 'interrupt',
+        status: 'accepted',
+        task_id: 'task-1',
+      }), {
+        status: 202,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { interruptTurn } = await import('../../../src/features/tasks/api/endpoints');
+    await interruptTurn('task-1', 'turn-1', 'turn.interrupt:test');
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/tasks/task-1/turns/turn-1/interrupt',
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ expected_turn_id: 'turn-1' }),
+    }));
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('turn.interrupt:test');
+  });
+
   it('uses the real api client when no MSW handler intercepts the request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ status: 'ok' }), {

@@ -13,11 +13,14 @@ import type { EnvironmentRecord } from '@features/environments/types';
 import type { SkillItem } from '@features/settings/types';
 import {
   createTask,
+  cancelTask,
   forkTask,
   getTask,
   getTaskMessages,
   getTaskOutput,
   getTasks,
+  getTaskTurns,
+  interruptTurn,
   listCanonicalTaskItems,
   retryTask,
   updateTask,
@@ -228,12 +231,15 @@ function createOutputPage(
 }
 
 vi.mock('@features/tasks/api', () => ({
+  cancelTask: vi.fn(),
   createTask: vi.fn(),
   forkTask: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTaskMessages: vi.fn(),
   getTasks: vi.fn(),
+  getTaskTurns: vi.fn(),
+  interruptTurn: vi.fn(),
   listCanonicalTaskItems: vi.fn(),
   retryTask: vi.fn(),
   updateTask: vi.fn(),
@@ -361,6 +367,7 @@ vi.mock('@features/auth', async (importOriginal) => {
 });
 
 const mockCreateTask = vi.mocked(createTask);
+const mockCancelTask = vi.mocked(cancelTask);
 const mockUpdateTask = vi.mocked(updateTask);
 const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
@@ -371,6 +378,8 @@ const mockGetTaskOutput = vi.mocked(getTaskOutput);
 const mockGetTaskMessages = vi.mocked(getTaskMessages);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetTasks = vi.mocked(getTasks);
+const mockGetTaskTurns = vi.mocked(getTaskTurns);
+const mockInterruptTurn = vi.mocked(interruptTurn);
 const mockListCanonicalTaskItems = vi.mocked(listCanonicalTaskItems);
 const mockRetryTask = vi.mocked(retryTask);
 const mockGetDomainProjects = vi.mocked(getDomainProjects);
@@ -385,6 +394,7 @@ beforeEach(() => {
   window.localStorage.clear();
 
   mockCreateTask.mockReset();
+  mockCancelTask.mockReset();
   mockUpdateTask.mockReset();
   mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
@@ -394,6 +404,8 @@ beforeEach(() => {
   mockGetTaskOutput.mockReset();
   mockGetSkills.mockReset();
   mockGetTasks.mockReset();
+  mockGetTaskTurns.mockReset();
+  mockInterruptTurn.mockReset();
   mockListCanonicalTaskItems.mockReset();
   mockGetTaskMessages.mockReset();
   mockRetryTask.mockReset();
@@ -406,6 +418,19 @@ beforeEach(() => {
   mockGetSkills.mockResolvedValue({ items: availableSkills });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetTasks.mockResolvedValue({ items: [taskSummary] });
+  mockGetTaskTurns.mockResolvedValue({
+    items: [{
+      task_id: 'task-1',
+      turn_id: 'turn-1',
+      turn_seq: 1,
+      status: 'in_progress',
+      started_at: null,
+      finished_at: null,
+      failure_code: null,
+      token_usage_json: null,
+      context_snapshot_ref: null,
+    }],
+  });
   mockGetTaskMessages.mockResolvedValue({ messages: [], has_more: false, next_sequence: null });
   mockListCanonicalTaskItems.mockImplementation(async (taskId) => {
     const page = await mockGetTaskOutput(taskId);
@@ -553,6 +578,149 @@ describe('TasksPage', () => {
     await waitFor(() => expect(mockRetryTask).toHaveBeenCalledWith('task-1', expect.stringMatching(/^task\.retry/)));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.detail('task-1') });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.messages('task-1') });
+  });
+
+  it('interrupts the active Turn from Task actions without cancelling the Task', async () => {
+    const user = userEvent.setup();
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    mockInterruptTurn.mockResolvedValue({
+      control_request_id: 'control-1',
+      expected_turn_id: 'turn-1',
+      kind: 'interrupt',
+      status: 'accepted',
+      task_id: 'task-1',
+    });
+
+    renderWithProviders(<TasksPage />, { client, route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }));
+
+    await waitFor(() => expect(mockGetTaskTurns).toHaveBeenCalledWith('task-1'));
+    await waitFor(() => expect(mockInterruptTurn).toHaveBeenCalledWith(
+      'task-1',
+      'turn-1',
+      expect.stringMatching(/^turn\.interrupt/),
+    ));
+    expect(mockCancelTask).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.detail('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.messages('task-1') });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks.turns('task-1') });
+  });
+
+  it('shares one pending interrupt action between the menu and Task header', async () => {
+    const user = userEvent.setup();
+    let resolveInterrupt: ((value: {
+      control_request_id: string;
+      expected_turn_id: string;
+      kind: string;
+      status: string;
+      task_id: string;
+    }) => void) | undefined;
+    mockInterruptTurn.mockImplementation(() => new Promise((resolve) => {
+      resolveInterrupt = resolve;
+    }));
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }));
+    await waitFor(() => expect(mockInterruptTurn).toHaveBeenCalledTimes(1));
+
+    const headerInterrupt = screen.getByRole('button', { name: 'Interrupt' });
+    expect(headerInterrupt).toBeDisabled();
+    await user.click(headerInterrupt);
+    expect(mockInterruptTurn).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }))
+      .toHaveAttribute('data-disabled');
+    expect(mockCancelTask).not.toHaveBeenCalled();
+
+    resolveInterrupt?.({
+      control_request_id: 'control-1',
+      expected_turn_id: 'turn-1',
+      kind: 'interrupt',
+      status: 'accepted',
+      task_id: 'task-1',
+    });
+    await waitFor(() => expect(headerInterrupt).toBeEnabled());
+  });
+
+  it('resolves the selected Task Turn and idempotency key after switching Tasks', async () => {
+    const user = userEvent.setup();
+    const secondTask = {
+      ...reviewTaskSummary,
+      project_id: 'default',
+      status: 'running' as const,
+    };
+    const secondRecord = { ...taskRecord, ...secondTask };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, secondTask] });
+    mockGetTask.mockImplementation(async (taskId) => taskId === secondTask.task_id ? secondRecord : taskRecord);
+    mockGetTaskTurns.mockImplementation(async (taskId) => ({
+      items: [{
+        task_id: taskId,
+        turn_id: `turn-${taskId}`,
+        turn_seq: 1,
+        status: 'in_progress',
+        started_at: null,
+        finished_at: null,
+        failure_code: null,
+        token_usage_json: null,
+        context_snapshot_ref: null,
+      }],
+    }));
+    mockInterruptTurn.mockResolvedValue({
+      control_request_id: 'control-1',
+      expected_turn_id: 'turn-task-1',
+      kind: 'interrupt',
+      status: 'accepted',
+      task_id: 'task-1',
+    });
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }));
+    await waitFor(() => expect(mockInterruptTurn).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /Review paper draft/ }));
+    await screen.findByRole('heading', { name: 'Review paper draft' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }));
+    await waitFor(() => expect(mockInterruptTurn).toHaveBeenCalledTimes(2));
+
+    expect(mockInterruptTurn.mock.calls[0]).toEqual([
+      'task-1',
+      'turn-task-1',
+      expect.stringMatching(/^turn\.interrupt/),
+    ]);
+    expect(mockInterruptTurn.mock.calls[1]).toEqual([
+      'task-review',
+      'turn-task-review',
+      expect.stringMatching(/^turn\.interrupt/),
+    ]);
+    expect(mockInterruptTurn.mock.calls[0]?.[2]).not.toBe(mockInterruptTurn.mock.calls[1]?.[2]);
+    expect(mockCancelTask).not.toHaveBeenCalled();
+  });
+
+  it('reports a consistent error and never cancels when no Turn is active', async () => {
+    const user = userEvent.setup();
+    mockGetTaskTurns.mockResolvedValue({ items: [] });
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }));
+
+    expect(mockCancelTask).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText('Interrupt failed: Task has no active Turn')).toBeInTheDocument());
+    expect(mockInterruptTurn).not.toHaveBeenCalled();
   });
 
   it('uses a list-first task flow on narrow screens and opens the inspector as a sheet', async () => {

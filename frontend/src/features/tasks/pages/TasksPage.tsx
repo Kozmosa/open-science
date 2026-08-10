@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   archiveTask,
-  cancelTask,
   forkTask,
   getTask,
   getTasks,
@@ -28,6 +27,7 @@ import TaskCreateFlow from '../components/TaskCreateFlow';
 import TaskInspectorPanel, { type TaskDrawerView } from '../components/TaskInspectorPanel';
 import TaskDetailPage from './TaskDetailPage';
 import TaskList from './TaskList';
+import { useTaskActions } from '../hooks/useTaskActions';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { IdempotencyKeyManager, semanticMutationValue } from '@/shared/api/idempotency';
 
@@ -101,7 +101,6 @@ function TasksPage() {
   const [forkPrompt, setForkPrompt] = useState('');
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const archiveKeyManager = useRef(new IdempotencyKeyManager('task.archive')).current;
-  const cancelKeyManager = useRef(new IdempotencyKeyManager('task.cancel')).current;
   const unarchiveKeyManager = useRef(new IdempotencyKeyManager('task.unarchive')).current;
   const retryKeyManager = useRef(new IdempotencyKeyManager('task.retry')).current;
   const moveKeyManager = useRef(new IdempotencyKeyManager('task.move')).current;
@@ -187,6 +186,7 @@ function TasksPage() {
   });
 
   const selectedTask = selectedTaskQuery.data ?? null;
+  const taskActions = useTaskActions(effectiveSelectedTaskId);
 
   useEffect(() => {
     if (!effectiveSelectedTaskId || !pageVisible) {
@@ -220,18 +220,6 @@ function TasksPage() {
     },
     onSuccess: ({ key }) => {
       archiveKeyManager.markSucceeded(key);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: async (taskId: string) => {
-      const key = cancelKeyManager.keyFor(semanticMutationValue({ taskId }));
-      return { result: await cancelTask(taskId, key), key };
-    },
-    onSuccess: ({ key }) => {
-      cancelKeyManager.markSucceeded(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.archived(true) });
     },
@@ -483,14 +471,19 @@ function TasksPage() {
               onToggleMetadataSidebar={toggleMetadataSidebar}
               canMutate={canMutateSelectedTask}
               mutationDisabledReason={mutationDisabledReason}
+              onInterrupt={taskActions.interrupt}
+              interruptPending={taskActions.isInterruptPending}
+              onSendPrompt={taskActions.sendPrompt}
+              actionsPending={taskActions.isPending}
               headerActions={selectedTask ? (
                 <TaskActionsMenu
                   task={selectedTask}
                   canMutate={canMutateSelectedTask}
                   disabledReason={mutationDisabledReason}
+                  interruptPending={taskActions.isInterruptPending}
                   onArchive={() => archiveMutation.mutate(selectedTask.task_id)}
                   onUnarchive={() => unarchiveMutation.mutate(selectedTask.task_id)}
-                  onCancel={() => cancelMutation.mutate(selectedTask.task_id)}
+                  onInterrupt={() => taskActions.interrupt()}
                   onRetry={() => retryMutation.mutate(selectedTask.task_id)}
                   onMove={() => {
                     setTargetProjectId(selectedTask.project_id);
@@ -541,14 +534,19 @@ function TasksPage() {
             onToggleMetadataSidebar={toggleMetadataSidebar}
             canMutate={canMutateSelectedTask}
             mutationDisabledReason={mutationDisabledReason}
+            onInterrupt={taskActions.interrupt}
+            interruptPending={taskActions.isInterruptPending}
+            onSendPrompt={taskActions.sendPrompt}
+            actionsPending={taskActions.isPending}
             headerActions={selectedTask ? (
               <TaskActionsMenu
                 task={selectedTask}
                 canMutate={canMutateSelectedTask}
                 disabledReason={mutationDisabledReason}
+                interruptPending={taskActions.isInterruptPending}
                 onArchive={() => archiveMutation.mutate(selectedTask.task_id)}
                 onUnarchive={() => unarchiveMutation.mutate(selectedTask.task_id)}
-                onCancel={() => cancelMutation.mutate(selectedTask.task_id)}
+                onInterrupt={() => taskActions.interrupt()}
                 onRetry={() => retryMutation.mutate(selectedTask.task_id)}
                 onMove={() => {
                   setTargetProjectId(selectedTask.project_id);

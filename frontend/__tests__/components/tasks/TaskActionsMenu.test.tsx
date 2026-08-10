@@ -25,7 +25,7 @@ function actions() {
   return {
     onArchive: vi.fn(),
     onUnarchive: vi.fn(),
-    onCancel: vi.fn(),
+    onInterrupt: vi.fn(),
     onRetry: vi.fn(),
     onMove: vi.fn(),
     onFork: vi.fn(),
@@ -58,6 +58,23 @@ describe('TaskActionsMenu', () => {
 
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
     expect(await screen.findByRole('menuitem', { name: 'Retry as new Turn' }))
+      .toHaveAttribute('data-disabled');
+  });
+
+  it('disables the Turn interrupt action while it is pending', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TaskActionsMenu
+        task={{ ...task, status: 'running' }}
+        canMutate
+        disabledReason={null}
+        interruptPending
+        {...actions()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }))
       .toHaveAttribute('data-disabled');
   });
 });

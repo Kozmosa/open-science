@@ -13,6 +13,7 @@ interface TaskHeaderBarProps {
   task: TaskSummary;
   showInterrupt?: boolean;
   onInterrupt?: () => void;
+  interruptPending?: boolean;
   taskSidebarCollapsed?: boolean;
   metadataSidebarOpen?: boolean;
   onToggleTaskSidebar?: () => void;
@@ -27,6 +28,7 @@ export default function TaskHeaderBar({
   task,
   showInterrupt = false,
   onInterrupt,
+  interruptPending = false,
   taskSidebarCollapsed = false,
   metadataSidebarOpen = true,
   onToggleTaskSidebar,
@@ -131,6 +133,8 @@ export default function TaskHeaderBar({
           <button
             type="button"
             onClick={onInterrupt}
+            disabled={interruptPending}
+            aria-busy={interruptPending}
             className="rounded-lg bg-[var(--osci-color-surface-subtle)] px-3 py-1 text-xs font-medium text-[var(--osci-color-text-secondary)] transition hover:bg-[var(--osci-color-primary-soft)] hover:text-[var(--osci-color-text)]"
           >
             Interrupt

@@ -13,9 +13,10 @@ interface TaskActionsMenuProps {
   task: TaskSummary;
   canMutate: boolean;
   disabledReason: string | null;
+  interruptPending?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
-  onCancel: () => void;
+  onInterrupt: () => void;
   onRetry: () => void;
   onMove: () => void;
   onFork: () => void;
@@ -34,9 +35,10 @@ export default function TaskActionsMenu({
   task,
   canMutate,
   disabledReason,
+  interruptPending = false,
   onArchive,
   onUnarchive,
-  onCancel,
+  onInterrupt,
   onRetry,
   onMove,
   onFork,
@@ -56,8 +58,8 @@ export default function TaskActionsMenu({
           <DropdownMenuItem disabled={disabled} onSelect={onArchive}>Archive Task</DropdownMenuItem>
         )}
         <DropdownMenuItem
-          disabled={disabled || !activeStatuses.has(task.status)}
-          onSelect={onCancel}
+          disabled={disabled || interruptPending || !activeStatuses.has(task.status)}
+          onSelect={onInterrupt}
         >
           Interrupt current Turn
         </DropdownMenuItem>
