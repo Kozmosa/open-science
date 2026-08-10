@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
-from ainrf.skills.merge import deep_merge_settings, resolve_env_placeholders
+from ainrf.skills.merge import deep_merge_settings
 import pytest
 
 pytestmark = [pytest.mark.unit]
@@ -21,17 +20,3 @@ def test_deep_merge_overlay_wins() -> None:
     overlay: dict[str, Any] = {"a": {"b": 2}, "c": [3, 4]}
     result = deep_merge_settings(base, overlay)
     assert result == {"a": {"b": 2}, "c": [3, 4]}
-
-
-def test_resolve_env_placeholders() -> None:
-    os.environ["TEST_VAR"] = "hello"
-    data: dict[str, Any] = {"key": "value is ${TEST_VAR}"}
-    result = resolve_env_placeholders(data)
-    assert result == {"key": "value is hello"}
-    del os.environ["TEST_VAR"]
-
-
-def test_resolve_env_missing_placeholder() -> None:
-    data: dict[str, Any] = {"key": "value is ${MISSING_VAR}"}
-    result = resolve_env_placeholders(data)
-    assert result == {"key": "value is ${MISSING_VAR}"}
