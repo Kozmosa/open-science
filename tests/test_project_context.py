@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,33 @@ def _admin() -> dict[str, object]:
 
 def _user(identifier: str) -> dict[str, object]:
     return {"id": identifier, "role": "member"}
+
+
+def test_context_service_has_one_active_snapshot_helper() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    source_path = repository_root / "src" / "ainrf" / "domain" / "context.py"
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    services = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ProjectContextService"
+    ]
+    assert len(services) == 1
+
+    helpers = [
+        node
+        for node in services[0].body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "_create_active_snapshot_for_task_in_transaction"
+    ]
+    assert len(helpers) == 1
+    assert helpers[0].decorator_list == []
+    called_methods = {
+        node.func.attr
+        for node in ast.walk(helpers[0])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert {"_active_version", "_assemble_for_task", "_insert_snapshot"} <= called_methods
 
 
 def test_publish_is_immutable_and_task_pins_active_version(

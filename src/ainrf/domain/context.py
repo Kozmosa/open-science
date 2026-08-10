@@ -1117,25 +1117,6 @@ class ProjectContextService:
             conn.commit()
             return snapshot_id
 
-    def _create_active_snapshot_for_task_in_transaction(
-        self,
-        conn: sqlite3.Connection,
-        *,
-        project_id: str,
-        workspace_id: str,
-        task_id: str,
-        task_prompt: str,
-    ) -> tuple[str, str]:
-        """Create an unpinned Snapshot for a new Task inside its write transaction."""
-
-        return self._create_active_snapshot_for_task_in_transaction(
-            conn,
-            project_id=project_id,
-            workspace_id=workspace_id,
-            task_id=task_id,
-            task_prompt=task_prompt,
-        )
-
     def _create_snapshot_for_task_context_version_in_transaction(
         self,
         conn: sqlite3.Connection,
