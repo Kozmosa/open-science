@@ -402,49 +402,6 @@ CREATE TABLE projects (
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
-CREATE TABLE runtime_approval_requests (
-            approval_id TEXT PRIMARY KEY,
-            task_id TEXT NOT NULL,
-            turn_id TEXT NOT NULL,
-            runtime_execution_id TEXT NOT NULL,
-            runtime_generation INTEGER NOT NULL CHECK (runtime_generation > 0),
-            tool_call_ref TEXT NOT NULL CHECK (trim(tool_call_ref) != ''),
-            status TEXT NOT NULL CHECK (status IN (
-                'pending', 'approved', 'denied', 'expired', 'invalidated'
-            )),
-            request_json TEXT NOT NULL
-                CHECK (json_valid(request_json) AND json_type(request_json) = 'object'),
-            decision_json TEXT CHECK (decision_json IS NULL
-                OR (json_valid(decision_json) AND json_type(decision_json) = 'object')),
-            decision_actor_user_id TEXT,
-            decision_idempotency_key TEXT,
-            decision_request_hash TEXT,
-            created_at TEXT NOT NULL,
-            expires_at TEXT,
-            resolved_at TEXT,
-            updated_at TEXT NOT NULL,
-            UNIQUE (runtime_execution_id, runtime_generation, tool_call_ref),
-            FOREIGN KEY (runtime_execution_id, turn_id, runtime_generation)
-                REFERENCES runtime_executions(
-                    runtime_execution_id, turn_id, runtime_generation
-                ) ON DELETE RESTRICT,
-            FOREIGN KEY (turn_id, task_id)
-                REFERENCES task_turns(turn_id, task_id) ON DELETE RESTRICT,
-            CHECK ((status = 'pending' AND decision_json IS NULL
-                    AND decision_actor_user_id IS NULL
-                    AND decision_idempotency_key IS NULL
-                    AND decision_request_hash IS NULL AND resolved_at IS NULL)
-                OR (status != 'pending' AND decision_json IS NOT NULL
-                    AND resolved_at IS NOT NULL)),
-            CHECK ((decision_actor_user_id IS NULL AND decision_idempotency_key IS NULL
-                    AND decision_request_hash IS NULL)
-                OR (decision_actor_user_id IS NOT NULL
-                    AND trim(decision_actor_user_id) != ''
-                    AND decision_idempotency_key IS NOT NULL
-                    AND trim(decision_idempotency_key) != ''
-                    AND decision_request_hash IS NOT NULL
-                    AND trim(decision_request_hash) != ''))
-        );
 CREATE TABLE runtime_executions (
             runtime_execution_id TEXT PRIMARY KEY,
             task_id TEXT NOT NULL,
@@ -1011,9 +968,6 @@ CREATE UNIQUE INDEX idx_runtime_executions_native_identity
         WHERE native_runtime_ref IS NOT NULL;
 CREATE INDEX idx_turn_controls_turn_created
         ON turn_control_requests(expected_turn_id, created_at, control_request_id);
-CREATE UNIQUE INDEX idx_runtime_approvals_decision_idempotency
-        ON runtime_approval_requests(decision_actor_user_id, decision_idempotency_key)
-        WHERE decision_idempotency_key IS NOT NULL;
 CREATE TRIGGER turn_submission_identity_immutable
         BEFORE UPDATE OF submission_id, task_id, reserved_turn_id, actor_user_id,
                          idempotency_key, request_hash, input_json,
@@ -1109,29 +1063,6 @@ CREATE TRIGGER turn_control_transition_guard
 CREATE TRIGGER turn_control_delete_forbidden
         BEFORE DELETE ON turn_control_requests
         BEGIN SELECT RAISE(ABORT, 'Turn Control Requests are append-only'); END;
-CREATE TRIGGER runtime_approval_active_scope_guard_insert
-        BEFORE INSERT ON runtime_approval_requests
-        WHEN NOT EXISTS (SELECT 1 FROM task_turns AS turn
-            JOIN runtime_executions AS execution ON execution.turn_id = turn.turn_id
-            WHERE turn.turn_id = NEW.turn_id AND turn.task_id = NEW.task_id
-              AND turn.status = 'in_progress'
-              AND execution.runtime_execution_id = NEW.runtime_execution_id
-              AND execution.runtime_generation = NEW.runtime_generation
-              AND execution.status IN ('starting', 'running', 'reconciling'))
-        BEGIN SELECT RAISE(ABORT, 'approval runtime scope is stale'); END;
-CREATE TRIGGER runtime_approval_identity_immutable
-        BEFORE UPDATE OF approval_id, task_id, turn_id, runtime_execution_id,
-                         runtime_generation, tool_call_ref, request_json, created_at, expires_at
-        ON runtime_approval_requests
-        BEGIN SELECT RAISE(ABORT, 'Runtime Approval identity is immutable'); END;
-CREATE TRIGGER runtime_approval_transition_guard
-        BEFORE UPDATE OF status ON runtime_approval_requests
-        WHEN OLD.status != 'pending'
-          OR NEW.status NOT IN ('approved', 'denied', 'expired', 'invalidated')
-        BEGIN SELECT RAISE(ABORT, 'invalid Runtime Approval state transition'); END;
-CREATE TRIGGER runtime_approval_delete_forbidden
-        BEFORE DELETE ON runtime_approval_requests
-        BEGIN SELECT RAISE(ABORT, 'Runtime Approvals are append-only'); END;
 CREATE TRIGGER fork_preview_update_forbidden
         BEFORE UPDATE ON fork_preview_receipts
         BEGIN SELECT RAISE(ABORT, 'Fork preview receipts are append-only'); END;
@@ -1208,12 +1139,6 @@ CREATE TRIGGER turn_control_v3_authority_guard_insert
             WHERE authority.task_id = NEW.task_id
               AND authority.authority = 'conversation_v3')
         BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
-CREATE TRIGGER runtime_approval_v3_authority_guard_insert
-        BEFORE INSERT ON runtime_approval_requests
-        WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
-            WHERE authority.task_id = NEW.task_id
-              AND authority.authority = 'conversation_v3')
-        BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
 CREATE TRIGGER fork_preview_v3_authority_guard_insert
         BEFORE INSERT ON fork_preview_receipts
         WHEN NOT EXISTS (SELECT 1 FROM conversation_task_authorities AS authority
@@ -1226,17 +1151,6 @@ CREATE TRIGGER fork_transfer_v3_authority_guard_insert
             WHERE authority.task_id = NEW.source_task_id
               AND authority.authority = 'conversation_v3')
         BEGIN SELECT RAISE(ABORT, 'Task requires conversation_v3 authority'); END;
-CREATE TRIGGER runtime_approval_active_scope_guard_resolve
-        BEFORE UPDATE OF status ON runtime_approval_requests
-        WHEN NEW.status IN ('approved', 'denied') AND NOT EXISTS (
-            SELECT 1 FROM task_turns AS turn
-            JOIN runtime_executions AS execution ON execution.turn_id = turn.turn_id
-            WHERE turn.turn_id = OLD.turn_id AND turn.task_id = OLD.task_id
-              AND turn.status = 'in_progress'
-              AND execution.runtime_execution_id = OLD.runtime_execution_id
-              AND execution.runtime_generation = OLD.runtime_generation
-              AND execution.status IN ('starting', 'running', 'reconciling'))
-        BEGIN SELECT RAISE(ABORT, 'approval runtime scope is stale'); END;
 CREATE TRIGGER turn_item_result_call_required_insert
         BEFORE INSERT ON turn_items
         WHEN NEW.item_type = 'tool_result' AND NEW.call_item_id IS NULL
@@ -1258,10 +1172,6 @@ CREATE TRIGGER runtime_execution_active_turn_guard_insert
                 AND turn.native_turn_kind = NEW.native_turn_kind
                 AND turn.native_turn_ref = NEW.native_turn_ref)
         BEGIN SELECT RAISE(ABORT, 'Runtime Execution Turn scope is stale'); END;
-CREATE TRIGGER runtime_approval_resolved_immutable
-        BEFORE UPDATE ON runtime_approval_requests
-        WHEN OLD.status != 'pending'
-        BEGIN SELECT RAISE(ABORT, 'resolved Runtime Approvals are immutable'); END;
 CREATE TRIGGER fork_transfer_target_v3_authority_guard
         BEFORE UPDATE OF status, target_task_id ON fork_transfer_receipts
         WHEN NEW.status = 'transferred' AND NOT EXISTS (

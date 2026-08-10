@@ -362,10 +362,11 @@ class AgentSdkEngine(HarnessEngine):
         tool_input: dict[str, Any],
         context: ToolPermissionContext,  # noqa: ARG002
     ) -> PermissionResultAllow:
-        """Permission callback for tool calls that require approval.
+        """Apply the Adapter-local allow policy for provider tool callbacks.
 
-        Currently a dummy that always allows. Future: integrate with WebUI
-        approval flow so users can approve/deny tool calls from the browser.
+        Interactive approval would require an end-to-end Runtime Adapter
+        interface; the Conversation Module does not persist disconnected
+        browser decisions for this callback.
         """
         _ = tool_name, tool_input
         return PermissionResultAllow()

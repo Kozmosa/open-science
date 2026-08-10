@@ -6,8 +6,6 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
-    ApprovalDecisionRequest,
-    ApprovalDecisionResponse,
     ForkConfirmResponse,
     ForkConfirmRequest,
     ForkPreviewRequest,
@@ -23,7 +21,7 @@ from ainrf.api.schemas import (
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import ConversationApplicationService
 from ainrf.domain.conversation_contracts import ConversationContractError
-from ainrf.domain.conversation_contracts import ApprovalStatus, ForkTransferMode
+from ainrf.domain.conversation_contracts import ForkTransferMode
 from ainrf.domain.service import DomainNotFoundError, DomainPermissionError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -164,33 +162,6 @@ async def retry_turn(
             context_snapshot_ref=payload.context_snapshot_ref,
         )
         return TurnSubmissionResponse.model_validate(result)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise _translate(exc) from exc
-
-
-@router.post(
-    "/{task_id}/approvals/{approval_id}/resolve",
-    response_model=ApprovalDecisionResponse,
-)
-async def resolve_approval(
-    task_id: str,
-    approval_id: str,
-    payload: ApprovalDecisionRequest,
-    request: Request,
-) -> ApprovalDecisionResponse:
-    """Resolve an approval without exposing RuntimeExecution identity over HTTP."""
-    try:
-        result = _conversation(request).resolve_approval(
-            task_id,
-            approval_id,
-            get_current_user(request),
-            status=ApprovalStatus(payload.status),
-            decision=payload.decision,
-            idempotency_key=require_idempotency_key(request),
-        )
-        return ApprovalDecisionResponse.model_validate(result)
     except HTTPException:
         raise
     except Exception as exc:

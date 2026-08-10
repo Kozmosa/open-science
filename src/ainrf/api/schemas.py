@@ -663,19 +663,6 @@ class TurnControlResponse(BaseModel):
     status: str
 
 
-class ApprovalDecisionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    status: Literal["approved", "denied"]
-    decision: dict[str, Any] = Field(default_factory=dict)
-
-
-class ApprovalDecisionResponse(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    approval_id: str
-    task_id: str
-    status: str
-
-
 class ForkPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     target_engine_family: Literal["codex", "claude"]

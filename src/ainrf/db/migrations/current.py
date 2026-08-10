@@ -108,6 +108,19 @@ def migration_036_retire_legacy_task_status(conn: sqlite3.Connection) -> None:
     )
 
 
+@registry.register("agentic_researcher")
+def migration_037_retire_unproduced_runtime_approvals(conn: sqlite3.Connection) -> None:
+    """Remove the disconnected approval table after proving it has no records."""
+
+    if not _has_table(conn, "runtime_approval_requests"):
+        return
+    if conn.execute("SELECT 1 FROM runtime_approval_requests LIMIT 1").fetchone() is not None:
+        raise RuntimeError(
+            "agentic_researcher migration 037 refuses to drop non-empty runtime_approval_requests"
+        )
+    conn.execute("DROP TABLE runtime_approval_requests")
+
+
 @registry.register("literature")
 def migration_008_retire_unused_literature_task_saga(conn: sqlite3.Connection) -> None:
     """Retire the empty Literature saga artifact left by the original v7 baseline.

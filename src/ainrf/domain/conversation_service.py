@@ -13,7 +13,6 @@ from uuid import uuid4
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.conversation_contracts import (
-    ApprovalStatus,
     ContextSnapshotSource,
     ConversationContractError,
     ConversationErrorCode,
@@ -22,7 +21,6 @@ from ainrf.domain.conversation_contracts import (
     IdempotencyScope,
     TaskWorkStatus,
     TurnStatus,
-    require_approval_transition,
     require_task_work_transition,
 )
 from ainrf.domain.conversation_execution_repository import (
@@ -1573,124 +1571,6 @@ class ConversationApplicationService:
                     digest=digest,
                     response=result,
                     created_at=created_at,
-                )
-                conn.commit()
-            except BaseException:
-                conn.rollback()
-                raise
-        return result
-
-    def resolve_approval(
-        self,
-        task_id: str,
-        approval_id: str,
-        user: dict[str, object],
-        *,
-        status: ApprovalStatus,
-        runtime_execution_id: str | None = None,
-        runtime_generation: int | None = None,
-        tool_call_ref: str | None = None,
-        decision: Mapping[str, object],
-        idempotency_key: str,
-    ) -> dict[str, object]:
-        _require_sanitized(decision, path="approval_decision")
-        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.DENIED}:
-            raise ConversationContractError(
-                ConversationErrorCode.INVALID_STATE_TRANSITION,
-                "A user decision can only approve or deny an approval",
-            )
-        actor = self._actor(user)
-        request = {
-            "task_id": task_id,
-            "approval_id": approval_id,
-            "status": status,
-            "decision": dict(decision),
-        }
-        resolved_at = _now()
-        with closing(self._connect()) as conn:
-            try:
-                self._begin(conn)
-                DomainAuthorizationService(conn).require_task_owner(task_id, user)
-                domain = _SqliteDomainRepository(conn)
-                digest, replay = self._replay(
-                    domain,
-                    actor=actor,
-                    scope=IdempotencyScope.RESOLVE_APPROVAL,
-                    key=idempotency_key,
-                    request=request,
-                )
-                if replay is not None:
-                    conn.commit()
-                    return replay
-                conversations = SqliteConversationRepository(conn)
-                executions = SqliteConversationExecutionRepository(conn)
-                self._require_current_conversation(conversations, task_id)
-                approval = executions.approval_by_id(approval_id)
-                if approval is None or str(approval["task_id"]) != task_id:
-                    raise DomainNotFoundError(approval_id)
-                persisted_runtime_execution_id = str(approval["runtime_execution_id"])
-                persisted_runtime_generation = int(approval["runtime_generation"])
-                persisted_tool_call_ref = str(approval["tool_call_ref"])
-                if runtime_execution_id is not None and (
-                    runtime_execution_id != persisted_runtime_execution_id
-                    or runtime_generation != persisted_runtime_generation
-                    or tool_call_ref != persisted_tool_call_ref
-                ):
-                    raise ConversationContractError(
-                        ConversationErrorCode.RUNTIME_LOST,
-                        "Approval runtime or tool-call scope is stale",
-                    )
-                require_approval_transition(ApprovalStatus(str(approval["status"])), status)
-                turn = conversations.turn_by_id(str(approval["turn_id"]))
-                execution = executions.active_runtime_execution(str(approval["turn_id"]))
-                if turn is None or str(turn["status"]) != TurnStatus.IN_PROGRESS:
-                    raise ConversationContractError(
-                        ConversationErrorCode.TURN_NOT_ACTIVE,
-                        "Approval belongs to a terminal Turn",
-                    )
-                if (
-                    execution is None
-                    or str(execution["runtime_execution_id"]) != persisted_runtime_execution_id
-                    or int(execution["runtime_generation"]) != persisted_runtime_generation
-                ):
-                    raise ConversationContractError(
-                        ConversationErrorCode.RUNTIME_LOST,
-                        "Approval runtime or tool-call scope is stale",
-                    )
-                expires_at = approval["expires_at"]
-                if expires_at is not None and _parse_timestamp(
-                    expires_at, field="approval.expires_at"
-                ) < _parse_timestamp(resolved_at, field="resolved_at"):
-                    raise ConversationContractError(
-                        ConversationErrorCode.RUNTIME_LOST, "Approval has expired"
-                    )
-                if (
-                    executions.resolve_approval(
-                        approval_id=approval_id,
-                        status=status,
-                        decision_json=_canonical_json(decision),
-                        decision_actor_user_id=actor,
-                        decision_idempotency_key=idempotency_key,
-                        decision_request_hash=digest,
-                        resolved_at=resolved_at,
-                        updated_at=resolved_at,
-                    )
-                    != 1
-                ):
-                    raise DomainConflictError("Approval resolution lost a state race")
-                result: dict[str, object] = {
-                    "approval_id": approval_id,
-                    "task_id": task_id,
-                    "status": status,
-                }
-                self._store(
-                    domain,
-                    actor=actor,
-                    scope=IdempotencyScope.RESOLVE_APPROVAL,
-                    key=idempotency_key,
-                    digest=digest,
-                    response=result,
-                    created_at=resolved_at,
                 )
                 conn.commit()
             except BaseException:

@@ -69,14 +69,6 @@ class RuntimeActiveFlag(StrEnum):
     WAITING_ON_USER_INPUT = "waiting_on_user_input"
 
 
-class ApprovalStatus(StrEnum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    DENIED = "denied"
-    EXPIRED = "expired"
-    INVALIDATED = "invalidated"
-
-
 class ControlKind(StrEnum):
     STEER = "steer"
     INTERRUPT = "interrupt"
@@ -114,7 +106,6 @@ class EngineCapability(StrEnum):
     NATIVE_TURN_ID = "native_turn_id"
     SAME_TURN_STEER = "same_turn_steer"
     INTERRUPT = "interrupt"
-    APPROVALS = "approvals"
     RECONNECT = "reconnect"
     FORK = "fork"
     TYPED_ITEMS = "typed_items"
@@ -190,7 +181,6 @@ class IdempotencyScope(StrEnum):
     RETRY_TURN = "retry_turn"
     STEER_TURN = "steer_turn"
     INTERRUPT_TURN = "interrupt_turn"
-    RESOLVE_APPROVAL = "resolve_approval"
     UPDATE_WORK_STATUS = "update_work_status"
     COMPLETE_TASK = "complete_task"
     REOPEN_TASK = "reopen_task"
@@ -214,8 +204,6 @@ class NativeReceiptKind(StrEnum):
     STEER_ACCEPTED = "steer_accepted"
     INTERRUPT_REQUESTED = "interrupt_requested"
     TERMINAL_EVIDENCE = "terminal_evidence"
-    APPROVAL_REQUESTED = "approval_requested"
-    APPROVAL_RESOLVED = "approval_resolved"
 
 
 class ConversationContractError(ValueError):
@@ -321,20 +309,6 @@ _CONTROL_TRANSITIONS: Final = {
         ControlRequestStatus.DELIVERY_UNKNOWN: frozenset(),
     },
 }
-_APPROVAL_TRANSITIONS: Final = {
-    ApprovalStatus.PENDING: frozenset(
-        {
-            ApprovalStatus.APPROVED,
-            ApprovalStatus.DENIED,
-            ApprovalStatus.EXPIRED,
-            ApprovalStatus.INVALIDATED,
-        }
-    ),
-    ApprovalStatus.APPROVED: frozenset(),
-    ApprovalStatus.DENIED: frozenset(),
-    ApprovalStatus.EXPIRED: frozenset(),
-    ApprovalStatus.INVALIDATED: frozenset(),
-}
 
 
 def _require_transition[T: StrEnum](
@@ -375,10 +349,6 @@ def require_control_transition(
     target: ControlRequestStatus,
 ) -> None:
     _require_transition(current, target, _CONTROL_TRANSITIONS[kind])
-
-
-def require_approval_transition(current: ApprovalStatus, target: ApprovalStatus) -> None:
-    _require_transition(current, target, _APPROVAL_TRANSITIONS)
 
 
 def require_single_active_turn(statuses: tuple[TurnStatus, ...]) -> None:

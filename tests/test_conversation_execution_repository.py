@@ -539,124 +539,6 @@ def test_controls_enforce_expected_turn_and_distinguish_interrupt_evidence(
             )
 
 
-def test_approval_is_bound_to_live_runtime_generation(tmp_path: Path) -> None:
-    with closing(_database(tmp_path)) as conn:
-        _accepted_turn(conn)
-        repository = SqliteConversationExecutionRepository(conn)
-        _runtime(repository)
-        repository.insert_approval_request(
-            approval_id="approval-1",
-            task_id="task-1",
-            turn_id="turn-1",
-            runtime_execution_id="execution-1",
-            runtime_generation=1,
-            tool_call_ref="tool-call-1",
-            request_json='{"tool":"shell"}',
-            created_at=_NOW,
-            expires_at=_EXPIRY,
-            updated_at=_NOW,
-        )
-        assert (
-            repository.resolve_approval(
-                approval_id="approval-1",
-                status="approved",
-                decision_json='{"decision":"allow"}',
-                decision_actor_user_id="user-1",
-                decision_idempotency_key="approval-key",
-                decision_request_hash="approval-hash",
-                resolved_at=_LATER,
-                updated_at=_LATER,
-            )
-            == 1
-        )
-        with pytest.raises(sqlite3.IntegrityError, match="resolved Runtime Approvals"):
-            conn.execute(
-                "UPDATE runtime_approval_requests SET updated_at = 'later' "
-                "WHERE approval_id = 'approval-1'"
-            )
-        assert (
-            repository.resolve_approval(
-                approval_id="approval-1",
-                status="denied",
-                decision_json='{"decision":"deny"}',
-                decision_actor_user_id="user-1",
-                decision_idempotency_key="approval-key-2",
-                decision_request_hash="approval-hash-2",
-                resolved_at=_LATER,
-                updated_at=_LATER,
-            )
-            == 0
-        )
-        with pytest.raises(sqlite3.IntegrityError, match="runtime scope is stale"):
-            repository.insert_approval_request(
-                approval_id="approval-stale",
-                task_id="task-1",
-                turn_id="turn-1",
-                runtime_execution_id="execution-1",
-                runtime_generation=2,
-                tool_call_ref="tool-call-2",
-                request_json="{}",
-                created_at=_NOW,
-                expires_at=None,
-                updated_at=_NOW,
-            )
-
-
-@pytest.mark.parametrize("cleanup_status", ["expired", "invalidated"])
-def test_approval_resolution_revalidates_live_runtime_scope(
-    tmp_path: Path, cleanup_status: str
-) -> None:
-    with closing(_database(tmp_path)) as conn:
-        _accepted_turn(conn)
-        repository = SqliteConversationExecutionRepository(conn)
-        _runtime(repository)
-        repository.insert_approval_request(
-            approval_id="approval-stale",
-            task_id="task-1",
-            turn_id="turn-1",
-            runtime_execution_id="execution-1",
-            runtime_generation=1,
-            tool_call_ref="tool-call-stale",
-            request_json="{}",
-            created_at=_NOW,
-            expires_at=_EXPIRY,
-            updated_at=_NOW,
-        )
-        repository.transition_runtime_execution(
-            runtime_execution_id="execution-1",
-            expected_status="starting",
-            status="failed",
-            evidence_json='{"terminal":true}',
-            finished_at=_LATER,
-            failure_code="runtime_lost",
-            updated_at=_LATER,
-        )
-        with pytest.raises(sqlite3.IntegrityError, match="runtime scope is stale"):
-            repository.resolve_approval(
-                approval_id="approval-stale",
-                status="approved",
-                decision_json="{}",
-                decision_actor_user_id="user-1",
-                decision_idempotency_key="decision-stale",
-                decision_request_hash="hash-stale",
-                resolved_at=_LATER,
-                updated_at=_LATER,
-            )
-        assert (
-            repository.resolve_approval(
-                approval_id="approval-stale",
-                status=cleanup_status,
-                decision_json='{"reason":"runtime_lost"}',
-                decision_actor_user_id="system",
-                decision_idempotency_key="invalidate-stale",
-                decision_request_hash="invalidate-hash",
-                resolved_at=_LATER,
-                updated_at=_LATER,
-            )
-            == 1
-        )
-
-
 def _preview(
     repository: SqliteConversationExecutionRepository,
     *,
@@ -834,7 +716,6 @@ def test_legacy_upgrade_leaves_execution_tables_empty(tmp_path: Path) -> None:
             "turn_submissions",
             "runtime_executions",
             "turn_control_requests",
-            "runtime_approval_requests",
             "fork_preview_receipts",
             "fork_transfer_receipts",
         )

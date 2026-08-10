@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from ainrf.domain.conversation_contracts import (
-    ApprovalStatus,
     CapabilityDeclaration,
     CapabilitySupport,
     ConversationContractError,
@@ -26,7 +25,6 @@ from ainrf.domain.conversation_contracts import (
     TurnAcceptanceBoundary,
     TurnStatus,
     TurnSubmissionStatus,
-    require_approval_transition,
     require_control_transition,
     require_runtime_execution_transition,
     require_single_active_turn,
@@ -133,13 +131,6 @@ def test_control_acceptance_and_terminal_evidence_are_separate() -> None:
             ControlRequestStatus.ACCEPTED,
             ControlRequestStatus.COMPLETED,
         )
-
-
-def test_runtime_loss_can_invalidate_only_pending_approval() -> None:
-    require_approval_transition(ApprovalStatus.PENDING, ApprovalStatus.INVALIDATED)
-
-    with pytest.raises(ConversationContractError):
-        require_approval_transition(ApprovalStatus.APPROVED, ApprovalStatus.INVALIDATED)
 
 
 def test_single_active_turn_invariant_is_task_scoped() -> None:

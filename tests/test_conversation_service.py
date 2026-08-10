@@ -16,7 +16,6 @@ from ainrf.auth.service import AuthService
 from ainrf.db import connect
 from ainrf.domain import ProjectContextService, build_domain_modules
 from ainrf.domain.conversation_contracts import (
-    ApprovalStatus,
     ConversationContractError,
     ConversationErrorCode,
     ForkTransferMode,
@@ -42,7 +41,6 @@ pytestmark = [pytest.mark.unit, pytest.mark.db_race]
 
 _USER: dict[str, object] = {"id": "user-1", "role": "researcher"}
 _NOW = "2026-07-18T00:00:00+00:00"
-_EXPIRY = "2099-07-18T01:00:00+00:00"
 
 
 def _db_path(state_root: Path) -> Path:
@@ -293,13 +291,7 @@ def _create_accepted_turn(state_root: Path, service: ConversationApplicationServ
     return _accept_turn(state_root, service, str(admission["submission_id"]))
 
 
-def _insert_runtime_and_approval(
-    state_root: Path,
-    turn_id: str,
-    *,
-    approval_id: str = "approval-1",
-    expires_at: str = _EXPIRY,
-) -> None:
+def _insert_runtime(state_root: Path, turn_id: str) -> None:
     with closing(connect(_db_path(state_root))) as conn:
         turn = conn.execute(
             "SELECT native_turn_kind, native_turn_ref FROM task_turns WHERE turn_id = ?",
@@ -321,18 +313,6 @@ def _insert_runtime_and_approval(
             evidence_json='{"source":"driver"}',
             created_at=_NOW,
             started_at=_NOW,
-            updated_at=_NOW,
-        )
-        repository.insert_approval_request(
-            approval_id=approval_id,
-            task_id="task-1",
-            turn_id=turn_id,
-            runtime_execution_id="execution-1",
-            runtime_generation=1,
-            tool_call_ref="tool-call-1",
-            request_json='{"tool":"shell"}',
-            created_at=_NOW,
-            expires_at=expires_at,
             updated_at=_NOW,
         )
         conn.commit()
@@ -414,7 +394,7 @@ def test_task_metadata_and_cancel_stay_inside_conversation_interface(
 ) -> None:
     service = _service(state_root)
     turn_id = _create_accepted_turn(state_root, service)
-    _insert_runtime_and_approval(state_root, turn_id)
+    _insert_runtime(state_root, turn_id)
     deferred = service.create_turn(
         "task-1",
         _USER,
@@ -1938,12 +1918,12 @@ def test_turn_admission_fails_closed_when_auth_main_is_replaced_with_stale_wal(
         keeper.close()
 
 
-def test_controls_and_approvals_are_runtime_scoped_and_idempotent(
+def test_controls_are_runtime_scoped_and_idempotent(
     state_root: Path,
 ) -> None:
     service = _service(state_root)
     turn_id = _create_accepted_turn(state_root, service)
-    _insert_runtime_and_approval(state_root, turn_id)
+    _insert_runtime(state_root, turn_id)
     service.update_work_status(
         "task-1",
         _USER,
@@ -1966,61 +1946,6 @@ def test_controls_and_approvals_are_runtime_scoped_and_idempotent(
         idempotency_key="interrupt-1",
     )
     assert interrupt["expected_turn_id"] == turn_id
-
-    decision = service.resolve_approval(
-        "task-1",
-        "approval-1",
-        _USER,
-        status=ApprovalStatus.APPROVED,
-        runtime_execution_id="execution-1",
-        runtime_generation=1,
-        tool_call_ref="tool-call-1",
-        decision={"scope": "once"},
-        idempotency_key="approval-1",
-    )
-    replay = service.resolve_approval(
-        "task-1",
-        "approval-1",
-        _USER,
-        status=ApprovalStatus.APPROVED,
-        runtime_execution_id="execution-1",
-        runtime_generation=1,
-        tool_call_ref="tool-call-1",
-        decision={"scope": "once"},
-        idempotency_key="approval-1",
-    )
-    assert replay == decision
-
-
-def test_approval_expiry_compares_rfc3339_offsets_chronologically(
-    state_root: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    service = _service(state_root)
-    turn_id = _create_accepted_turn(state_root, service)
-    _insert_runtime_and_approval(
-        state_root,
-        turn_id,
-        expires_at="2026-07-18T01:30:00+01:00",
-    )
-    monkeypatch.setattr(
-        conversation_service_module,
-        "_now",
-        lambda: "2026-07-18T00:45:00+00:00",
-    )
-
-    with pytest.raises(ConversationContractError) as expired:
-        service.resolve_approval(
-            "task-1",
-            "approval-1",
-            _USER,
-            status=ApprovalStatus.APPROVED,
-            runtime_execution_id="execution-1",
-            runtime_generation=1,
-            tool_call_ref="tool-call-1",
-            decision={"scope": "once"},
-            idempotency_key="approval-expired-offset",
-        )
-    assert expired.value.code is ConversationErrorCode.RUNTIME_LOST
 
 
 def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(

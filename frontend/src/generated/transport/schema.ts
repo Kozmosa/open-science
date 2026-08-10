@@ -93,41 +93,6 @@ export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
 export type ApiStatus = 'ok' | 'degraded';
 
 /**
- * ApprovalDecisionRequest
- */
-export type ApprovalDecisionRequest = {
-    /**
-     * Decision
-     */
-    decision?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Status
-     */
-    status: 'approved' | 'denied';
-};
-
-/**
- * ApprovalDecisionResponse
- */
-export type ApprovalDecisionResponse = {
-    /**
-     * Approval Id
-     */
-    approval_id: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Task Id
-     */
-    task_id: string;
-    [key: string]: unknown;
-};
-
-/**
  * AuthTokenResponse
  */
 export type AuthTokenResponse = {
@@ -7417,40 +7382,6 @@ export type PatchApiTasksTaskIdResponses = {
 };
 
 export type PatchApiTasksTaskIdResponse = PatchApiTasksTaskIdResponses[keyof PatchApiTasksTaskIdResponses];
-
-export type PostApiTasksTaskIdApprovalsApprovalIdResolveData = {
-    body: ApprovalDecisionRequest;
-    path: {
-        /**
-         * Task Id
-         */
-        task_id: string;
-        /**
-         * Approval Id
-         */
-        approval_id: string;
-    };
-    query?: never;
-    url: '/api/tasks/{task_id}/approvals/{approval_id}/resolve';
-};
-
-export type PostApiTasksTaskIdApprovalsApprovalIdResolveErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PostApiTasksTaskIdApprovalsApprovalIdResolveError = PostApiTasksTaskIdApprovalsApprovalIdResolveErrors[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveErrors];
-
-export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponses = {
-    /**
-     * Successful Response
-     */
-    200: ApprovalDecisionResponse;
-};
-
-export type PostApiTasksTaskIdApprovalsApprovalIdResolveResponse = PostApiTasksTaskIdApprovalsApprovalIdResolveResponses[keyof PostApiTasksTaskIdApprovalsApprovalIdResolveResponses];
 
 export type PostApiTasksTaskIdArchiveData = {
     body?: never;

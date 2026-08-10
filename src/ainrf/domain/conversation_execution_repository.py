@@ -10,7 +10,7 @@ import sqlite3
 
 
 class SqliteConversationExecutionRepository:
-    """SQL-only repository for submission, runtime, control, approval, and Fork records."""
+    """SQL-only repository for submission, runtime, control, and Fork records."""
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
@@ -310,12 +310,6 @@ class SqliteConversationExecutionRepository:
             (stale_before,),
         ).fetchall()
 
-    def approval_by_id(self, approval_id: str) -> sqlite3.Row | None:
-        return self._conn.execute(
-            "SELECT * FROM runtime_approval_requests WHERE approval_id = ?",
-            (approval_id,),
-        ).fetchone()
-
     def fork_preview_by_id(self, preview_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             "SELECT * FROM fork_preview_receipts WHERE preview_id = ?", (preview_id,)
@@ -545,74 +539,6 @@ class SqliteConversationExecutionRepository:
               AND status = 'accepted'
             """,
             (completed_at, updated_at, runtime_execution_id),
-        ).rowcount
-
-    def insert_approval_request(
-        self,
-        *,
-        approval_id: str,
-        task_id: str,
-        turn_id: str,
-        runtime_execution_id: str,
-        runtime_generation: int,
-        tool_call_ref: str,
-        request_json: str,
-        created_at: str,
-        expires_at: str | None,
-        updated_at: str,
-    ) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO runtime_approval_requests (
-                approval_id, task_id, turn_id, runtime_execution_id,
-                runtime_generation, tool_call_ref, status, request_json,
-                created_at, expires_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
-            """,
-            (
-                approval_id,
-                task_id,
-                turn_id,
-                runtime_execution_id,
-                runtime_generation,
-                tool_call_ref,
-                request_json,
-                created_at,
-                expires_at,
-                updated_at,
-            ),
-        )
-
-    def resolve_approval(
-        self,
-        *,
-        approval_id: str,
-        status: str,
-        decision_json: str,
-        decision_actor_user_id: str | None,
-        decision_idempotency_key: str | None,
-        decision_request_hash: str | None,
-        resolved_at: str,
-        updated_at: str,
-    ) -> int:
-        return self._conn.execute(
-            """
-            UPDATE runtime_approval_requests
-            SET status = ?, decision_json = ?, decision_actor_user_id = ?,
-                decision_idempotency_key = ?, decision_request_hash = ?,
-                resolved_at = ?, updated_at = ?
-            WHERE approval_id = ? AND status = 'pending'
-            """,
-            (
-                status,
-                decision_json,
-                decision_actor_user_id,
-                decision_idempotency_key,
-                decision_request_hash,
-                resolved_at,
-                updated_at,
-                approval_id,
-            ),
         ).rowcount
 
     def insert_fork_preview(
