@@ -243,6 +243,7 @@ class TaskProjectionService:
             "researcher_type": str(row["researcher_type"]),
             "harness_engine": str(row["harness_engine"]),
             "status": conversation.status if conversation is not None else str(row["status"]),
+            "work_status": conversation.work_status if conversation is not None else "open",
             "title": str(row["title"]),
             "prompt": str(row["prompt"]),
             "created_at": str(row["created_at"]),

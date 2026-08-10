@@ -89,6 +89,7 @@ const taskBase = {
   task_id: 'task-1',
   project_id: 'default',
   title: 'Task 1',
+  work_status: 'open',
   task_profile: 'claude-code',
   workspace_summary: {
     workspace_id: 'workspace-default',

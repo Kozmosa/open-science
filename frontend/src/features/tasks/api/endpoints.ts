@@ -60,7 +60,11 @@ export const createTask = async (
   return adaptTask(response.task as TaskSummaryResponse);
 };
 
-function taskLifecycleAction(taskId: string, action: 'archive' | 'unarchive', idempotencyKey: string): Promise<TaskSummary> {
+function taskLifecycleAction(
+  taskId: string,
+  action: 'archive' | 'unarchive' | 'complete' | 'reopen',
+  idempotencyKey: string,
+): Promise<TaskSummary> {
   return api.post<TaskSummaryResponse>(`/tasks/${taskId}/${action}`, {}, {
     headers: { 'Idempotency-Key': idempotencyKey },
   }).then(adaptTask);
@@ -70,6 +74,10 @@ export const archiveTask = (taskId: string, key: string): Promise<TaskSummary> =
   taskLifecycleAction(taskId, 'archive', key);
 export const unarchiveTask = (taskId: string, key: string): Promise<TaskSummary> =>
   taskLifecycleAction(taskId, 'unarchive', key);
+export const completeTask = (taskId: string, key: string): Promise<TaskSummary> =>
+  taskLifecycleAction(taskId, 'complete', key);
+export const reopenTask = (taskId: string, key: string): Promise<TaskSummary> =>
+  taskLifecycleAction(taskId, 'reopen', key);
 export const cancelTask = (taskId: string, key: string): Promise<void> =>
   api.post(`/tasks/${taskId}/cancel`, {}, { headers: { 'Idempotency-Key': key } });
 export const getTaskTurns = (taskId: string): Promise<TaskTurnListResponse> =>

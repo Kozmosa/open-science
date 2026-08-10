@@ -218,3 +218,52 @@ async def test_frontend_workspace_contract_distinguishes_execution_access(
     assert blocked["can_execute"] is False
     assert blocked["cannot_execute_reason"] == "environment_grant_required"
     assert blocked["project_links"] == []
+
+
+@pytest.mark.anyio
+async def test_task_work_lifecycle_returns_explicit_projection_and_requires_idempotency(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    ids = _seed_frontend_contract(app, state_root)
+    headers = {"X-API-Key": _API_KEY}
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        listed = await client.get("/api/tasks", headers=headers)
+        task = next(
+            item for item in listed.json()["items"] if item["project_id"] == ids["project_id"]
+        )
+        task_id = str(task["task_id"])
+        missing_key = await client.post(f"/api/tasks/{task_id}/complete", headers=headers)
+        completed = await client.post(
+            f"/api/tasks/{task_id}/complete",
+            headers={**headers, "Idempotency-Key": "api-complete"},
+        )
+        replay = await client.post(
+            f"/api/tasks/{task_id}/complete",
+            headers={**headers, "Idempotency-Key": "api-complete"},
+        )
+        no_op = await client.post(
+            f"/api/tasks/{task_id}/complete",
+            headers={**headers, "Idempotency-Key": "api-complete-noop"},
+        )
+        reopened = await client.post(
+            f"/api/tasks/{task_id}/reopen",
+            headers={**headers, "Idempotency-Key": "api-reopen"},
+        )
+
+    assert listed.status_code == 200
+    assert task["work_status"] == "open"
+    assert missing_key.status_code == 409
+    assert completed.status_code == 200
+    assert completed.json()["work_status"] == "completed"
+    assert completed.json()["updated_at"] != task["updated_at"]
+    assert replay.status_code == 200
+    assert replay.json() == completed.json()
+    assert no_op.status_code == 409
+    assert no_op.json()["detail"]["code"] == "invalid_state_transition"
+    assert reopened.status_code == 200
+    assert reopened.json()["work_status"] == "open"
+    assert reopened.json()["updated_at"] != completed.json()["updated_at"]

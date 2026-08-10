@@ -77,6 +77,45 @@ describe('api endpoints', () => {
     expect(restored).not.toHaveProperty('task');
   });
 
+  it('adapts explicit complete and reopen TaskSummary responses from MSW', async () => {
+    const {
+      completeTask,
+      createTask,
+      reopenTask,
+    } = await import('../../../src/features/tasks/api/endpoints');
+    const created = await createTask({
+      projectId: 'project-alpha',
+      workspaceId: 'workspace-alpha',
+      researcherType: 'vanilla',
+      harnessEngine: 'claude-code',
+      prompt: 'Complete lifecycle contract',
+      skills: [],
+      mcpServers: [],
+    }, 'task.create:complete-contract');
+
+    const completed = await completeTask(created.task_id, 'task.complete:contract');
+    expect(completed.work_status).toBe('completed');
+    const reopened = await reopenTask(created.task_id, 'task.reopen:contract');
+    expect(reopened.work_status).toBe('open');
+  });
+
+  it('keeps a succeeded Turn open until explicit Task completion', async () => {
+    const {
+      completeTask,
+      getTask,
+      reopenTask,
+    } = await import('../../../src/features/tasks/api/endpoints');
+    const succeededTurnTask = await getTask('task-seed');
+
+    expect(succeededTurnTask.status).toBe('succeeded');
+    expect(succeededTurnTask.work_status).toBe('open');
+
+    const completed = await completeTask(succeededTurnTask.task_id, 'task.complete:succeeded-turn');
+    expect(completed.work_status).toBe('completed');
+    const reopened = await reopenTask(succeededTurnTask.task_id, 'task.reopen:succeeded-turn');
+    expect(reopened.work_status).toBe('open');
+  });
+
   it('sends stable idempotency keys through the Turn submission Interface', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
@@ -93,6 +132,41 @@ describe('api endpoints', () => {
       '/api/tasks/task-1/turns',
     ]);
     expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('turn.submit:test');
+  });
+
+  it('sends idempotency keys through explicit Task completion and reopen actions', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({
+        task_id: 'task-1',
+        project_id: 'project-1',
+        workspace_id: 'workspace-1',
+        environment_id: 'env-1',
+        researcher_type: 'vanilla',
+        harness_engine: 'claude-code',
+        status: 'queued',
+        work_status: 'completed',
+        title: 'Task',
+        prompt: 'Prompt',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        owner_user_id: 'u1',
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { completeTask, reopenTask } = await import('../../../src/features/tasks/api/endpoints');
+    await completeTask('task-1', 'task.complete:test');
+    await reopenTask('task-1', 'task.reopen:test');
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/tasks/task-1/complete',
+      '/api/tasks/task-1/reopen',
+    ]);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.complete:test');
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get('Idempotency-Key')).toBe('task.reopen:test');
   });
 
   it('interrupts a concrete active Turn without using the Task cancel endpoint', async () => {

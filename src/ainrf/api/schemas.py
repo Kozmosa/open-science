@@ -561,6 +561,7 @@ class TaskSummaryResponse(BaseModel):
     researcher_type: str
     harness_engine: str
     status: str
+    work_status: Literal["open", "completed", "cancelled"]
     title: str
     prompt: str
     created_at: str

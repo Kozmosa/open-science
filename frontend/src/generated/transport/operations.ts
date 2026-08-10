@@ -868,6 +868,13 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
+  "post_api_tasks_task_id_complete": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/complete",
+    "clientPath": "/tasks/{task_id}/complete",
+    "canonical": true,
+    "deprecated": false
+  },
   "post_api_tasks_task_id_fork": {
     "method": "POST",
     "path": "/api/tasks/{task_id}/fork",
@@ -900,6 +907,13 @@ export const transportOperations = {
     "method": "POST",
     "path": "/api/tasks/{task_id}/move",
     "clientPath": "/tasks/{task_id}/move",
+    "canonical": true,
+    "deprecated": false
+  },
+  "post_api_tasks_task_id_reopen": {
+    "method": "POST",
+    "path": "/api/tasks/{task_id}/reopen",
+    "clientPath": "/tasks/{task_id}/reopen",
     "canonical": true,
     "deprecated": false
   },

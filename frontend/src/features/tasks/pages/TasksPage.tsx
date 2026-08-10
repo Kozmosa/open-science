@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   archiveTask,
+  completeTask,
   forkTask,
   getTask,
   getTasks,
   moveTask,
   retryTask,
+  reopenTask,
   unarchiveTask,
   updateTask,
 } from '../api';
@@ -102,6 +104,10 @@ function TasksPage() {
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const archiveKeyManager = useRef(new IdempotencyKeyManager('task.archive')).current;
   const unarchiveKeyManager = useRef(new IdempotencyKeyManager('task.unarchive')).current;
+  const completeKeyManager = useRef(new IdempotencyKeyManager('task.complete')).current;
+  const reopenKeyManager = useRef(new IdempotencyKeyManager('task.reopen')).current;
+  const completeFlight = useRef(false);
+  const reopenFlight = useRef(false);
   const retryKeyManager = useRef(new IdempotencyKeyManager('task.retry')).current;
   const moveKeyManager = useRef(new IdempotencyKeyManager('task.move')).current;
   const forkKeyManager = useRef(new IdempotencyKeyManager('task.fork')).current;
@@ -235,6 +241,56 @@ function TasksPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
     },
   });
+
+  const completeMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const key = completeKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await completeTask(taskId, key), key, taskId };
+    },
+    onSuccess: ({ key, taskId }) => {
+      completeKeyManager.markSucceeded(key);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
+      showToast(t('pages.tasks.completeSuccess'), 'success');
+    },
+    onError: () => {
+      showToast(t('pages.tasks.completeFailed'), 'error');
+    },
+    onSettled: () => {
+      completeFlight.current = false;
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      const key = reopenKeyManager.keyFor(semanticMutationValue({ taskId }));
+      return { result: await reopenTask(taskId, key), key, taskId };
+    },
+    onSuccess: ({ key, taskId }) => {
+      reopenKeyManager.markSucceeded(key);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
+      showToast(t('pages.tasks.reopenSuccess'), 'success');
+    },
+    onError: () => {
+      showToast(t('pages.tasks.reopenFailed'), 'error');
+    },
+    onSettled: () => {
+      reopenFlight.current = false;
+    },
+  });
+
+  const triggerComplete = useCallback((taskId: string) => {
+    if (completeFlight.current) return;
+    completeFlight.current = true;
+    completeMutation.mutate(taskId);
+  }, [completeMutation]);
+
+  const triggerReopen = useCallback((taskId: string) => {
+    if (reopenFlight.current) return;
+    reopenFlight.current = true;
+    reopenMutation.mutate(taskId);
+  }, [reopenMutation]);
 
   const retryMutation = useMutation({
     mutationFn: async (taskId: string) => {
@@ -481,8 +537,12 @@ function TasksPage() {
                   canMutate={canMutateSelectedTask}
                   disabledReason={mutationDisabledReason}
                   interruptPending={taskActions.isInterruptPending}
+                  completePending={completeMutation.isPending}
+                  reopenPending={reopenMutation.isPending}
                   onArchive={() => archiveMutation.mutate(selectedTask.task_id)}
                   onUnarchive={() => unarchiveMutation.mutate(selectedTask.task_id)}
+                  onComplete={() => triggerComplete(selectedTask.task_id)}
+                  onReopen={() => triggerReopen(selectedTask.task_id)}
                   onInterrupt={() => taskActions.interrupt()}
                   onRetry={() => retryMutation.mutate(selectedTask.task_id)}
                   onMove={() => {
@@ -544,8 +604,12 @@ function TasksPage() {
                 canMutate={canMutateSelectedTask}
                 disabledReason={mutationDisabledReason}
                 interruptPending={taskActions.isInterruptPending}
+                completePending={completeMutation.isPending}
+                reopenPending={reopenMutation.isPending}
                 onArchive={() => archiveMutation.mutate(selectedTask.task_id)}
                 onUnarchive={() => unarchiveMutation.mutate(selectedTask.task_id)}
+                onComplete={() => triggerComplete(selectedTask.task_id)}
+                onReopen={() => triggerReopen(selectedTask.task_id)}
                 onInterrupt={() => taskActions.interrupt()}
                 onRetry={() => retryMutation.mutate(selectedTask.task_id)}
                 onMove={() => {

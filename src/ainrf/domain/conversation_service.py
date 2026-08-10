@@ -969,6 +969,135 @@ class ConversationApplicationService:
                 raise
         return result
 
+    def _transition_work_status(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        target: TaskWorkStatus,
+        idempotency_key: str,
+        scope: IdempotencyScope,
+        event_type: str,
+    ) -> dict[str, object]:
+        """Apply one explicit Task work-lifecycle transition.
+
+        The public lifecycle methods deliberately expose a closed set of
+        transitions.  Pending submissions remain durable but are not claimable
+        while the Task is closed; an active Turn remains owned by its runtime
+        and is not interrupted or fabricated as terminal evidence by this
+        business-state mutation.
+        """
+
+        actor = self._actor(user)
+        updated_at = _now()
+        request = {"task_id": task_id}
+        with closing(self._connect()) as conn:
+            try:
+                self._begin(conn)
+                DomainAuthorizationService(conn).require_task_owner(task_id, user)
+                domain = _SqliteDomainRepository(conn)
+                digest, replay = self._replay(
+                    domain,
+                    actor=actor,
+                    scope=scope,
+                    key=idempotency_key,
+                    request=request,
+                )
+                if replay is not None:
+                    conn.commit()
+                    return replay
+                conversations = SqliteConversationRepository(conn)
+                state = self._require_current_conversation(conversations, task_id)
+                current = TaskWorkStatus(str(state["work_status"]))
+                require_task_work_transition(current, target)
+                if (
+                    conversations.update_work_status(
+                        task_id=task_id,
+                        expected_status=current,
+                        status=target,
+                        updated_at=updated_at,
+                    )
+                    != 1
+                ):
+                    raise DomainConflictError("Task work-status update lost a state race")
+                if (
+                    conn.execute(
+                        "UPDATE tasks SET updated_at = ? WHERE task_id = ?",
+                        (updated_at, task_id),
+                    ).rowcount
+                    != 1
+                ):
+                    raise DomainNotFoundError(task_id)
+
+                result: dict[str, object] = {
+                    "task_id": task_id,
+                    "work_status": target,
+                    "revision": int(state["revision"]) + 1,
+                }
+                self._store(
+                    domain,
+                    actor=actor,
+                    scope=scope,
+                    key=idempotency_key,
+                    digest=digest,
+                    response=result,
+                    created_at=updated_at,
+                )
+                self._audit(
+                    domain,
+                    actor=actor,
+                    event_type=event_type,
+                    subject_type="task",
+                    subject_id=task_id,
+                    created_at=updated_at,
+                )
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return result
+
+    def complete_task(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Explicitly mark Task work complete without terminating active runtime."""
+
+        return self._transition_work_status(
+            task_id,
+            user,
+            target=TaskWorkStatus.COMPLETED,
+            idempotency_key=idempotency_key,
+            scope=IdempotencyScope.COMPLETE_TASK,
+            event_type="conversation.task.completed",
+        )
+
+    def reopen_task(
+        self,
+        task_id: str,
+        user: dict[str, object],
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        """Explicitly reopen a completed or cancelled Task.
+
+        Reopening changes only the business work status.  Canceled or
+        delivery-unknown submissions remain terminal/fenced and are never
+        replayed as new Turns.
+        """
+
+        return self._transition_work_status(
+            task_id,
+            user,
+            target=TaskWorkStatus.OPEN,
+            idempotency_key=idempotency_key,
+            scope=IdempotencyScope.REOPEN_TASK,
+            event_type="conversation.task.reopened",
+        )
+
     def cancel_task(
         self,
         task_id: str,

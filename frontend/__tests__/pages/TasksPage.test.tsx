@@ -14,6 +14,7 @@ import type { SkillItem } from '@features/settings/types';
 import {
   createTask,
   cancelTask,
+  completeTask,
   forkTask,
   getTask,
   getTaskMessages,
@@ -23,6 +24,7 @@ import {
   interruptTurn,
   listCanonicalTaskItems,
   retryTask,
+  reopenTask,
   updateTask,
 } from '@features/tasks/api';
 import { getCodexDefaults, getSkills } from '@features/settings/api';
@@ -124,6 +126,7 @@ const taskSummary: TaskSummary = {
   owner_user_id: 'user-1',
   exit_code: null,
   status: 'running',
+  work_status: 'open',
   workspace_summary: {
     workspace_id: workspace.workspace_id,
     label: workspace.label,
@@ -232,6 +235,7 @@ function createOutputPage(
 
 vi.mock('@features/tasks/api', () => ({
   cancelTask: vi.fn(),
+  completeTask: vi.fn(),
   createTask: vi.fn(),
   forkTask: vi.fn(),
   getTask: vi.fn(),
@@ -242,6 +246,7 @@ vi.mock('@features/tasks/api', () => ({
   interruptTurn: vi.fn(),
   listCanonicalTaskItems: vi.fn(),
   retryTask: vi.fn(),
+  reopenTask: vi.fn(),
   updateTask: vi.fn(),
 }));
 vi.mock('@features/settings/api', () => ({
@@ -368,6 +373,7 @@ vi.mock('@features/auth', async (importOriginal) => {
 
 const mockCreateTask = vi.mocked(createTask);
 const mockCancelTask = vi.mocked(cancelTask);
+const mockCompleteTask = vi.mocked(completeTask);
 const mockUpdateTask = vi.mocked(updateTask);
 const mockForkTask = vi.mocked(forkTask);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
@@ -382,6 +388,7 @@ const mockGetTaskTurns = vi.mocked(getTaskTurns);
 const mockInterruptTurn = vi.mocked(interruptTurn);
 const mockListCanonicalTaskItems = vi.mocked(listCanonicalTaskItems);
 const mockRetryTask = vi.mocked(retryTask);
+const mockReopenTask = vi.mocked(reopenTask);
 const mockGetDomainProjects = vi.mocked(getDomainProjects);
 
 afterEach(() => {
@@ -395,6 +402,7 @@ beforeEach(() => {
 
   mockCreateTask.mockReset();
   mockCancelTask.mockReset();
+  mockCompleteTask.mockReset();
   mockUpdateTask.mockReset();
   mockForkTask.mockReset();
   mockGetCodexDefaults.mockReset();
@@ -409,6 +417,7 @@ beforeEach(() => {
   mockListCanonicalTaskItems.mockReset();
   mockGetTaskMessages.mockReset();
   mockRetryTask.mockReset();
+  mockReopenTask.mockReset();
 
   mockGetCodexDefaults.mockResolvedValue({
     codex_config_toml: null,
@@ -648,6 +657,55 @@ describe('TasksPage', () => {
       task_id: 'task-1',
     });
     await waitFor(() => expect(headerInterrupt).toBeEnabled());
+  });
+
+  it('prevents duplicate Complete requests and disables the action while pending', async () => {
+    const user = userEvent.setup();
+    let resolveComplete: ((value: TaskSummary) => void) | undefined;
+    mockCompleteTask.mockImplementation(() => new Promise((resolve) => {
+      resolveComplete = resolve;
+    }));
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    const completeItem = await screen.findByRole('menuitem', { name: 'Complete Task' });
+    await user.click(completeItem);
+    await user.click(completeItem);
+    await waitFor(() => expect(mockCompleteTask).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Complete Task' }))
+      .toHaveAttribute('data-disabled');
+    resolveComplete?.({ ...taskSummary, work_status: 'completed' });
+    await waitFor(() => expect(mockCompleteTask).toHaveBeenCalledTimes(1));
+  });
+
+  it('prevents duplicate Reopen requests and disables the action while pending', async () => {
+    const user = userEvent.setup();
+    const completedTask = { ...taskSummary, status: 'succeeded' as const, work_status: 'completed' as const };
+    mockGetTasks.mockResolvedValue({ items: [completedTask] });
+    mockGetTask.mockResolvedValue({ ...taskRecord, ...completedTask });
+    let resolveReopen: ((value: TaskSummary) => void) | undefined;
+    mockReopenTask.mockImplementation(() => new Promise((resolve) => {
+      resolveReopen = resolve;
+    }));
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    const reopenItem = await screen.findByRole('menuitem', { name: 'Reopen Task' });
+    await user.click(reopenItem);
+    await user.click(reopenItem);
+    await waitFor(() => expect(mockReopenTask).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Reopen Task' }))
+      .toHaveAttribute('data-disabled');
+    resolveReopen?.({ ...completedTask, work_status: 'open' });
+    await waitFor(() => expect(mockReopenTask).toHaveBeenCalledTimes(1));
   });
 
   it('resolves the selected Task Turn and idempotency key after switching Tasks', async () => {

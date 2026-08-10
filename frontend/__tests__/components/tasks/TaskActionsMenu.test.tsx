@@ -13,6 +13,7 @@ const task: TaskSummary = {
   title: 'Failed Task',
   prompt: 'Retry me',
   status: 'failed',
+  work_status: 'open',
   owner_user_id: 'u1',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:01:00Z',
@@ -25,6 +26,8 @@ function actions() {
   return {
     onArchive: vi.fn(),
     onUnarchive: vi.fn(),
+    onComplete: vi.fn(),
+    onReopen: vi.fn(),
     onInterrupt: vi.fn(),
     onRetry: vi.fn(),
     onMove: vi.fn(),
@@ -76,5 +79,75 @@ describe('TaskActionsMenu', () => {
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
     expect(await screen.findByRole('menuitem', { name: 'Interrupt current Turn' }))
       .toHaveAttribute('data-disabled');
+  });
+
+  it('gates Complete and Reopen on explicit work status', async () => {
+    const user = userEvent.setup();
+    const handlers = actions();
+    renderWithProviders(
+      <TaskActionsMenu task={task} canMutate disabledReason={null} {...handlers} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Complete Task' }))
+      .not.toHaveAttribute('data-disabled');
+    expect(await screen.findByRole('menuitem', { name: 'Reopen Task' }))
+      .toHaveAttribute('data-disabled');
+  });
+
+  it('keeps Complete available after a succeeded Turn until work is explicitly completed', async () => {
+    const user = userEvent.setup();
+    const handlers = actions();
+    renderWithProviders(
+      <TaskActionsMenu
+        task={{ ...task, status: 'succeeded', work_status: 'open' }}
+        canMutate
+        disabledReason={null}
+        {...handlers}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Complete Task' }))
+      .not.toHaveAttribute('data-disabled');
+    expect(await screen.findByRole('menuitem', { name: 'Reopen Task' }))
+      .toHaveAttribute('data-disabled');
+  });
+
+  it('disables the matching lifecycle action while its mutation is pending', async () => {
+    const user = userEvent.setup();
+    const handlers = actions();
+    renderWithProviders(
+      <TaskActionsMenu
+        task={task}
+        canMutate
+        disabledReason={null}
+        completePending
+        {...handlers}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Complete Task' }))
+      .toHaveAttribute('data-disabled');
+  });
+
+  it('localizes lifecycle action labels', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <TaskActionsMenu
+        task={{ ...task, work_status: 'completed' }}
+        canMutate
+        disabledReason={null}
+        {...actions()}
+      />,
+      { locale: 'zh' },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    expect(await screen.findByRole('menuitem', { name: '完成任务' }))
+      .toHaveAttribute('data-disabled');
+    expect(await screen.findByRole('menuitem', { name: '重新打开任务' }))
+      .not.toHaveAttribute('data-disabled');
   });
 });

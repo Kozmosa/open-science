@@ -783,6 +783,7 @@ export function mockCreateTask(payload: TaskCreateRequest): TaskSummary {
     owner_user_id: MOCK_APP_USER_ID,
     exit_code: null,
     status: 'queued',
+    work_status: 'open',
     workspace_summary: {
       workspace_id: workspace.workspace_id,
       label: workspace.label,
@@ -917,10 +918,37 @@ export function mockCancelTask(taskId: string): TaskSummary {
     [taskId]: {
       ...task,
       status: 'cancelled',
+      work_status: 'cancelled',
       updated_at: timestamp,
       completed_at: timestamp,
       error_summary: 'Task cancelled by user',
     },
+  };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
+export function mockCompleteTask(taskId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  if (task.work_status !== 'open') {
+    throw new Error('Task is not open');
+  }
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: { ...task, work_status: 'completed', updated_at: timestamp },
+  };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
+export function mockReopenTask(taskId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  if (task.work_status === 'open') {
+    throw new Error('Task is already open');
+  }
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: { ...task, work_status: 'open', updated_at: timestamp },
   };
   return cloneTaskSummary(mockTasks[taskId]);
 }

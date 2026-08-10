@@ -53,6 +53,7 @@ def _duration_ms(started_at: object, finished_at: object) -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class ConversationTaskProjection:
+    work_status: str
     status: str
     started_at: str | None
     completed_at: str | None
@@ -158,6 +159,7 @@ class ConversationProjectionService:
                 for turn in turns
             )
             result[task_id] = ConversationTaskProjection(
+                work_status=work_status,
                 status=status,
                 started_at=min(started) if started else None,
                 completed_at=max(finished) if finished else None,

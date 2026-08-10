@@ -8,6 +8,7 @@ import type {
 export type TaskStatus =
   | 'queued' | 'starting' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused'
   | 'launch_unknown' | 'stopped_by_project_archive' | 'stopped_permission_revoked' | 'stopped_runtime_unknown';
+export type TaskWorkStatus = 'open' | 'completed' | 'cancelled';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
@@ -34,6 +35,7 @@ export type TaskResultSummary = { exit_code: number | null; failure_category: st
 
 export type TaskSummary = TaskSummaryResponse & {
   status: TaskStatus;
+  work_status: TaskWorkStatus;
   started_at: string | null;
   completed_at: string | null;
   error_summary: string | null;
@@ -132,6 +134,7 @@ export function adaptTask(value: TaskSummaryResponse): TaskSummary {
   return {
     ...value,
     status: value.status as TaskStatus,
+    work_status: value.work_status,
     started_at: value.started_at ?? null,
     completed_at: value.completed_at ?? null,
     error_summary: value.error_summary ?? null,

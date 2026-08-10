@@ -4,6 +4,7 @@ import type {
   TaskEdge,
   TaskSummary,
   TaskStatus,
+  TaskWorkStatus,
 } from '@features/tasks/types';
 import type { AdminUserItem, EnvAccessItem, SearchSettingsResponse } from '@features/settings/types';
 import type { TaskCreateRequest } from '@/generated/transport';
@@ -244,6 +245,7 @@ function makeTask(
   title: string,
   prompt: string,
   status: TaskStatus = 'queued',
+  workStatus: TaskWorkStatus = 'open',
 ): TaskSummary {
   const isFinished = status === 'succeeded' || status === 'failed' || status === 'cancelled';
   return {
@@ -253,6 +255,7 @@ function makeTask(
     environment_id: 'env-localhost',
     title,
     status,
+    work_status: workStatus,
     created_at: BASE_TIME,
     updated_at: isFinished ? LATER_TIME : BASE_TIME,
     started_at: status === 'queued' ? null : BASE_TIME,
@@ -983,7 +986,27 @@ export const frontendV2MockHandlers = [
   http.post('/api/tasks/:taskId/cancel', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     const task = taskById(taskId);
-    return task ? HttpResponse.json(updateTaskStatus(task, 'cancelled')) : notFound('Task', taskId);
+    if (!task) return notFound('Task', taskId);
+    task.work_status = 'cancelled';
+    return HttpResponse.json(updateTaskStatus(task, 'cancelled'));
+  }),
+  http.post('/api/tasks/:taskId/complete', ({ params }) => {
+    const taskId = textParam(params, 'taskId');
+    const task = taskById(taskId);
+    if (!task) return notFound('Task', taskId);
+    if (task.work_status !== 'open') return HttpResponse.json({ detail: 'Task is not open' }, { status: 409 });
+    task.work_status = 'completed';
+    task.updated_at = LATER_TIME;
+    return HttpResponse.json(task);
+  }),
+  http.post('/api/tasks/:taskId/reopen', ({ params }) => {
+    const taskId = textParam(params, 'taskId');
+    const task = taskById(taskId);
+    if (!task) return notFound('Task', taskId);
+    if (task.work_status === 'open') return HttpResponse.json({ detail: 'Task is already open' }, { status: 409 });
+    task.work_status = 'open';
+    task.updated_at = LATER_TIME;
+    return HttpResponse.json(task);
   }),
   http.post('/api/tasks/:taskId/turns', async ({ params, request }) => {
     const taskId = textParam(params, 'taskId');

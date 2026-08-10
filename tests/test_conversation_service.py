@@ -1231,6 +1231,70 @@ def test_work_status_rejects_noop_and_turn_completion_does_not_change_it(
         assert (state["work_status"], state["revision"]) == ("open", 1)
 
 
+def test_explicit_complete_reopen_preserves_pending_submission_and_idempotency(
+    state_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = _service(state_root)
+    admission = service.create_turn(
+        "task-1", _USER, input={"text": "complete me"}, idempotency_key="complete-admission"
+    )
+    timestamps = iter(
+        (
+            "2026-08-10T20:30:00+00:00",
+            "2026-08-10T20:30:01+00:00",
+            "2026-08-10T20:30:02+00:00",
+            "2026-08-10T20:30:03+00:00",
+        )
+    )
+    monkeypatch.setattr(conversation_service_module, "_now", lambda: next(timestamps))
+
+    completed = service.complete_task("task-1", _USER, idempotency_key="complete-explicit")
+    completed_view = service.read_task("task-1", _USER)
+    replay = service.complete_task("task-1", _USER, idempotency_key="complete-explicit")
+    replay_view = service.read_task("task-1", _USER)
+    assert completed == replay
+    assert completed["work_status"] == TaskWorkStatus.COMPLETED
+    assert completed_view["updated_at"] == "2026-08-10T20:30:00+00:00"
+    assert replay_view["updated_at"] == completed_view["updated_at"]
+    with closing(connect(_db_path(state_root))) as conn:
+        submission = conn.execute(
+            "SELECT status, failure_code FROM turn_submissions WHERE submission_id = ?",
+            (admission["submission_id"],),
+        ).fetchone()
+    assert submission is not None
+    assert tuple(submission) == ("queued", None)
+
+    reopened = service.reopen_task("task-1", _USER, idempotency_key="reopen-explicit")
+    reopened_view = service.read_task("task-1", _USER)
+    assert reopened["work_status"] == TaskWorkStatus.OPEN
+    assert reopened_view["updated_at"] == "2026-08-10T20:30:02+00:00"
+    replacement = service.create_turn(
+        "task-1", _USER, input={"text": "after reopen"}, idempotency_key="after-reopen-explicit"
+    )
+    assert replacement["status"] == "queued"
+
+
+def test_explicit_complete_does_not_interrupt_active_turn(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    active_turn = _create_accepted_turn(state_root, service)
+    completed = service.complete_task("task-1", _USER, idempotency_key="complete-active")
+    assert completed["work_status"] == TaskWorkStatus.COMPLETED
+    with closing(connect(_db_path(state_root))) as conn:
+        state = conn.execute(
+            "SELECT work_status FROM conversation_task_states WHERE task_id = 'task-1'"
+        ).fetchone()
+        turn = conn.execute(
+            "SELECT status FROM task_turns WHERE turn_id = ?", (active_turn,)
+        ).fetchone()
+    assert state is not None and state["work_status"] == TaskWorkStatus.COMPLETED
+    assert turn is not None and turn["status"] == TurnStatus.IN_PROGRESS
+    service.reopen_task("task-1", _USER, idempotency_key="reopen-active")
+    service.finish_turn("task-1", active_turn, status=TurnStatus.COMPLETED)
+    assert service.read_task("task-1", _USER)["work_status"] == TaskWorkStatus.OPEN
+
+
 def test_acceptance_materializes_once_and_rejects_secret_evidence(
     state_root: Path,
 ) -> None:

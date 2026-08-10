@@ -15,7 +15,9 @@ import { createTransportMockAdapter } from '@/shared/api/transport';
 import { frontendV2MockHandlers, resetFrontendV2MockState } from './scenario';
 import {
   mockArchiveTask,
+  mockCompleteTask,
   mockCancelTask,
+  mockReopenTask,
   mockCreateEnvironment,
   mockCreateProjectEnvironmentReference,
   mockCreateTask,
@@ -206,6 +208,8 @@ export const legacyMockHandlers = [
   http.post('/api/tasks/:taskId/archive', ({ params }) => mockJson(() => mockArchiveTask(textParam(params, 'taskId')))),
   http.post('/api/tasks/:taskId/unarchive', ({ params }) => mockJson(() => mockUnarchiveTask(textParam(params, 'taskId')))),
   http.post('/api/tasks/:taskId/cancel', ({ params }) => mockJson(() => mockCancelTask(textParam(params, 'taskId')))),
+  http.post('/api/tasks/:taskId/complete', ({ params }) => mockJson(() => mockCompleteTask(textParam(params, 'taskId')))),
+  http.post('/api/tasks/:taskId/reopen', ({ params }) => mockJson(() => mockReopenTask(textParam(params, 'taskId')))),
   http.get('/api/tasks/:taskId/turns', ({ params }) => {
     const taskId = textParam(params, 'taskId');
     return HttpResponse.json({ items: [{

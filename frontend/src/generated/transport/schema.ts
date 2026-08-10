@@ -3258,6 +3258,10 @@ export type TaskSummaryResponse = {
      */
     updated_at: string;
     /**
+     * Work Status
+     */
+    work_status: 'open' | 'completed' | 'cancelled';
+    /**
      * Working Directory
      */
     working_directory?: string | null;
@@ -7422,6 +7426,36 @@ export type PostApiTasksTaskIdCancelResponses = {
 
 export type PostApiTasksTaskIdCancelResponse = PostApiTasksTaskIdCancelResponses[keyof PostApiTasksTaskIdCancelResponses];
 
+export type PostApiTasksTaskIdCompleteData = {
+    body?: never;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/complete';
+};
+
+export type PostApiTasksTaskIdCompleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdCompleteError = PostApiTasksTaskIdCompleteErrors[keyof PostApiTasksTaskIdCompleteErrors];
+
+export type PostApiTasksTaskIdCompleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskSummaryResponse;
+};
+
+export type PostApiTasksTaskIdCompleteResponse = PostApiTasksTaskIdCompleteResponses[keyof PostApiTasksTaskIdCompleteResponses];
+
 export type PostApiTasksTaskIdForkData = {
     body: TaskForkRequest;
     path: {
@@ -7575,6 +7609,36 @@ export type PostApiTasksTaskIdMoveResponses = {
 };
 
 export type PostApiTasksTaskIdMoveResponse = PostApiTasksTaskIdMoveResponses[keyof PostApiTasksTaskIdMoveResponses];
+
+export type PostApiTasksTaskIdReopenData = {
+    body?: never;
+    path: {
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/{task_id}/reopen';
+};
+
+export type PostApiTasksTaskIdReopenErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostApiTasksTaskIdReopenError = PostApiTasksTaskIdReopenErrors[keyof PostApiTasksTaskIdReopenErrors];
+
+export type PostApiTasksTaskIdReopenResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaskSummaryResponse;
+};
+
+export type PostApiTasksTaskIdReopenResponse = PostApiTasksTaskIdReopenResponses[keyof PostApiTasksTaskIdReopenResponses];
 
 export type GetApiTasksTaskIdTurnsData = {
     body?: never;

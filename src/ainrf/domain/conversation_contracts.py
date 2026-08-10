@@ -181,6 +181,8 @@ class IdempotencyScope(StrEnum):
     INTERRUPT_TURN = "interrupt_turn"
     RESOLVE_APPROVAL = "resolve_approval"
     UPDATE_WORK_STATUS = "update_work_status"
+    COMPLETE_TASK = "complete_task"
+    REOPEN_TASK = "reopen_task"
     FORK_PREVIEW = "fork_preview"
     FORK_CONFIRM = "fork_confirm"
     CANCEL_TASK = "cancel_task"

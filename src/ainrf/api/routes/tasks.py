@@ -20,6 +20,7 @@ from ainrf.domain import (
     DomainPermissionError,
     TaskProjectionService,
 )
+from ainrf.domain.conversation_contracts import ConversationContractError
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -58,6 +59,11 @@ def _translate_v2_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=403, detail="Task permission denied")
     if isinstance(exc, DomainNotFoundError):
         return HTTPException(status_code=404, detail="Task not found")
+    if isinstance(exc, ConversationContractError):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": str(exc)},
+        )
     if isinstance(exc, ValueError):
         return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected Task domain error")
@@ -188,6 +194,44 @@ async def cancel_task(request: Request, task_id: str) -> None:
             idempotency_key=_idempotency_key(request),
         )
         return
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
+
+
+@router.post("/{task_id}/complete", response_model=TaskSummaryResponse)
+async def complete_task(request: Request, task_id: str) -> TaskSummaryResponse:
+    """Mark Task business work complete and return its canonical projection."""
+
+    conversation = _get_conversation_application_service(request)
+    user = get_current_user(request)
+    try:
+        conversation.complete_task(
+            task_id,
+            user,
+            idempotency_key=_idempotency_key(request),
+        )
+        return _v2_task_summary(_get_task_projection_service(request), task_id, user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _translate_v2_error(exc) from exc
+
+
+@router.post("/{task_id}/reopen", response_model=TaskSummaryResponse)
+async def reopen_task(request: Request, task_id: str) -> TaskSummaryResponse:
+    """Reopen a completed or cancelled Task and return its canonical projection."""
+
+    conversation = _get_conversation_application_service(request)
+    user = get_current_user(request)
+    try:
+        conversation.reopen_task(
+            task_id,
+            user,
+            idempotency_key=_idempotency_key(request),
+        )
+        return _v2_task_summary(_get_task_projection_service(request), task_id, user)
     except HTTPException:
         raise
     except Exception as exc:
