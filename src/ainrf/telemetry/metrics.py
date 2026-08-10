@@ -33,15 +33,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ),
     ("ainrf_auth_login_success_total", [], "Successful login attempts"),
     ("ainrf_auth_login_failed_total", ["reason"], "Failed login attempts"),
-    ("ainrf_terminal_exec_total", [], "Terminal command executions"),
-    ("ainrf_terminal_exec_denied_total", [], "Denied terminal command executions"),
     (
         "ainrf_files_sensitive_path_access_total",
         ["pattern"],
         "Sensitive file path access events by bounded path pattern",
     ),
-    ("ainrf_environment_update_total", [], "Environment detection/update events"),
-    ("ainrf_code_session_created_total", [], "Code session spawn events"),
     (
         "ainrf_rate_limited_total",
         ["reason", "route"],
@@ -82,7 +78,6 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
         ["target", "error_type"],
         "SSH connection errors by privacy-safe aggregate target",
     ),
-    ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),
     ("ainrf_client_error_events_total", [], "Client-side error events ingested"),
     ("ainrf_literature_summarize_total", ["status"], "LLM summarize calls for literature papers"),
 ]
@@ -99,7 +94,6 @@ _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
         ["target"],
         "SSH command execution latency by privacy-safe aggregate target",
     ),
-    ("ainrf_db_query_duration_seconds", ["db"], "Database query latency"),
     ("ainrf_literature_summarize_duration_seconds", [], "Per-paper LLM summarize duration"),
     (
         "ainrf_client_lcp_seconds",

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from pathlib import Path
 from typing import Generator
 
@@ -94,6 +96,74 @@ class TestMetricsFormat:
 
 
 class TestPublicMetricPrivacy:
+    def test_observability_consumers_reference_registered_metrics_and_public_labels(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        operational_paths = (
+            root / "deploy/examples/prometheus-rules.example.yml",
+            root / "deploy/config/prometheus/rules/ainrf-alerts.yml",
+            root / "deploy/config/grafana/dashboards/ainrf/ainrf-overview.json",
+        )
+        documentation_paths = (
+            root / "docs-site/docs/observability/metrics.md",
+            root / "docs-site/docs/observability/monitoring-stack.md",
+            root / "docs/reference/prometheus-metrics.md",
+        )
+        registered = {
+            match.group(1)
+            for match in re.finditer(r"^# HELP (ainrf_[a-z0-9_]+) ", get_metrics_text(), re.M)
+        }
+        references: set[str] = set()
+        contents: dict[Path, str] = {}
+        for path in (*operational_paths, *documentation_paths):
+            content = path.read_text(encoding="utf-8")
+            contents[path] = content
+        for path in operational_paths[:2]:
+            document = yaml.safe_load(contents[path])
+            expressions = (
+                str(rule["expr"]) for group in document["groups"] for rule in group["rules"]
+            )
+            for expression in expressions:
+                for name in re.findall(r"ainrf_[a-z0-9_]+", expression):
+                    references.add(name.removesuffix("_bucket"))
+        dashboard_document = json.loads(contents[operational_paths[2]])
+        for panel in dashboard_document["panels"]:
+            for target in panel.get("targets", []):
+                for name in re.findall(r"ainrf_[a-z0-9_]+", str(target.get("expr", ""))):
+                    references.add(name.removesuffix("_bucket"))
+
+        retired = {
+            "ainrf_terminal_exec_total",
+            "ainrf_terminal_exec_denied_total",
+            "ainrf_environment_update_total",
+            "ainrf_code_session_created_total",
+            "ainrf_db_query_duration_seconds",
+            "ainrf_db_slow_query_total",
+        }
+        documentation = "\n".join(contents[path] for path in documentation_paths)
+        assert retired.isdisjoint(registered)
+        assert retired.isdisjoint(references)
+        assert all(name not in documentation for name in retired)
+        assert references <= registered
+
+        panels = {str(panel["title"]): panel for panel in dashboard_document["panels"]}
+        assert panels["Sensitive File Access"]["targets"][0]["legendFormat"] == "{{pattern}}"
+        ssh_latency = panels["SSH Command Latency"]
+        assert all("by (le, target)" in target["expr"] for target in ssh_latency["targets"])
+        assert all("{{target}}" in target["legendFormat"] for target in ssh_latency["targets"])
+        assert panels["SSH Connection Errors"]["targets"][0]["legendFormat"] == (
+            "{{target}} {{error_type}}"
+        )
+
+        alert_document = yaml.safe_load(contents[operational_paths[1]])
+        alert_rules = {
+            str(rule["alert"]): rule
+            for group in alert_document["groups"]
+            for rule in group["rules"]
+        }
+        ssh_description = alert_rules["AINRFSSHConnectionErrors"]["annotations"]["description"]
+        assert "$labels.target" in ssh_description
+        assert "$labels.host" not in ssh_description
+
     def test_rate_limit_metric_rejects_raw_dynamic_paths(self) -> None:
         opaque_path = "/api/literature/papers/arxiv:2401.12345"
 

@@ -170,40 +170,6 @@
       }
     },
     {
-      "title": "Terminal Exec Commands",
-      "description": "Allowed vs denied terminal commands",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "denied" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
-          }
-        ]
-      },
-      "targets": [
-        {
-          "expr": "rate(ainrf_terminal_exec_total[5m])",
-          "legendFormat": "exec",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(ainrf_terminal_exec_denied_total[5m])",
-          "legendFormat": "denied",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-    {
       "title": "Active WebSocket Sessions",
       "description": "Currently open terminal WebSocket connections",
       "type": "stat",
@@ -246,7 +212,7 @@
       "targets": [
         {
           "expr": "increase(ainrf_files_sensitive_path_access_total[5m])",
-          "legendFormat": "{{path}}",
+          "legendFormat": "{{pattern}}",
           "refId": "A"
         }
       ],
@@ -254,48 +220,6 @@
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom" }
       }
-    },
-    {
-      "title": "Environment Updates",
-      "description": "Environment detection/update operations",
-      "type": "timeseries",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
-        }
-      },
-      "targets": [
-        {
-          "expr": "rate(ainrf_environment_update_total[5m])",
-          "legendFormat": "{{status}}",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-    {
-      "title": "Code Sessions Created",
-      "description": "Total code-server sessions spawned",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" }
-        }
-      },
-      "targets": [
-        {
-          "expr": "increase(ainrf_code_session_created_total[1h])",
-          "legendFormat": "last hour",
-          "refId": "A"
-        }
-      ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     },
     {
       "title": "SSH Command Latency",
@@ -314,18 +238,18 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, host))",
-          "legendFormat": "p50 {{host}}",
+          "expr": "histogram_quantile(0.50, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, target))",
+          "legendFormat": "p50 {{target}}",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, host))",
-          "legendFormat": "p95 {{host}}",
+          "expr": "histogram_quantile(0.95, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, target))",
+          "legendFormat": "p95 {{target}}",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, host))",
-          "legendFormat": "p99 {{host}}",
+          "expr": "histogram_quantile(0.99, sum(rate(ainrf_ssh_command_duration_seconds_bucket[5m])) by (le, target))",
+          "legendFormat": "p99 {{target}}",
           "refId": "C"
         }
       ],
@@ -336,7 +260,7 @@
     },
     {
       "title": "SSH Connection Errors",
-      "description": "SSH connection errors by host and error type",
+      "description": "SSH connection errors by aggregate target and error type",
       "type": "timeseries",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 28 },
       "fieldConfig": {
@@ -352,7 +276,7 @@
       "targets": [
         {
           "expr": "increase(ainrf_ssh_connection_error_total[5m])",
-          "legendFormat": "{{host}} {{error_type}}",
+          "legendFormat": "{{target}} {{error_type}}",
           "refId": "A"
         }
       ],
@@ -360,32 +284,6 @@
         "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom" }
       }
-    },
-    {
-      "title": "Slow DB Queries",
-      "description": "Database queries exceeding 1 second threshold",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 28 },
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 1, "color": "yellow" },
-              { "value": 10, "color": "red" }
-            ]
-          }
-        }
-      },
-      "targets": [
-        {
-          "expr": "increase(ainrf_db_slow_query_total[1h])",
-          "legendFormat": "{{db}}",
-          "refId": "A"
-        }
-      ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     },
     {
       "title": "HTTP Contract Traffic by Surface / Operation",

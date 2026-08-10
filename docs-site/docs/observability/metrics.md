@@ -13,11 +13,7 @@ description: OpenScience Prometheus 指标参考 — 计数器、直方图、仪
 | `ainrf_http_contract_requests_total` | surface, operation, method, status_class | 长期 HTTP contract 流量；准确区分 canonical、root、`/v1` 与 external-compatible |
 | `ainrf_auth_login_success_total` | — | 登录成功次数 |
 | `ainrf_auth_login_failed_total` | reason | 按原因分类的登录失败次数 |
-| `ainrf_terminal_exec_total` | environment_id | 终端命令执行次数 |
-| `ainrf_terminal_exec_denied_total` | — | 被拒绝的终端命令次数 |
-| `ainrf_code_session_created_total` | — | Code-Server 会话创建次数 |
 | `ainrf_files_sensitive_path_access_total` | pattern | 敏感路径访问次数 |
-| `ainrf_environment_update_total` | — | 环境更新次数 |
 
 ## 直方图（Histograms）
 

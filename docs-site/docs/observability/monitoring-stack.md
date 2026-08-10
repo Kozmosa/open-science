@@ -109,11 +109,10 @@ Dashboard JSON 位于 `deploy/config/grafana/dashboards/ainrf/ainrf-overview.jso
 | P95 延迟 | Stat | `ainrf_http_request_duration_seconds` | 95 分位延迟，阈值 1s/5s |
 | 请求延迟分布 | 时序图 | p50/p90/p99 | 延迟分布趋势 |
 | 登录成功/失败 | 时序图 | `ainrf_auth_login_*_total` | 登录成功/失败趋势 |
-| 终端命令执行 | 时序图 | `ainrf_terminal_exec_*` | 允许/拒绝的终端命令 |
 | 活跃 WebSocket 会话 | Stat | `ainrf_terminal_ws_active` | 当前活跃 WS 连接数 |
 | 敏感文件访问 | 柱状图 | `ainrf_files_sensitive_path_access_total` | 敏感路径访问事件 |
-| 环境更新 | 时序图 | `ainrf_environment_update_total` | 环境检测/更新操作 |
-| 代码会话创建 | Stat | `ainrf_code_session_created_total` | 最近 1 小时代码会话数 |
+| SSH 命令延迟 | 时序图 | `ainrf_ssh_command_duration_seconds` | 按隐私安全的 aggregate target 展示 p50/p95/p99 |
+| SSH 连接错误 | 时序图 | `ainrf_ssh_connection_error_total` | 按 aggregate target 与错误类型展示 |
 | HTTP contract traffic | 时序图 | `ainrf_http_contract_requests_total` | 按 canonical/root/`v1`/external-compatible 与 stable operation 展示长期流量 |
 | HTTP contract errors | 时序图 | `ainrf_http_contract_requests_total` | 按 surface/operation 展示 4xx/5xx |
 | Telemetry guard | Stat | unmatched + delivery latch | unknown 分类或 durable delivery failure 时保持 fail-closed |

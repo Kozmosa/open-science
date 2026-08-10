@@ -36,9 +36,9 @@ Metrics emitted by the `build_http_metrics_middleware` (every HTTP request excep
 
 | Metric | Type | Labels | Emitted When | Call Site |
 |--------|------|--------|--------------|-----------|
-| `ainrf_ssh_connection_attempt_total` | Counter | `host` | An SSH connection is opened | `execution/ssh.py` |
-| `ainrf_ssh_connection_error_total` | Counter | `host`, `error_type` | An SSH connection or command fails | `execution/ssh.py` |
-| `ainrf_ssh_command_duration_seconds` | Histogram | `host` | An SSH command completes (success or failure) | `execution/ssh.py` |
+| `ainrf_ssh_connection_attempt_total` | Counter | `target` (`all`) | An SSH connection is opened | `execution/ssh.py` |
+| `ainrf_ssh_connection_error_total` | Counter | `target` (`all`), `error_type` | An SSH connection or command fails | `execution/ssh.py` |
+| `ainrf_ssh_command_duration_seconds` | Histogram | `target` (`all`) | An SSH command completes (success or failure) | `execution/ssh.py` |
 
 ---
 
@@ -46,20 +46,9 @@ Metrics emitted by the `build_http_metrics_middleware` (every HTTP request excep
 
 | Metric | Type | Labels | Emitted When | Call Site |
 |--------|------|--------|--------------|-----------|
-| `ainrf_terminal_exec_total` | Counter | _(none)_ | A command is executed in a terminal session | `routes/terminal.py` |
-| `ainrf_terminal_exec_denied_total` | Counter | _(none)_ | A command execution is denied by policy | `routes/terminal.py` |
 | `ainrf_terminal_ws_active` | Gauge | _(none)_ | WebSocket terminal session opens (+1) / closes (−1) | `routes/terminal.py` |
 
 > **Dashboard tip**: Plot `ainrf_terminal_ws_active` as a time-series to see concurrent terminal session count.
-
----
-
-## Database
-
-| Metric | Type | Labels | Emitted When | Call Site |
-|--------|------|--------|--------------|-----------|
-| `ainrf_db_query_duration_seconds` | Histogram | `db` (SQLite connection path stem, e.g. `literature`, `auth`) | Any SQLite query completes | `db/instrumentation.py` |
-| `ainrf_db_slow_query_total` | Counter | `db` | A SQLite query exceeds 1 second | `db/instrumentation.py` |
 
 ---
 
@@ -68,15 +57,6 @@ Metrics emitted by the `build_http_metrics_middleware` (every HTTP request excep
 | Metric | Type | Labels | Emitted When |
 |--------|------|--------|--------------|
 | `ainrf_files_sensitive_path_access_total` | Counter | `pattern` (bounded sensitive-path category) | An authorized file route attempts to access a sensitive path (e.g. `.env` or `*.pem`) |
-
----
-
-## Environments
-
-| Metric | Type | Labels | Emitted When |
-|--------|------|--------|--------------|
-| `ainrf_environment_update_total` | Counter | _(none)_ | An environment detection or configuration update occurs |
-| `ainrf_code_session_created_total` | Counter | _(none)_ | A new code session (Claude Code / Codex process) is spawned |
 
 ---
 

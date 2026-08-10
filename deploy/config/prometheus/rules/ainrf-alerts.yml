@@ -51,24 +51,8 @@ groups:
           summary: "OpenScience SSH connection errors detected"
           description: >
             SSH connection errors are occurring at {{ $value | printf "%.2f" }}
-            per second on host {{ $labels.host }}.  Check container health and
+            per second for aggregate target {{ $labels.target }}. Check runtime health and
             network connectivity.
-
-  - name: ainrf.db
-    rules:
-      - alert: AINRFSlowQuerySpike
-        expr: |
-          increase(ainrf_db_slow_query_total[10m]) > 10
-        for: 5m
-        labels:
-          severity: warning
-          component: database
-        annotations:
-          summary: "OpenScience database slow query spike"
-          description: >
-            {{ $value }} slow queries (>1s) were recorded in the last 10
-            minutes on database {{ $labels.db }}.  Consider adding indexes or
-            optimizing the queries.
 
   - name: ainrf.domain-control-plane
     rules:
@@ -319,20 +303,6 @@ groups:
           description: >
             {{ $value }} account lockout events per second. Users are being
             locked out due to repeated failed login attempts.
-
-  - name: ainrf.terminal
-    rules:
-      - alert: AINRFTerminalExecDenials
-        expr: rate(ainrf_terminal_exec_denied_total[5m]) > 1
-        for: 1m
-        labels:
-          severity: warning
-          component: terminal
-        annotations:
-          summary: "Terminal exec commands being denied"
-          description: >
-            {{ $value }} exec denials per second. May indicate unauthorized
-            command attempts or policy violations.
 
   - name: ainrf.security
     rules:
