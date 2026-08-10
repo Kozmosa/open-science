@@ -60,16 +60,16 @@ export const createTask = async (
   return adaptTask(response.task as TaskSummaryResponse);
 };
 
-function taskAction(taskId: string, action: string, idempotencyKey: string): Promise<TaskSummary> {
-  return api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/${action}`, {}, {
+function taskLifecycleAction(taskId: string, action: 'archive' | 'unarchive', idempotencyKey: string): Promise<TaskSummary> {
+  return api.post<TaskSummaryResponse>(`/tasks/${taskId}/${action}`, {}, {
     headers: { 'Idempotency-Key': idempotencyKey },
-  }).then((response) => adaptTask(response.task as TaskSummaryResponse));
+  }).then(adaptTask);
 }
 
 export const archiveTask = (taskId: string, key: string): Promise<TaskSummary> =>
-  taskAction(taskId, 'archive', key);
+  taskLifecycleAction(taskId, 'archive', key);
 export const unarchiveTask = (taskId: string, key: string): Promise<TaskSummary> =>
-  taskAction(taskId, 'unarchive', key);
+  taskLifecycleAction(taskId, 'unarchive', key);
 export const cancelTask = (taskId: string, key: string): Promise<void> =>
   api.post(`/tasks/${taskId}/cancel`, {}, { headers: { 'Idempotency-Key': key } });
 export const getTaskTurns = (taskId: string): Promise<TaskTurnListResponse> =>

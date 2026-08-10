@@ -970,7 +970,7 @@ export const frontendV2MockHandlers = [
     if (!task) return notFound('Task', taskId);
     task.archived_at = LATER_TIME;
     task.archive_reason = 'Archived from frontend v2 mock scenario';
-    return HttpResponse.json(task);
+    return HttpResponse.json(task, { status: 200 });
   }),
   http.post('/api/tasks/:taskId/unarchive', ({ params }) => {
     const taskId = textParam(params, 'taskId');
@@ -978,7 +978,7 @@ export const frontendV2MockHandlers = [
     if (!task) return notFound('Task', taskId);
     task.archived_at = null;
     task.archive_reason = null;
-    return HttpResponse.json(task);
+    return HttpResponse.json(task, { status: 200 });
   }),
   http.post('/api/tasks/:taskId/cancel', ({ params }) => {
     const taskId = textParam(params, 'taskId');

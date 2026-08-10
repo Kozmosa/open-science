@@ -874,7 +874,27 @@ export function mockArchiveTask(taskId: string): TaskSummary {
   const timestamp = nowIso();
   mockTasks = {
     ...mockTasks,
-    [taskId]: { ...task, updated_at: timestamp },
+    [taskId]: {
+      ...task,
+      archived_at: timestamp,
+      archive_reason: 'user_archived',
+      updated_at: timestamp,
+    },
+  };
+  return cloneTaskSummary(mockTasks[taskId]);
+}
+
+export function mockUnarchiveTask(taskId: string): TaskSummary {
+  const task = mockGetTask(taskId);
+  const timestamp = nowIso();
+  mockTasks = {
+    ...mockTasks,
+    [taskId]: {
+      ...task,
+      archived_at: null,
+      archive_reason: null,
+      updated_at: timestamp,
+    },
   };
   return cloneTaskSummary(mockTasks[taskId]);
 }

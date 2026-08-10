@@ -51,6 +51,7 @@ import {
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
+  mockUnarchiveTask,
   resetMockEnvironmentState,
   resetMockTaskState,
   resetMockTerminalSession,
@@ -203,6 +204,7 @@ export const legacyMockHandlers = [
     }, { status: 202 });
   })),
   http.post('/api/tasks/:taskId/archive', ({ params }) => mockJson(() => mockArchiveTask(textParam(params, 'taskId')))),
+  http.post('/api/tasks/:taskId/unarchive', ({ params }) => mockJson(() => mockUnarchiveTask(textParam(params, 'taskId')))),
   http.post('/api/tasks/:taskId/cancel', ({ params }) => mockJson(() => mockCancelTask(textParam(params, 'taskId')))),
   http.get('/api/tasks/:taskId/turns', ({ params }) => {
     const taskId = textParam(params, 'taskId');

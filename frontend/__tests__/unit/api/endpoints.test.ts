@@ -48,6 +48,35 @@ describe('api endpoints', () => {
     expect(items[0]?.item_type).toBe('user_message');
   });
 
+  it('adapts archive and unarchive TaskSummary responses from MSW', async () => {
+    const {
+      archiveTask,
+      createTask,
+      unarchiveTask,
+    } = await import('../../../src/features/tasks/api/endpoints');
+    const created = await createTask({
+      projectId: 'project-alpha',
+      workspaceId: 'workspace-alpha',
+      researcherType: 'vanilla',
+      harnessEngine: 'claude-code',
+      prompt: 'Archive contract regression',
+      skills: [],
+      mcpServers: [],
+    }, 'task.create:archive-contract');
+
+    const archived = await archiveTask(created.task_id, 'task.archive:archive-contract');
+    expect(archived).toMatchObject({
+      task_id: created.task_id,
+      archived_at: expect.any(String),
+      archive_reason: expect.any(String),
+    });
+    expect(archived).not.toHaveProperty('task');
+
+    const restored = await unarchiveTask(created.task_id, 'task.unarchive:archive-contract');
+    expect(restored).toMatchObject({ task_id: created.task_id, archived_at: null, archive_reason: null });
+    expect(restored).not.toHaveProperty('task');
+  });
+
   it('sends stable idempotency keys through the Turn submission Interface', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ task_id: 'task-1', status: 'running', sequence: 1 }), {
