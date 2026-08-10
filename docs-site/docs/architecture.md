@@ -81,6 +81,7 @@ Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递�
 | `/v1/models`、`/v1/messages` | External protocol adapter | Anthropic-compatible 外部协议入口 | 长期支持 |
 | `domain-migration` CLI 与 `/api/admin/domain/legacy-records` | Domain migration / release | 已退休状态的只读历史审计证据；不得成为 product read fallback | 保留，admin-only |
 | `migration retire-legacy preflight|apply|verify` | Release owner | version 32 到 current baseline 33 的一次性维护窗口删除动作 | 保留，one-time only |
+| `/api/tasks/{task_id}/fork` legacy one-shot Task fork | Conversation Domain / Task HTTP Adapter | WebUI caller 仍是 `frontend/src/features/tasks/api/endpoints.ts::forkTask`（由 `TasksPage` 的 Fork Task 操作调用）；继续以旧 payload 映射 canonical Task + Submission，待 UI 改用正式 transfer 流程 | fail-closed 保留；caller 尚未迁移，方向为 `/api/tasks/{task_id}/fork-preview` → `/api/tasks/{task_id}/fork-preview/{preview_id}/confirm`，完成 caller、generated transport、contract tests 与 release staging 验收后再评估删除 |
 | Literature subscriptions CRUD（4 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 topic application Interface 上的 payload Adapter，但尚未完成删除批准 | fail-closed 保留 |
 | Literature subscription fetch/status（2 operations） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 durable check Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
 | Literature paper read（1 operation） | Literature compatibility Adapter | repo caller audit 未发现 WebUI caller；已收敛为正式 paper state Interface 上的 Adapter，但尚未完成删除批准 | fail-closed 保留 |
