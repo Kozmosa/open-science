@@ -10,7 +10,7 @@ review_by: 2026-08-29
 **Status:** Accepted product and service design; Dramatiq + dedicated Redis execution selected
 **Date:** 2026-07-11
 **Scope:** 文献追踪用户体验、持久化数据、每日检查、按需摘要、研究任务转化、统一后端 API 与迁移边界
-**Supersedes:** 当本文与 [`2026-05-21-literature-tracking-design.md`](archived/2026-05-21-literature-tracking-design.md) 或 [`docs/proposals/literature-fetch-refactor.md`](../../proposals/literature-fetch-refactor.md) 冲突时，以本文为准
+**Supersedes:** 当本文与 [`2026-05-21-literature-tracking-design.md`](archived/2026-05-21-literature-tracking-design.md) 或 [`literature-fetch-refactor.md`](../../archive/proposals/literature-fetch-refactor.md) 冲突时，以本文为准
 **Task contract:** 文献转研究任务必须复用 [`2026-07-11-project-task-workspace-domain-design.md`](archived/2026-07-11-project-task-workspace-domain-design.md) 的标准 Task 创建、权限、Context 和 Workspace/Environment 派生规则
 
 ## 1. 背景与结论

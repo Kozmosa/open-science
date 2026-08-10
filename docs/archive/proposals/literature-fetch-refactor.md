@@ -1,3 +1,9 @@
+> **Status:** Superseded and archived (2026-08-10)
+> **Superseded by:** [`2026-07-11-literature-tracking-service-redesign-design.md`](../../superpowers/specs/2026-07-11-literature-tracking-service-redesign-design.md)
+> **Original path:** `docs/proposals/literature-fetch-refactor.md`
+>
+> This proposal is preserved for historical context only. The active service redesign above is authoritative.
+
 # Literature Fetch Refactor & Enhancement Proposal
 
 **Date:** 2026-06-15  
