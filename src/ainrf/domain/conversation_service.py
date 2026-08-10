@@ -14,6 +14,7 @@ from uuid import uuid4
 from ainrf.db import connect, run_pending
 from ainrf.domain.conversation_contracts import (
     ApprovalStatus,
+    ContextSnapshotSource,
     ConversationContractError,
     ConversationErrorCode,
     ControlKind,
@@ -369,6 +370,54 @@ class ConversationApplicationService:
             raise DomainConflictError("Task environment must be derived from the Workspace")
         return row
 
+    @staticmethod
+    def _resolve_context_snapshot_ref(
+        conn: sqlite3.Connection,
+        task_id: str,
+        requested_snapshot_ref: str | None,
+    ) -> str | None:
+        """Resolve and validate the immutable Context pin for a new submission.
+
+        A missing request value inherits the Task's current pin.  A supplied
+        value is a one-submission override, but it must name an immutable
+        snapshot belonging to the Task's Project.  The Task pin itself remains
+        the default for later Turns and is owned by the Context lifecycle.
+        """
+
+        task = conn.execute(
+            """
+            SELECT project_id, project_context_snapshot_id
+            FROM tasks WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if task is None:
+            raise DomainNotFoundError(task_id)
+        snapshot_ref = requested_snapshot_ref
+        if snapshot_ref is None:
+            snapshot_ref = (
+                None
+                if task["project_context_snapshot_id"] is None
+                else str(task["project_context_snapshot_id"])
+            )
+        if snapshot_ref is None:
+            return None
+        if not snapshot_ref.strip():
+            raise DomainConflictError("Context snapshot reference must be non-empty")
+        snapshot = conn.execute(
+            """
+            SELECT snapshot.context_snapshot_id
+            FROM context_snapshots AS snapshot
+            JOIN project_context_versions AS version
+              ON version.context_version_id = snapshot.context_version_id
+            WHERE snapshot.context_snapshot_id = ? AND version.project_id = ?
+            """,
+            (snapshot_ref, str(task["project_id"])),
+        ).fetchone()
+        if snapshot is None:
+            raise DomainConflictError("Context snapshot reference must belong to the Task Project")
+        return str(snapshot["context_snapshot_id"])
+
     def initialize_task(self, task_id: str, user: dict[str, object]) -> dict[str, object]:
         """Establish explicit v3 authority for a newly-created Task."""
         actor = self._actor(user)
@@ -506,6 +555,7 @@ class ConversationApplicationService:
                     context_snapshot_ref=snapshot_id,
                     created_at=created_at,
                     updated_at=created_at,
+                    context_snapshot_source=ContextSnapshotSource.TASK_PIN,
                 )
                 executions.insert_submission_intent(
                     submission_id=submission_id,
@@ -642,8 +692,9 @@ class ConversationApplicationService:
                     """
                     UPDATE turn_submissions SET context_snapshot_ref = ?, updated_at = ?
                     WHERE task_id = ? AND status = 'queued'
+                      AND context_snapshot_source = ?
                     """,
-                    (snapshot_id, created_at, task_id),
+                    (snapshot_id, created_at, task_id, ContextSnapshotSource.TASK_PIN),
                 )
                 result: dict[str, object] = {
                     "task_id": task_id,
@@ -771,6 +822,11 @@ class ConversationApplicationService:
                         ConversationErrorCode.ACTIVE_TURN_EXISTS,
                         "Retry cannot be admitted while another Turn is active",
                     )
+                resolved_context_snapshot_ref = self._resolve_context_snapshot_ref(
+                    conn,
+                    task_id,
+                    context_snapshot_ref,
+                )
                 submission_id = uuid4().hex
                 reserved_turn_id = uuid4().hex
                 intent = (
@@ -788,9 +844,14 @@ class ConversationApplicationService:
                     idempotency_key=idempotency_key,
                     request_hash=digest,
                     input_json=_canonical_json(input),
-                    context_snapshot_ref=context_snapshot_ref,
+                    context_snapshot_ref=resolved_context_snapshot_ref,
                     created_at=created_at,
                     updated_at=created_at,
+                    context_snapshot_source=(
+                        ContextSnapshotSource.SUBMISSION_OVERRIDE
+                        if context_snapshot_ref is not None
+                        else ContextSnapshotSource.TASK_PIN
+                    ),
                 )
                 executions.insert_submission_intent(
                     submission_id=submission_id,
@@ -1798,6 +1859,7 @@ class ConversationApplicationService:
                     context_snapshot_ref=snapshot_id,
                     created_at=confirmed_at,
                     updated_at=confirmed_at,
+                    context_snapshot_source=ContextSnapshotSource.TASK_PIN,
                 )
                 executions.insert_submission_intent(
                     submission_id=submission_id,

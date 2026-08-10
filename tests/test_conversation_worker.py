@@ -19,6 +19,7 @@ from ainrf.domain.conversation_execution import (
     RuntimeExecutionClaim,
     SubmissionClaim,
 )
+from ainrf.domain.conversation_execution_repository import SqliteConversationExecutionRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.conversation_worker import ConversationDispatcher, ConversationWorkerRuntime
 from ainrf.domain_control import DomainMaintenanceService
@@ -204,6 +205,67 @@ def state_root(tmp_path: Path) -> Path:
     application.initialize_task("task-1", _USER)
     application.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
     return root
+
+
+def test_worker_renders_the_persisted_submission_context_snapshot(state_root: Path) -> None:
+    db_path = state_root / "runtime" / "agentic_researcher.sqlite3"
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            """INSERT INTO project_context_versions (
+                   context_version_id, project_id, content, fingerprint, is_active,
+                   created_by_user_id, created_at, fragment_manifest_json
+               ) VALUES ('worker-context-version', 'project-1', 'Worker Context',
+                         'worker-context-fingerprint', 0, 'user-1', 'now', '[]')"""
+        )
+        conn.execute(
+            """INSERT INTO context_snapshots (
+                   context_snapshot_id, context_version_id, fingerprint, content, created_at
+               ) VALUES ('worker-context-snapshot', 'worker-context-version',
+                         'worker-snapshot-fingerprint', 'Worker Context', 'now')"""
+        )
+        conn.execute(
+            """UPDATE tasks
+               SET project_context_version_id = 'worker-context-version',
+                   project_context_snapshot_id = 'worker-context-snapshot'
+               WHERE task_id = 'task-1'"""
+        )
+        conn.commit()
+
+    application = ConversationApplicationService(state_root)
+    admission = application.create_turn(
+        "task-1", _USER, input={"text": "context turn"}, idempotency_key="context-turn"
+    )
+    with closing(connect(db_path)) as conn:
+        initial = conn.execute(
+            "SELECT submission_id FROM turn_submissions WHERE idempotency_key = 'create-1'"
+        ).fetchone()
+        assert initial is not None
+        repository = SqliteConversationExecutionRepository(conn)
+        assert (
+            repository.transition_submission(
+                submission_id=str(initial["submission_id"]),
+                expected_status="queued",
+                status="cancelled",
+                finished_at="now",
+                failure_code="superseded_by_context_test",
+                updated_at="now",
+            )
+            == 1
+        )
+        persisted = conn.execute(
+            "SELECT context_snapshot_ref FROM turn_submissions WHERE submission_id = ?",
+            (str(admission["submission_id"]),),
+        ).fetchone()
+        assert persisted is not None
+        assert persisted["context_snapshot_ref"] == "worker-context-snapshot"
+        conn.commit()
+
+    dispatcher = ConversationDispatcher(state_root)
+    claim = dispatcher._execution.claim_next_submission()
+    assert claim is not None
+    assert claim.submission_id == admission["submission_id"]
+    context = dispatcher._execution_context(claim)
+    assert context.rendered_prompt == "Worker Context\n\nUser Turn:\ncontext turn"
 
 
 @pytest.mark.anyio

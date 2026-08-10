@@ -1325,11 +1325,15 @@ class ProjectContextService:
                 (context_version_id, snapshot_id, now, task_id),
             )
             # A queued Turn submission has not crossed the runtime boundary
-            # and must follow the newly confirmed Task pin.
+            # and must follow the newly confirmed Task pin unless it carries
+            # an explicit one-submission override. Provenance is persisted on
+            # each submission, so an override remains stable even when it
+            # selected the same snapshot as the old Task pin.
             conn.execute(
                 """UPDATE turn_submissions
                    SET context_snapshot_ref = ?, updated_at = ?
-                   WHERE task_id = ? AND status = 'queued'""",
+                   WHERE task_id = ? AND status = 'queued'
+                     AND context_snapshot_source = 'task_pin'""",
                 (snapshot_id, now, task_id),
             )
             conn.execute(

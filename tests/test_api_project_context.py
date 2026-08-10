@@ -15,6 +15,8 @@ from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
+from ainrf.domain.conversation_contracts import TurnStatus
+from ainrf.domain.conversation_execution import ConversationExecutionService
 from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
 
 pytestmark = [pytest.mark.api]
@@ -137,7 +139,73 @@ async def test_api_fresh_project_has_an_initial_context_and_can_create_a_task(
 
         task_context = await client.get(_api_path(f"/api/domain/tasks/{task_id}/context"))
         assert task_context.status_code == 200
-        assert _payload(task_context)["context_version_id"] == active_version["context_version_id"]
+        task_context_payload = _payload(task_context)
+        assert task_context_payload["context_version_id"] == active_version["context_version_id"]
+        context_snapshot_ref = str(task_context_payload["context_snapshot_id"])
+
+        created_turn = await client.post(
+            _api_path(f"/api/tasks/{task_id}/turns"),
+            headers={"Idempotency-Key": "initial-context-turn"},
+            json={"text": "Use the pinned Context.", "context_snapshot_ref": context_snapshot_ref},
+        )
+        assert created_turn.status_code == 202
+        created_turn_payload = _payload(created_turn)
+        conversation = app.state.conversation_application_service
+        execution = ConversationExecutionService(state_root)
+        first_claim = execution.claim_next_submission()
+        assert first_claim is not None
+        execution.begin_delivery(first_claim.submission_id)
+        first_accepted = conversation.accept_submission(
+            first_claim.submission_id,
+            native_turn_kind="turn",
+            native_turn_ref="api-context-initial",
+            engine_family="claude",
+            engine_driver="claude-code",
+            contract_version=1,
+            delivery_evidence={"source": "api-test"},
+        )
+        conversation.finish_turn(
+            task_id,
+            str(first_accepted["turn_id"]),
+            status=TurnStatus.COMPLETED,
+        )
+        second_claim = execution.claim_next_submission()
+        assert second_claim is not None
+        assert second_claim.submission_id == created_turn_payload["submission_id"]
+        execution.begin_delivery(second_claim.submission_id)
+        second_accepted = conversation.accept_submission(
+            second_claim.submission_id,
+            native_turn_kind="turn",
+            native_turn_ref="api-context-created",
+            engine_family="claude",
+            engine_driver="claude-code",
+            contract_version=1,
+            delivery_evidence={"source": "api-test"},
+        )
+        conversation.finish_turn(
+            task_id,
+            str(second_accepted["turn_id"]),
+            status=TurnStatus.COMPLETED,
+        )
+        retried_turn = await client.post(
+            _api_path(f"/api/tasks/{task_id}/turns/{second_accepted['turn_id']}/retry"),
+            headers={"Idempotency-Key": "initial-context-retry"},
+            json={
+                "text": "Retry with the pinned Context.",
+                "context_snapshot_ref": context_snapshot_ref,
+            },
+        )
+        assert retried_turn.status_code == 202
+        retried_payload = _payload(retried_turn)
+
+        with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+            refs = conn.execute(
+                """SELECT submission_id, context_snapshot_ref FROM turn_submissions
+                   WHERE submission_id IN (?, ?) ORDER BY submission_id""",
+                (created_turn_payload["submission_id"], retried_payload["submission_id"]),
+            ).fetchall()
+        assert len(refs) == 2
+        assert all(row["context_snapshot_ref"] == context_snapshot_ref for row in refs)
 
 
 @pytest.mark.anyio

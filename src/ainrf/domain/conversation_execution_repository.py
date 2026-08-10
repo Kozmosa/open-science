@@ -28,14 +28,15 @@ class SqliteConversationExecutionRepository:
         context_snapshot_ref: str | None,
         created_at: str,
         updated_at: str,
+        context_snapshot_source: str = "task_pin",
     ) -> None:
         self._conn.execute(
             """
             INSERT INTO turn_submissions (
                 submission_id, task_id, reserved_turn_id, actor_user_id,
                 idempotency_key, request_hash, status, input_json,
-                context_snapshot_ref, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)
+                context_snapshot_ref, context_snapshot_source, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)
             """,
             (
                 submission_id,
@@ -46,6 +47,7 @@ class SqliteConversationExecutionRepository:
                 request_hash,
                 input_json,
                 context_snapshot_ref,
+                context_snapshot_source,
                 created_at,
                 updated_at,
             ),

@@ -620,6 +620,7 @@ class TurnCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str = Field(min_length=1)
     allow_next_turn: bool = False
+    context_snapshot_ref: str | None = Field(default=None, min_length=1)
 
 
 class TurnResponse(BaseModel):

@@ -65,6 +65,7 @@ async def create_turn(
             get_current_user(request),
             input={"text": payload.text},
             idempotency_key=require_idempotency_key(request),
+            context_snapshot_ref=payload.context_snapshot_ref,
             allow_next_turn=payload.allow_next_turn,
         )
         return TurnSubmissionResponse.model_validate(result)
@@ -159,6 +160,7 @@ async def retry_turn(
             get_current_user(request),
             input={"text": payload.text},
             idempotency_key=require_idempotency_key(request),
+            context_snapshot_ref=payload.context_snapshot_ref,
         )
         return TurnSubmissionResponse.model_validate(result)
     except HTTPException:

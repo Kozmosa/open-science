@@ -31,6 +31,11 @@ class TurnSubmissionStatus(StrEnum):
     FAILED_DELIVERY = "failed_delivery"
 
 
+class ContextSnapshotSource(StrEnum):
+    TASK_PIN = "task_pin"
+    SUBMISSION_OVERRIDE = "submission_override"
+
+
 class RuntimeExecutionStatus(StrEnum):
     STARTING = "starting"
     RUNNING = "running"

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from ainrf.db.migration import SchemaBaselineError, current_version, run_pending
+from ainrf.db.migrations.current import migration_034_conversation_cancellation_guards
 from ainrf.db.retire_legacy import migrate, preflight, verify
 
 
@@ -61,9 +62,19 @@ def _schema_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str |
     }
 
 
+def _build_v34_artifact(path: Path) -> None:
+    _build_v33_artifact(path)
+    with _connect(path) as connection:
+        migration_034_conversation_cancellation_guards(connection)
+        connection.execute(
+            "UPDATE _schema_version SET version = 34 WHERE database = 'agentic_researcher'"
+        )
+        connection.commit()
+
+
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 34), ("literature", 8), ("terminal", 1)],
+    [("auth", 7), ("agentic_researcher", 35), ("literature", 8), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -302,7 +313,7 @@ def test_fresh_baseline_honors_caller_transaction_success_and_failure(tmp_path: 
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("CREATE TEMP TABLE caller_temp (value INTEGER NOT NULL)")
         connection.execute("INSERT INTO caller_temp VALUES (1)")
-        assert run_pending(connection, "agentic_researcher") == 2
+        assert run_pending(connection, "agentic_researcher") == 3
         assert connection.in_transaction
         connection.execute("CREATE TABLE caller_ordinary (value INTEGER NOT NULL)")
         connection.execute("INSERT INTO caller_ordinary VALUES (2)")
@@ -311,7 +322,7 @@ def test_fresh_baseline_honors_caller_transaction_success_and_failure(tmp_path: 
 
     with _connect(success_path) as connection:
         assert connection.execute("SELECT * FROM caller_ordinary").fetchone()[0] == 2
-        assert current_version(connection, "agentic_researcher") == 34
+        assert current_version(connection, "agentic_researcher") == 35
 
     failure_path = tmp_path / "failure.sqlite3"
     with _connect(failure_path) as connection:
@@ -377,8 +388,8 @@ def test_existing_v33_domain_migrates_cancellation_guards(tmp_path: Path) -> Non
     fresh_path = tmp_path / "fresh.sqlite3"
     artifact_path = tmp_path / "v33-artifact.sqlite3"
     with _connect(fresh_path) as fresh:
-        assert run_pending(fresh, "agentic_researcher") == 2
-        assert current_version(fresh, "agentic_researcher") == 34
+        assert run_pending(fresh, "agentic_researcher") == 3
+        assert current_version(fresh, "agentic_researcher") == 35
         assert fresh.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         fresh_schema = {
             (str(row["type"]), str(row["name"])): str(row["sql"])
@@ -389,8 +400,8 @@ def test_existing_v33_domain_migrates_cancellation_guards(tmp_path: Path) -> Non
         }
     _build_v33_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "agentic_researcher") == 1
-        assert current_version(connection, "agentic_researcher") == 34
+        assert run_pending(connection, "agentic_researcher") == 2
+        assert current_version(connection, "agentic_researcher") == 35
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         artifact_schema = {
             (str(row["type"]), str(row["name"])): str(row["sql"])
@@ -408,6 +419,22 @@ def test_existing_v33_domain_migrates_cancellation_guards(tmp_path: Path) -> Non
         "OLD.status = 'ready' AND NEW.status = 'cancelled'"
         in artifact_schema[("trigger", "next_turn_transition_guard")]
     )
+    assert "context_snapshot_source" in fresh_schema[("table", "turn_submissions")]
+    assert "context_snapshot_source" in artifact_schema[("table", "turn_submissions")]
+
+    v34_path = tmp_path / "v34-artifact.sqlite3"
+    _build_v34_artifact(v34_path)
+    with _connect(v34_path) as connection:
+        assert run_pending(connection, "agentic_researcher") == 1
+        assert current_version(connection, "agentic_researcher") == 35
+        v34_schema = {
+            (str(row["type"]), str(row["name"])): str(row["sql"])
+            for row in connection.execute(
+                "SELECT type, name, sql FROM sqlite_master "
+                "WHERE name IN ('turn_submissions', 'next_turn_transition_guard')"
+            )
+        }
+    assert v34_schema == fresh_schema
 
 
 def test_run_pending_rolls_back_when_nested_savepoint_release_is_denied(
@@ -470,8 +497,8 @@ def test_run_pending_rolls_back_when_nested_savepoint_release_is_denied(
             ).fetchone()[0]
             == before_table
         )
-        assert run_pending(connection, "agentic_researcher") == 1
-        assert current_version(connection, "agentic_researcher") == 34
+        assert run_pending(connection, "agentic_researcher") == 2
+        assert current_version(connection, "agentic_researcher") == 35
         assert connection.execute("SELECT * FROM caller_ordinary").fetchone()[0] == 1
         assert connection.execute("SELECT * FROM caller_temp").fetchone()[0] == 2
         connection.commit()
@@ -587,6 +614,41 @@ def test_migration_034_rolls_back_trigger_and_version_on_injected_failure(
             ).fetchone()[0]
             == before_table
         )
+
+
+def test_migration_035_rolls_back_provenance_column_and_version_on_failure(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "v34-artifact.sqlite3"
+    _build_v34_artifact(path)
+    with _connect(path) as connection:
+
+        def deny_alter_table(
+            action: int,
+            _arg1: str | None,
+            _arg2: str | None,
+            _database: str | None,
+            _source: str | None,
+        ) -> int:
+            return (
+                sqlite3.SQLITE_DENY if action == sqlite3.SQLITE_ALTER_TABLE else sqlite3.SQLITE_OK
+            )
+
+        connection.set_authorizer(deny_alter_table)
+        with pytest.raises(sqlite3.DatabaseError):
+            run_pending(connection, "agentic_researcher")
+        connection.set_authorizer(None)
+        assert current_version(connection, "agentic_researcher") == 34
+        columns = {
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(turn_submissions)")
+        }
+        assert "context_snapshot_source" not in columns
+        assert run_pending(connection, "agentic_researcher") == 1
+        assert current_version(connection, "agentic_researcher") == 35
+        columns = {
+            str(row["name"]) for row in connection.execute("PRAGMA table_info(turn_submissions)")
+        }
+        assert "context_snapshot_source" in columns
 
 
 def test_prebaseline_schema_fails_closed(tmp_path: Path) -> None:

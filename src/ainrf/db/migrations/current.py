@@ -55,6 +55,22 @@ def migration_034_conversation_cancellation_guards(conn: sqlite3.Connection) -> 
     )
 
 
+@registry.register("agentic_researcher")
+def migration_035_context_snapshot_provenance(conn: sqlite3.Connection) -> None:
+    """Persist whether a queued submission inherited or overrode its Task pin."""
+
+    columns = {
+        str(row["name"]) for row in conn.execute("PRAGMA table_info(turn_submissions)").fetchall()
+    }
+    if "context_snapshot_source" in columns:
+        return
+    conn.execute(
+        """ALTER TABLE turn_submissions
+           ADD COLUMN context_snapshot_source TEXT NOT NULL DEFAULT 'task_pin'
+           CHECK (context_snapshot_source IN ('task_pin', 'submission_override'))"""
+    )
+
+
 @registry.register("literature")
 def migration_008_retire_unused_literature_task_saga(conn: sqlite3.Connection) -> None:
     """Retire the empty Literature saga artifact left by the original v7 baseline.

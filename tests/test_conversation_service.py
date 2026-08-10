@@ -117,6 +117,52 @@ def _service(
     return service
 
 
+def _insert_context_snapshot(
+    state_root: Path, snapshot_id: str, *, content: str = "Context"
+) -> None:
+    with closing(connect(_db_path(state_root))) as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO context_snapshots (
+                   context_snapshot_id, context_version_id, fingerprint, content, created_at
+               ) VALUES (?, 'context-version-legacy', ?, ?, ?)""",
+            (snapshot_id, f"fingerprint-{snapshot_id}", content, _NOW),
+        )
+        conn.commit()
+
+
+def _pin_task_snapshot(state_root: Path, snapshot_id: str, *, content: str = "Context") -> None:
+    _insert_context_snapshot(state_root, snapshot_id, content=content)
+    with closing(connect(_db_path(state_root))) as conn:
+        conn.execute(
+            """UPDATE tasks
+               SET project_context_version_id = 'context-version-legacy',
+                   project_context_snapshot_id = ?
+               WHERE task_id = 'task-1'""",
+            (snapshot_id,),
+        )
+        conn.commit()
+
+
+def _submission_context_snapshot(state_root: Path, submission_id: str) -> str | None:
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            "SELECT context_snapshot_ref FROM turn_submissions WHERE submission_id = ?",
+            (submission_id,),
+        ).fetchone()
+    assert row is not None
+    return None if row["context_snapshot_ref"] is None else str(row["context_snapshot_ref"])
+
+
+def _submission_context_source(state_root: Path, submission_id: str) -> str:
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            "SELECT context_snapshot_source FROM turn_submissions WHERE submission_id = ?",
+            (submission_id,),
+        ).fetchone()
+    assert row is not None
+    return str(row["context_snapshot_source"])
+
+
 def _submission_to_delivering(state_root: Path, submission_id: str) -> None:
     with closing(connect(_db_path(state_root))) as conn:
         repository = SqliteConversationExecutionRepository(conn)
@@ -761,6 +807,138 @@ def test_create_and_retry_key_reuse_is_a_stable_conflict(state_root: Path) -> No
             input={"text": "retry"},
             idempotency_key="create-1",
         )
+
+
+def test_turn_admissions_inherit_the_current_task_context_pin_across_lifecycle(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    _pin_task_snapshot(state_root, "snapshot-context-v1")
+
+    first = service.create_turn(
+        "task-1", _USER, input={"text": "first"}, idempotency_key="context-first"
+    )
+    assert _submission_context_snapshot(state_root, str(first["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    first_turn = _accept_turn(state_root, service, str(first["submission_id"]))
+    service.finish_turn("task-1", first_turn, status=TurnStatus.COMPLETED)
+
+    later = service.create_turn(
+        "task-1", _USER, input={"text": "later"}, idempotency_key="context-later"
+    )
+    assert _submission_context_snapshot(state_root, str(later["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    later_turn = _accept_turn(state_root, service, str(later["submission_id"]))
+    service.finish_turn("task-1", later_turn, status=TurnStatus.COMPLETED)
+
+    retry = service.retry_turn(
+        "task-1",
+        later_turn,
+        _USER,
+        input={"text": "retry"},
+        idempotency_key="context-retry",
+    )
+    assert _submission_context_snapshot(state_root, str(retry["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    retry_turn = _accept_turn(state_root, service, str(retry["submission_id"]))
+    service.finish_turn("task-1", retry_turn, status=TurnStatus.COMPLETED)
+
+    _pin_task_snapshot(state_root, "snapshot-context-v2")
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.COMPLETED, idempotency_key="context-close"
+    )
+    service.update_work_status(
+        "task-1", _USER, status=TaskWorkStatus.OPEN, idempotency_key="context-reopen"
+    )
+    reopened = service.create_turn(
+        "task-1", _USER, input={"text": "reopened"}, idempotency_key="context-reopened"
+    )
+    assert _submission_context_snapshot(state_root, str(reopened["submission_id"])) == (
+        "snapshot-context-v2"
+    )
+
+
+def test_explicit_context_override_is_project_scoped_and_survives_context_confirmation(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    service = _service(state_root)
+    _pin_task_snapshot(state_root, "snapshot-context-v1")
+    _insert_context_snapshot(state_root, "snapshot-context-override", content="Override")
+
+    inherited = service.create_turn(
+        "task-1", _USER, input={"text": "inherited"}, idempotency_key="context-inherited"
+    )
+    override = service.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "override"},
+        idempotency_key="context-override",
+        context_snapshot_ref="snapshot-context-override",
+    )
+    explicit_current_pin = service.create_turn(
+        "task-1",
+        _USER,
+        input={"text": "explicit current pin"},
+        idempotency_key="context-explicit-current-pin",
+        context_snapshot_ref="snapshot-context-v1",
+    )
+    assert _submission_context_snapshot(state_root, str(inherited["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    assert _submission_context_snapshot(state_root, str(override["submission_id"])) == (
+        "snapshot-context-override"
+    )
+    assert _submission_context_snapshot(state_root, str(explicit_current_pin["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    assert _submission_context_source(state_root, str(inherited["submission_id"])) == "task_pin"
+    assert (
+        _submission_context_source(state_root, str(override["submission_id"]))
+        == "submission_override"
+    )
+    assert (
+        _submission_context_source(state_root, str(explicit_current_pin["submission_id"]))
+        == "submission_override"
+    )
+
+    with closing(connect(_db_path(state_root))) as conn:
+        task = conn.execute(
+            "SELECT project_context_snapshot_id FROM tasks WHERE task_id = 'task-1'"
+        ).fetchone()
+    assert task is not None and task["project_context_snapshot_id"] == "snapshot-context-v1"
+
+    context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
+    context.save_draft("project-legacy", "Confirmed context", _USER)
+    context.publish("project-legacy", _USER, idempotency_key="context-publish")
+    preview = context.preview_task_context_update("task-1", "project-legacy", _USER)
+    confirmed = context.confirm_task_context_update(
+        "task-1",
+        "project-legacy",
+        str(preview["preview_id"]),
+        _USER,
+        idempotency_key="context-confirm",
+    )
+
+    assert _submission_context_snapshot(state_root, str(inherited["submission_id"])) == (
+        str(confirmed["context_snapshot_id"])
+    )
+    assert _submission_context_snapshot(state_root, str(override["submission_id"])) == (
+        "snapshot-context-override"
+    )
+    assert _submission_context_snapshot(state_root, str(explicit_current_pin["submission_id"])) == (
+        "snapshot-context-v1"
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        task = conn.execute(
+            "SELECT project_context_snapshot_id FROM tasks WHERE task_id = 'task-1'"
+        ).fetchone()
+    assert (
+        task is not None and task["project_context_snapshot_id"] == confirmed["context_snapshot_id"]
+    )
 
 
 def test_terminal_evidence_validation_and_replay(state_root: Path) -> None:

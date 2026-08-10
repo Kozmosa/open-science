@@ -3529,6 +3529,10 @@ export type TurnCreateRequest = {
      */
     allow_next_turn?: boolean;
     /**
+     * Context Snapshot Ref
+     */
+    context_snapshot_ref?: string | null;
+    /**
      * Text
      */
     text: string;
