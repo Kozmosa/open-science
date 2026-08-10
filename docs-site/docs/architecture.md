@@ -93,21 +93,19 @@ Literature 的正式 HTTP Interface 当前固定为 19 个 operation：overview 
 
 ## Production retirement checkpoint
 
-本节是用户控制的生产检查点，不是本 PR 已完成的生产证据。合并前由用户确认：
+本节定义 production retirement 的长期 gate 与授权边界，不记录某次发布是否已完成。Release owner 负责准备并保存证据；只有用户审阅证据并显式授权维护窗口后，才能执行 production migration、compatibility retirement 或 release。缺少授权或任一必需证据时，操作必须 fail-closed，不得推进；本文本身不构成 production 执行证据。
 
-1. 已完成完整 backup，并在隔离 staged root 验证 restore、SQLite integrity 和只读 post-restore smoke。
-2. release manifest 中 API、Web、worker 和 schema artifact SHA 一致；已停止 writers、进入 maintenance，并确认 participant drain、active Turn/Submission 为零或符合窗口策略，workspace/tenant source 稳定。
-3. 已在生产 state root 运行 `openscience migration retire-legacy preflight`，人工核对 ready 后只运行一次 `apply`，确认旧 telemetry snapshot/legacy-write counter 已清除，再运行 `verify` 并保存 JSON/integrity evidence。
-4. 已启动同一 manifest，完成只读 health/domain/Task/Turn/Item/admin-audit smoke；确认没有旧表访问、旧 writer 或 legacy fallback。
-5. 失败时使用已验证的上一份 release manifest 和完整 backup 人工 rollback。代码回滚不能恢复已删除表，数据恢复必须依赖 backup；在缺少证据时保持 fail-closed。
-
-本次 PR 不执行上述步骤，不访问 production 容器、数据库、端口、日志或数据，也不 merge。
+1. Release owner 必须在停止 writer 前完成完整 backup，并在隔离 staged root 验证 restore、SQLite integrity 和只读 post-restore smoke；用户授权前核对这些结果。
+2. 获得用户授权后，release owner 才可停止 writers 并进入 maintenance；release manifest 中 API、Web、worker 和 schema artifact SHA 必须一致，并确认 participant drain、active Turn/Submission 为零或符合窗口策略，workspace/tenant source 稳定。
+3. 在获授权的 maintenance window 中，release owner 在 production state root 运行 `openscience migration retire-legacy preflight`，人工核对 ready 后只运行一次 `apply`，确认旧 telemetry snapshot/legacy-write counter 已清除，再运行 `verify` 并保存 JSON/integrity evidence。
+4. 启动同一 manifest 后，必须完成只读 health/domain/Task/Turn/Item/admin-audit smoke，并确认没有旧表访问、旧 writer 或 legacy fallback。
+5. 失败时使用已验证的上一份 release manifest 和完整 backup 人工 rollback。代码回滚不能恢复已删除表，数据恢复必须依赖 backup；缺少 backup/restore、release consistency、post-smoke、rollback 或 telemetry evidence 时，必须保持 fail-closed。
 
 ## 最终收口验收
 
 2026-08-01 的最终收口使用提交 SHA 对应的不可变 release manifest，在 `openscience-release-staging` 的独立 named volumes 与 `127.0.0.1:7192` / `127.0.0.1:17000` 上完成。API、Web 与 fixture worker 使用同一 release SHA；验收覆盖登录、用户、设置、Project、Workspace、Environment、文件读写与租户权限、Task 全生命周期、Runs、Timeline、Literature、Skills、Terminal、正式 HTTP contract 与已删除入口的 404。浏览器 Console、page error、真实 Network failure 与 5xx 均为零；Task 由 fixture worker 成功执行，API 重启后 Task、上传文件与 durable HTTP contract evidence 仍可读取。隔离 API、Web、init 与 worker 日志未发现相关 schema、权限或未处理异常。
 
-该验收没有访问或操作 production 容器、数据、日志、端口或 HTTP。最终可审计的准确 SHA、manifest 与 required checks 以对应 pull request 记录为准。
+该验收没有访问或操作 production 容器、数据、日志、端口或 HTTP。最终可审计的准确 SHA、manifest 与 required checks 以对应 release record 为准。
 
 ## 长期验证 owner
 
