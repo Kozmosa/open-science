@@ -273,6 +273,89 @@ def migration_009_harden_literature_api_attempts(conn: sqlite3.Connection) -> No
     )
 
 
+@registry.register("literature")
+def migration_010_retire_legacy_topic_mapping(conn: sqlite3.Connection) -> None:
+    """Remove the unused subscription-to-topic mapping without losing topic matches."""
+
+    if not _has_table(conn, "literature_topics"):
+        raise RuntimeError("literature topics table is required by migration 010")
+    columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(literature_topics)")}
+    if "legacy_subscription_id" not in columns:
+        return
+    if not _has_table(conn, "literature_topic_matches"):
+        raise RuntimeError("literature topic matches table is required by migration 010")
+
+    conn.execute(
+        """
+        CREATE TEMP TABLE literature_topics_v10_backup AS
+        SELECT topic_id, user_id, label, include_terms_json, exclude_terms_json,
+               categories_json, status, is_active, created_at, updated_at, last_matched_at
+        FROM literature_topics
+        """
+    )
+    conn.execute(
+        """
+        CREATE TEMP TABLE literature_topic_matches_v10_backup AS
+        SELECT topic_id, paper_id, reason_json, matched_at
+        FROM literature_topic_matches
+        """
+    )
+    conn.execute("DROP TABLE literature_topic_matches")
+    conn.execute("DROP TABLE literature_topics")
+    conn.execute(
+        """
+        CREATE TABLE literature_topics (
+            topic_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            include_terms_json TEXT NOT NULL DEFAULT '[]',
+            exclude_terms_json TEXT NOT NULL DEFAULT '[]',
+            categories_json TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'active',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_matched_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO literature_topics (
+            topic_id, user_id, label, include_terms_json, exclude_terms_json,
+            categories_json, status, is_active, created_at, updated_at, last_matched_at
+        )
+        SELECT topic_id, user_id, label, include_terms_json, exclude_terms_json,
+               categories_json, status, is_active, created_at, updated_at, last_matched_at
+        FROM literature_topics_v10_backup
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE literature_topic_matches (
+            topic_id TEXT NOT NULL,
+            paper_id TEXT NOT NULL,
+            reason_json TEXT NOT NULL DEFAULT '[]',
+            matched_at TEXT NOT NULL,
+            PRIMARY KEY(topic_id, paper_id),
+            FOREIGN KEY (topic_id) REFERENCES literature_topics(topic_id),
+            FOREIGN KEY (paper_id) REFERENCES literature_catalog_papers(paper_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO literature_topic_matches (topic_id, paper_id, reason_json, matched_at)
+        SELECT topic_id, paper_id, reason_json, matched_at
+        FROM literature_topic_matches_v10_backup
+        """
+    )
+    conn.execute("DROP TABLE literature_topics_v10_backup")
+    conn.execute("DROP TABLE literature_topic_matches_v10_backup")
+    conn.execute("CREATE INDEX idx_lit_topics_user ON literature_topics(user_id, is_active)")
+    conn.execute("CREATE INDEX idx_lit_matches_paper ON literature_topic_matches(paper_id)")
+
+
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])
 def agentic_researcher_baseline(conn: sqlite3.Connection) -> None:
     _apply_baseline(conn, "agentic_researcher")

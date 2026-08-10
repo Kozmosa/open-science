@@ -8,6 +8,7 @@ import pytest
 
 from ainrf.db.migration import SchemaBaselineError, current_version, run_pending
 from ainrf.db.migrations.current import (
+    migration_009_harden_literature_api_attempts,
     migration_034_conversation_cancellation_guards,
     migration_035_context_snapshot_provenance,
 )
@@ -58,6 +59,61 @@ def _build_v7_literature_artifact(
         connection.commit()
 
 
+def _build_v9_literature_artifact(path: Path) -> None:
+    """Build the prior topic schema with its unused legacy mapping column."""
+
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        migration_009_harden_literature_api_attempts(connection)
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("DROP TABLE literature_topic_matches")
+        connection.execute("DROP TABLE literature_topics")
+        connection.execute(
+            """
+            CREATE TABLE literature_topics (
+                topic_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                label TEXT NOT NULL,
+                include_terms_json TEXT NOT NULL DEFAULT '[]',
+                exclude_terms_json TEXT NOT NULL DEFAULT '[]',
+                categories_json TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'active',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                legacy_subscription_id TEXT UNIQUE,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_matched_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE literature_topic_matches (
+                topic_id TEXT NOT NULL,
+                paper_id TEXT NOT NULL,
+                reason_json TEXT NOT NULL DEFAULT '[]',
+                matched_at TEXT NOT NULL,
+                PRIMARY KEY(topic_id, paper_id),
+                FOREIGN KEY (topic_id) REFERENCES literature_topics(topic_id),
+                FOREIGN KEY (paper_id) REFERENCES literature_catalog_papers(paper_id)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE INDEX idx_lit_topics_user ON literature_topics(user_id, is_active)"
+        )
+        connection.execute(
+            "CREATE INDEX idx_lit_matches_paper ON literature_topic_matches(paper_id)"
+        )
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 9)")
+        connection.commit()
+
+
 def _schema_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str | None]]:
     return {
         (str(row["type"]), str(row["name"]), row["sql"])
@@ -99,7 +155,7 @@ def _build_v35_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 36), ("literature", 9), ("terminal", 1)],
+    [("auth", 7), ("agentic_researcher", 36), ("literature", 10), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -114,12 +170,12 @@ def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_autho
 ) -> None:
     path = tmp_path / "literature.sqlite3"
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 3
+        assert run_pending(connection, "literature") == 4
         tables = {
             str(row["name"])
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
-        assert current_version(connection, "literature") == 9
+        assert current_version(connection, "literature") == 10
 
     assert {
         "literature_research_task_intents",
@@ -134,13 +190,13 @@ def test_literature_v7_empty_artifact_migrates_to_fresh_schema(tmp_path: Path) -
     fresh_path = tmp_path / "fresh.sqlite3"
     artifact_path = tmp_path / "v7-artifact.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "literature") == 3
+        assert run_pending(connection, "literature") == 4
         fresh_schema = _schema_objects(connection)
 
     _build_v7_literature_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "literature") == 2
-        assert current_version(connection, "literature") == 9
+        assert run_pending(connection, "literature") == 3
+        assert current_version(connection, "literature") == 10
         artifact_schema = _schema_objects(connection)
 
     assert artifact_schema == fresh_schema
@@ -153,8 +209,144 @@ def test_literature_v7_artifact_without_retired_tables_advances(tmp_path: Path) 
         include_task_sagas=False,
     )
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 2
+        assert run_pending(connection, "literature") == 3
+        assert current_version(connection, "literature") == 10
+
+
+def test_literature_v9_topic_mapping_migrates_without_losing_topics_or_matches(
+    tmp_path: Path,
+) -> None:
+    fresh_path = tmp_path / "fresh.sqlite3"
+    artifact_path = tmp_path / "v9-topic-mapping.sqlite3"
+    with _connect(fresh_path) as connection:
+        run_pending(connection, "literature")
+        fresh_schema = _schema_objects(connection)
+
+    _build_v9_literature_artifact(artifact_path)
+    with _connect(artifact_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO literature_catalog_papers (
+                paper_id, provider, external_id, title, first_seen_at, last_seen_at
+            ) VALUES ('paper-1', 'arxiv', '2401.00001', 'Paper', 'created', 'seen')
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO literature_topics (
+                topic_id, user_id, label, include_terms_json, exclude_terms_json,
+                categories_json, status, is_active, legacy_subscription_id,
+                created_at, updated_at, last_matched_at
+            ) VALUES (
+                'topic-1', 'owner', 'Agents', '["agent"]', '["legacy"]',
+                '["cs.AI"]', 'active', 1, 'subscription-1',
+                'created', 'updated', 'matched'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO literature_topic_matches (topic_id, paper_id, reason_json, matched_at)
+            VALUES ('topic-1', 'paper-1', '["category"]', 'matched')
+            """
+        )
+        connection.commit()
+
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 10
+        assert "legacy_subscription_id" not in {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(literature_topics)")
+        }
+        assert tuple(
+            connection.execute(
+                """
+                SELECT topic_id, user_id, label, include_terms_json, exclude_terms_json,
+                       categories_json, status, is_active, created_at, updated_at, last_matched_at
+                FROM literature_topics
+                """
+            ).fetchone()
+        ) == (
+            "topic-1",
+            "owner",
+            "Agents",
+            '["agent"]',
+            '["legacy"]',
+            '["cs.AI"]',
+            "active",
+            1,
+            "created",
+            "updated",
+            "matched",
+        )
+        assert tuple(
+            connection.execute(
+                "SELECT topic_id, paper_id, reason_json, matched_at FROM literature_topic_matches"
+            ).fetchone()
+        ) == ("topic-1", "paper-1", '["category"]', "matched")
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert _schema_objects(connection) == fresh_schema
+
+
+def test_literature_v9_topic_mapping_drop_failure_rolls_back_data_and_version(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "v9-topic-mapping-failure.sqlite3"
+    _build_v9_literature_artifact(path)
+    with _connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO literature_topics (
+                topic_id, user_id, label, legacy_subscription_id, created_at, updated_at
+            ) VALUES ('topic-1', 'owner', 'Agents', 'subscription-1', 'created', 'updated')
+            """
+        )
+        connection.commit()
+
+        def deny_topic_drop(
+            action: int,
+            arg1: str | None,
+            _arg2: str | None,
+            _database: str | None,
+            _source: str | None,
+        ) -> int:
+            return (
+                sqlite3.SQLITE_DENY
+                if action == sqlite3.SQLITE_DROP_TABLE and arg1 == "literature_topics"
+                else sqlite3.SQLITE_OK
+            )
+
+        connection.set_authorizer(deny_topic_drop)
+        with pytest.raises(sqlite3.DatabaseError):
+            run_pending(connection, "literature")
+        connection.set_authorizer(None)
+
         assert current_version(connection, "literature") == 9
+        assert "legacy_subscription_id" in {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(literature_topics)")
+        }
+        assert tuple(
+            connection.execute(
+                "SELECT topic_id, legacy_subscription_id FROM literature_topics"
+            ).fetchone()
+        ) == ("topic-1", "subscription-1")
+        assert (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'literature_topic_matches'"
+            ).fetchone()
+            is not None
+        )
+        assert (
+            connection.execute(
+                "SELECT name FROM temp.sqlite_master "
+                "WHERE name IN ('literature_topics_v10_backup', "
+                "'literature_topic_matches_v10_backup')"
+            ).fetchall()
+            == []
+        )
+
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 10
 
 
 @pytest.mark.parametrize(
@@ -286,8 +478,8 @@ def test_literature_api_attempt_migration_upgrades_v8_shape_and_adds_guards(
         connection.commit()
 
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 1
-        assert current_version(connection, "literature") == 9
+        assert run_pending(connection, "literature") == 2
+        assert current_version(connection, "literature") == 10
         columns = {
             str(row[1]) for row in connection.execute("PRAGMA table_info(literature_api_attempts)")
         }
@@ -383,7 +575,7 @@ def test_literature_api_attempt_migration_quarantines_legacy_succeeded_rows(
         connection.commit()
 
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 1
+        assert run_pending(connection, "literature") == 2
         row = connection.execute(
             "SELECT state, legacy_state, response_hash, completed_at FROM literature_api_attempts WHERE attempt_id = 'legacy-1'"
         ).fetchone()

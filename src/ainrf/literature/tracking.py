@@ -820,46 +820,6 @@ class LiteratureTrackingService:
             if cursor.rowcount == 0:
                 raise KeyError("Topic not found")
 
-    def sync_legacy_topic(
-        self,
-        *,
-        topic_id: str,
-        user_id: str,
-        label: str,
-        include_terms: list[str],
-        categories: list[str],
-        is_active: bool,
-    ) -> None:
-        """Keep legacy subscription IDs as a thin compatibility mapping."""
-        now = _now()
-        valid_categories = self._clean_terms(categories)
-        active = bool(is_active and valid_categories)
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO literature_topics (
-                    topic_id, user_id, label, include_terms_json, exclude_terms_json, categories_json,
-                    status, is_active, legacy_subscription_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(topic_id) DO UPDATE SET
-                    label=excluded.label, include_terms_json=excluded.include_terms_json,
-                    categories_json=excluded.categories_json, status=excluded.status,
-                    is_active=excluded.is_active, updated_at=excluded.updated_at
-                """,
-                (
-                    topic_id,
-                    user_id,
-                    label,
-                    json.dumps(self._clean_terms(include_terms)),
-                    json.dumps(valid_categories),
-                    "active" if active else "attention_needed",
-                    int(active),
-                    topic_id,
-                    now,
-                    now,
-                ),
-            )
-
     def preview_topic(self, user_id: str, body: dict[str, Any]) -> dict[str, Any]:
         categories = body.get("categories", [])
         include_terms = body.get("include_terms", [])

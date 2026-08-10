@@ -50,4 +50,4 @@ doc_state: current
 | POST | `/subscriptions/{subscription_id}/fetch` | durable check create | 无 WebUI/script caller | 保留，待批准 |
 | POST | `/papers/{paper_id}/read` | paper state update | 无 WebUI/script caller | 保留，待批准 |
 
-这些 routes 不再调用旧 `LiteratureService` 写规则，也不再通过 `sync_legacy_topic()` 双写。自动门禁固定 inventory、验证 repo caller absence，并确保 generated transport 仍准确反映保留状态。删除仍需隔离完整手动验收和用户逐批批准；本次未删除，也未操作 production 或为 telemetry 部署未验收代码。
+这些 routes 直接把 canonical `topic_id` 呈现为兼容 transport 的 `subscription_id`，不再依赖旧 service、双写方法或持久化映射列。自动门禁固定 inventory、验证 repo caller absence，并确保 generated transport 仍准确反映保留状态。删除仍需隔离完整手动验收和用户逐批批准；本次未删除，也未操作 production 或为 telemetry 部署未验收代码。

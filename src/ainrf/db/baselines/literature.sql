@@ -239,7 +239,6 @@ CREATE TABLE literature_topics (
             categories_json TEXT NOT NULL DEFAULT '[]',
             status TEXT NOT NULL DEFAULT 'active',
             is_active INTEGER NOT NULL DEFAULT 1,
-            legacy_subscription_id TEXT UNIQUE,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             last_matched_at TEXT
