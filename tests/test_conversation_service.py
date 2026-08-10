@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
@@ -364,6 +365,115 @@ def test_application_interface_reads_canonical_task_turns_and_items(state_root: 
     assert [turn["turn_id"] for turn in turns] == [turn_id]
     assert items[0]["item_type"] == "user_message"
     assert items[0]["payload"] == {"text": "hello"}
+
+
+def test_item_reads_redact_project_collaborator_payload_without_rewriting_durable_evidence(
+    state_root: Path,
+) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+    with closing(connect(_db_path(state_root))) as conn:
+        turn = conn.execute(
+            "SELECT native_turn_kind, native_turn_ref FROM task_turns WHERE turn_id = ?",
+            (turn_id,),
+        ).fetchone()
+        assert turn is not None
+        execution = SqliteConversationExecutionRepository(conn)
+        execution.insert_runtime_execution(
+            runtime_execution_id="execution-item-redaction",
+            task_id="task-1",
+            turn_id=turn_id,
+            execution_seq=1,
+            runtime_generation=1,
+            binding_id=None,
+            native_runtime_kind="process",
+            native_runtime_ref="runtime-item-redaction",
+            native_turn_kind=str(turn["native_turn_kind"]),
+            native_turn_ref=str(turn["native_turn_ref"]),
+            evidence_json="{}",
+            created_at=_NOW,
+            started_at=_NOW,
+            updated_at=_NOW,
+        )
+        assert (
+            execution.transition_runtime_execution(
+                runtime_execution_id="execution-item-redaction",
+                expected_status="starting",
+                status="running",
+                evidence_json="{}",
+                updated_at=_NOW,
+            )
+            == 1
+        )
+        conn.execute(
+            """
+            INSERT INTO project_members (
+                project_id, user_id, role, can_publish, created_at, updated_at
+            ) VALUES ('project-legacy', 'collaborator', 'viewer', 0, ?, ?)
+            """,
+            (_NOW, _NOW),
+        )
+        conn.commit()
+
+    payload = {
+        "message": "shared dialogue",
+        "credential": "credential-secret",
+        "nested": [
+            {
+                "token": "token-secret",
+                "headers": {"Authorization": "Bearer authorization-secret"},
+            },
+            "Authorization: Bearer inline-secret",
+            "/home/ainrf_tenants/user-1/workspace/output.txt",
+        ],
+    }
+    ConversationExecutionService(state_root).append_item(
+        RuntimeExecutionClaim(
+            runtime_execution_id="execution-item-redaction",
+            task_id="task-1",
+            turn_id=turn_id,
+            runtime_generation=1,
+        ),
+        item_type=TurnItemType.SYSTEM_NOTICE,
+        actor=TurnItemActor.SYSTEM,
+        payload=payload,
+        native_provenance={},
+    )
+
+    owner = service.list_items("task-1", _USER, turn_id=turn_id)
+    admin = service.list_items("task-1", {"id": "admin", "role": "admin"}, turn_id=turn_id)
+    collaborator = service.list_items(
+        "task-1", {"id": "collaborator", "role": "researcher"}, turn_id=turn_id
+    )
+    owner_item = next(item for item in owner if item["item_type"] == "system_notice")
+    admin_item = next(item for item in admin if item["item_type"] == "system_notice")
+    collaborator_item = next(item for item in collaborator if item["item_type"] == "system_notice")
+
+    assert owner_item["payload"] == payload
+    assert admin_item["payload"] == payload
+    assert collaborator_item["payload"] == {
+        "message": "shared dialogue",
+        "credential": "[REDACTED]",
+        "nested": [
+            {
+                "token": "[REDACTED]",
+                "headers": {"Authorization": "[REDACTED]"},
+            },
+            "Authorization: [REDACTED]",
+            "[REDACTED_PATH]",
+        ],
+    }
+
+    with closing(connect(_db_path(state_root))) as conn:
+        row = conn.execute(
+            """
+            SELECT payload_json FROM turn_items
+            WHERE task_id = ? AND turn_id = ? AND item_type = 'system_notice'
+            """,
+            ("task-1", turn_id),
+        ).fetchone()
+        assert row is not None
+        assert json.loads(str(row["payload_json"])) == payload
 
 
 def test_create_task_atomically_uses_conversation_authority_without_attempt(

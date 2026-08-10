@@ -36,6 +36,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain.output_redaction import redact_task_item_payload_for_viewer
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.harness_engine.base import HarnessEngineType
@@ -2165,12 +2166,24 @@ class ConversationApplicationService:
         *,
         turn_id: str | None = None,
     ) -> list[dict[str, object]]:
-        """Return ordered canonical Items for a Task or one of its Turns."""
+        """Return ordered canonical Items for a Task or one of its Turns.
+
+        Durable ``turn_items`` rows remain the evidence source of truth.  Only
+        Project collaborators receive a redacted read projection; the Task
+        owner and global administrators retain the original payload for
+        runtime diagnosis.
+        """
 
         with closing(self._connect()) as conn:
-            DomainAuthorizationService(conn).require_task_viewer(task_id, user)
+            authorization = DomainAuthorizationService(conn)
+            authorization.require_task_viewer(task_id, user)
             conversations = SqliteConversationRepository(conn)
             self._require_current_conversation(conversations, task_id)
+            task = conn.execute(
+                "SELECT owner_user_id FROM tasks WHERE task_id = ?", (task_id,)
+            ).fetchone()
+            if task is None:
+                raise DomainNotFoundError(task_id)
             if turn_id is None:
                 rows = conversations.list_task_items(task_id)
             else:
@@ -2178,7 +2191,12 @@ class ConversationApplicationService:
                 if turn is None or str(turn["task_id"]) != task_id:
                     raise DomainNotFoundError(turn_id)
                 rows = conversations.list_turn_items(turn_id)
-            return [self._row_dict(row) for row in rows]
+            items = [self._row_dict(row) for row in rows]
+            if user.get("role") == "admin" or task["owner_user_id"] == user.get("id"):
+                return items
+            for item in items:
+                item["payload"] = redact_task_item_payload_for_viewer(item.get("payload"))
+            return items
 
     @staticmethod
     def _row_dict(row: sqlite3.Row) -> dict[str, object]:

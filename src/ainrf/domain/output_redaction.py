@@ -76,7 +76,7 @@ _SENSITIVE_FIELD_TOKENS = frozenset(
 # scheme slashes (``https://…``).
 _ABSOLUTE_PATH = re.compile(r"(?<![:/])/(?:[^\s'\"`<>()\[\]{},;]+)")
 _AUTHORIZATION_VALUE = re.compile(
-    r"""(?ix)\b(?:proxy-)?authorization\b\s*[:=]\s*(?:bearer\s+)?[^\s,;\]\}"']+"""
+    r"""(?ix)\b(?:proxy-)?authorization\b\s*[:=]\s*(?:bearer\s+)?(?:\[(?:\\.|[^\]])*\]|[^\s,;\]\}"']+)"""
 )
 _SENSITIVE_ASSIGNMENT = re.compile(
     r"""(?ix)
@@ -88,21 +88,21 @@ _SENSITIVE_ASSIGNMENT = re.compile(
         )[\"']?
     )
     (?P<separator>\s*(?:=|:)\s*)
-    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|[^\s,;}\]]+)
+    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\[(?:\\.|[^\]])*\]|[^\s,;}\]]+)
     """
 )
 _FIELD_ASSIGNMENT = re.compile(
     r"""(?ix)
     (?P<key>[\"']?[a-z][a-z0-9_. -]{0,127}[\"']?)
     (?P<separator>\s*(?:=|:)\s*)
-    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|[^\s,;}\]]+)
+    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\[(?:\\.|[^\]])*\]|[^\s,;}\]]+)
     """
 )
 _SENSITIVE_FLAG = re.compile(
     r"""(?ix)
     (?P<key>--?(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|password|secret|credential|private[ _-]?key|ssh[ _-]?key|token))
     (?P<separator>\s+|=)
-    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|[^\s,;}\]]+)
+    (?P<value>\"(?:\\.|[^\"])*\"|'(?:\\.|[^'])*'|\[(?:\\.|[^\]])*\]|[^\s,;}\]]+)
     """
 )
 _BEARER_TOKEN = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}")
@@ -129,10 +129,22 @@ def redact_task_output_for_viewer(content: str) -> str:
     except json.JSONDecodeError:
         return _redact_text(content)
 
-    redacted = _redact_json_value(decoded)
+    redacted = redact_task_item_payload_for_viewer(decoded)
     if redacted == decoded:
         return content
     return json.dumps(redacted, ensure_ascii=False, separators=(",", ":"))
+
+
+def redact_task_item_payload_for_viewer(payload: object) -> object:
+    """Return a recursively redacted copy of one durable Item payload.
+
+    Conversation Items are persisted as structured JSON rather than the
+    serialized output strings handled by :func:`redact_task_output_for_viewer`.
+    Keep this as the shared read-side entry point so callers cannot
+    accidentally redact only a top-level field or mutate the durable payload.
+    """
+
+    return _redact_json_value(payload)
 
 
 def _redact_json_value(value: object, *, field_name: str = "", depth: int = 0) -> object:

@@ -6,7 +6,10 @@ import json
 
 import pytest
 
-from ainrf.domain.output_redaction import redact_task_output_for_viewer
+from ainrf.domain.output_redaction import (
+    redact_task_item_payload_for_viewer,
+    redact_task_output_for_viewer,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -48,3 +51,46 @@ def test_redaction_fails_closed_for_deeply_nested_embedded_json() -> None:
 
     assert nested_secret not in rendered
     assert "[REDACTED]" in rendered
+
+
+def test_item_payload_redaction_recurses_through_dicts_lists_and_strings() -> None:
+    payload = {
+        "message": "shared dialogue",
+        "credential": "credential-secret",
+        "nested": [
+            {"token": "token-secret"},
+            "Authorization: Bearer authorization-secret",
+            "/home/ainrf_tenants/alice/workspace/output.txt",
+        ],
+    }
+
+    redacted = redact_task_item_payload_for_viewer(payload)
+
+    assert redacted == {
+        "message": "shared dialogue",
+        "credential": "[REDACTED]",
+        "nested": [
+            {"token": "[REDACTED]"},
+            "Authorization: [REDACTED]",
+            "[REDACTED_PATH]",
+        ],
+    }
+    assert payload["credential"] == "credential-secret"
+
+
+def test_authorization_redaction_is_idempotent_for_plain_and_nested_strings() -> None:
+    authorization = "Authorization: Bearer authorization-secret"
+    assert redact_task_output_for_viewer(authorization) == "Authorization: [REDACTED]"
+    assert redact_task_output_for_viewer(redact_task_output_for_viewer(authorization)) == (
+        "Authorization: [REDACTED]"
+    )
+
+    payload = {
+        "headers": {"Authorization": "Bearer authorization-secret"},
+        "nested": [authorization, {"content": authorization}],
+    }
+    redacted_once = redact_task_item_payload_for_viewer(payload)
+    redacted_twice = redact_task_item_payload_for_viewer(redacted_once)
+
+    assert "authorization-secret" not in json.dumps(redacted_once)
+    assert redacted_twice == redacted_once
