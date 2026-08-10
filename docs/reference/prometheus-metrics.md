@@ -115,40 +115,43 @@ Rating values are `"good"`, `"needs-improvement"`, or `"poor"` per Google's Core
 
 ---
 
-## Literature Tracking (arXiv Fetcher)
+## Literature Tracking (durable planner and worker)
 
-Metrics for the periodic arXiv paper discovery and LLM summarization pipeline (APScheduler, 6-hour interval by default).
+The current Literature Module does not run the retired APScheduler `LiteratureScheduler` or a fixed six-hour per-subscription loop. `ConversationWorkerRuntime` invokes `run_planner_cycle()` for due checks; `LiteratureTrackingService` commits checks, source snapshots, paper versions, matching, user state, summaries, work items, and outbox records to SQLite. Dramatiq publishes and executes durable work IDs through `process_durable_work_item`, while `LiteratureTaskSagaService` coordinates current Task creation through the Conversation Domain. SQLite and durable domain telemetry are the authority; Redis/Dramatiq and process-local counters are transport or observation layers only.
+
+### Current durable telemetry
 
 | Metric | Type | Labels | Emitted When | Call Site |
 |--------|------|--------|--------------|-----------|
-| `ainrf_literature_fetch_total` | Counter | `subscription_id`, `status` (`success` / `failed`) | Each subscription fetch attempt completes (or raises) | `literature/scheduler.py` |
-| `ainrf_literature_papers_fetched_total` | Counter | `subscription_id` | arXiv API returns papers (count is the number returned, regardless of duplicates) | `literature/scheduler.py` |
-| `ainrf_literature_papers_new_total` | Counter | `subscription_id` | New (non-duplicate) papers are inserted into the database | `literature/scheduler.py` |
-| `ainrf_literature_summarize_total` | Counter | `status` (`success` / `failed`) | Each per-paper LLM summarize call completes (or fails) | `literature/fetcher.py` |
-| `ainrf_literature_fetch_duration_seconds` | Histogram | `subscription_id` | Each subscription fetch attempt (arXiv query + LLM summarization) ends | `literature/scheduler.py` |
-| `ainrf_literature_summarize_duration_seconds` | Histogram | _(none)_ | Each individual paper summarization LLM call ends | `literature/fetcher.py` |
-| `ainrf_literature_last_fetch_timestamp_seconds` | Gauge | `subscription_id` | A subscription fetch succeeds (set to `time.time()` — Unix epoch seconds) | `literature/scheduler.py` |
+| `ainrf_domain_literature_saga_events_total` | Counter | `outcome` | A Literature-to-Task saga transition is durably recorded | `domain_telemetry.record_literature_saga_event()` |
+| `ainrf_domain_literature_saga_intents` | Gauge | `status` | Current durable Literature-to-Task intent count is hydrated during a domain telemetry scrape | `domain_telemetry.refresh_domain_metrics()` |
+| `ainrf_domain_literature_saga_oldest_pending_age_seconds` | Gauge | _(none)_ | Age of the oldest non-terminal Literature-to-Task intent during a durable scrape | `domain_telemetry.refresh_domain_metrics()` |
+| `ainrf_literature_summarize_total` | Counter | `status` (`success` / `failed`) | A current Literature worker summary call completes or fails | `literature/summarizer.py` |
+| `ainrf_literature_summarize_duration_seconds` | Histogram | _(none)_ | A current Literature worker summary call ends | `literature/summarizer.py` |
 
 **Derived PromQL** (examples):
 
-- Fetch success rate per subscription:
+- Literature-to-Task saga completions:
   ```
-  rate(ainrf_literature_fetch_total{status="success"}[1h])
-  / rate(ainrf_literature_fetch_total[1h])
+  rate(ainrf_domain_literature_saga_events_total{outcome="completed"}[1h])
   ```
-- Time since last successful fetch (staleness check):
+- Pending Literature-to-Task intents by recovery state:
   ```
-  time() - ainrf_literature_last_fetch_timestamp_seconds > 21600
+  sum by (status) (ainrf_domain_literature_saga_intents)
   ```
-- Summarize success rate:
+- Summary success rate:
   ```
   rate(ainrf_literature_summarize_total{status="success"}[1h])
   / rate(ainrf_literature_summarize_total[1h])
   ```
-- Duplicate rate (fraction of papers already in database):
+- Oldest pending Literature-to-Task intent:
   ```
-  1 - (rate(ainrf_literature_papers_new_total[1h]) / rate(ainrf_literature_papers_fetched_total[1h]))
+  ainrf_domain_literature_saga_oldest_pending_age_seconds
   ```
+
+### Compatibility-only fetch series
+
+The registry still pre-declares `ainrf_literature_fetch_total`, `ainrf_literature_papers_fetched_total`, `ainrf_literature_papers_new_total`, `ainrf_literature_fetch_duration_seconds`, and `ainrf_literature_last_fetch_timestamp_seconds` for isolated compatibility/test callers. The metrics boundary removes `subscription_id` and exposes a bounded `scope="all"` label; the retired scheduler path does not emit them in the current production worker. Do not use these series as current Literature health or completeness evidence.
 
 ---
 

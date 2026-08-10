@@ -66,7 +66,7 @@ docker compose -f docker-compose.cpu.yml -f docker-compose.observability.yml up 
 
 - **Litefuse UI**: `http://<host>:13000` — after first start, create admin account and generate API keys.
 - **Configuration**: set `AINRF_OBSERVABILITY_ENABLED=true` plus `AINRF_OBSERVABILITY_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` in `.env`, then restart the ainrf service. See `deploy/docker-compose.observability.yml` header for full secret generation instructions.
-- **Integration points**: `AgenticResearcherService` wraps each task lifecycle as a trace with per-turn generation spans; `LiteratureScheduler` wraps each subscription fetch. Both coexist with existing SQLite token tracking (dual-write).
+- **Integration points**: The current Task/Turn lifecycle is owned by `ConversationWorkerRuntime` and the Conversation Domain; committed-v2 Task/Turn/Item/RuntimeExecution persistence and `domain_telemetry` are authoritative. Literature checks are planned by `LiteratureTrackingService`/`run_planner_cycle`, persisted as SQLite work items and outbox records, and processed by the Dramatiq literature worker; current Literature-to-Task transitions emit durable `ainrf_domain_literature_saga_*` telemetry. Litefuse is an optional `SafeReporter` sink and never replaces canonical state or creates a legacy dual-write path.
 - **Graceful degradation**: when Litefuse is disabled or unreachable, `SafeReporter` wraps all calls in try/except — observability failures never affect the main application.
 
 | Observability Stack | Service | Port | What it shows |
