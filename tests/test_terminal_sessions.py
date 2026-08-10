@@ -798,6 +798,27 @@ def test_terminal_attachment_broker_validates_token_and_expiry(tmp_path: Path) -
         broker.open_runtime(attachment.attachment_id, attachment.token)
 
 
+def test_attachment_lookup_does_not_stop_expired_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    broker = TerminalAttachmentBroker()
+    attachment = broker.create_attachment("http://testserver/", attachment_target(tmp_path))
+    broker._attachments[attachment.attachment_id].expires_at = utc_now() - timedelta(seconds=1)
+    runtime = object()
+    broker._runtimes[attachment.attachment_id] = runtime  # type: ignore[assignment]
+    stopped: list[object] = []
+    monkeypatch.setattr(
+        "ainrf.terminal.attachments.stop_terminal_bridge",
+        lambda current_runtime: stopped.append(current_runtime),
+    )
+
+    observed = broker.get_attachment(attachment.attachment_id)
+
+    assert observed is broker._attachments[attachment.attachment_id]
+    assert broker._runtimes[attachment.attachment_id] is runtime
+    assert stopped == []
+
+
 def test_detach_only_closes_bridge_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     broker = TerminalAttachmentBroker()
     attachment = broker.create_attachment("http://testserver/", attachment_target(tmp_path))

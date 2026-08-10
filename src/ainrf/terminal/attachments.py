@@ -118,6 +118,13 @@ class TerminalAttachmentBroker:
 
         return self._validate_attachment(attachment_id, token)
 
+    def get_attachment(self, attachment_id: str | None) -> TerminalAttachment | None:
+        """Return an attachment record without opening or stopping its runtime."""
+
+        if attachment_id is None:
+            return None
+        return self._attachments.get(attachment_id)
+
     def detach_attachment(self, attachment_id: str | None) -> TerminalAttachment | None:
         if attachment_id is None:
             return None

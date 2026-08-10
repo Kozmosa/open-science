@@ -621,8 +621,12 @@ class SessionManager:
             try:
                 environment = self._environment_service.get_environment(binding.environment_id)
             except EnvironmentNotFoundError:
+                if environment_visible is not None:
+                    continue
                 environment = None
             else:
+                if environment.id != binding.environment_id:
+                    continue
                 pair = self._refresh_pair(binding, environment, pair)
             items.append((binding, pair, environment))
         return items

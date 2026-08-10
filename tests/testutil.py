@@ -164,7 +164,19 @@ def make_client(tmp_path: Path, *, max_file_size_bytes: int | None = None) -> ht
         domain_artifact_sha=artifact_sha,
     )
     app = _create_app(api_config, max_file_size_bytes=max_file_size_bytes)
-    headers = get_jwt_headers(app, "admin", "test-admin-password")
+    headers = get_jwt_headers(
+        app,
+        "admin",
+        "test-admin-password",
+        user_id="file-browser-admin",
+    )
+    app.state.auth_service.grant_environment(
+        env_id="env-localhost",
+        user_id="file-browser-admin",
+        max_tasks=None,
+        granted_by="file-browser-admin",
+        reason="file route fixture execution grant",
+    )
 
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -182,7 +194,19 @@ def make_client_and_app(tmp_path: Path, *, max_file_size_bytes: int | None = Non
         domain_artifact_sha=artifact_sha,
     )
     app = _create_app(api_config)
-    headers = get_jwt_headers(app, "admin", "test-admin-password")
+    headers = get_jwt_headers(
+        app,
+        "admin",
+        "test-admin-password",
+        user_id="file-browser-admin",
+    )
+    app.state.auth_service.grant_environment(
+        env_id="env-localhost",
+        user_id="file-browser-admin",
+        max_tasks=None,
+        granted_by="file-browser-admin",
+        reason="file route fixture execution grant",
+    )
 
     client = httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

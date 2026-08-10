@@ -11,7 +11,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import FileResponse, StreamingResponse
 
 from ainrf.api.domain_access import (
-    require_v2_active_environment,
+    require_v2_environment_execution_grant,
     require_v2_workspace_execution_owner,
 )
 from ainrf.api.schemas import (
@@ -105,7 +105,7 @@ async def list_files(
     ),
 ) -> FileListResponse:
     user = get_current_user(request)
-    require_v2_active_environment(request, user, environment_id)
+    require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
@@ -143,7 +143,7 @@ async def read_file(
     ),
 ) -> FileReadResponse:
     user = get_current_user(request)
-    require_v2_active_environment(request, user, environment_id)
+    require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
@@ -176,7 +176,7 @@ async def stream_file(
     ),
 ):
     user = get_current_user(request)
-    require_v2_active_environment(request, user, environment_id)
+    require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
@@ -266,7 +266,7 @@ async def upload_file(
     file: UploadFile = File(...),
 ) -> FileUploadResponse:
     user = get_current_user(request)
-    require_v2_active_environment(request, user, environment_id)
+    require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)

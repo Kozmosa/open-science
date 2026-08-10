@@ -80,6 +80,14 @@ def make_client(tmp_path: Path) -> tuple[TestClient, FastAPI]:
         "terminal-password",
         user_id="browser-user",
     )
+    for user_id in ("daemon", "browser-user"):
+        app.state.auth_service.grant_environment(
+            env_id="env-localhost",
+            user_id=user_id,
+            max_tasks=None,
+            granted_by="browser-user",
+            reason="terminal attachment fixture execution grant",
+        )
     return TestClient(app), app
 
 
@@ -644,6 +652,139 @@ def test_terminal_attachment_websocket_rejects_bad_token(tmp_path: Path) -> None
             f"/api/terminal/attachments/{attachment.attachment_id}/ws?token=wrong-token"
         ) as ws:
             ws.receive_text()
+
+
+def test_terminal_attachment_websocket_rechecks_revoked_grant_before_pty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    start_calls: list[str] = []
+
+    def fail_start(*args: object, **kwargs: object) -> object:
+        start_calls.append("pty")
+        raise AssertionError("revoked attachment grant must not start a PTY")
+
+    monkeypatch.setattr("ainrf.terminal.attachments.start_terminal_bridge", fail_start)
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-stale-grant",
+            session_id="p-stale-grant",
+            session_name="p-stale-grant",
+            user_id="daemon",
+            environment_id="env-localhost",
+            environment_alias="localhost",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "p-stale-grant"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+    app.state.auth_service.revoke_environment(
+        "env-localhost",
+        "daemon",
+        revoked_by="browser-user",
+        reason="stale attachment grant regression",
+    )
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        ):
+            pass
+
+    assert exc_info.value.code == 4403
+    assert start_calls == []
+
+
+def test_terminal_attachment_websocket_requires_exact_runtime_environment_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    start_calls: list[str] = []
+
+    def fail_start(*args: object, **kwargs: object) -> object:
+        start_calls.append("pty")
+        raise AssertionError("mismatched Environment identity must not start a PTY")
+
+    monkeypatch.setattr("ainrf.terminal.attachments.start_terminal_bridge", fail_start)
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-mismatched-environment",
+            session_id="p-mismatched-environment",
+            session_name="p-mismatched-environment",
+            user_id="daemon",
+            environment_id="env-localhost",
+            environment_alias="localhost",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "p-mismatched-environment"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+    monkeypatch.setattr(
+        app.state.environment_service,
+        "get_environment",
+        lambda _environment_id: SimpleNamespace(id="different-environment"),
+    )
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        ):
+            pass
+
+    assert exc_info.value.code == 4404
+    assert start_calls == []
+
+
+@pytest.mark.parametrize("auth_db_state", ["missing", "corrupt"])
+def test_terminal_attachment_websocket_fails_closed_when_auth_authority_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    auth_db_state: str,
+) -> None:
+    client, app = make_client(tmp_path)
+    broker = app.state.terminal_attachment_broker
+    start_calls: list[str] = []
+
+    def fail_start(*args: object, **kwargs: object) -> object:
+        start_calls.append("pty")
+        raise AssertionError("unavailable auth authority must not start a PTY")
+
+    monkeypatch.setattr("ainrf.terminal.attachments.start_terminal_bridge", fail_start)
+    attachment = broker.create_attachment(
+        "http://testserver/",
+        TerminalAttachmentTarget(
+            binding_id="binding-unavailable-auth",
+            session_id="p-unavailable-auth",
+            session_name="p-unavailable-auth",
+            user_id="daemon",
+            environment_id="env-localhost",
+            environment_alias="localhost",
+            target_kind=TERMINAL_LOCAL_TARGET_KIND,
+            working_directory="/workspace/project",
+            attach_command=("tmux", "attach-session", "-t", "p-unavailable-auth"),
+            spawn_working_directory=tmp_path,
+        ),
+    )
+    auth_db = tmp_path / "runtime" / "auth.sqlite3"
+    if auth_db_state == "missing":
+        auth_db.unlink()
+    else:
+        auth_db.write_bytes(b"not a sqlite database")
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/api/terminal/attachments/{attachment.attachment_id}/ws?token={attachment.token}"
+        ):
+            pass
+
+    assert exc_info.value.code == 4403
+    assert start_calls == []
 
 
 def test_terminal_attachment_websocket_rejects_input_for_readonly_attachment(

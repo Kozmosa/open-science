@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import threading
 import time
@@ -9,7 +10,7 @@ from typing import Any, cast
 import anyio
 import httpx
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 
 from ainrf.api.routes.terminal import (
     create_terminal_session,
@@ -26,10 +27,11 @@ from ainrf.domain_control import (
     DomainMaintenanceService,
     MaintenanceModeError,
 )
+from ainrf.auth.service import AuthService
 from ainrf.environments.models import EnvironmentRegistryEntry
 from ainrf.terminal.attachments import TerminalAttachmentBroker
 from ainrf.terminal.tmux import TmuxCommandError
-from tests.testutil import get_jwt_headers, make_terminal_app, make_terminal_manager
+from tests.testutil import get_jwt_headers, make_terminal_app, make_terminal_manager, seed_user
 
 pytestmark = [pytest.mark.api, pytest.mark.concurrent]
 
@@ -52,7 +54,15 @@ def _create_environment(
         display_name=display_name,
         connection={"host": host, "user": "root", "default_workdir": default_workdir},
     )
-    return state.environment_service.get_environment(str(created["environment_id"]))
+    environment_id = str(created["environment_id"])
+    state.auth_service.grant_environment(
+        env_id=environment_id,
+        user_id=APP_USER_ID,
+        max_tasks=None,
+        granted_by=APP_USER_ID,
+        reason="terminal route fixture execution grant",
+    )
+    return state.environment_service.get_environment(environment_id)
 
 
 def _maintenance_terminal_request(
@@ -71,6 +81,23 @@ def _maintenance_terminal_request(
     the same 503 mapping from that middleware.
     """
 
+    auth_service = AuthService(state_root=state_root)
+    seed_user(
+        auth_service,
+        "browser-user",
+        "terminal-password",
+        role="admin",
+        user_id=APP_USER_ID,
+    )
+    for environment in environment_service.list_environments():
+        auth_service.grant_environment(
+            env_id=environment.id,
+            user_id=APP_USER_ID,
+            max_tasks=None,
+            granted_by=APP_USER_ID,
+            reason="terminal maintenance fixture execution grant",
+        )
+
     domain_reader = SimpleNamespace(
         ready=lambda: True,
         environment=lambda environment_id, _user, include_disabled=False: {
@@ -87,6 +114,7 @@ def _maintenance_terminal_request(
                     api_config=SimpleNamespace(
                         state_root=state_root,
                     ),
+                    auth_service=auth_service,
                     domain_api_participant_id=None,
                     environment_module=domain_reader,
                     domain_maintenance_service=maintenance,
@@ -144,6 +172,309 @@ async def test_terminal_session_get_returns_idle_summary_for_selected_environmen
         "attachment_id": None,
         "attachment_expires_at": None,
     }
+
+
+@pytest.mark.anyio
+async def test_terminal_runtime_surfaces_require_execution_grant_before_control_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_terminal_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
+    created = app.state.environment_module.create_environment(
+        {"id": APP_USER_ID, "role": "admin"},
+        alias="terminal-no-grant",
+        display_name="Terminal no-grant",
+        connection={"host": "127.0.0.1"},
+    )
+    environment_id = str(created["environment_id"])
+    calls: list[str] = []
+
+    def fail_get_session(*args: object, **kwargs: object) -> object:
+        calls.append("lookup")
+        raise AssertionError("terminal lookup must not reach SessionManager without a grant")
+
+    def fail_ensure_session(*args: object, **kwargs: object) -> object:
+        calls.append("create")
+        raise AssertionError("terminal create must not reach tmux without a grant")
+
+    def fail_reset_session(*args: object, **kwargs: object) -> object:
+        calls.append("reset")
+        raise AssertionError("terminal reset must not reach tmux without a grant")
+
+    async def fail_exec(*args: object, **kwargs: object) -> object:
+        calls.append("exec")
+        raise AssertionError("terminal exec must not reach the executor without a grant")
+
+    monkeypatch.setattr(app.state.terminal_session_manager, "get_session_record", fail_get_session)
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        fail_ensure_session,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager,
+        "reset_personal_session",
+        fail_reset_session,
+    )
+    monkeypatch.setattr("ainrf.api.routes.terminal.exec_command", fail_exec)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        lookup = await client.get(
+            f"/api/terminal/session?environment_id={environment_id}", headers=jwt_headers
+        )
+        create = await client.post(
+            "/api/terminal/session",
+            headers=jwt_headers,
+            json={"environment_id": environment_id},
+        )
+        execute = await client.post(
+            "/api/terminal/session/exec",
+            headers=jwt_headers,
+            json={"environment_id": environment_id, "command": ["pwd"]},
+        )
+        delete = await client.delete(
+            f"/api/terminal/session?environment_id={environment_id}",
+            headers=jwt_headers,
+        )
+        reset = await client.post(
+            "/api/terminal/session/reset",
+            headers=jwt_headers,
+            json={"environment_id": environment_id},
+        )
+
+    assert lookup.status_code == 403
+    assert create.status_code == 403
+    assert execute.status_code == 403
+    assert delete.status_code == 403
+    assert reset.status_code == 403
+    assert calls == []
+
+    app.state.auth_service.grant_environment(
+        env_id=environment_id,
+        user_id=APP_USER_ID,
+        max_tasks=None,
+        granted_by=APP_USER_ID,
+        reason="terminal grant transition test",
+    )
+    app.state.auth_service.revoke_environment(
+        environment_id,
+        APP_USER_ID,
+        revoked_by=APP_USER_ID,
+        reason="terminal grant transition test",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        revoked_lookup = await client.get(
+            f"/api/terminal/session?environment_id={environment_id}", headers=jwt_headers
+        )
+    assert revoked_lookup.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_terminal_session_pairs_filter_ungranted_visible_environments(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_terminal_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
+    granted = _create_environment(
+        app,
+        alias="terminal-granted-pair",
+        display_name="Granted pair",
+        host="gpu.example.com",
+    )
+    hidden_record = app.state.environment_module.create_environment(
+        {"id": APP_USER_ID, "role": "admin"},
+        alias="terminal-hidden-pair",
+        display_name="Hidden pair",
+        connection={"host": "gpu-hidden.example.com"},
+    )
+    hidden = app.state.environment_service.get_environment(str(hidden_record["environment_id"]))
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: False,
+    )
+    app.state.terminal_session_manager.ensure_personal_session(APP_USER_ID, granted, None)
+    app.state.terminal_session_manager.ensure_personal_session(APP_USER_ID, hidden, None)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        specific_hidden = await client.get(
+            f"/api/terminal/session-pairs?environment_id={hidden.id}", headers=jwt_headers
+        )
+        all_pairs = await client.get("/api/terminal/session-pairs", headers=jwt_headers)
+
+    assert specific_hidden.status_code == 403
+    assert all_pairs.status_code == 200
+    pair_environment_ids = {item["environment_id"] for item in all_pairs.json()["items"]}
+    assert granted.id in pair_environment_ids
+    assert hidden.id not in pair_environment_ids
+
+
+@pytest.mark.anyio
+async def test_terminal_session_pairs_filter_runtime_identity_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_terminal_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
+    environment = _create_environment(
+        app,
+        alias="terminal-drifting-pair",
+        display_name="Drifting pair",
+        host="gpu-drift.example.com",
+    )
+    manager = app.state.terminal_session_manager
+    monkeypatch.setattr(
+        manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: False,
+    )
+    manager.ensure_personal_session(APP_USER_ID, environment, None)
+
+    service = app.state.environment_service
+    original_get_environment = service.get_environment
+    target_calls = 0
+
+    def drifting_get_environment(environment_id: str) -> EnvironmentRegistryEntry:
+        nonlocal target_calls
+        resolved = original_get_environment(environment_id)
+        if environment_id != environment.id:
+            return resolved
+        target_calls += 1
+        if target_calls >= 2:
+            return replace(resolved, id="runtime-identity-drift")
+        return resolved
+
+    monkeypatch.setattr(service, "get_environment", drifting_get_environment)
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.get("/api/terminal/session-pairs", headers=jwt_headers)
+
+    assert response.status_code == 200
+    assert target_calls >= 2
+    assert environment.id not in {item["environment_id"] for item in response.json()["items"]}
+
+
+@pytest.mark.anyio
+async def test_terminal_mutations_recheck_grant_at_external_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, environment_service = make_terminal_manager(tmp_path)
+    environment = environment_service.create_environment(
+        alias="gpu-grant-race",
+        display_name="Grant race",
+        host="gpu-grant-race.example.com",
+    )
+    maintenance = DomainMaintenanceService(tmp_path)
+    broker = TerminalAttachmentBroker()
+    request = _maintenance_terminal_request(
+        state_root=tmp_path,
+        maintenance=maintenance,
+        manager=manager,
+        environment_service=environment_service,
+        broker=broker,
+    )
+    auth_service = request.app.state.auth_service
+    external_calls: list[str] = []
+
+    def unexpected_create(*args: object, **kwargs: object) -> object:
+        external_calls.append("create")
+        raise AssertionError("revoked grant must stop terminal creation")
+
+    def unexpected_reset(*args: object, **kwargs: object) -> object:
+        external_calls.append("reset")
+        raise AssertionError("revoked grant must stop terminal reset")
+
+    def unexpected_detach(*args: object, **kwargs: object) -> object:
+        external_calls.append("delete")
+        raise AssertionError("revoked grant must stop attachment detach")
+
+    async def unexpected_exec(*args: object, **kwargs: object) -> object:
+        external_calls.append("exec")
+        raise AssertionError("revoked grant must stop tenant command")
+
+    monkeypatch.setattr(manager, "ensure_personal_session", unexpected_create)
+    monkeypatch.setattr(manager, "reset_personal_session", unexpected_reset)
+    monkeypatch.setattr(broker, "detach_attachment", unexpected_detach)
+    monkeypatch.setattr("ainrf.api.routes.terminal.exec_command", unexpected_exec)
+
+    original_resolve_workdir = environment_service.resolve_effective_workdir
+
+    def resolve_then_revoke(
+        project_id: str,
+        environment_id: str,
+        fallback_root: Path,
+    ) -> str:
+        resolved = original_resolve_workdir(project_id, environment_id, fallback_root)
+        auth_service.revoke_environment(
+            environment.id,
+            APP_USER_ID,
+            revoked_by=APP_USER_ID,
+            reason="terminal mutation boundary regression",
+        )
+        return resolved
+
+    monkeypatch.setattr(
+        environment_service,
+        "resolve_effective_workdir",
+        resolve_then_revoke,
+    )
+
+    async def expect_denied(operation: object) -> None:
+        auth_service.grant_environment(
+            env_id=environment.id,
+            user_id=APP_USER_ID,
+            max_tasks=None,
+            granted_by=APP_USER_ID,
+            reason="terminal mutation boundary regression",
+        )
+        with pytest.raises(HTTPException) as caught:
+            await operation  # type: ignore[misc]
+        assert caught.value.status_code == 403
+
+    await expect_denied(
+        create_terminal_session(
+            TerminalSessionCreateRequest(environment_id=environment.id),
+            request,
+        )
+    )
+    await expect_denied(
+        delete_terminal_session(
+            request,
+            environment_id=environment.id,
+            attachment_id="attachment-grant-race",
+        )
+    )
+    await expect_denied(
+        reset_terminal_session(
+            TerminalSessionResetRequest(environment_id=environment.id),
+            request,
+        )
+    )
+    await expect_denied(
+        terminal_session_exec(
+            TerminalExecRequest(environment_id=environment.id, command=["pwd"]),
+            request,
+        )
+    )
+
+    assert external_calls == []
 
 
 @pytest.mark.anyio
@@ -457,6 +788,68 @@ async def test_terminal_session_delete_detaches_without_destroying_tmux_session(
     assert detached.json()["status"] == "running"
     assert detached.json()["attachment_id"] is None
     assert detached.json()["terminal_ws_url"] is None
+
+
+@pytest.mark.anyio
+async def test_terminal_attachment_environment_identity_is_required_for_delete_and_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = make_terminal_app(tmp_path)
+    jwt_headers = get_jwt_headers(app, user_id=APP_USER_ID)
+    attached_environment = _create_environment(
+        app,
+        alias="gpu-attached",
+        display_name="Attached environment",
+        host="gpu-attached.example.com",
+    )
+    other_environment = _create_environment(
+        app,
+        alias="gpu-other",
+        display_name="Other environment",
+        host="gpu-other.example.com",
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "ensure_personal_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        app.state.terminal_session_manager._tmux_adapter,
+        "has_session",
+        lambda *args, **kwargs: True,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        created = await client.post(
+            "/api/terminal/session",
+            headers=jwt_headers,
+            json={"environment_id": attached_environment.id},
+        )
+        attachment_id = created.json()["attachment_id"]
+        wrong_delete = await client.delete(
+            "/api/terminal/session",
+            params={
+                "environment_id": other_environment.id,
+                "attachment_id": attachment_id,
+            },
+            headers=jwt_headers,
+        )
+        wrong_reset = await client.post(
+            "/api/terminal/session/reset",
+            headers=jwt_headers,
+            json={
+                "environment_id": other_environment.id,
+                "attachment_id": attachment_id,
+            },
+        )
+
+    assert created.status_code == 200
+    assert wrong_delete.status_code == 404
+    assert wrong_reset.status_code == 404
+    assert app.state.terminal_attachment_broker.get_attachment(attachment_id) is not None
 
 
 @pytest.mark.anyio

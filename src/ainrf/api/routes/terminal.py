@@ -14,10 +14,13 @@ from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSock
 from starlette.websockets import WebSocketState
 
 from ainrf.api.domain_access import (
-    require_v2_active_environment,
+    has_v2_environment_execution_grant,
+    reject_v2_environment_execution_grant,
+    require_v2_environment_execution_grant,
     require_v2_workspace_execution_owner,
     v2_environment_module,
 )
+from ainrf.auth.models import AuthError
 from ainrf.auth.permissions import get_current_user
 from ainrf.api.schemas import (
     TerminalExecRequest,
@@ -170,6 +173,7 @@ def _terminal_http_mutation(
     request: Request,
     *,
     source: str,
+    access_check: Callable[[], None] | None = None,
 ) -> Iterator[Callable[[], None]]:
     """Fence an HTTP terminal side effect at the point it actually starts.
 
@@ -184,10 +188,16 @@ def _terminal_http_mutation(
         source=source,
         participant_id=getattr(request.app.state, "domain_api_participant_id", None),
     )
+
+    def check_boundary() -> None:
+        maintenance.check_lease(lease)
+        if access_check is not None:
+            access_check()
+
     try:
-        maintenance.check_lease(lease)
-        yield lambda: maintenance.check_lease(lease)
-        maintenance.check_lease(lease)
+        check_boundary()
+        yield check_boundary
+        check_boundary()
     finally:
         maintenance.finish_mutation(lease)
 
@@ -245,6 +255,8 @@ def _translate_environment_error(exc: Exception) -> HTTPException:
 
 
 def _translate_terminal_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(exc, TerminalSessionOperationError):
         return HTTPException(status_code=503, detail=str(exc))
     return HTTPException(status_code=500, detail="Unexpected terminal runtime error")
@@ -255,6 +267,8 @@ def _close_code_for_http_status(status: int) -> int:
         return 4404
     if status == 401:
         return 4401
+    if status == 403:
+        return 4403
     if status == 503:
         return 4503
     return 4409
@@ -276,20 +290,53 @@ def _require_v2_attachment_environment_access(
 ) -> None:
     """Revalidate the attachment owner's durable grant before starting a PTY."""
 
+    if not has_v2_environment_execution_grant(
+        websocket,
+        {"id": attachment.user_id},
+        attachment.environment_id,
+    ):
+        # Check the durable grant before asking AuthService to read the same
+        # database.  SQLite recovery must not turn a missing/corrupt authority
+        # into an accepted capability during the WebSocket handshake.
+        reject_v2_environment_execution_grant(
+            websocket,
+            user_id=attachment.user_id,
+            environment_id=attachment.environment_id,
+        )
     auth_service = getattr(websocket.app.state, "auth_service", None)
     if auth_service is None:
-        raise HTTPException(status_code=503, detail="authentication service not initialized")
+        reject_v2_environment_execution_grant(
+            websocket,
+            user_id=attachment.user_id,
+            environment_id=attachment.environment_id,
+        )
     try:
         user_record = auth_service.get_user(attachment.user_id)
-    except Exception as exc:
+    except AuthError as exc:
         raise HTTPException(status_code=404, detail="Environment not found") from exc
+    except Exception:
+        # A missing/corrupt auth authority must never turn an existing
+        # capability into a live PTY.  Use the shared denial seam even though
+        # this WebSocket has no request actor dictionary to carry forward.
+        reject_v2_environment_execution_grant(
+            websocket,
+            user_id=attachment.user_id,
+            environment_id=attachment.environment_id,
+        )
     if user_record.status.value != "active":
         raise HTTPException(status_code=404, detail="Environment not found")
-    require_v2_active_environment(
+    require_v2_environment_execution_grant(
         websocket,
         {"id": user_record.id, "role": user_record.role.value},
         attachment.environment_id,
     )
+    runtime_service = _get_environment_service(websocket)
+    try:
+        runtime_environment = runtime_service.get_environment(attachment.environment_id)
+    except EnvironmentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Environment not found") from exc
+    if runtime_environment.id != attachment.environment_id:
+        raise HTTPException(status_code=404, detail="Environment not found")
 
 
 def _get_environment_context(
@@ -302,14 +349,29 @@ def _get_environment_context(
 ) -> tuple[EnvironmentRegistryEntry | None, str | None]:
     if environment_id is None:
         return None, None
-    require_v2_active_environment(request, user, environment_id)
+    require_v2_environment_execution_grant(request, user, environment_id)
     environment = service.get_environment(environment_id)
+    if environment.id != environment_id:
+        raise EnvironmentNotFoundError(environment_id)
     working_directory = service.resolve_effective_workdir(
         project_id,
         environment_id,
         state_root,
     )
     return environment, working_directory
+
+
+def _require_attachment_identity(
+    attachment: TerminalAttachment,
+    *,
+    user_id: str,
+    environment_id: str,
+) -> None:
+    """Keep a terminal capability bound to one user and Environment ID."""
+
+    if attachment.user_id == user_id and attachment.environment_id == environment_id:
+        return
+    raise HTTPException(status_code=404, detail="Terminal attachment not found")
 
 
 def _get_running_loop() -> asyncio.AbstractEventLoop:
@@ -360,8 +422,10 @@ async def read_terminal_session_pairs(
     domain = v2_environment_module(request)
     if environment_id is not None:
         try:
-            require_v2_active_environment(request, user, environment_id)
-            service.get_environment(environment_id)
+            require_v2_environment_execution_grant(request, user, environment_id)
+            environment = service.get_environment(environment_id)
+            if environment.id != environment_id:
+                raise EnvironmentNotFoundError(environment_id)
         except Exception as exc:
             raise _translate_environment_error(exc) from exc
 
@@ -370,7 +434,13 @@ async def read_terminal_session_pairs(
             domain.environment(candidate_environment_id, user, include_disabled=False)
         except DomainNotFoundError:
             return False
-        return True
+        try:
+            runtime_environment = service.get_environment(candidate_environment_id)
+        except EnvironmentNotFoundError:
+            return False
+        if runtime_environment.id != candidate_environment_id:
+            return False
+        return has_v2_environment_execution_grant(request, user, candidate_environment_id)
 
     items = await to_thread.run_sync(
         manager.list_session_pairs,
@@ -420,7 +490,15 @@ async def create_terminal_session(
         created_session_cleanup = cleanup
 
     try:
-        with _terminal_http_mutation(request, source="terminal.session.create") as check_lease:
+        with _terminal_http_mutation(
+            request,
+            source="terminal.session.create",
+            access_check=lambda: require_v2_environment_execution_grant(
+                request,
+                user,
+                payload.environment_id,
+            ),
+        ) as check_lease:
             session, target = await to_thread.run_sync(
                 lambda: manager.ensure_personal_session(
                     app_user_id,
@@ -474,23 +552,44 @@ async def delete_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
-    with _terminal_http_mutation(request, source="terminal.session.delete") as check_lease:
-        detached_attachment = broker.detach_attachment(attachment_id)
-        check_lease()
-        resolved_environment_id = environment_id or (
-            detached_attachment.environment_id if detached_attachment is not None else None
+    attachment = broker.get_attachment(attachment_id)
+    if attachment is not None:
+        _require_attachment_identity(
+            attachment,
+            user_id=app_user_id,
+            environment_id=environment_id or attachment.environment_id,
         )
-        try:
-            environment, working_directory = _get_environment_context(
-                request,
-                service,
-                resolved_environment_id,
-                user,
-                request.app.state.api_config.state_root,
-                project_id=project_id,
-            )
-        except Exception as exc:
-            raise _translate_environment_error(exc) from exc
+    resolved_environment_id = environment_id or (
+        attachment.environment_id if attachment is not None else None
+    )
+    try:
+        environment, working_directory = _get_environment_context(
+            request,
+            service,
+            resolved_environment_id,
+            user,
+            request.app.state.api_config.state_root,
+            project_id=project_id,
+        )
+    except Exception as exc:
+        raise _translate_environment_error(exc) from exc
+
+    access_check = (
+        None
+        if resolved_environment_id is None
+        else lambda: require_v2_environment_execution_grant(
+            request,
+            user,
+            resolved_environment_id,
+        )
+    )
+    with _terminal_http_mutation(
+        request,
+        source="terminal.session.delete",
+        access_check=access_check,
+    ) as check_lease:
+        broker.detach_attachment(attachment_id)
+        check_lease()
 
         session = await to_thread.run_sync(
             lambda: manager.get_session_record(
@@ -515,6 +614,14 @@ async def reset_terminal_session(
     service = _get_environment_service(request)
     manager = _get_session_manager(request)
     broker = _get_attachment_broker(request)
+    if payload.attachment_id is not None:
+        attachment = broker.get_attachment(payload.attachment_id)
+        if attachment is not None:
+            _require_attachment_identity(
+                attachment,
+                user_id=app_user_id,
+                environment_id=payload.environment_id,
+            )
     try:
         environment, working_directory = _get_environment_context(
             request,
@@ -536,7 +643,15 @@ async def reset_terminal_session(
         created_session_cleanup = cleanup
 
     try:
-        with _terminal_http_mutation(request, source="terminal.session.reset") as check_lease:
+        with _terminal_http_mutation(
+            request,
+            source="terminal.session.reset",
+            access_check=lambda: require_v2_environment_execution_grant(
+                request,
+                user,
+                payload.environment_id,
+            ),
+        ) as check_lease:
             broker.detach_attachment(payload.attachment_id)
             check_lease()
             session, target = await to_thread.run_sync(
@@ -651,7 +766,15 @@ async def terminal_session_exec(
                 detail=f"Command '{base_cmd}' not in allowed list. Contact administrator to add it.",
             )
 
-        with _terminal_http_mutation(request, source="terminal.session.exec") as check_lease:
+        with _terminal_http_mutation(
+            request,
+            source="terminal.session.exec",
+            access_check=lambda: require_v2_environment_execution_grant(
+                request,
+                user,
+                payload.environment_id,
+            ),
+        ) as check_lease:
             check_lease()
             result = await exec_command(
                 environment,
