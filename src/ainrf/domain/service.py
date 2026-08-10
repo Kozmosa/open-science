@@ -18,6 +18,7 @@ from ainrf.domain.environment_identity import (
     canonical_connection_object,
     environment_connection_fingerprint,
 )
+from ainrf.domain.environment_access import has_active_environment_execution_grant
 from ainrf.domain.interfaces import EnvironmentModule, ProjectModule, WorkspaceModule
 from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.project_initialization import initialize_project_context
@@ -400,21 +401,11 @@ class _DomainWriteKernel:
         raise DomainNotFoundError(environment_id)
 
     def _has_active_environment_grant(self, *, environment_id: str, user_id: str) -> bool:
-        if not self._auth_db_path.is_file():
-            return False
-        auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
-        try:
-            with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
-                grant = conn.execute(
-                    """
-                    SELECT 1 FROM environment_access
-                    WHERE environment_id = ? AND user_id = ? AND status = 'active'
-                    """,
-                    (environment_id, user_id),
-                ).fetchone()
-        except sqlite3.OperationalError:
-            return False
-        return grant is not None
+        return has_active_environment_execution_grant(
+            self._auth_db_path,
+            environment_id=environment_id,
+            user_id=user_id,
+        )
 
     def _require_known_auth_user(
         self, user_id: str, *, allow_api_key_principal: bool = False

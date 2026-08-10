@@ -122,17 +122,18 @@ async def test_api_fresh_project_has_an_initial_context_and_can_create_a_task(
         assert isinstance(draft["fingerprint"], str)
 
         workspace_id, _ = _prepare_attached_workspace(app, state_root, project_id)
+        task_payload = {
+            "project_id": project_id,
+            "workspace_id": workspace_id,
+            "researcher_type": "vanilla",
+            "harness_engine": "claude-code",
+            "prompt": "Run against the initial Context.",
+            "skills": [],
+        }
         created = await client.post(
             _api_path("/api/tasks"),
             headers={"Idempotency-Key": "initial-context-task"},
-            json={
-                "project_id": project_id,
-                "workspace_id": workspace_id,
-                "researcher_type": "vanilla",
-                "harness_engine": "claude-code",
-                "prompt": "Run against the initial Context.",
-                "skills": [],
-            },
+            json=task_payload,
         )
         assert created.status_code == 202
         task_id = str(_nested(_payload(created), "task")["task_id"])
@@ -206,6 +207,23 @@ async def test_api_fresh_project_has_an_initial_context_and_can_create_a_task(
             ).fetchall()
         assert len(refs) == 2
         assert all(row["context_snapshot_ref"] == context_snapshot_ref for row in refs)
+
+        with connect(state_root / "runtime" / "agentic_researcher.sqlite3") as conn:
+            conn.execute("UPDATE tasks SET owner_user_id = 'other' WHERE task_id = ?", (task_id,))
+            conn.commit()
+
+        replay_after_transfer = await client.post(
+            _api_path("/api/tasks"),
+            headers={"Idempotency-Key": "initial-context-task"},
+            json=task_payload,
+        )
+        assert replay_after_transfer.status_code == 403
+        changed_replay_after_transfer = await client.post(
+            _api_path("/api/tasks"),
+            headers={"Idempotency-Key": "initial-context-task"},
+            json={**task_payload, "prompt": "Changed prompt."},
+        )
+        assert changed_replay_after_transfer.status_code == 403
 
 
 @pytest.mark.anyio

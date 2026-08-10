@@ -27,6 +27,7 @@ from ainrf.domain.conversation_execution import (
     RuntimeExecutionClaim,
     SubmissionClaim,
 )
+from ainrf.domain.environment_access import has_active_environment_execution_grant
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
 from ainrf.domain.service import DomainConflictError
 from ainrf.domain_control import (
@@ -166,20 +167,33 @@ class ConversationDispatcher:
             tenant_user=tenant_user,
         )
 
-    def _require_environment_grant(self, row: Mapping[str, object], owner_user_id: str) -> None:
-        if row["environment_owner_user_id"] == owner_user_id:
-            return
-        if not self._auth_db_path.is_file():
-            raise RuntimeError("Environment grant database is unavailable")
-        uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
-        with closing(sqlite3.connect(uri, uri=True)) as conn:
-            grant = conn.execute(
-                "SELECT 1 FROM environment_access "
-                "WHERE environment_id = ? AND user_id = ? AND status = 'active'",
-                (str(row["environment_id"]), owner_user_id),
-            ).fetchone()
-        if grant is None:
+    def _require_environment_grant(self, row: Mapping[str, object], user_id: str) -> None:
+        if not has_active_environment_execution_grant(
+            self._auth_db_path,
+            environment_id=str(row["environment_id"]),
+            user_id=user_id,
+        ):
             raise RuntimeError("Environment access was revoked or is unavailable")
+
+    def _require_claim_environment_grant(self, claim: SubmissionClaim) -> None:
+        """Recheck the current grant immediately before external execution."""
+
+        with closing(connect(self._db_path)) as conn:
+            row = conn.execute(
+                """
+                SELECT task.owner_user_id, task.environment_id,
+                       workspace.environment_id AS workspace_environment_id
+                FROM tasks AS task
+                JOIN workspaces AS workspace ON workspace.workspace_id = task.workspace_id
+                WHERE task.task_id = ?
+                """,
+                (claim.task_id,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Conversation Task domain relationships are unavailable")
+        if row["environment_id"] != row["workspace_environment_id"]:
+            raise RuntimeError("Conversation Task Environment no longer matches the Workspace")
+        self._require_environment_grant(row, str(row["owner_user_id"]))
 
     def _tenant_user_for(self, owner_user_id: str) -> str | None:
         if not tenant_identity.is_container_environment():
@@ -304,6 +318,31 @@ class ConversationDispatcher:
                 return True
             raise
         except DomainConflictError:
+            return True
+        try:
+            self._require_claim_environment_grant(claim)
+        except asyncio.CancelledError:
+            with suppress(DomainConflictError, ConversationContractError):
+                self._execution.mark_delivery_unknown(
+                    claim.submission_id,
+                    failure_code="worker_cancelled_before_acceptance",
+                    evidence={
+                        "source": "worker_preflight",
+                        "replay_forbidden": True,
+                    },
+                )
+            raise
+        except Exception as exc:
+            with suppress(DomainConflictError, ConversationContractError):
+                self._execution.mark_delivery_unknown(
+                    claim.submission_id,
+                    failure_code="worker_failed_before_acceptance",
+                    evidence={
+                        "source": "worker_preflight",
+                        "error_type": type(exc).__name__,
+                        "replay_forbidden": True,
+                    },
+                )
             return True
         execution: RuntimeExecutionClaim | None = None
         terminal_status: TurnStatus | None = None

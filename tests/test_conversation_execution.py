@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from ainrf.auth.service import AuthService
 from ainrf.db import connect, run_pending
 from ainrf.domain.conversation_contracts import TurnItemActor, TurnItemType
 from ainrf.domain.conversation_execution import ConversationExecutionService
@@ -25,6 +26,40 @@ def state_root(tmp_path: Path) -> Path:
         run_pending(conn, "agentic_researcher")
         conn.execute(
             """
+            INSERT INTO environments (
+                environment_id, alias, owner_user_id, display_name, connection_json,
+                connection_fingerprint, created_at, updated_at
+            ) VALUES ('environment-1', 'local', 'user-1', 'Local', '{}', 'fp', ?, ?)
+            """,
+            ("2026-08-01T00:00:00+00:00", "2026-08-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO workspaces (
+                workspace_id, label, owner_user_id, environment_id, canonical_path,
+                created_at, updated_at
+            ) VALUES ('workspace-1', 'ws', 'user-1', 'environment-1', '/tmp', ?, ?)
+            """,
+            ("2026-08-01T00:00:00+00:00", "2026-08-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO projects (
+                project_id, owner_user_id, name, status, created_at, updated_at
+            ) VALUES ('project-1', 'user-1', 'Project', 'active', ?, ?)
+            """,
+            ("2026-08-01T00:00:00+00:00", "2026-08-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
+            INSERT INTO project_workspace_links (
+                project_id, workspace_id, status, is_primary, actor_id, created_at, updated_at
+            ) VALUES ('project-1', 'workspace-1', 'active', 1, 'user-1', ?, ?)
+            """,
+            ("2026-08-01T00:00:00+00:00", "2026-08-01T00:00:00+00:00"),
+        )
+        conn.execute(
+            """
             INSERT INTO tasks (
                 task_id, project_id, workspace_id, environment_id, researcher_type,
                 harness_engine, status, title, prompt, created_at, updated_at,
@@ -37,6 +72,15 @@ def state_root(tmp_path: Path) -> Path:
             """
         )
         conn.commit()
+    auth = AuthService(state_root=root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id="environment-1",
+        user_id="user-1",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation execution fixture",
+    )
     application = ConversationApplicationService(root)
     application.initialize_task("task-1", _USER)
     application.create_turn(

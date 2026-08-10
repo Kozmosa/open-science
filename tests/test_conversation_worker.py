@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from ainrf.auth.service import AuthService
 from ainrf.db import connect, run_pending
 from ainrf.domain import OverviewSnapshotService
 from ainrf.domain.conversation_contracts import (
@@ -206,6 +207,15 @@ def state_root(tmp_path: Path) -> Path:
             """
         )
         conn.commit()
+    auth = AuthService(state_root=root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id="environment-1",
+        user_id="user-1",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation worker fixture",
+    )
     application = ConversationApplicationService(root)
     application.initialize_task("task-1", _USER)
     application.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
@@ -271,6 +281,68 @@ def test_worker_renders_the_persisted_submission_context_snapshot(state_root: Pa
     assert claim.submission_id == admission["submission_id"]
     context = dispatcher._execution_context(claim)
     assert context.rendered_prompt == "Worker Context\n\nUser Turn:\ncontext turn"
+
+
+@pytest.mark.anyio
+async def test_worker_does_not_start_adapter_for_environment_owner_without_grant(
+    state_root: Path,
+) -> None:
+    AuthService(state_root=state_root).revoke_environment(
+        "environment-1", "user-1", revoked_by="admin", reason="worker grant race"
+    )
+    starts = 0
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            nonlocal starts
+            starts += 1
+            await super().start_turn(context, emit)
+
+    adapter = TrackingAdapter()
+    dispatcher = ConversationDispatcher(state_root, adapter_factory=lambda _engine: adapter)
+    assert await dispatcher.run_once() is True
+    assert starts == 0
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        row = conn.execute(
+            "SELECT status, failure_code FROM turn_submissions WHERE submission_id = "
+            "(SELECT submission_id FROM turn_submissions ORDER BY created_at LIMIT 1)"
+        ).fetchone()
+    assert row is not None
+    assert tuple(row) == ("delivery_unknown", "worker_failed_before_acceptance")
+
+
+@pytest.mark.anyio
+async def test_worker_rechecks_environment_grant_after_context_before_adapter_start(
+    state_root: Path,
+) -> None:
+    starts = 0
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            nonlocal starts
+            starts += 1
+            await super().start_turn(context, emit)
+
+    def context_factory(claim: SubmissionClaim) -> ExecutionContext:
+        AuthService(state_root=state_root).revoke_environment(
+            "environment-1", "user-1", revoked_by="admin", reason="worker start race"
+        )
+        return ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        )
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine: TrackingAdapter(),
+        context_factory=context_factory,
+    )
+    assert await dispatcher.run_once() is True
+    assert starts == 0
 
 
 def test_worker_scopes_checkpoint_to_submission_runtime_identity(state_root: Path) -> None:

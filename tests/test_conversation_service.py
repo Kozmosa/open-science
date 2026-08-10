@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from contextlib import closing
@@ -46,6 +47,27 @@ _EXPIRY = "2099-07-18T01:00:00+00:00"
 
 def _db_path(state_root: Path) -> Path:
     return state_root / "runtime" / "agentic_researcher.sqlite3"
+
+
+def _environment_grant_denied_total(state_root: Path) -> float:
+    telemetry_path = state_root / "runtime" / "domain_telemetry.sqlite3"
+    if not telemetry_path.is_file():
+        return 0.0
+    labels_json = json.dumps(
+        {"reason": "environment_grant_required", "resource": "environment"},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    with closing(sqlite3.connect(telemetry_path)) as conn:
+        row = conn.execute(
+            """
+            SELECT value FROM domain_telemetry_counter_totals
+            WHERE metric_name = 'ainrf_domain_permission_denied_total'
+              AND labels_json = ?
+            """,
+            (labels_json,),
+        ).fetchone()
+    return 0.0 if row is None else float(row[0])
 
 
 def _insert_task(state_root: Path, task_id: str = "task-1") -> None:
@@ -104,6 +126,15 @@ def _insert_task(state_root: Path, task_id: str = "task-1") -> None:
             (task_id, _NOW, _NOW),
         )
         conn.commit()
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id="environment-legacy",
+        user_id="user-1",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation service fixture",
+    )
 
 
 def _service(
@@ -161,6 +192,53 @@ def _submission_context_source(state_root: Path, submission_id: str) -> str:
         ).fetchone()
     assert row is not None
     return str(row["context_snapshot_source"])
+
+
+def _task_creation_fixture(
+    state_root: Path, committed_v2_state: str
+) -> tuple[ConversationApplicationService, AuthService, dict[str, object], str, str, str]:
+    owner: dict[str, object] = {"id": "owner", "role": "member"}
+    admin: dict[str, object] = {"id": "admin", "role": "admin"}
+    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
+    environment = domain.environments.create_environment(
+        admin, alias="host", display_name="Host", connection={}
+    )
+    environment_id = str(environment["environment_id"])
+    auth = AuthService(state_root=state_root)
+    auth.initialize()
+    auth.grant_environment(
+        env_id=environment_id,
+        user_id="owner",
+        max_tasks=None,
+        granted_by="admin",
+        reason="conversation task test",
+    )
+    project = domain.projects.create_project(owner, name="Project")
+    project_id = str(project["project_id"])
+    workspace = domain.workspaces.create_workspace(
+        owner,
+        environment_id=environment_id,
+        canonical_path="/tmp/conversation-task",
+        label="Task",
+    )
+    workspace_id = str(workspace["workspace_id"])
+    domain.projects.attach_workspace(
+        project_id,
+        workspace_id,
+        owner,
+        idempotency_key="link",
+    )
+    context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
+    context.save_draft(project_id, "context", owner)
+    context.publish(project_id, owner)
+    return (
+        ConversationApplicationService(state_root, artifact_sha=committed_v2_state),
+        auth,
+        owner,
+        project_id,
+        workspace_id,
+        environment_id,
+    )
 
 
 def _submission_to_delivering(state_root: Path, submission_id: str) -> None:
@@ -712,43 +790,14 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
     state_root: Path,
     committed_v2_state: str,
 ) -> None:
-    owner: dict[str, object] = {"id": "owner", "role": "member"}
-    admin: dict[str, object] = {"id": "admin", "role": "admin"}
-    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
-    environment = domain.environments.create_environment(
-        admin, alias="host", display_name="Host", connection={}
+    service, _, owner, project_id, workspace_id, _ = _task_creation_fixture(
+        state_root, committed_v2_state
     )
-    auth = AuthService(state_root=state_root)
-    auth.initialize()
-    auth.grant_environment(
-        env_id=str(environment["environment_id"]),
-        user_id="owner",
-        max_tasks=None,
-        granted_by="admin",
-        reason="conversation task test",
-    )
-    project = domain.projects.create_project(owner, name="Project")
-    workspace = domain.workspaces.create_workspace(
-        owner,
-        environment_id=str(environment["environment_id"]),
-        canonical_path="/tmp/conversation-task",
-        label="Task",
-    )
-    domain.projects.attach_workspace(
-        str(project["project_id"]),
-        str(workspace["workspace_id"]),
-        owner,
-        idempotency_key="link",
-    )
-    context = ProjectContextService(state_root, artifact_sha=committed_v2_state)
-    context.save_draft(str(project["project_id"]), "context", owner)
-    context.publish(str(project["project_id"]), owner)
-    service = ConversationApplicationService(state_root, artifact_sha=committed_v2_state)
 
     created = service.create_task(
         owner,
-        project_id=str(project["project_id"]),
-        workspace_id=str(workspace["workspace_id"]),
+        project_id=project_id,
+        workspace_id=workspace_id,
         title="Task",
         prompt="Prompt",
         researcher_type="vanilla",
@@ -757,8 +806,8 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
     )
     replay = service.create_task(
         owner,
-        project_id=str(project["project_id"]),
-        workspace_id=str(workspace["workspace_id"]),
+        project_id=project_id,
+        workspace_id=workspace_id,
         title="Task",
         prompt="Prompt",
         researcher_type="vanilla",
@@ -783,6 +832,102 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
         )
 
 
+def test_create_task_replay_requires_current_task_authorization_before_conflict(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    service, _, owner, project_id, workspace_id, _ = _task_creation_fixture(
+        state_root, committed_v2_state
+    )
+    created = service.create_task(
+        owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="replay",
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        conn.execute(
+            "UPDATE tasks SET owner_user_id = 'other' WHERE task_id = ?", (created["task_id"],)
+        )
+        conn.commit()
+
+    with pytest.raises(DomainPermissionError):
+        service.create_task(
+            owner,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            title="Task",
+            prompt="Prompt",
+            researcher_type="vanilla",
+            harness_engine="claude-code",
+            idempotency_key="replay",
+        )
+    with pytest.raises(DomainPermissionError):
+        service.create_task(
+            owner,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            title="Task",
+            prompt="Changed prompt",
+            researcher_type="vanilla",
+            harness_engine="claude-code",
+            idempotency_key="replay",
+        )
+
+
+@pytest.mark.parametrize("failure_mode", ["missing", "revoked"])
+def test_create_task_requires_current_environment_grant_before_any_write(
+    state_root: Path,
+    committed_v2_state: str,
+    failure_mode: str,
+) -> None:
+    service, auth, owner, project_id, workspace_id, environment_id = _task_creation_fixture(
+        state_root, committed_v2_state
+    )
+    if failure_mode == "revoked":
+        auth.revoke_environment(environment_id, "owner", revoked_by="admin")
+    else:
+        (state_root / "runtime" / "auth.sqlite3").unlink()
+
+    tables = (
+        "tasks",
+        "turn_submissions",
+        "conversation_task_authorities",
+        "conversation_task_states",
+        "domain_idempotency_requests",
+        "domain_audit_events",
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        before = {
+            table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in tables
+        }
+
+    with pytest.raises(DomainPermissionError, match="Environment grant"):
+        service.create_task(
+            owner,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            title="Denied Task",
+            prompt="Denied prompt",
+            researcher_type="vanilla",
+            harness_engine="claude-code",
+            idempotency_key=f"denied-{failure_mode}",
+        )
+
+    with closing(connect(_db_path(state_root))) as conn:
+        after = {
+            table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in tables
+        }
+    assert after == before
+    assert _environment_grant_denied_total(state_root) == 1.0
+
+
 def test_replay_requires_current_authorization(state_root: Path) -> None:
     service = _service(state_root)
     service.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
@@ -792,6 +937,32 @@ def test_replay_requires_current_authorization(state_root: Path) -> None:
 
     with pytest.raises(DomainPermissionError):
         service.create_turn("task-1", _USER, input={"text": "hello"}, idempotency_key="create-1")
+
+
+def test_committed_turn_replay_survives_grant_revocation_but_payload_conflict_does_not(
+    state_root: Path,
+) -> None:
+    notified: list[str] = []
+    service = _service(state_root, notifier=notified.append)
+    created = service.create_turn(
+        "task-1", _USER, input={"text": "hello"}, idempotency_key="replay-after-revoke"
+    )
+    assert notified == [str(created["submission_id"])]
+    AuthService(state_root=state_root).revoke_environment(
+        "environment-legacy", "user-1", revoked_by="admin"
+    )
+
+    assert (
+        service.create_turn(
+            "task-1", _USER, input={"text": "hello"}, idempotency_key="replay-after-revoke"
+        )
+        == created
+    )
+    assert notified == [str(created["submission_id"])]
+    with pytest.raises(DomainConflictError, match="different request"):
+        service.create_turn(
+            "task-1", _USER, input={"text": "changed"}, idempotency_key="replay-after-revoke"
+        )
 
 
 def test_create_and_retry_key_reuse_is_a_stable_conflict(state_root: Path) -> None:
@@ -1211,6 +1382,97 @@ def test_legacy_and_closed_tasks_reject_turn_admission(state_root: Path) -> None
     )
 
 
+def test_fork_confirmation_requires_target_environment_grant_before_transfer(
+    state_root: Path, committed_v2_state: str
+) -> None:
+    service = _service(state_root)
+    turn_id = _create_accepted_turn(state_root, service)
+    service.finish_turn("task-1", turn_id, status=TurnStatus.COMPLETED)
+
+    admin: dict[str, object] = {"id": "admin", "role": "admin"}
+    domain = build_domain_modules(state_root, artifact_sha=committed_v2_state)
+    target_environment = domain.environments.create_environment(
+        admin, alias="fork-target", display_name="Fork target", connection={}
+    )
+    target_environment_id = str(target_environment["environment_id"])
+    auth = AuthService(state_root=state_root)
+    auth.grant_environment(
+        env_id=target_environment_id,
+        user_id="user-1",
+        max_tasks=None,
+        granted_by="admin",
+        reason="fork target fixture",
+    )
+    target_project = domain.projects.create_project(_USER, name="Fork target project")
+    target_project_id = str(target_project["project_id"])
+    target_workspace = domain.workspaces.create_workspace(
+        _USER,
+        environment_id=target_environment_id,
+        canonical_path="/tmp/conversation-fork-target",
+        label="Fork target workspace",
+    )
+    target_workspace_id = str(target_workspace["workspace_id"])
+    domain.projects.attach_workspace(
+        target_project_id,
+        target_workspace_id,
+        _USER,
+        idempotency_key="fork-target-link",
+    )
+    preview = service.preview_fork(
+        "task-1",
+        _USER,
+        target_engine_family="claude",
+        target_project_id=target_project_id,
+        target_workspace_id=target_workspace_id,
+        transfer_mode=ForkTransferMode.FULL_TRANSCRIPT,
+        transfer_range={"through_turn": turn_id},
+        metrics={"truncated": False},
+        disclosure={},
+        idempotency_key="fork-target-preview",
+    )
+    auth.revoke_environment(target_environment_id, "user-1", revoked_by="admin")
+
+    tables = ("tasks", "turn_submissions", "fork_transfer_receipts", "task_relationships")
+    with closing(connect(_db_path(state_root))) as conn:
+        before = {
+            table: int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE "
+                    + ("project_id = ?" if table == "tasks" else "1 = 1"),
+                    (target_project_id,) if table == "tasks" else (),
+                ).fetchone()[0]
+            )
+            for table in tables
+        }
+
+    with pytest.raises(DomainPermissionError, match="Environment grant"):
+        service.confirm_fork(
+            "task-1",
+            str(preview["preview_id"]),
+            _USER,
+            preview_hash=str(preview["preview_hash"]),
+            source_revision=str(preview["source_revision"]),
+            transfer_mode=ForkTransferMode.FULL_TRANSCRIPT,
+            truncation_acknowledged=False,
+            full_transcript_confirmed=True,
+            idempotency_key="fork-target-confirm",
+        )
+
+    with closing(connect(_db_path(state_root))) as conn:
+        after = {
+            table: int(
+                conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE "
+                    + ("project_id = ?" if table == "tasks" else "1 = 1"),
+                    (target_project_id,) if table == "tasks" else (),
+                ).fetchone()[0]
+            )
+            for table in tables
+        }
+    assert after == before
+    assert _environment_grant_denied_total(state_root) == 1.0
+
+
 def test_work_status_rejects_noop_and_turn_completion_does_not_change_it(
     state_root: Path,
 ) -> None:
@@ -1550,6 +1812,116 @@ def test_active_turn_retry_and_next_turn_semantics(state_root: Path) -> None:
         idempotency_key="retry-terminal",
     )
     assert retry["intent"] == "retry"
+
+
+@pytest.mark.parametrize("action", ["create", "retry", "next"])
+def test_turn_admission_requires_current_environment_grant_before_notifying(
+    state_root: Path, action: str
+) -> None:
+    notified: list[str] = []
+    service = _service(state_root, notifier=notified.append)
+    if action == "retry":
+        turn_id = _create_accepted_turn(state_root, service)
+        service.finish_turn("task-1", turn_id, status=TurnStatus.COMPLETED)
+    elif action == "next":
+        _create_accepted_turn(state_root, service)
+    before_notified = list(notified)
+    AuthService(state_root=state_root).revoke_environment(
+        "environment-legacy", "user-1", revoked_by="admin"
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        before = {
+            table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in (
+                "turn_submissions",
+                "next_turn_submissions",
+                "domain_idempotency_requests",
+                "domain_audit_events",
+            )
+        }
+
+    with pytest.raises(DomainPermissionError, match="Environment grant"):
+        if action == "create":
+            service.create_turn("task-1", _USER, input={"text": "denied"}, idempotency_key="denied")
+        elif action == "retry":
+            service.retry_turn(
+                "task-1",
+                turn_id,
+                _USER,
+                input={"text": "denied"},
+                idempotency_key="denied",
+            )
+        else:
+            service.create_turn(
+                "task-1",
+                _USER,
+                input={"text": "denied"},
+                idempotency_key="denied",
+                allow_next_turn=True,
+            )
+
+    with closing(connect(_db_path(state_root))) as conn:
+        after = {
+            table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in (
+                "turn_submissions",
+                "next_turn_submissions",
+                "domain_idempotency_requests",
+                "domain_audit_events",
+            )
+        }
+    assert after == before
+    assert notified == before_notified
+    assert _environment_grant_denied_total(state_root) == 1.0
+
+
+def test_turn_admission_fails_closed_when_auth_main_is_replaced_with_stale_wal(
+    state_root: Path,
+) -> None:
+    notified: list[str] = []
+    service = _service(state_root, notifier=notified.append)
+    auth_path = state_root / "runtime" / "auth.sqlite3"
+    keeper = sqlite3.connect(auth_path)
+    try:
+        assert keeper.execute("PRAGMA journal_mode = WAL").fetchone()[0].lower() == "wal"
+        AuthService(state_root=state_root).grant_environment(
+            env_id="environment-legacy",
+            user_id="user-1",
+            max_tasks=None,
+            granted_by="admin",
+        )
+        assert auth_path.with_name(f"{auth_path.name}-wal").is_file()
+
+        with closing(connect(_db_path(state_root))) as conn:
+            before = {
+                table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in (
+                    "turn_submissions",
+                    "domain_idempotency_requests",
+                    "domain_audit_events",
+                )
+            }
+
+        auth_path.write_bytes(b"not a sqlite database")
+        with pytest.raises(DomainPermissionError, match="Environment grant"):
+            service.create_turn(
+                "task-1", _USER, input={"text": "corrupt auth"}, idempotency_key="corrupt-auth"
+            )
+
+        with closing(connect(_db_path(state_root))) as conn:
+            after = {
+                table: int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in (
+                    "turn_submissions",
+                    "domain_idempotency_requests",
+                    "domain_audit_events",
+                )
+            }
+        assert after == before
+        assert notified == []
+        assert _environment_grant_denied_total(state_root) == 1.0
+    finally:
+        keeper.close()
 
 
 def test_controls_and_approvals_are_runtime_scoped_and_idempotent(

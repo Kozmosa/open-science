@@ -30,6 +30,7 @@ from ainrf.domain.conversation_execution_repository import (
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.domain.context import ProjectContextService
+from ainrf.domain.environment_access import has_active_environment_execution_grant
 from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.service import (
     DomainAuthorizationService,
@@ -37,6 +38,7 @@ from ainrf.domain.service import (
     DomainNotFoundError,
     DomainPermissionError,
 )
+from ainrf.domain_telemetry import record_permission_denied
 from ainrf.domain.output_redaction import redact_task_item_payload_for_viewer
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
@@ -293,6 +295,42 @@ class ConversationApplicationService:
             raise DomainConflictError("Stored idempotency response is invalid")
         return digest, value
 
+    def _replay_create_task(
+        self,
+        conn: sqlite3.Connection,
+        repository: _SqliteDomainRepository,
+        *,
+        actor: str,
+        user: dict[str, object],
+        key: str,
+        request: object,
+    ) -> tuple[str, dict[str, object] | None]:
+        """Authorize a CREATE_TASK replay before disclosing key outcomes."""
+
+        if not key:
+            raise DomainConflictError("Idempotency-Key is required")
+        digest = _request_hash(request)
+        row = repository.idempotency_record(
+            actor_user_id=actor,
+            scope=IdempotencyScope.CREATE_TASK,
+            key=key,
+        )
+        if row is None:
+            return digest, None
+        try:
+            value = json.loads(str(row["response_json"]))
+        except (TypeError, ValueError):
+            raise DomainConflictError("Stored idempotency response is invalid") from None
+        if not isinstance(value, dict):
+            raise DomainConflictError("Stored idempotency response is invalid")
+        task_id = value.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise DomainConflictError("Stored idempotency response is invalid")
+        DomainAuthorizationService(conn).require_task_owner(task_id, user)
+        if str(row["request_hash"]) != digest:
+            raise DomainConflictError("Idempotency-Key was already used for a different request")
+        return digest, value
+
     @staticmethod
     def _store(
         repository: _SqliteDomainRepository,
@@ -369,6 +407,57 @@ class ConversationApplicationService:
         if expected_environment_id is not None and row["environment_id"] != expected_environment_id:
             raise DomainConflictError("Task environment must be derived from the Workspace")
         return row
+
+    def _require_environment_execution_grant(
+        self,
+        *,
+        environment_id: str,
+        user: Mapping[str, object],
+    ) -> None:
+        """Require an explicit current grant before admitting execution work."""
+
+        actor = self._actor(user)
+        if has_active_environment_execution_grant(
+            self._auth_db_path,
+            environment_id=environment_id,
+            user_id=actor,
+        ):
+            return
+        record_permission_denied(
+            resource="environment",
+            reason="environment_grant_required",
+            user_id=actor,
+            environment_id=environment_id,
+            state_root=self._state_root,
+        )
+        raise DomainPermissionError("Active Environment grant is required")
+
+    def _require_task_environment_execution_grant(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        task_id: str,
+        user: Mapping[str, object],
+    ) -> None:
+        """Check the Task's actual Workspace Environment before a new submission."""
+
+        row = conn.execute(
+            """
+            SELECT task.environment_id, workspace.environment_id AS workspace_environment_id
+            FROM tasks AS task
+            JOIN workspaces AS workspace ON workspace.workspace_id = task.workspace_id
+            WHERE task.task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if row is None:
+            raise DomainNotFoundError(task_id)
+        if row["environment_id"] != row["workspace_environment_id"]:
+            raise DomainConflictError("Task Environment no longer matches the Workspace")
+        self._require_environment_execution_grant(
+            environment_id=str(row["workspace_environment_id"]),
+            user=user,
+        )
 
     @staticmethod
     def _resolve_context_snapshot_ref(
@@ -479,17 +568,15 @@ class ConversationApplicationService:
             try:
                 self._begin(conn)
                 domain = _SqliteDomainRepository(conn)
-                digest, replay = self._replay(
+                digest, replay = self._replay_create_task(
+                    conn,
                     domain,
                     actor=actor,
-                    scope=IdempotencyScope.CREATE_TASK,
+                    user=user,
                     key=idempotency_key,
                     request=request,
                 )
                 if replay is not None:
-                    DomainAuthorizationService(conn).require_task_owner(
-                        str(replay["task_id"]), user
-                    )
                     conn.commit()
                     return replay
                 authorization = DomainAuthorizationService(conn)
@@ -500,6 +587,10 @@ class ConversationApplicationService:
                     project_id=project_id,
                     workspace_id=workspace_id,
                     expected_environment_id=environment_id,
+                )
+                self._require_environment_execution_grant(
+                    environment_id=str(workspace["environment_id"]),
+                    user=user,
                 )
                 task_id = f"task-{uuid4().hex}"
                 snapshot_id, context_version_id = (
@@ -784,6 +875,7 @@ class ConversationApplicationService:
                 if replay is not None:
                     conn.commit()
                     return replay
+                self._require_task_environment_execution_grant(conn, task_id=task_id, user=user)
                 conversations = SqliteConversationRepository(conn)
                 executions = SqliteConversationExecutionRepository(conn)
                 self._require_open(self._require_current_conversation(conversations, task_id))
@@ -1904,6 +1996,10 @@ class ConversationApplicationService:
                     project_id=target_project_id,
                     workspace_id=target_workspace_id,
                     expected_environment_id=None,
+                )
+                self._require_environment_execution_grant(
+                    environment_id=str(target_workspace["environment_id"]),
+                    user=user,
                 )
                 transfer_range = json.loads(str(preview["transfer_range_json"]))
                 if not isinstance(transfer_range, dict):
