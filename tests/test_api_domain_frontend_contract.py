@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.schemas import TaskSummaryResponse
 from ainrf.auth.service import AuthService
 from ainrf.domain import ConversationApplicationService, ProjectContextService
 from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
@@ -267,3 +268,68 @@ async def test_task_work_lifecycle_returns_explicit_projection_and_requires_idem
     assert reopened.status_code == 200
     assert reopened.json()["work_status"] == "open"
     assert reopened.json()["updated_at"] != completed.json()["updated_at"]
+
+
+@pytest.mark.anyio
+async def test_task_mutation_responses_use_strict_projection_for_create_and_fork(
+    state_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    ids = _seed_frontend_contract(app, state_root)
+    headers = {"X-API-Key": _API_KEY}
+
+    def fail_on_aggregate_read(*_args: object, **_kwargs: object) -> dict[str, object]:
+        pytest.fail("Task mutation transport must use the canonical Task projection")
+
+    monkeypatch.setattr(
+        app.state.conversation_application_service,
+        "read_task",
+        fail_on_aggregate_read,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        listed = await client.get("/api/tasks", headers=headers)
+        source_task_id = str(listed.json()["items"][0]["task_id"])
+        created = await client.post(
+            "/api/tasks",
+            headers={**headers, "Idempotency-Key": "strict-create-task"},
+            json={
+                "project_id": ids["project_id"],
+                "workspace_id": ids["workspace_id"],
+                "researcher_type": "vanilla",
+                "harness_engine": "claude-code",
+                "prompt": "Strict create response",
+                "skills": [],
+                "mcp_servers": [],
+            },
+        )
+        forked = await client.post(
+            f"/api/tasks/{source_task_id}/fork",
+            headers={**headers, "Idempotency-Key": "strict-fork-task"},
+            json={
+                "workspace_id": ids["workspace_id"],
+                "project_id": ids["project_id"],
+                "title": "Strict fork response",
+                "prompt": "Strict fork response",
+            },
+        )
+
+    assert created.status_code == 202
+    assert forked.status_code == 202
+    for response in (created, forked):
+        payload = response.json()
+        assert set(payload) == {"task", "submission"}
+        task = payload["task"]
+        validated = TaskSummaryResponse.model_validate(task)
+        assert validated.task_id == task["task_id"]
+        assert set(task) == set(TaskSummaryResponse.model_fields)
+        assert {
+            "conversation_revision",
+            "runtime_status",
+            "active_turn_id",
+            "turn_count",
+            "item_count",
+            "binding",
+        }.isdisjoint(task)

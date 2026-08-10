@@ -57,7 +57,7 @@ export const createTask = async (
   const response = await api.post<ConversationTaskMutationResponse>('/tasks', request, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
-  return adaptTask(response.task as TaskSummaryResponse);
+  return adaptTask(response.task);
 };
 
 function taskLifecycleAction(
@@ -157,7 +157,7 @@ export const forkTask = async (
   const response = await api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/fork`, payload, {
     headers: { 'Idempotency-Key': key },
   });
-  return adaptTask(response.task as TaskSummaryResponse);
+  return adaptTask(response.task);
 };
 
 export const updateTask = (

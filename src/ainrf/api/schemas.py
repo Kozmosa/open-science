@@ -613,7 +613,7 @@ class TurnSubmissionResponse(BaseModel):
 
 class ConversationTaskMutationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    task: dict[str, Any]
+    task: TaskSummaryResponse
     submission: TurnSubmissionResponse
 
 

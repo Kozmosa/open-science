@@ -229,12 +229,7 @@ export type ConversationReceiptResponse = {
  */
 export type ConversationTaskMutationResponse = {
     submission: TurnSubmissionResponse;
-    /**
-     * Task
-     */
-    task: {
-        [key: string]: unknown;
-    };
+    task: TaskSummaryResponse;
 };
 
 /**

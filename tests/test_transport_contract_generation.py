@@ -30,6 +30,19 @@ def test_generated_openapi_matches_backend_authority() -> None:
     }
 
 
+def test_task_mutation_response_uses_strict_task_summary_reference() -> None:
+    schema = build_transport_openapi()
+    mutation = schema["components"]["schemas"]["ConversationTaskMutationResponse"]
+    assert mutation["additionalProperties"] is False
+    assert mutation["properties"]["task"] == {"$ref": "#/components/schemas/TaskSummaryResponse"}
+    assert schema["components"]["schemas"]["TaskSummaryResponse"]["additionalProperties"] is False
+
+    generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
+    start = generated_types.index("export type ConversationTaskMutationResponse = {")
+    end = generated_types.index("};", start) + 2
+    assert "task: TaskSummaryResponse;" in generated_types[start:end]
+
+
 def test_operation_ids_are_unique_stable_and_cover_canonical_metadata() -> None:
     schema = build_transport_openapi()
     operations: list[tuple[str, str, str, bool]] = []

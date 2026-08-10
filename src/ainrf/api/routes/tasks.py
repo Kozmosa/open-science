@@ -97,7 +97,9 @@ async def create_task(
             user_mcp_servers=payload.mcp_servers,
             idempotency_key=_idempotency_key(request),
         )
-        task = conversation.read_task(str(created["task_id"]), user)
+        task = _v2_task_summary(
+            _get_task_projection_service(request), str(created["task_id"]), user
+        )
         return ConversationTaskMutationResponse(
             task=task,
             submission=TurnSubmissionResponse.model_validate(created),
@@ -334,8 +336,9 @@ async def fork_task_compatibility(
 
     conversation = _get_conversation_application_service(request)
     user = get_current_user(request)
+    projection = _get_task_projection_service(request)
     try:
-        source = conversation.read_task(task_id, user)
+        source = projection.task(task_id, user)
         created = conversation.create_task(
             user,
             project_id=payload.project_id or str(source["project_id"]),
@@ -346,7 +349,7 @@ async def fork_task_compatibility(
             harness_engine=str(source["harness_engine"]),
             idempotency_key=_idempotency_key(request),
         )
-        task = conversation.read_task(str(created["task_id"]), user)
+        task = _v2_task_summary(projection, str(created["task_id"]), user)
         return ConversationTaskMutationResponse(
             task=task,
             submission=TurnSubmissionResponse.model_validate(created),

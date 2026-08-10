@@ -99,6 +99,40 @@ describe('api endpoints', () => {
     expect(reopened.work_status).toBe('open');
   });
 
+  it('adapts strict TaskSummary payloads from create and legacy fork mutations', async () => {
+    const { createTask, forkTask } = await import('../../../src/features/tasks/api/endpoints');
+    const created = await createTask({
+      projectId: 'project-alpha',
+      workspaceId: 'workspace-alpha',
+      researcherType: 'vanilla',
+      harnessEngine: 'claude-code',
+      prompt: 'Strict mutation response',
+      skills: [],
+      mcpServers: [],
+    }, 'task.create:strict-mutation');
+
+    const forked = await forkTask(created.task_id, {
+      workspace_id: 'workspace-alpha',
+      project_id: 'project-alpha',
+      title: 'Strict fork response',
+      prompt: 'Strict fork response',
+    }, 'task.fork:strict-mutation');
+
+    expect(created).toMatchObject({
+      project_id: 'project-alpha',
+      workspace_id: 'workspace-alpha',
+      status: 'queued',
+    });
+    expect(forked).toMatchObject({
+      project_id: 'project-alpha',
+      workspace_id: 'workspace-alpha',
+      title: 'Strict fork response',
+      prompt: 'Strict fork response',
+      status: 'queued',
+    });
+    expect(forked).not.toHaveProperty('conversation_revision');
+  });
+
   it('keeps a succeeded Turn open until explicit Task completion', async () => {
     const {
       completeTask,
