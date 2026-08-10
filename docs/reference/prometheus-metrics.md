@@ -152,24 +152,19 @@ Metrics for the periodic arXiv paper discovery and LLM summarization pipeline (A
 
 ---
 
-## SLA (Service Level Agreement)
-
-Defined in `src/ainrf/api/routes/sla_metrics.py`. These metrics are created directly via the `prometheus_client` library (not through the pre-declaration mechanism in `metrics.py`).
+## Rate Limiting
 
 | Metric | Type | Labels | Emitted When | Call Site |
 |--------|------|--------|--------------|-----------|
-| `ainrf_sla_task_completion_seconds` | Histogram | `status` (succeeded / failed / cancelled) | A task transitions from running to a terminal status | `sla_metrics.py` → `record_task_completed()` |
-| `ainrf_sla_llm_first_token_seconds` | Histogram | `model` | First contentful token received from an LLM call | `sla_metrics.py` → `record_llm_first_token_latency()` |
-| `ainrf_sla_tasks_total` | Counter | `status`, `researcher_type`, `harness_engine` | A task completes (any outcome) | `sla_metrics.py` → `record_task_completed()` |
-| `ainrf_sla_uptime_seconds` | Gauge | _(none)_ | Set on first call to `record_uptime()` (periodic refresh) | `sla_metrics.py` → `record_uptime()` |
-| `ainrf_rate_limited_total` | Counter | `reason` (`concurrency` / `ip_quota` / …), `path` | A request is rejected by rate limiting middleware or client-logs quota | `sla_metrics.py` → `rate_limited()` |
+| `ainrf_rate_limited_total` | Counter | `reason`, `route` | A request is rejected by rate limiting middleware or a client-telemetry quota | `api/middleware`, `routes/client_logs.py`, `routes/client_metrics.py` |
 
-**SLA histogram buckets**:
+The `route` label is bounded before recording: known static client telemetry
+routes and FastAPI route templates are retained, while opaque or unmatched
+paths are reported as `/unmatched`. This keeps public exposition free of
+tenant/resource identifiers.
 
-- `ainrf_sla_task_completion_seconds`: 60s, 5min, 10min, 15min, 30min, 1h, 2h
-- `ainrf_sla_llm_first_token_seconds`: 0.1s, 0.25s, 0.5s, 1s, 2.5s, 5s, 10s, 30s, 60s
-
-> All other histograms (HTTP, SSH, DB, Literature) use the default buckets: 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s.
+All histograms use the default buckets: 5ms, 10ms, 25ms, 50ms, 100ms,
+250ms, 500ms, 1s, 2.5s, 5s, 10s.
 
 ---
 
@@ -207,7 +202,7 @@ All AINRF-specific metrics follow the `ainrf_<subsystem>_<metric_name>_<unit>` p
 | Counter: `_total` suffix | `ainrf_auth_login_failed_total` |
 | Histogram: `_seconds` suffix | `ainrf_http_request_duration_seconds` |
 | Gauge: no mandatory suffix | `ainrf_terminal_ws_active` |
-| Subsystem grouping | `ainrf_literature_*`, `ainrf_sla_*`, `ainrf_ssh_*` |
+| Subsystem grouping | `ainrf_literature_*`, `ainrf_rate_limited_*`, `ainrf_ssh_*` |
 
 Histogram bucket suffixes (`_bucket`, `_sum`, `_count`) are added automatically by `prometheus_client` and are not part of the declared metric name.
 
@@ -222,7 +217,8 @@ Alerting rules are at `deploy/config/prometheus/rules/ainrf-alerts.yml`. The bun
 ## Related Documents
 
 - [Observability Stack Architecture](../superpowers/specs/archived/2026-06-15-observability-stack-design.md) — archived design record for the three-layer observability system
-- `src/ainrf/api/routes/metrics.py` — metric pre-declaration table, public mutation API, exposition endpoint
-- `src/ainrf/api/routes/sla_metrics.py` — SLA metrics definitions and recording helpers
+- `src/ainrf/telemetry/metrics.py` — metric pre-declaration table, public mutation and reset API
+- `src/ainrf/api/routes/metrics.py` — metrics exposition endpoint
+- `src/ainrf/telemetry/rate_limit.py` — bounded rate-limit metric recording
 - `src/ainrf/api/routes/client_metrics.py` — client-side web vitals ingestion endpoint
 - `deploy/examples/prometheus-rules.example.yml` — starter alert rules

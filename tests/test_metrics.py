@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Generator
 
 import httpx
 import pytest
+import yaml
 from fastapi import FastAPI
 
 from tests.testutil import create_v2_test_app as create_app
 from ainrf.api.config import ApiConfig, hash_api_key
 from ainrf.api.http_telemetry import build_http_metrics_middleware
+from ainrf.api.middleware import build_concurrency_limit_middleware
+from ainrf.api.middleware.rate_limit import build_rate_limit_middleware
 from ainrf.telemetry.metrics import (
     dec_gauge,
     get_metrics_text,
@@ -22,7 +26,7 @@ from ainrf.telemetry.metrics import (
     set_counter,
     set_gauge,
 )
-from ainrf.telemetry.sla import rate_limited
+from ainrf.telemetry.rate_limit import rate_limited
 from ainrf.api.routes import client_metrics
 from tests.testutil import get_jwt_headers
 
@@ -100,6 +104,36 @@ class TestPublicMetricPrivacy:
         text = get_metrics_text()
         assert 'ainrf_rate_limited_total{reason="user_quota",route="/unmatched"}' in text
         assert opaque_path not in text
+
+    def test_rate_limit_metric_accepts_route_templates(self) -> None:
+        rate_limited("concurrency", "/api/tasks/{task_id}")
+
+        text = get_metrics_text()
+        assert 'ainrf_rate_limited_total{reason="concurrency",route="/api/tasks/{task_id}"}' in text
+
+    def test_rate_limit_metric_reset_preserves_predeclared_exposition(self) -> None:
+        rate_limited("ip_quota", "/client-logs")
+        assert (
+            'ainrf_rate_limited_total{reason="ip_quota",route="/client-logs"}' in get_metrics_text()
+        )
+
+        reset_metrics()
+        text = get_metrics_text()
+        assert 'ainrf_rate_limited_total{reason="ip_quota",route="/client-logs"}' not in text
+        assert "# TYPE ainrf_rate_limited_total counter" in text
+
+    def test_rate_limit_alert_rule_references_metric(self) -> None:
+        rules_path = (
+            Path(__file__).resolve().parents[1] / "deploy/config/prometheus/rules/ainrf-alerts.yml"
+        )
+        document = yaml.safe_load(rules_path.read_text(encoding="utf-8"))
+        rules = {
+            str(rule["alert"]): rule for group in document["groups"] for rule in group["rules"]
+        }
+
+        rate_limit_rule = rules["AINRFRateLimitSpike"]
+        assert "ainrf_rate_limited_total" in rate_limit_rule["expr"]
+        assert "{{ $labels.route }}" in rate_limit_rule["annotations"]["description"]
 
     def test_aggregates_ssh_and_literature_resource_labels(self) -> None:
         private_host = "tenant-gpu-42.internal"
@@ -192,6 +226,61 @@ class TestPublicMetricPrivacy:
         text = get_metrics_text()
         assert 'path="/unmatched"' in text
         assert opaque_path not in text
+
+    @pytest.mark.anyio
+    async def test_rate_limit_middleware_resolves_dynamic_route_before_dispatch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AINRF_RATE_LIMIT_ENABLED", "true")
+        monkeypatch.setenv("AINRF_RATE_LIMIT_REQUESTS_PER_MINUTE", "0")
+        monkeypatch.setenv("AINRF_RATE_LIMIT_BURST_SIZE", "0")
+
+        app = FastAPI()
+
+        @app.get("/api/tasks/{task_id}")
+        async def task_detail(task_id: str) -> dict[str, str]:
+            return {"task_id": task_id}
+
+        app.middleware("http")(build_rate_limit_middleware())
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/api/tasks/secret")
+
+        assert response.status_code == 429
+        text = get_metrics_text()
+        assert 'ainrf_rate_limited_total{reason="user_quota",route="/api/tasks/{task_id}"}' in text
+
+    @pytest.mark.anyio
+    async def test_concurrency_middleware_resolves_dynamic_route_before_dispatch(self) -> None:
+        started = asyncio.Event()
+        release = asyncio.Event()
+        app = FastAPI()
+
+        @app.get("/api/tasks/{task_id}")
+        async def task_detail(task_id: str) -> dict[str, str]:
+            if task_id == "hold":
+                started.set()
+                await release.wait()
+            return {"task_id": task_id}
+
+        app.middleware("http")(build_concurrency_limit_middleware(1))
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            first_request = asyncio.create_task(client.get("/api/tasks/hold"))
+            try:
+                await asyncio.wait_for(started.wait(), timeout=1.0)
+                second_response = await client.get("/api/tasks/secret")
+                assert second_response.status_code == 503
+                text = get_metrics_text()
+                assert (
+                    'ainrf_rate_limited_total{reason="concurrency",route="/api/tasks/{task_id}"}'
+                    in text
+                )
+            finally:
+                release.set()
+                await first_request
 
     @pytest.mark.anyio
     async def test_client_web_vitals_use_only_predeclared_bounded_metric_names_and_ratings(

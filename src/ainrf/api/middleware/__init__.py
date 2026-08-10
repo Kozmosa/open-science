@@ -223,7 +223,7 @@ def build_concurrency_limit_middleware(
             await asyncio.wait_for(semaphore.acquire(), timeout=5.0)
         except TimeoutError:
             from ainrf.api.http_telemetry import route_template_for_request
-            from ainrf.telemetry.sla import rate_limited
+            from ainrf.telemetry.rate_limit import rate_limited
 
             rate_limited("concurrency", route_template_for_request(request))
             return JSONResponse(

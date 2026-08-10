@@ -14,7 +14,7 @@ from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
 from ainrf.telemetry.metrics import inc_counter
-from ainrf.telemetry.sla import rate_limited
+from ainrf.telemetry.rate_limit import rate_limited
 
 router = APIRouter(prefix="/client-logs", tags=["client-logs"])
 

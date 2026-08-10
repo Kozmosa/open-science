@@ -281,36 +281,6 @@ groups:
 
   - name: ainrf.sla
     rules:
-      - alert: AINRFTaskCompletionSLABreach
-        expr: |
-          histogram_quantile(0.95,
-            sum(rate(ainrf_sla_task_completion_seconds_bucket[1h])) by (le, status)
-          ) > 1800
-        for: 1h
-        labels:
-          severity: critical
-          component: sla
-        annotations:
-          summary: "Task completion P95 exceeds 30-minute SLO"
-          description: >
-            The 95th percentile task completion latency has been above 30
-            minutes for 1 hour. Current P95: {{ $value | printf "%.0f" }}s.
-
-      - alert: AINRFLLMFirstTokenSLABreach
-        expr: |
-          histogram_quantile(0.99,
-            sum(rate(ainrf_sla_llm_first_token_seconds_bucket[30m])) by (le)
-          ) > 10
-        for: 30m
-        labels:
-          severity: warning
-          component: sla
-        annotations:
-          summary: "LLM first-token P99 exceeds 10-second SLO"
-          description: >
-            The 99th percentile LLM first-token latency has been above 10
-            seconds for 30 minutes. Current P99: {{ $value | printf "%.1f" }}s.
-
       - alert: AINRFErrorBudgetBurn
         expr: |
           (
@@ -338,7 +308,7 @@ groups:
           summary: "Rate-limited requests detected"
           description: >
             Rate-limited requests are occurring at {{ $value | printf "%.2f" }}
-            per second. Reason: {{ $labels.reason }}. Path: {{ $labels.path }}.
+            per second. Reason: {{ $labels.reason }}. Route: {{ $labels.route }}.
 
   - name: ainrf.auth
     rules:

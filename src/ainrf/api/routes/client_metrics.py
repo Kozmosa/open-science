@@ -16,7 +16,7 @@ from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
 from ainrf.telemetry.metrics import observe_histogram
-from ainrf.telemetry.sla import rate_limited
+from ainrf.telemetry.rate_limit import rate_limited
 
 router = APIRouter(prefix="/client-metrics", tags=["client-metrics"])
 

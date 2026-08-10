@@ -42,6 +42,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_task_completed_total", [], "Tasks completed"),
     ("ainrf_task_failed_total", [], "Tasks failed"),
     (
+        "ainrf_rate_limited_total",
+        ["reason", "route"],
+        "Requests rejected by rate limiting",
+    ),
+    (
         "ainrf_domain_idempotency_requests_total",
         ["outcome"],
         "Domain idempotency transport and durable replay outcomes",

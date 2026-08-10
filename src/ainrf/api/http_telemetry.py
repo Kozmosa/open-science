@@ -18,13 +18,19 @@ from ainrf.telemetry.metrics import inc_counter, observe_histogram
 
 
 def route_template_for_request(request: Request) -> str:
-    """Return a bounded matched route template for metric labels."""
+    """Return a bounded route template for metric labels.
+
+    Middleware runs before Starlette dispatches a request, so ``scope["route"]``
+    is normally absent when a request is rejected by an outer limiter.  Fall
+    back to the application's route table in that case so a known dynamic
+    route keeps its template while unknown paths remain ``/unmatched``.
+    """
 
     route = request.scope.get("route")
     template = getattr(route, "path", None)
     if isinstance(template, str) and template.startswith("/"):
         return template
-    return "/unmatched"
+    return _route_template_from_table(request)
 
 
 def contract_operation_for_route(route: object, method: str) -> str:
@@ -66,6 +72,19 @@ def _contract_routes(app: object) -> tuple[ContractRoute, ...]:
             if isinstance(path, str) and hasattr(path_regex, "fullmatch") and methods:
                 frozen.append(ContractRoute(path, path_regex, frozenset(methods)))
     return tuple(frozen)
+
+
+def _route_template_from_table(request: Request) -> str:
+    """Resolve a bounded route template before Starlette route dispatch."""
+
+    partial_template: str | None = None
+    for candidate in _contract_routes(request.app):
+        if not candidate.path_regex.fullmatch(request.url.path):
+            continue
+        if request.method in candidate.methods:
+            return candidate.path
+        partial_template = partial_template or candidate.path
+    return partial_template or "/unmatched"
 
 
 def frozen_contract_operations(app: object) -> frozenset[str]:
