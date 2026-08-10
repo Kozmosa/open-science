@@ -34,7 +34,6 @@ def make_auth_client(tmp_path: Path) -> httpx.AsyncClient:
             domain_artifact_sha=artifact_sha,
         )
     )
-    app.state.literature_service.initialize()
     app.state.literature_tracking_service.initialize()
     headers = get_jwt_headers(app, username="admin", password="test-admin-password")
     return httpx.AsyncClient(

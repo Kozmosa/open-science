@@ -41,7 +41,6 @@ from ainrf.api.routes.client_metrics import router as client_metrics_router
 from ainrf.api.routes.domain import router as domain_router
 from ainrf.auth import AuthService
 from ainrf.files import FileBrowserService
-from ainrf.literature.service import LiteratureService
 from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.literature.task_saga import LiteratureTaskSagaService
 from ainrf.monitor.service import ResourceMonitorService
@@ -180,7 +179,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await _run_sync_in_lifespan(workspace_service.initialize)
         auth_service = app.state.auth_service
         await _run_sync_in_lifespan(auth_service.initialize)
-        await _run_sync_in_lifespan(app.state.literature_service.initialize)
         await _run_sync_in_lifespan(app.state.literature_tracking_service.initialize)
         # Create initial admin if no users exist
         try:
@@ -372,7 +370,6 @@ def create_app(
             state_root=api_config.state_root,
             read_only=True,
         )
-        app.state.literature_service = None
         app.state.literature_tracking_service = None
         app.state.literature_task_saga_service = None
     else:
@@ -421,7 +418,6 @@ def create_app(
             state_root=api_config.state_root,
         )
         app.state.skill_registry_config_service.initialize()
-        app.state.literature_service = LiteratureService(state_root=api_config.state_root)
         app.state.literature_tracking_service = LiteratureTrackingService(
             state_root=api_config.state_root
         )

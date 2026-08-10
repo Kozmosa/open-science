@@ -105,7 +105,7 @@ Rating values are `"good"`, `"needs-improvement"`, or `"poor"` per Google's Core
 
 ## Literature Tracking (durable planner and worker)
 
-The current Literature Module does not run the retired APScheduler `LiteratureScheduler` or a fixed six-hour per-subscription loop. `ConversationWorkerRuntime` invokes `run_planner_cycle()` for due checks; `LiteratureTrackingService` commits checks, source snapshots, paper versions, matching, user state, summaries, work items, and outbox records to SQLite. Dramatiq publishes and executes durable work IDs through `process_durable_work_item`, while `LiteratureTaskSagaService` coordinates current Task creation through the Conversation Domain. SQLite and durable domain telemetry are the authority; Redis/Dramatiq and process-local counters are transport or observation layers only.
+The current Literature Module has removed the retired APScheduler fetch cluster and fixed per-subscription loop. `ConversationWorkerRuntime` invokes `run_planner_cycle()` for due checks; `LiteratureTrackingService` commits checks, source snapshots, paper versions, matching, user state, summaries, work items, and outbox records to SQLite. Dramatiq publishes and executes durable work IDs through `process_durable_work_item`, while `LiteratureTaskSagaService` coordinates current Task creation through the Conversation Domain. SQLite and durable domain telemetry are the authority; Redis/Dramatiq and process-local counters are transport or observation layers only.
 
 ### Current durable telemetry
 
@@ -136,10 +136,6 @@ The current Literature Module does not run the retired APScheduler `LiteratureSc
   ```
   ainrf_domain_literature_saga_oldest_pending_age_seconds
   ```
-
-### Compatibility-only fetch series
-
-The registry still pre-declares `ainrf_literature_fetch_total`, `ainrf_literature_papers_fetched_total`, `ainrf_literature_papers_new_total`, `ainrf_literature_fetch_duration_seconds`, and `ainrf_literature_last_fetch_timestamp_seconds` for isolated compatibility/test callers. The metrics boundary removes `subscription_id` and exposes a bounded `scope="all"` label; the retired scheduler path does not emit them in the current production worker. Do not use these series as current Literature health or completeness evidence.
 
 ---
 

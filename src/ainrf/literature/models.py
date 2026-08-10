@@ -4,47 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 
-def _new_id() -> str:
-    import uuid
-
-    return uuid.uuid4().hex[:12]
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-@dataclass
-class LiteratureSubscription:
-    subscription_id: str = field(default_factory=_new_id)
-    user_id: str = ""
-    label: str = ""
-    keywords: list[str] = field(default_factory=list)
-    arxiv_categories: list[str] = field(default_factory=list)
-    seed_paper_ids: list[str] = field(default_factory=list)
-    # TODO: seed paper diffusion not yet implemented
-    frequency: str = "daily"
-    max_results: int = 50
-    is_active: bool = True
-    created_at: str = field(default_factory=_now_iso)
-    last_fetched_at: str | None = None
-    next_fetch_at: str | None = None
-
-    def to_dict(self) -> dict:
-        return {
-            "subscription_id": self.subscription_id,
-            "user_id": self.user_id,
-            "label": self.label,
-            "keywords": self.keywords,
-            "arxiv_categories": self.arxiv_categories,
-            "seed_paper_ids": self.seed_paper_ids,
-            "frequency": self.frequency,
-            "max_results": self.max_results,
-            "is_active": self.is_active,
-            "created_at": self.created_at,
-            "last_fetched_at": self.last_fetched_at,
-            "next_fetch_at": self.next_fetch_at,
-        }
 
 
 @dataclass

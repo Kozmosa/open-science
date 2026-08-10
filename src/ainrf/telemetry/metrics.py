@@ -80,21 +80,6 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ),
     ("ainrf_db_slow_query_total", ["db"], "Slow database queries (>1s)"),
     ("ainrf_client_error_events_total", [], "Client-side error events ingested"),
-    (
-        "ainrf_literature_fetch_total",
-        ["scope", "status"],
-        "Literature fetch attempts by privacy-safe aggregate scope",
-    ),
-    (
-        "ainrf_literature_papers_fetched_total",
-        ["scope"],
-        "Papers returned from arXiv queries by privacy-safe aggregate scope",
-    ),
-    (
-        "ainrf_literature_papers_new_total",
-        ["scope"],
-        "New papers inserted by privacy-safe aggregate scope (excludes duplicates)",
-    ),
     ("ainrf_literature_summarize_total", ["status"], "LLM summarize calls for literature papers"),
 ]
 
@@ -111,11 +96,6 @@ _HISTOGRAM_SPECS: list[tuple[str, list[str], str]] = [
         "SSH command execution latency by privacy-safe aggregate target",
     ),
     ("ainrf_db_query_duration_seconds", ["db"], "Database query latency"),
-    (
-        "ainrf_literature_fetch_duration_seconds",
-        ["scope"],
-        "Literature fetch duration by privacy-safe aggregate scope",
-    ),
     ("ainrf_literature_summarize_duration_seconds", [], "Per-paper LLM summarize duration"),
     (
         "ainrf_client_lcp_seconds",
@@ -145,11 +125,6 @@ _GAUGE_SPECS: list[tuple[str, list[str], str]] = [
         "ainrf_http_contract_telemetry_delivery_failure_latched",
         [],
         "Whether HTTP contract durable evidence delivery has failed",
-    ),
-    (
-        "ainrf_literature_last_fetch_timestamp_seconds",
-        ["scope"],
-        "Unix timestamp of the last literature fetch by privacy-safe aggregate scope",
     ),
     (
         "ainrf_domain_metrics_scrape_success",
@@ -266,15 +241,6 @@ _SSH_METRICS: frozenset[str] = frozenset(
         "ainrf_ssh_command_duration_seconds",
     }
 )
-_LITERATURE_METRICS: frozenset[str] = frozenset(
-    {
-        "ainrf_literature_fetch_total",
-        "ainrf_literature_papers_fetched_total",
-        "ainrf_literature_papers_new_total",
-        "ainrf_literature_fetch_duration_seconds",
-        "ainrf_literature_last_fetch_timestamp_seconds",
-    }
-)
 
 
 def _init_all() -> None:
@@ -339,19 +305,15 @@ def _get_or_create_gauge(name: str) -> Gauge:
 def _sanitize_public_labels(name: str, labels: dict[str, str] | None) -> dict[str, str] | None:
     """Replace sensitive per-resource labels before public metric exposition.
 
-    Existing workers still submit their local SSH host or Literature
-    subscription identifier.  Keep those callers compatible while enforcing
-    the bounded public schema at the only shared metric mutation boundary.
+    Existing workers still submit their local SSH host. Keep those callers
+    compatible while enforcing the bounded public schema at the only shared
+    metric mutation boundary.
     """
 
     sanitized = labels.copy() if labels is not None else {}
     if name in _SSH_METRICS:
         sanitized.pop("host", None)
         sanitized["target"] = "all"
-        return sanitized
-    if name in _LITERATURE_METRICS:
-        sanitized.pop("subscription_id", None)
-        sanitized["scope"] = "all"
         return sanitized
     return sanitized or None
 

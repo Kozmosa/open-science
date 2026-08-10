@@ -188,27 +188,3 @@ class TestApiConfigObservability:
         assert cfg.observability_base_url == "http://litefuse:3000"
         assert cfg.observability_secret_key == "sk-abc"
         assert cfg.observability_public_key == "pk-xyz"
-
-
-# ---------------------------------------------------------------------------
-# Literature fetcher integration
-# ---------------------------------------------------------------------------
-class TestLiteratureObservability:
-    @pytest.mark.anyio
-    async def test_fetch_for_subscription_accepts_reporter(self):
-        """fetch_for_subscription accepts optional reporter parameter."""
-        from ainrf.literature.models import LiteratureSubscription
-        from ainrf.literature.fetcher import fetch_for_subscription
-        from ainrf.observability.protocol import NullReporter
-
-        sub = LiteratureSubscription(
-            subscription_id="sub-1",
-            label="Test",
-            keywords=["test"],
-            arxiv_categories=["cs.AI"],
-            frequency="daily",
-        )
-        # Patch arxiv fetch to return empty list (no real API call).
-        with patch("ainrf.literature.fetcher.fetch_papers", return_value=[]):
-            result = await fetch_for_subscription(sub, NullReporter())
-        assert isinstance(result, list)

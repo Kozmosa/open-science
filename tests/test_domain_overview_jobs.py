@@ -817,7 +817,6 @@ def test_overview_builder_does_not_call_external_or_action_services(
         raise AssertionError("overview must not trigger external work")
 
     monkeypatch.setattr("ainrf.environments.probing.build_detection_snapshot", forbidden)
-    monkeypatch.setattr("ainrf.literature.fetcher.fetch_for_subscription", forbidden)
     monkeypatch.setattr(
         "ainrf.domain.conversation_service.ConversationApplicationService.create_task",
         forbidden,

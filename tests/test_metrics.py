@@ -23,8 +23,6 @@ from ainrf.telemetry.metrics import (
     inc_gauge,
     observe_histogram,
     reset_metrics,
-    set_counter,
-    set_gauge,
 )
 from ainrf.telemetry.rate_limit import rate_limited
 from ainrf.api.routes import client_metrics
@@ -135,11 +133,9 @@ class TestPublicMetricPrivacy:
         assert "ainrf_rate_limited_total" in rate_limit_rule["expr"]
         assert "{{ $labels.route }}" in rate_limit_rule["annotations"]["description"]
 
-    def test_aggregates_ssh_and_literature_resource_labels(self) -> None:
+    def test_aggregates_ssh_resource_labels(self) -> None:
         private_host = "tenant-gpu-42.internal"
-        private_subscription_id = "subscription-tenant-42"
         private_target = "tenant-target-42"
-        private_scope = "tenant-scope-42"
         inc_counter(
             "ainrf_ssh_connection_error_total",
             {"host": private_host, "target": private_target, "error_type": "TimeoutError"},
@@ -149,44 +145,14 @@ class TestPublicMetricPrivacy:
             0.5,
             {"host": private_host},
         )
-        inc_counter(
-            "ainrf_literature_fetch_total",
-            {
-                "subscription_id": private_subscription_id,
-                "scope": private_scope,
-                "status": "success",
-            },
-        )
-        set_counter(
-            "ainrf_literature_papers_fetched_total",
-            1.0,
-            {"subscription_id": private_subscription_id},
-        )
-        set_gauge(
-            "ainrf_literature_last_fetch_timestamp_seconds",
-            1.0,
-            {"subscription_id": private_subscription_id},
-        )
-        inc_gauge(
-            "ainrf_literature_last_fetch_timestamp_seconds",
-            {"subscription_id": private_subscription_id},
-        )
-        dec_gauge(
-            "ainrf_literature_last_fetch_timestamp_seconds",
-            {"subscription_id": private_subscription_id},
-        )
 
         text = get_metrics_text()
         public_metrics = "\n".join(line for line in text.splitlines() if line.startswith("ainrf_"))
 
         assert 'target="all"' in public_metrics
-        assert 'scope="all"' in public_metrics
         assert private_host not in public_metrics
-        assert private_subscription_id not in public_metrics
         assert private_target not in public_metrics
-        assert private_scope not in public_metrics
         assert "host=" not in public_metrics
-        assert "subscription_id=" not in public_metrics
 
     @pytest.mark.anyio
     async def test_http_metrics_use_route_template_not_raw_url(self) -> None:
@@ -356,21 +322,3 @@ class TestMetricsEndpoint:
         ) as client:
             resp = await client.get("/metrics", headers=headers)
             assert "ainrf_auth_login_success_total" in resp.text
-
-    @pytest.mark.anyio
-    async def test_public_endpoint_hides_resource_identifiers(self, tmp_path: Path) -> None:
-        private_subscription_id = "subscription-tenant-42"
-        inc_counter(
-            "ainrf_literature_fetch_total",
-            {"subscription_id": private_subscription_id, "status": "success"},
-        )
-        app = create_app(_make_config(tmp_path, metrics=True))
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test"
-        ) as client:
-            resp = await client.get("/metrics")
-
-        assert resp.status_code == 200
-        assert 'scope="all"' in resp.text
-        assert private_subscription_id not in resp.text
-        assert "subscription_id=" not in resp.text
