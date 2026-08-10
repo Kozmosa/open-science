@@ -54,18 +54,6 @@ Metrics emitted by the `build_http_metrics_middleware` (every HTTP request excep
 
 ---
 
-## Tasks
-
-| Metric | Type | Labels | Emitted When |
-|--------|------|--------|--------------|
-| `ainrf_task_created_total` | Counter | _(none)_ | A new task is created |
-| `ainrf_task_completed_total` | Counter | _(none)_ | A task reaches a terminal success state |
-| `ainrf_task_failed_total` | Counter | _(none)_ | A task reaches a terminal failure state |
-
-> **Note**: `ainrf_task_created_total`, `ainrf_task_completed_total`, and `ainrf_task_failed_total` are **not pre-declared** with label dimensions — they are lazily created. This means their TYPE/HELP lines only appear in `/metrics` output after at least one increment. If you see `total` in a PromQL query but not in the metrics endpoint, check that the corresponding code path has been exercised.
-
----
-
 ## Database
 
 | Metric | Type | Labels | Emitted When | Call Site |

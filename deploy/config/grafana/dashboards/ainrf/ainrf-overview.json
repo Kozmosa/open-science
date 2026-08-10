@@ -298,57 +298,6 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     },
     {
-      "title": "Task Execution Rate",
-      "description": "Tasks created, completed, and failed over time",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "fillOpacity": 10
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byRegexp", "options": "failed.*" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
-          },
-          {
-            "matcher": { "id": "byRegexp", "options": "created.*" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
-          },
-          {
-            "matcher": { "id": "byRegexp", "options": "completed.*" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
-          }
-        ]
-      },
-      "targets": [
-        {
-          "expr": "rate(ainrf_task_created_total[5m])",
-          "legendFormat": "created {{researcher_type}}",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(ainrf_task_completed_total[5m])",
-          "legendFormat": "completed {{status}}",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(ainrf_task_failed_total[5m])",
-          "legendFormat": "failed {{researcher_type}}",
-          "refId": "C"
-        }
-      ],
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] }
-      }
-    },
-    {
       "title": "SSH Command Latency",
       "description": "SSH remote command execution duration",
       "type": "timeseries",

@@ -38,9 +38,6 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_files_sensitive_path_access_total", [], "Sensitive file path access events"),
     ("ainrf_environment_update_total", [], "Environment detection/update events"),
     ("ainrf_code_session_created_total", [], "Code session spawn events"),
-    ("ainrf_task_created_total", [], "Tasks created"),
-    ("ainrf_task_completed_total", [], "Tasks completed"),
-    ("ainrf_task_failed_total", [], "Tasks failed"),
     (
         "ainrf_rate_limited_total",
         ["reason", "route"],

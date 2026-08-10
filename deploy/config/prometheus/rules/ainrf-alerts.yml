@@ -38,22 +38,6 @@ groups:
             The 95th percentile HTTP request latency has been above 5 seconds
             for 10 minutes. Current P95: {{ $value | printf "%.1f" }}s.
 
-  - name: ainrf.tasks
-    rules:
-      - alert: AINRFTaskFailureSpike
-        expr: |
-          increase(ainrf_task_failed_total[10m]) > 5
-        for: 5m
-        labels:
-          severity: warning
-          component: agentic_researcher
-        annotations:
-          summary: "OpenScience task failure spike detected"
-          description: >
-            {{ $value }} tasks have failed in the last 10 minutes.
-            This may indicate a systemic issue with the task execution pipeline
-            or the underlying AI harness engines.
-
   - name: ainrf.ssh
     rules:
       - alert: AINRFSSHConnectionErrors
