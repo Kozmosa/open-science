@@ -7,7 +7,13 @@ import type {
   TaskWorkStatus,
 } from '@features/tasks/types';
 import type { AdminUserItem, EnvAccessItem, SearchSettingsResponse } from '@features/settings/types';
-import type { TaskCreateRequest } from '@/generated/transport';
+import type {
+  ForkConfirmRequest,
+  ForkConfirmResponse,
+  ForkPreviewRequest,
+  ForkPreviewResponse,
+  TaskCreateRequest,
+} from '@/generated/transport';
 import type {
   LiteratureCheck,
   LiteraturePaperDetail,
@@ -40,6 +46,7 @@ const http = createTransportMockAdapter(mswHttp);
 const OWNER_ID = 'mock-browser-user';
 const BASE_TIME = '2026-07-16T08:00:00Z';
 const LATER_TIME = '2026-07-16T08:05:00Z';
+const FORK_PREVIEW_VALIDITY_SECONDS = 900;
 
 type Params = Record<string, string | readonly string[] | undefined>;
 
@@ -51,6 +58,11 @@ interface MockRefreshJob {
 interface MockSummary {
   summary: LiteratureSummary;
   poll_count: number;
+}
+
+interface MockIdempotencyRecord<Response> {
+  request_signature: string;
+  response: Response;
 }
 
 interface MockIntent {
@@ -70,6 +82,9 @@ interface FrontendV2MockState {
   tasks: TaskSummary[];
   messages: Record<string, MessageItem[]>;
   task_edges: TaskEdge[];
+  fork_previews: Record<string, ForkPreviewResponse>;
+  fork_preview_idempotency: Record<string, MockIdempotencyRecord<ForkPreviewResponse>>;
+  fork_confirmations: Record<string, MockIdempotencyRecord<ForkConfirmResponse>>;
   contexts: Record<string, DomainProjectContext>;
   context_versions: Record<string, DomainContextVersion[]>;
   context_candidates: Record<string, DomainContextCandidate[]>;
@@ -103,12 +118,65 @@ function notFound(entity: string, id: string): Response {
   return HttpResponse.json({ detail: `${entity} ${id} was not found in the frontend v2 mock scenario` }, { status: 404 });
 }
 
+function idempotencyConflict(): Response {
+  return HttpResponse.json({ detail: 'Idempotency-Key was already used for a different request' }, { status: 409 });
+}
+
+function missingIdempotencyKey(): Response {
+  return HttpResponse.json({ detail: 'Idempotency-Key is required' }, { status: 409 });
+}
+
 function noContent(): Response {
   return new HttpResponse(null, { status: 204 });
 }
 
-function idempotencyKey(request: Request): string {
-  return request.headers.get('Idempotency-Key')?.trim() || 'mock-idempotency-key';
+function idempotencyKey(request: Request): string | null {
+  return request.headers.get('Idempotency-Key')?.trim() || null;
+}
+
+function legacyIdempotencyKey(request: Request): string {
+  return idempotencyKey(request) ?? 'mock-idempotency-key';
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
+}
+
+function forkPreviewRequestSignature(sourceTaskId: string, payload: ForkPreviewRequest): string {
+  return canonicalJson({
+    task_id: sourceTaskId,
+    target_engine_family: payload.target_engine_family,
+    target_project_id: payload.target_project_id ?? null,
+    target_workspace_id: payload.target_workspace_id ?? null,
+    target_harness_engine: payload.target_harness_engine ?? null,
+    target_title: payload.target_title ?? null,
+    transfer_mode: payload.transfer_mode,
+    transfer_range: payload.transfer_range ?? {},
+    metrics: payload.metrics ?? {},
+    disclosure: payload.disclosure ?? {},
+    validity_seconds: FORK_PREVIEW_VALIDITY_SECONDS,
+  });
+}
+
+function forkConfirmRequestSignature(
+  sourceTaskId: string,
+  previewId: string,
+  payload: ForkConfirmRequest,
+): string {
+  return canonicalJson({
+    task_id: sourceTaskId,
+    preview_id: previewId,
+    preview_hash: payload.preview_hash,
+    source_revision: payload.source_revision,
+    transfer_mode: payload.transfer_mode,
+    truncation_acknowledged: payload.truncation_acknowledged ?? false,
+    full_transcript_confirmed: payload.full_transcript_confirmed ?? false,
+  });
 }
 
 function makeCapabilities(): DomainCapabilities {
@@ -444,6 +512,9 @@ function createState(): FrontendV2MockState {
       ],
     },
     task_edges: [],
+    fork_previews: {},
+    fork_preview_idempotency: {},
+    fork_confirmations: {},
     contexts: {
       default: { project_id: 'default', active_version: defaultContext, draft: null },
       'project-alpha': {
@@ -547,6 +618,128 @@ export function resetFrontendV2MockState(): void {
 
 function taskById(taskId: string): TaskSummary | undefined {
   return state.tasks.find((task) => task.task_id === taskId);
+}
+
+type MockTranscriptTurn = {
+  turn_id: string;
+  task_id: string;
+  turn_seq: number;
+  status: 'completed';
+  retry_of_turn_id: null;
+  context_snapshot_ref: string | null;
+  binding_id: string | null;
+  engine_family: 'codex' | 'claude';
+  engine_driver: string;
+  contract_version: number;
+  provider_profile_ref: string | null;
+  provider_profile_version: string | null;
+  provider_profile_fingerprint: string | null;
+  model: string | null;
+  native_turn_kind: string | null;
+  native_turn_ref: string | null;
+  accepted_at: string;
+  started_at: string;
+  finished_at: string;
+  updated_at: string;
+  failure_code: null;
+  failure_metadata_json: string;
+};
+
+type MockTranscriptItem = {
+  item_id: string;
+  task_id: string;
+  turn_id: string;
+  task_item_seq: number;
+  turn_item_seq: number;
+  envelope_type: string;
+  envelope_version: number;
+  item_type: string;
+  actor: 'user' | 'agent' | 'system';
+  payload_json: string;
+  native_provenance_json: string;
+  native_dedupe_scope: null;
+  native_item_id: null;
+  parent_item_id: null;
+  call_item_id: null;
+  occurred_at: string;
+  ingested_at: string;
+  persisted_at: string;
+};
+
+function mockTranscriptRows(taskId: string): {
+  turns: MockTranscriptTurn[];
+  items: MockTranscriptItem[];
+} {
+  const task = taskById(taskId);
+  const engineFamily = engineFamilyForHarnessEngine(task?.harness_engine ?? 'claude-code') ?? 'claude';
+  const turnId = `turn-${taskId}-1`;
+  const turns: MockTranscriptTurn[] = [{
+    turn_id: turnId,
+    task_id: taskId,
+    turn_seq: 1,
+    status: 'completed',
+    retry_of_turn_id: null,
+    context_snapshot_ref: null,
+    binding_id: null,
+    engine_family: engineFamily,
+    engine_driver: task?.harness_engine ?? 'claude-code',
+    contract_version: 1,
+    provider_profile_ref: null,
+    provider_profile_version: null,
+    provider_profile_fingerprint: null,
+    model: null,
+    native_turn_kind: null,
+    native_turn_ref: null,
+    accepted_at: BASE_TIME,
+    started_at: BASE_TIME,
+    finished_at: LATER_TIME,
+    updated_at: LATER_TIME,
+    failure_code: null,
+    failure_metadata_json: '{}',
+  }];
+  const items = (state.messages[taskId] ?? []).map<MockTranscriptItem>((message) => {
+    const itemType = message.type === 'user'
+      ? 'user_message'
+      : message.type === 'assistant'
+        ? 'agent_message'
+        : 'system_notice';
+    const actor = message.type === 'user' ? 'user' : message.type === 'assistant' ? 'agent' : 'system';
+    return {
+      item_id: message.id,
+      task_id: taskId,
+      turn_id: turnId,
+      task_item_seq: message.metadata.sequence,
+      turn_item_seq: message.metadata.sequence,
+      envelope_type: 'conversation.item',
+      envelope_version: 1,
+      item_type: itemType,
+      actor,
+      payload_json: canonicalJson({
+        text: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+      }),
+      native_provenance_json: canonicalJson({ source: 'mock' }),
+      native_dedupe_scope: null,
+      native_item_id: null,
+      parent_item_id: null,
+      call_item_id: null,
+      occurred_at: message.metadata.timestamp,
+      ingested_at: message.metadata.timestamp,
+      persisted_at: message.metadata.timestamp,
+    };
+  });
+  return { turns, items };
+}
+
+async function mockTranscriptRevision(taskId: string): Promise<string> {
+  const payload = canonicalJson(mockTranscriptRows(taskId));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function engineFamilyForHarnessEngine(engine: string): 'codex' | 'claude' | null {
+  if (engine === 'codex-app-server') return 'codex';
+  if (engine === 'agent-sdk' || engine === 'claude-code') return 'claude';
+  return null;
 }
 
 function projectById(projectId: string): DomainProjectProjection | undefined {
@@ -1038,6 +1231,142 @@ export const frontendV2MockHandlers = [
     task.updated_at = LATER_TIME;
     return HttpResponse.json(task);
   }),
+  http.post('/api/tasks/:taskId/fork-preview', async ({ params, request }) => {
+    const sourceTaskId = textParam(params, 'taskId');
+    const key = idempotencyKey(request);
+    if (!key) return missingIdempotencyKey();
+    const source = taskById(sourceTaskId);
+    if (!source) return notFound('Task', sourceTaskId);
+    const payload = await requestJson<ForkPreviewRequest>(request);
+    const requestSignature = forkPreviewRequestSignature(sourceTaskId, payload);
+    const replay = state.fork_preview_idempotency[key];
+    if (replay) {
+      if (replay.request_signature !== requestSignature) return idempotencyConflict();
+      return HttpResponse.json(replay.response);
+    }
+    const sourceEngineFamily = engineFamilyForHarnessEngine(source.harness_engine);
+    if (!sourceEngineFamily) {
+      return HttpResponse.json({ detail: 'Source Task engine is not supported for Fork' }, { status: 409 });
+    }
+    if (sourceEngineFamily === payload.target_engine_family) {
+      return HttpResponse.json({
+        detail: {
+          code: 'fork_confirmation_required',
+          message: 'Fork target engine must differ from source engine',
+        },
+      }, { status: 409 });
+    }
+    const targetWorkspaceId = payload.target_workspace_id ?? source.workspace_id;
+    const targetProjectId = payload.target_project_id ?? source.project_id;
+    const targetWorkspace = workspaceById(targetWorkspaceId);
+    const targetProject = projectById(targetProjectId);
+    if (!targetWorkspace) return notFound('Workspace', targetWorkspaceId);
+    if (!targetProject) return notFound('Project', targetProjectId);
+    const legalHarnessEngines = payload.target_engine_family === 'codex'
+      ? ['codex-app-server'] as const
+      : ['agent-sdk', 'claude-code'] as const;
+    const targetHarnessEngine = payload.target_harness_engine ?? legalHarnessEngines[0];
+    if (!legalHarnessEngines.includes(targetHarnessEngine as never)) {
+      return HttpResponse.json({ detail: 'Fork target driver does not match target engine family' }, { status: 409 });
+    }
+    const previewId = `fork-preview-${sourceTaskId}-${Object.keys(state.fork_previews).length + 1}`;
+    const preview: ForkPreviewResponse = {
+      preview_id: previewId,
+      preview_hash: `hash-${previewId}`,
+      source_task_id: sourceTaskId,
+      source_revision: await mockTranscriptRevision(sourceTaskId),
+      source_engine_family: sourceEngineFamily,
+      target_engine_family: payload.target_engine_family,
+      target_project_id: targetProject.project_id,
+      target_workspace_id: targetWorkspace.workspace_id,
+      target_harness_engine: targetHarnessEngine,
+      target_title: payload.target_title ?? `Fork of ${source.title}`,
+      transfer_mode: payload.transfer_mode,
+      truncated: payload.metrics?.truncated === true,
+      expires_at: new Date(Date.now() + FORK_PREVIEW_VALIDITY_SECONDS * 1000).toISOString(),
+    };
+    state.fork_previews[previewId] = preview;
+    state.fork_preview_idempotency[key] = { request_signature: requestSignature, response: preview };
+    return HttpResponse.json(preview);
+  }),
+  http.post('/api/tasks/:taskId/fork-preview/:previewId/confirm', async ({ params, request }) => {
+    const sourceTaskId = textParam(params, 'taskId');
+    const previewId = textParam(params, 'previewId');
+    const key = idempotencyKey(request);
+    if (!key) return missingIdempotencyKey();
+    const payload = await requestJson<ForkConfirmRequest>(request);
+    const requestSignature = forkConfirmRequestSignature(sourceTaskId, previewId, payload);
+    const replay = state.fork_confirmations[key];
+    if (replay) {
+      if (replay.request_signature !== requestSignature) return idempotencyConflict();
+      return HttpResponse.json(replay.response);
+    }
+    const preview = state.fork_previews[previewId];
+    if (!preview || preview.source_task_id !== sourceTaskId) return notFound('Fork Preview', previewId);
+    const source = taskById(sourceTaskId);
+    if (!source) return notFound('Task', sourceTaskId);
+    const currentSourceRevision = await mockTranscriptRevision(sourceTaskId);
+    const previewExpiresAt = Date.parse(preview.expires_at);
+    const invalidConfirmation = preview.preview_hash !== payload.preview_hash
+      || preview.source_revision !== payload.source_revision
+      || currentSourceRevision !== preview.source_revision
+      || Number.isNaN(previewExpiresAt)
+      || previewExpiresAt < Date.now()
+      || preview.transfer_mode !== payload.transfer_mode
+      || (preview.truncated && !payload.truncation_acknowledged)
+      || (preview.transfer_mode === 'full_transcript' && !payload.full_transcript_confirmed)
+      || (preview.transfer_mode !== 'full_transcript' && payload.full_transcript_confirmed);
+    if (invalidConfirmation) {
+      return HttpResponse.json({
+        detail: {
+          code: 'fork_confirmation_required',
+          message: 'Fork confirmation does not match a current preview',
+        },
+      }, { status: 409 });
+    }
+    const targetTaskId = `task-mock-${state.task_counter + 1}`;
+    state.task_counter += 1;
+    const target = makeTask(
+      targetTaskId,
+      preview.target_project_id,
+      preview.target_workspace_id,
+      preview.target_title,
+      `Continue from confirmed Fork of ${source.title}.`,
+    );
+    target.harness_engine = preview.target_harness_engine;
+    target.task_profile = preview.target_harness_engine;
+    target.binding = target.binding ? {
+      ...target.binding,
+      execution_engine: preview.target_harness_engine,
+      task_profile: preview.target_harness_engine,
+    } : target.binding;
+    state.tasks.unshift(target);
+    state.messages[targetTaskId] = [{
+      id: `message-${targetTaskId}-1`,
+      type: 'user',
+      content: target.prompt,
+      metadata: { timestamp: BASE_TIME, sequence: 1, sourceKind: 'message' },
+    }];
+    state.task_edges.push({
+      edge_id: `edge-${targetTaskId}-${sourceTaskId}`,
+      project_id: target.project_id,
+      source_task_id: targetTaskId,
+      target_task_id: sourceTaskId,
+      relationship_type: 'derived_from',
+      created_at: LATER_TIME,
+    });
+    const response: ForkConfirmResponse = {
+      transfer_id: `transfer-${previewId}`,
+      preview_id: previewId,
+      source_task_id: sourceTaskId,
+      status: 'transferred',
+      target_task_id: targetTaskId,
+      submission_id: `submission-${targetTaskId}-1`,
+      reserved_turn_id: `turn-${targetTaskId}-1`,
+    };
+    state.fork_confirmations[key] = { request_signature: requestSignature, response };
+    return HttpResponse.json(response);
+  }),
   http.post('/api/tasks/:taskId/fork', async ({ params, request }) => {
     const sourceTaskId = textParam(params, 'taskId');
     const source = taskById(sourceTaskId);
@@ -1324,7 +1653,7 @@ export const frontendV2MockHandlers = [
     const paperId = textParam(params, 'paperId');
     const paper = state.papers.find((item) => item.paper_id === paperId);
     if (!paper) return notFound('Literature Paper', paperId);
-    const key = idempotencyKey(request);
+    const key = legacyIdempotencyKey(request);
     const existing = state.intents[key];
     if (existing) return HttpResponse.json(existing.intent);
     const payload = await requestJson<LiteratureResearchTaskRequest>(request);
@@ -1387,7 +1716,7 @@ export const frontendV2MockHandlers = [
     return HttpResponse.json({ items, next_cursor: null, total: items.length });
   }),
   http.post('/api/literature/checks', ({ request }) => {
-    const key = idempotencyKey(request);
+    const key = legacyIdempotencyKey(request);
     const existing = state.checks.find((check) => check.trigger === key);
     if (existing) return HttpResponse.json(existing);
     state.check_counter += 1;
@@ -1419,7 +1748,7 @@ export const frontendV2MockHandlers = [
   http.get('/api/literature/checks', () => HttpResponse.json({ items: state.checks, total: state.checks.length, next_cursor: null })),
 
   http.post('/api/domain/overview/today/refresh', ({ request }) => {
-    const key = idempotencyKey(request);
+    const key = legacyIdempotencyKey(request);
     const jobId = `overview-refresh-${key.replace(/[^a-zA-Z0-9_-]/g, '-').slice(-40)}`;
     const existing = state.refresh_jobs[jobId];
     if (existing) return HttpResponse.json(existing.job);

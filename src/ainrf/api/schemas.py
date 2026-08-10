@@ -709,8 +709,34 @@ class ForkConfirmRequest(BaseModel):
     full_transcript_confirmed: bool = False
 
 
-class ConversationReceiptResponse(BaseModel):
-    model_config = ConfigDict(extra="allow")
+class ForkPreviewResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preview_id: str
+    preview_hash: str
+    source_task_id: str
+    source_revision: str
+    source_engine_family: Literal["codex", "claude"]
+    target_engine_family: Literal["codex", "claude"]
+    target_project_id: str
+    target_workspace_id: str
+    target_harness_engine: Literal["codex-app-server", "agent-sdk", "claude-code"]
+    target_title: str
+    transfer_mode: Literal["selected_turns", "recent_turns", "full_transcript", "context_only"]
+    truncated: bool
+    expires_at: str
+
+
+class ForkConfirmResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    transfer_id: str
+    preview_id: str
+    source_task_id: str
+    status: Literal["transferred"]
+    target_task_id: str
+    submission_id: str
+    reserved_turn_id: str
 
 
 class TaskRelationshipResponse(BaseModel):

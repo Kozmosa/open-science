@@ -1,14 +1,16 @@
 import { Plus } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import {
   archiveTask,
   completeTask,
-  forkTask,
+  confirmFork,
   getTask,
+  getTaskTurns,
   getTasks,
   moveTask,
+  previewFork,
   retryTask,
   reopenTask,
   unarchiveTask,
@@ -17,7 +19,18 @@ import {
 import { Button, Checkbox, Dialog, FormField, NativeSelect, PageShell, Sheet, SplitPane, Textarea, useToast } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { extractErrorMessage } from '@/shared/utils/error';
-import type { TaskListResponse, TaskSummary } from '../types';
+import {
+  engineFamilyForHarnessEngine,
+  FORK_HARNESS_ENGINES_BY_FAMILY,
+} from '../types';
+import type {
+  ForkEngineFamily,
+  ForkHarnessEngine,
+  ForkPreview,
+  ForkTransferMode,
+  TaskListResponse,
+  TaskSummary,
+} from '../types';
 import { useAuth } from '@features/auth';
 import {
   getDomainProjectContext,
@@ -38,6 +51,47 @@ const DEFAULT_TASK_SIDEBAR_WIDTH = 320;
 const DEFAULT_METADATA_SIDEBAR_WIDTH = 320;
 const DRAWER_VIEWS = new Set<TaskDrawerView>(['details', 'turns', 'context', 'closed']);
 const NARROW_TASKS_QUERY = '(max-width: 1023px)';
+
+type ForkPreviewMutationVariables = {
+  sourceTaskId: string;
+  sourceEngineFamily: ForkEngineFamily;
+  targetProjectId: string;
+  targetWorkspaceId: string;
+  targetEngineFamily: ForkEngineFamily;
+  targetHarnessEngine: ForkHarnessEngine;
+  targetTitle?: string;
+  transferMode: ForkTransferMode;
+  flowGeneration: number;
+  requestGeneration: number;
+  locationKey: string;
+};
+
+type ForkPreviewMutationResult = {
+  preview: ForkPreview;
+  key: string;
+  sourceTaskId: string;
+  flowGeneration: number;
+  requestGeneration: number;
+  locationKey: string;
+};
+
+type ForkConfirmMutationVariables = {
+  sourceTaskId: string;
+  previewId: string;
+  previewHash: string;
+  sourceRevision: string;
+  transferMode: ForkTransferMode;
+  truncationAcknowledged: boolean;
+  fullTranscriptConfirmed: boolean;
+  flowGeneration: number;
+  requestGeneration: number;
+  locationKey: string;
+};
+
+type ForkConfirmMutationResult = ForkConfirmMutationVariables & {
+  task: TaskSummary;
+  key: string;
+};
 
 function usePageVisibility(): boolean {
   const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
@@ -70,6 +124,7 @@ function TasksPage() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
   const [showFailedOrCancelled, setShowFailedOrCancelled] = useState(false);
@@ -100,7 +155,15 @@ function TasksPage() {
   const [operationDialog, setOperationDialog] = useState<'move' | 'fork' | null>(null);
   const [targetProjectId, setTargetProjectId] = useState('');
   const [targetWorkspaceId, setTargetWorkspaceId] = useState('');
-  const [forkPrompt, setForkPrompt] = useState('');
+  const [forkTitle, setForkTitle] = useState('');
+  const [forkTargetEngineFamily, setForkTargetEngineFamily] = useState<ForkEngineFamily | ''>('');
+  const [forkTargetHarnessEngine, setForkTargetHarnessEngine] = useState<ForkHarnessEngine | ''>('');
+  const [forkTransferMode, setForkTransferMode] = useState<ForkTransferMode>('full_transcript');
+  const [forkPreview, setForkPreview] = useState<ForkPreview | null>(null);
+  const [forkTruncationAcknowledged, setForkTruncationAcknowledged] = useState(false);
+  const [forkFullTranscriptConfirmed, setForkFullTranscriptConfirmed] = useState(false);
+  const [forkPreviewError, setForkPreviewError] = useState<unknown>(null);
+  const [forkConfirmError, setForkConfirmError] = useState<unknown>(null);
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const archiveKeyManager = useRef(new IdempotencyKeyManager('task.archive')).current;
   const unarchiveKeyManager = useRef(new IdempotencyKeyManager('task.unarchive')).current;
@@ -110,8 +173,22 @@ function TasksPage() {
   const reopenFlight = useRef(false);
   const retryKeyManager = useRef(new IdempotencyKeyManager('task.retry')).current;
   const moveKeyManager = useRef(new IdempotencyKeyManager('task.move')).current;
-  const forkKeyManager = useRef(new IdempotencyKeyManager('task.fork')).current;
+  const forkPreviewKeyManager = useRef(new IdempotencyKeyManager('task.fork.preview')).current;
+  const forkConfirmKeyManager = useRef(new IdempotencyKeyManager('task.fork.confirm')).current;
   const renameKeyManager = useRef(new IdempotencyKeyManager('task.rename')).current;
+  const forkFlowGeneration = useRef(0);
+  const forkPreviewRequestGeneration = useRef(0);
+  const forkConfirmRequestGeneration = useRef(0);
+  const locationKeyRef = useRef(location.key);
+  const selectedTaskIdRef = useRef<string | null>(null);
+  const operationDialogRef = useRef<'move' | 'fork' | null>(null);
+  const forkPreviewRef = useRef<ForkPreview | null>(null);
+  const lastObservedSelectedTaskIdRef = useRef<string | null>(null);
+
+  const advanceForkFlow = useCallback(() => {
+    forkFlowGeneration.current += 1;
+    return forkFlowGeneration.current;
+  }, []);
 
   const effectiveSelectedTaskId = useMemo(() => {
     if (requestedTaskId && tasks.some((task) => task.task_id === requestedTaskId)) {
@@ -138,6 +215,11 @@ function TasksPage() {
 
   const selectTask = useCallback(
     (taskId: string | null) => {
+      if (selectedTaskIdRef.current !== taskId) {
+        advanceForkFlow();
+        selectedTaskIdRef.current = taskId;
+        lastObservedSelectedTaskIdRef.current = taskId;
+      }
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         if (taskId) {
@@ -148,8 +230,23 @@ function TasksPage() {
         return next;
       });
     },
-    [setSearchParams]
+    [advanceForkFlow, setSearchParams]
   );
+
+  const selectTaskFromList = useCallback((taskId: string | null) => {
+    if (selectedTaskIdRef.current !== taskId
+      && (operationDialogRef.current === 'fork' || forkPreviewRef.current !== null)) {
+      operationDialogRef.current = null;
+      forkPreviewRef.current = null;
+      setOperationDialog(null);
+      setForkPreview(null);
+      setForkTruncationAcknowledged(false);
+      setForkFullTranscriptConfirmed(false);
+      setForkPreviewError(null);
+      setForkConfirmError(null);
+    }
+    selectTask(taskId);
+  }, [selectTask]);
 
   const returnToTaskList = useCallback(() => {
     setSearchParams((current) => {
@@ -159,6 +256,34 @@ function TasksPage() {
       return next;
     });
   }, [setSearchParams]);
+
+  useEffect(() => {
+    locationKeyRef.current = location.key;
+  }, [location.key]);
+
+  useEffect(() => {
+    selectedTaskIdRef.current = effectiveSelectedTaskId;
+    operationDialogRef.current = operationDialog;
+    forkPreviewRef.current = forkPreview;
+  }, [effectiveSelectedTaskId, forkPreview, operationDialog]);
+
+  useEffect(() => {
+    if (lastObservedSelectedTaskIdRef.current === effectiveSelectedTaskId) return;
+    lastObservedSelectedTaskIdRef.current = effectiveSelectedTaskId;
+    advanceForkFlow();
+    if (operationDialogRef.current === 'fork' || forkPreviewRef.current !== null) {
+      operationDialogRef.current = null;
+      forkPreviewRef.current = null;
+      startTransition(() => {
+        setOperationDialog(null);
+        setForkPreview(null);
+        setForkTruncationAcknowledged(false);
+        setForkFullTranscriptConfirmed(false);
+        setForkPreviewError(null);
+        setForkConfirmError(null);
+      });
+    }
+  }, [advanceForkFlow, effectiveSelectedTaskId]);
 
   const toggleMetadataSidebar = useCallback(() => {
     setDrawerView(drawerView === 'closed' ? 'details' : 'closed');
@@ -362,34 +487,273 @@ function TasksPage() {
     },
   });
 
-  const forkMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedTask || !targetWorkspaceId) throw new Error('Target Workspace is required');
+  const isCurrentForkPreviewRequest = (
+    request: Pick<ForkPreviewMutationVariables, 'sourceTaskId' | 'flowGeneration' | 'requestGeneration' | 'locationKey'>,
+  ): boolean => request.flowGeneration === forkFlowGeneration.current
+    && request.requestGeneration === forkPreviewRequestGeneration.current
+    && request.sourceTaskId === selectedTaskIdRef.current
+    && request.locationKey === locationKeyRef.current
+    && operationDialogRef.current === 'fork';
+
+  const isCurrentForkConfirmRequest = (
+    request: Pick<ForkConfirmMutationVariables, 'sourceTaskId' | 'previewId' | 'flowGeneration' | 'requestGeneration' | 'locationKey'>,
+  ): boolean => request.flowGeneration === forkFlowGeneration.current
+    && request.requestGeneration === forkConfirmRequestGeneration.current
+    && request.sourceTaskId === selectedTaskIdRef.current
+    && request.locationKey === locationKeyRef.current
+    && operationDialogRef.current === 'fork'
+    && forkPreviewRef.current?.preview_id === request.previewId;
+
+  const forkPreviewMutation = useMutation<ForkPreviewMutationResult, Error, ForkPreviewMutationVariables>({
+    mutationFn: async (input) => {
+      if (!input.targetWorkspaceId) throw new Error('Target Workspace is required');
+      if (!input.targetProjectId) throw new Error('Target Project is required');
+      if (input.targetEngineFamily === input.sourceEngineFamily) {
+        throw new Error('Fork target engine must differ from the source engine');
+      }
+      const legalDrivers = FORK_HARNESS_ENGINES_BY_FAMILY[input.targetEngineFamily];
+      if (!input.targetHarnessEngine || !legalDrivers.includes(input.targetHarnessEngine)) {
+        throw new Error('Fork target driver does not match the target engine family');
+      }
       const workspace = domainWorkspacesQuery.data?.items.find(
-        (item) => item.workspace_id === targetWorkspaceId,
+        (item) => item.workspace_id === input.targetWorkspaceId,
       );
-      const projectId = targetProjectId
-        || workspace?.project_links.find((link) => link.link_status === 'active')?.project_id;
+      if (!workspace) throw new Error('Target Workspace is unavailable');
+      if (!workspace.project_links.some(
+        (link) => link.project_id === input.targetProjectId
+          && link.link_status === 'active'
+          && link.project_status === 'active'
+          && link.can_execute,
+      )) {
+        throw new Error('Target Workspace is not executable for the selected Project');
+      }
+      const turns = input.transferMode === 'context_only'
+        || input.transferMode === 'full_transcript'
+        ? null
+        : await getTaskTurns(input.sourceTaskId);
+      const transferRange = input.transferMode === 'context_only'
+        || input.transferMode === 'full_transcript'
+        ? {}
+        : input.transferMode === 'selected_turns'
+          ? { turn_ids: turns?.items.map((turn) => turn.turn_id) ?? [] }
+          : { count: Math.min(5, turns?.items.length ?? 0) };
       const payload = {
-        workspace_id: targetWorkspaceId,
-        project_id: projectId,
-        prompt: forkPrompt.trim() || undefined,
+        target_engine_family: input.targetEngineFamily,
+        target_project_id: input.targetProjectId,
+        target_workspace_id: input.targetWorkspaceId,
+        target_harness_engine: input.targetHarnessEngine,
+        target_title: input.targetTitle,
+        transfer_mode: input.transferMode,
+        transfer_range: transferRange,
+        metrics: {},
+        disclosure: { caller: 'tasks-page' },
       };
-      const key = forkKeyManager.keyFor(semanticMutationValue({ taskId: selectedTask.task_id, ...payload }));
-      const task = await forkTask(
-        selectedTask.task_id,
-        payload,
+      const key = forkPreviewKeyManager.keyFor(semanticMutationValue({
+        taskId: input.sourceTaskId,
+        targetProjectId: input.targetProjectId,
+        targetWorkspaceId: input.targetWorkspaceId,
+        targetEngineFamily: input.targetEngineFamily,
+        targetHarnessEngine: input.targetHarnessEngine,
+        targetTitle: input.targetTitle,
+        transferMode: input.transferMode,
+        transferRange,
+      }));
+      const preview = await previewFork(input.sourceTaskId, payload, key);
+      return {
+        preview,
         key,
-      );
-      return { task, key };
+        sourceTaskId: input.sourceTaskId,
+        flowGeneration: input.flowGeneration,
+        requestGeneration: input.requestGeneration,
+        locationKey: input.locationKey,
+      };
     },
-    onSuccess: async ({ task, key }) => {
-      forkKeyManager.markSucceeded(key);
-      setOperationDialog(null);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
-      selectTask(task.task_id);
+    onSuccess: (result) => {
+      forkPreviewKeyManager.markSucceeded(result.key);
+      if (!isCurrentForkPreviewRequest(result)) return;
+      setForkPreviewError(null);
+      forkPreviewRef.current = result.preview;
+      setForkPreview(result.preview);
+      setForkTruncationAcknowledged(false);
+      setForkFullTranscriptConfirmed(false);
+    },
+    onError: (error, input) => {
+      if (isCurrentForkPreviewRequest(input)) setForkPreviewError(error);
     },
   });
+
+  const forkConfirmMutation = useMutation<ForkConfirmMutationResult, Error, ForkConfirmMutationVariables>({
+    mutationFn: async (input) => {
+      const payload = {
+        preview_hash: input.previewHash,
+        source_revision: input.sourceRevision,
+        transfer_mode: input.transferMode,
+        truncation_acknowledged: input.truncationAcknowledged,
+        full_transcript_confirmed: input.fullTranscriptConfirmed,
+      };
+      const key = forkConfirmKeyManager.keyFor(semanticMutationValue({
+        taskId: input.sourceTaskId,
+        previewId: input.previewId,
+        previewHash: input.previewHash,
+        sourceRevision: input.sourceRevision,
+        transferMode: input.transferMode,
+        truncationAcknowledged: input.truncationAcknowledged,
+        fullTranscriptConfirmed: input.fullTranscriptConfirmed,
+      }));
+      const task = await confirmFork(input.sourceTaskId, input.previewId, payload, key);
+      return { ...input, task, key };
+    },
+    onSuccess: async (result) => {
+      forkConfirmKeyManager.markSucceeded(result.key);
+      const refreshTasks = queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+      if (!isCurrentForkConfirmRequest(result)) {
+        await refreshTasks;
+        return;
+      }
+      await refreshTasks;
+      if (!isCurrentForkConfirmRequest(result)) return;
+      operationDialogRef.current = null;
+      forkPreviewRef.current = null;
+      setOperationDialog(null);
+      setForkPreview(null);
+      setForkTruncationAcknowledged(false);
+      setForkFullTranscriptConfirmed(false);
+      setForkPreviewError(null);
+      setForkConfirmError(null);
+      selectTask(result.task.task_id);
+    },
+    onError: (error, input) => {
+      if (isCurrentForkConfirmRequest(input)) setForkConfirmError(error);
+    },
+  });
+
+  const sourceEngineFamily = selectedTask
+    ? engineFamilyForHarnessEngine(selectedTask.harness_engine)
+    : null;
+  const forkTargetEngineOptions: ForkEngineFamily[] = sourceEngineFamily
+    ? (['codex', 'claude'] as const).filter((family) => family !== sourceEngineFamily)
+    : [];
+  const forkTargetDrivers = forkTargetEngineFamily
+    ? FORK_HARNESS_ENGINES_BY_FAMILY[forkTargetEngineFamily]
+    : [];
+  const forkRequiresFullTranscriptConfirmation = forkPreview?.transfer_mode === 'full_transcript';
+  const forkConfirmDisabled = !forkPreview
+    || (forkRequiresFullTranscriptConfirmation && !forkFullTranscriptConfirmed)
+    || (forkPreview.truncated && !forkTruncationAcknowledged);
+
+  const startForkPreview = useCallback(() => {
+    if (!selectedTask || forkPreviewMutation.isPending) return;
+    const sourceEngineFamily = engineFamilyForHarnessEngine(selectedTask.harness_engine);
+    if (!sourceEngineFamily || !forkTargetEngineFamily || !forkTargetHarnessEngine || !targetProjectId || !targetWorkspaceId) {
+      return;
+    }
+    const flowGeneration = advanceForkFlow();
+    const requestGeneration = forkPreviewRequestGeneration.current + 1;
+    forkPreviewRequestGeneration.current = requestGeneration;
+    setForkPreviewError(null);
+    setForkConfirmError(null);
+    forkPreviewMutation.reset();
+    forkPreviewMutation.mutate({
+      sourceTaskId: selectedTask.task_id,
+      sourceEngineFamily,
+      targetProjectId,
+      targetWorkspaceId,
+      targetEngineFamily: forkTargetEngineFamily,
+      targetHarnessEngine: forkTargetHarnessEngine,
+      targetTitle: forkTitle.trim() || undefined,
+      transferMode: forkTransferMode,
+      flowGeneration,
+      requestGeneration,
+      locationKey: location.key,
+    });
+  }, [
+    advanceForkFlow,
+    forkPreviewMutation,
+    forkTargetEngineFamily,
+    forkTargetHarnessEngine,
+    forkTitle,
+    forkTransferMode,
+    location.key,
+    selectedTask,
+    targetProjectId,
+    targetWorkspaceId,
+  ]);
+
+  const startForkConfirm = useCallback(() => {
+    const preview = forkPreviewRef.current;
+    if (!preview || forkConfirmMutation.isPending) return;
+    const flowGeneration = advanceForkFlow();
+    const requestGeneration = forkConfirmRequestGeneration.current + 1;
+    forkConfirmRequestGeneration.current = requestGeneration;
+    setForkConfirmError(null);
+    forkConfirmMutation.reset();
+    forkConfirmMutation.mutate({
+      sourceTaskId: preview.source_task_id,
+      previewId: preview.preview_id,
+      previewHash: preview.preview_hash,
+      sourceRevision: preview.source_revision,
+      transferMode: preview.transfer_mode,
+      truncationAcknowledged: forkTruncationAcknowledged,
+      fullTranscriptConfirmed: forkFullTranscriptConfirmed,
+      flowGeneration,
+      requestGeneration,
+      locationKey: location.key,
+    });
+  }, [
+    advanceForkFlow,
+    forkConfirmMutation,
+    forkFullTranscriptConfirmed,
+    forkTruncationAcknowledged,
+    location.key,
+  ]);
+
+  const openForkDialog = useCallback(() => {
+    if (!selectedTask) return;
+    const source = engineFamilyForHarnessEngine(selectedTask.harness_engine);
+    const target = source === 'codex' ? 'claude' : source === 'claude' ? 'codex' : '';
+    setTargetProjectId(selectedTask.project_id);
+    setTargetWorkspaceId(selectedTask.workspace_id);
+    setForkTitle('');
+    setForkTargetEngineFamily(target);
+    setForkTargetHarnessEngine(target ? FORK_HARNESS_ENGINES_BY_FAMILY[target][0] ?? '' : '');
+    setForkTransferMode('full_transcript');
+    setForkPreview(null);
+    setForkTruncationAcknowledged(false);
+    setForkFullTranscriptConfirmed(false);
+    setForkPreviewError(null);
+    setForkConfirmError(null);
+    advanceForkFlow();
+    operationDialogRef.current = 'fork';
+    forkPreviewRef.current = null;
+    forkPreviewMutation.reset();
+    forkConfirmMutation.reset();
+    setOperationDialog('fork');
+  }, [advanceForkFlow, forkConfirmMutation, forkPreviewMutation, selectedTask]);
+
+  const closeOperationDialog = useCallback(() => {
+    advanceForkFlow();
+    operationDialogRef.current = null;
+    forkPreviewRef.current = null;
+    setOperationDialog(null);
+    setForkPreview(null);
+    setForkTruncationAcknowledged(false);
+    setForkFullTranscriptConfirmed(false);
+    setForkPreviewError(null);
+    setForkConfirmError(null);
+    forkPreviewMutation.reset();
+    forkConfirmMutation.reset();
+  }, [advanceForkFlow, forkConfirmMutation, forkPreviewMutation]);
+
+  const backToForkOptions = useCallback(() => {
+    advanceForkFlow();
+    forkPreviewRef.current = null;
+    setForkPreview(null);
+    setForkTruncationAcknowledged(false);
+    setForkFullTranscriptConfirmed(false);
+    setForkPreviewError(null);
+    setForkConfirmError(null);
+    forkConfirmMutation.reset();
+  }, [advanceForkFlow, forkConfirmMutation]);
 
   const tasksError = extractErrorMessage(tasksQuery.error);
   const detailError = extractErrorMessage(selectedTaskQuery.error);
@@ -437,6 +801,9 @@ function TasksPage() {
   const effectiveMetadataSidebarWidth = drawerView !== 'closed'
     ? metadataSidebarWidth
     : SIDEBAR_COLLAPSED_WIDTH;
+  const forkDialogMatchesSelection = (!forkPreview || forkPreview.source_task_id === effectiveSelectedTaskId)
+    && (!forkPreviewMutation.variables
+      || forkPreviewMutation.variables.sourceTaskId === effectiveSelectedTaskId);
 
   const taskSidebarContent = taskSidebarCollapsed ? null : (
     <div className="flex min-h-0 flex-1 flex-col p-3">
@@ -497,7 +864,7 @@ function TasksPage() {
         tasksError={tasksError}
         searchQuery={taskSearchQuery}
         onSearchQueryChange={setTaskSearchQuery}
-        onSelectTask={selectTask}
+        onSelectTask={selectTaskFromList}
         canRenameTask={(task) => Boolean(
           user
           && (user.role === 'admin' || task.owner_user_id === user.id)
@@ -549,12 +916,7 @@ function TasksPage() {
                     setTargetProjectId(selectedTask.project_id);
                     setOperationDialog('move');
                   }}
-                  onFork={() => {
-                    setTargetProjectId(selectedTask.project_id);
-                    setTargetWorkspaceId(selectedTask.workspace_id);
-                    setForkPrompt('');
-                    setOperationDialog('fork');
-                  }}
+                  onFork={openForkDialog}
                 />
               ) : null}
             />
@@ -616,12 +978,7 @@ function TasksPage() {
                   setTargetProjectId(selectedTask.project_id);
                   setOperationDialog('move');
                 }}
-                onFork={() => {
-                  setTargetProjectId(selectedTask.project_id);
-                  setTargetWorkspaceId(selectedTask.workspace_id);
-                  setForkPrompt('');
-                  setOperationDialog('fork');
-                }}
+                onFork={openForkDialog}
               />
             ) : null}
           />
@@ -654,29 +1011,78 @@ function TasksPage() {
       ) : null}
 
       <Dialog
-        isOpen={operationDialog !== null}
-        onClose={() => setOperationDialog(null)}
+        isOpen={operationDialog !== null && forkDialogMatchesSelection}
+        onClose={closeOperationDialog}
         title={operationDialog === 'move' ? 'Move Task' : 'Fork Task'}
         size="md"
       >
         <div className="space-y-4">
-          <FormField label="Project">
-            <NativeSelect
-              aria-label="Target Project"
-              value={targetProjectId}
-              onChange={(event) => {
-                setTargetProjectId(event.target.value);
-                setTargetWorkspaceId('');
-              }}
-            >
-              <option value="">Select Project</option>
-              {eligibleTargetProjects
-                .map((project) => (
-                  <option key={project.project_id} value={project.project_id}>{project.name}</option>
-                ))}
-            </NativeSelect>
-          </FormField>
-          {operationDialog === 'fork' ? (
+          {operationDialog === 'fork' && forkPreview ? (
+            <>
+              <p className="text-sm font-medium text-[var(--osci-color-text)]">
+                Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.
+              </p>
+              <dl className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-x-4 gap-y-2 rounded-lg border border-[var(--osci-color-border)] bg-[var(--osci-color-surface-subtle)] p-3 text-sm">
+                <dt className="text-[var(--osci-color-text-muted)]">Source engine</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">{forkPreview.source_engine_family}</dd>
+                <dt className="text-[var(--osci-color-text-muted)]">Target engine</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">
+                  {forkPreview.target_engine_family} ({forkPreview.target_harness_engine})
+                </dd>
+                <dt className="text-[var(--osci-color-text-muted)]">Transfer mode</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">{forkPreview.transfer_mode}</dd>
+                <dt className="text-[var(--osci-color-text-muted)]">Target title</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">{forkPreview.target_title}</dd>
+                <dt className="text-[var(--osci-color-text-muted)]">Transcript truncated</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">{forkPreview.truncated ? 'Yes' : 'No'}</dd>
+                <dt className="text-[var(--osci-color-text-muted)]">Preview expires</dt>
+                <dd className="font-medium text-[var(--osci-color-text)]">{forkPreview.expires_at}</dd>
+              </dl>
+              {forkRequiresFullTranscriptConfirmation ? (
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--osci-color-text)]">
+                  <Checkbox
+                    aria-label="Confirm full transcript transfer"
+                    checked={forkFullTranscriptConfirmed}
+                    onCheckedChange={(checked) => setForkFullTranscriptConfirmed(checked === true)}
+                  />
+                  <span>I explicitly confirm transferring the full transcript to the different target engine.</span>
+                </label>
+              ) : null}
+              {forkPreview.truncated ? (
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-[var(--osci-color-text)]">
+                  <Checkbox
+                    aria-label="Acknowledge truncated transcript"
+                    checked={forkTruncationAcknowledged}
+                    onCheckedChange={(checked) => setForkTruncationAcknowledged(checked === true)}
+                  />
+                  <span>I acknowledge that the preview is truncated and the target will receive only the disclosed transfer.</span>
+                </label>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-[var(--osci-color-text)]">
+                Step 1 of 2: generate a preview only. The first click does not create a target Task.
+              </p>
+              <FormField label="Project">
+                <NativeSelect
+                  aria-label="Target Project"
+                  value={targetProjectId}
+                  onChange={(event) => {
+                    setTargetProjectId(event.target.value);
+                    setTargetWorkspaceId('');
+                  }}
+                >
+                  <option value="">Select Project</option>
+                  {eligibleTargetProjects
+                    .map((project) => (
+                      <option key={project.project_id} value={project.project_id}>{project.name}</option>
+                    ))}
+                </NativeSelect>
+              </FormField>
+            </>
+          )}
+          {operationDialog === 'fork' && !forkPreview ? (
             <>
               <FormField label="Workspace">
                 <NativeSelect
@@ -697,33 +1103,100 @@ function TasksPage() {
                     ))}
                 </NativeSelect>
               </FormField>
-              <FormField label="Fork prompt">
+              <FormField label="Target engine family">
+                <NativeSelect
+                  aria-label="Target engine family"
+                  value={forkTargetEngineFamily}
+                  onChange={(event) => {
+                    const family = event.target.value as ForkEngineFamily;
+                    setForkTargetEngineFamily(family);
+                    setForkTargetHarnessEngine(FORK_HARNESS_ENGINES_BY_FAMILY[family]?.[0] ?? '');
+                  }}
+                  disabled={forkTargetEngineOptions.length === 0}
+                >
+                  <option value="">Select target engine</option>
+                  {forkTargetEngineOptions.map((family) => (
+                    <option key={family} value={family}>{family}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+              <FormField label="Target driver">
+                <NativeSelect
+                  aria-label="Target driver"
+                  value={forkTargetHarnessEngine}
+                  onChange={(event) => setForkTargetHarnessEngine(event.target.value as ForkHarnessEngine)}
+                  disabled={forkTargetDrivers.length === 0}
+                >
+                  <option value="">Select target driver</option>
+                  {forkTargetDrivers.map((driver) => (
+                    <option key={driver} value={driver}>{driver}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+              <FormField label="Transfer mode">
+                <NativeSelect
+                  aria-label="Transfer mode"
+                  value={forkTransferMode}
+                  onChange={(event) => setForkTransferMode(event.target.value as ForkTransferMode)}
+                >
+                  <option value="selected_turns">Selected turns</option>
+                  <option value="recent_turns">Recent turns</option>
+                  <option value="full_transcript">Full transcript</option>
+                  <option value="context_only">Context only</option>
+                </NativeSelect>
+              </FormField>
+              <FormField label="Target title">
                 <Textarea
-                  aria-label="Fork prompt"
-                  value={forkPrompt}
-                  onChange={(event) => setForkPrompt(event.target.value)}
-                  placeholder="Optional replacement prompt"
+                  aria-label="Target title"
+                  value={forkTitle}
+                  onChange={(event) => setForkTitle(event.target.value)}
+                  placeholder="Optional title (defaults to Fork of the source Task)"
                 />
               </FormField>
+              {!sourceEngineFamily ? (
+                <p className="text-sm text-[var(--osci-color-danger)]">
+                  The source Task engine is not mapped to a supported Fork engine.
+                </p>
+              ) : null}
             </>
-          ) : (
+          ) : operationDialog === 'move' ? (
             <p className="text-sm text-[var(--osci-color-text-muted)]">
               The Task ID, Workspace, and Turn history remain unchanged. The target Project active Context Version will be pinned.
             </p>
-          )}
+          ) : null}
           {moveMutation.error instanceof Error ? <p className="text-sm text-[var(--osci-color-danger)]">{moveMutation.error.message}</p> : null}
-          {forkMutation.error instanceof Error ? <p className="text-sm text-[var(--osci-color-danger)]">{forkMutation.error.message}</p> : null}
+          {extractErrorMessage(forkPreviewError) ? <p className="text-sm text-[var(--osci-color-danger)]">{extractErrorMessage(forkPreviewError)}</p> : null}
+          {extractErrorMessage(forkConfirmError) ? <p className="text-sm text-[var(--osci-color-danger)]">{extractErrorMessage(forkConfirmError)}</p> : null}
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOperationDialog(null)}>Cancel</Button>
-            <Button
-              onClick={() => operationDialog === 'move' ? moveMutation.mutate() : forkMutation.mutate()}
-              disabled={operationDialog === 'move'
-                ? !targetContextQuery.data?.active_version?.context_version_id
-                : !targetProjectId || !targetWorkspaceId}
-              isLoading={moveMutation.isPending || forkMutation.isPending}
-            >
-              {operationDialog === 'move' ? 'Move Task' : 'Fork Task'}
-            </Button>
+            <Button variant="secondary" onClick={closeOperationDialog}>Cancel</Button>
+            {operationDialog === 'fork' && forkPreview ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={backToForkOptions}
+                >
+                  Back to options
+                </Button>
+                <Button
+                  onClick={startForkConfirm}
+                  disabled={forkConfirmDisabled}
+                  isLoading={forkConfirmMutation.isPending}
+                >
+                  Confirm Fork
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => operationDialog === 'move' ? moveMutation.mutate() : startForkPreview()}
+                disabled={operationDialog === 'move'
+                  ? !targetContextQuery.data?.active_version?.context_version_id
+                  : !targetProjectId || !targetWorkspaceId || !forkTargetEngineFamily || !forkTargetHarnessEngine
+                    || forkTargetEngineFamily === sourceEngineFamily}
+                isLoading={moveMutation.isPending || forkPreviewMutation.isPending}
+              >
+                {operationDialog === 'move' ? 'Move Task' : 'Preview Fork'}
+              </Button>
+            )}
           </div>
         </div>
       </Dialog>

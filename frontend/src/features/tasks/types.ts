@@ -1,4 +1,5 @@
 import type {
+  ForkPreviewResponse,
   TaskCreateRequest,
   TaskSummaryResponse,
   TurnItemResponse,
@@ -12,6 +13,41 @@ export type TaskWorkStatus = 'open' | 'completed' | 'cancelled';
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
+export type ForkEngineFamily = 'codex' | 'claude';
+export type ForkHarnessEngine = HarnessEngine;
+export type ForkTransferMode = 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+
+export type ForkPreview = {
+  preview_id: string;
+  preview_hash: string;
+  source_task_id: string;
+  source_revision: string;
+  source_engine_family: ForkEngineFamily;
+  target_engine_family: ForkEngineFamily;
+  target_project_id: string;
+  target_workspace_id: string;
+  target_harness_engine: ForkHarnessEngine;
+  target_title: string;
+  transfer_mode: ForkTransferMode;
+  truncated: boolean;
+  expires_at: string;
+};
+
+export const FORK_HARNESS_ENGINES_BY_FAMILY: Record<ForkEngineFamily, readonly ForkHarnessEngine[]> = {
+  codex: ['codex-app-server'],
+  claude: ['agent-sdk', 'claude-code'],
+};
+
+export function engineFamilyForHarnessEngine(engine: string): ForkEngineFamily | null {
+  if (engine === 'codex-app-server') return 'codex';
+  if (engine === 'agent-sdk' || engine === 'claude-code') return 'claude';
+  return null;
+}
+
+export function adaptForkPreview(value: ForkPreviewResponse): ForkPreview {
+  return value;
+}
+
 export type TaskCreateInput = {
   projectId: string;
   workspaceId: string;

@@ -8,9 +8,10 @@ from ainrf.api.idempotency import require_idempotency_key
 from ainrf.api.schemas import (
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,
-    ConversationReceiptResponse,
+    ForkConfirmResponse,
     ForkConfirmRequest,
     ForkPreviewRequest,
+    ForkPreviewResponse,
     TurnControlResponse,
     TurnCreateRequest,
     TurnInterruptRequest,
@@ -196,10 +197,10 @@ async def resolve_approval(
         raise _translate(exc) from exc
 
 
-@router.post("/{task_id}/fork-preview", response_model=ConversationReceiptResponse)
+@router.post("/{task_id}/fork-preview", response_model=ForkPreviewResponse)
 async def preview_fork(
     task_id: str, payload: ForkPreviewRequest, request: Request
-) -> ConversationReceiptResponse:
+) -> ForkPreviewResponse:
     try:
         result = _conversation(request).preview_fork(
             task_id,
@@ -215,7 +216,7 @@ async def preview_fork(
             disclosure=payload.disclosure,
             idempotency_key=require_idempotency_key(request),
         )
-        return ConversationReceiptResponse.model_validate(result)
+        return ForkPreviewResponse.model_validate(result)
     except HTTPException:
         raise
     except Exception as exc:
@@ -224,14 +225,14 @@ async def preview_fork(
 
 @router.post(
     "/{task_id}/fork-preview/{preview_id}/confirm",
-    response_model=ConversationReceiptResponse,
+    response_model=ForkConfirmResponse,
 )
 async def confirm_fork(
     task_id: str,
     preview_id: str,
     payload: ForkConfirmRequest,
     request: Request,
-) -> ConversationReceiptResponse:
+) -> ForkConfirmResponse:
     try:
         result = _conversation(request).confirm_fork(
             task_id,
@@ -244,7 +245,7 @@ async def confirm_fork(
             full_transcript_confirmed=payload.full_transcript_confirmed,
             idempotency_key=require_idempotency_key(request),
         )
-        return ConversationReceiptResponse.model_validate(result)
+        return ForkConfirmResponse.model_validate(result)
     except HTTPException:
         raise
     except Exception as exc:

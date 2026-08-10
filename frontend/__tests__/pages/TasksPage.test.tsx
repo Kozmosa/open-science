@@ -1,12 +1,14 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
+import { useNavigate, type NavigateFunction } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TasksPage from '../../src/pages/TasksPage';
 import { createTestQueryClient, renderWithProviders } from '@/test-support/render';
 import type {
   TaskOutputEvent,
   TaskOutputListResponse,
-  TaskSummary,
+  ForkPreview,
   TaskSummary,
 } from '@features/tasks/types';
 import type { EnvironmentRecord } from '@features/environments/types';
@@ -15,7 +17,7 @@ import {
   createTask,
   cancelTask,
   completeTask,
-  forkTask,
+  confirmFork,
   getTask,
   getTaskMessages,
   getTaskOutput,
@@ -23,6 +25,7 @@ import {
   getTaskTurns,
   interruptTurn,
   listCanonicalTaskItems,
+  previewFork,
   retryTask,
   reopenTask,
   updateTask,
@@ -209,6 +212,22 @@ const taskRecord: TaskSummary = {
   },
 };
 
+const forkPreview: ForkPreview = {
+  preview_id: 'preview-task-1',
+  preview_hash: 'preview-hash-task-1',
+  source_task_id: 'task-1',
+  source_revision: 'revision-task-1-1',
+  source_engine_family: 'claude',
+  target_engine_family: 'codex',
+  target_project_id: 'default',
+  target_workspace_id: 'workspace-default',
+  target_harness_engine: 'codex-app-server',
+  target_title: 'Fork of Train model',
+  transfer_mode: 'full_transcript',
+  truncated: false,
+  expires_at: '2026-08-10T23:00:00Z',
+};
+
 function createOutputEvent(
   seq: number,
   overrides: Partial<TaskOutputEvent> = {}
@@ -233,11 +252,31 @@ function createOutputPage(
   };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function NavigableTasksPage({ onReady }: { onReady: (navigate: NavigateFunction) => void }) {
+  const navigate = useNavigate();
+  useEffect(() => onReady(navigate), [navigate, onReady]);
+  return <TasksPage />;
+}
+
 vi.mock('@features/tasks/api', () => ({
   cancelTask: vi.fn(),
   completeTask: vi.fn(),
   createTask: vi.fn(),
-  forkTask: vi.fn(),
+  confirmFork: vi.fn(),
   getTask: vi.fn(),
   getTaskOutput: vi.fn(),
   getTaskMessages: vi.fn(),
@@ -245,6 +284,7 @@ vi.mock('@features/tasks/api', () => ({
   getTaskTurns: vi.fn(),
   interruptTurn: vi.fn(),
   listCanonicalTaskItems: vi.fn(),
+  previewFork: vi.fn(),
   retryTask: vi.fn(),
   reopenTask: vi.fn(),
   updateTask: vi.fn(),
@@ -375,7 +415,8 @@ const mockCreateTask = vi.mocked(createTask);
 const mockCancelTask = vi.mocked(cancelTask);
 const mockCompleteTask = vi.mocked(completeTask);
 const mockUpdateTask = vi.mocked(updateTask);
-const mockForkTask = vi.mocked(forkTask);
+const mockConfirmFork = vi.mocked(confirmFork);
+const mockPreviewFork = vi.mocked(previewFork);
 const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
@@ -404,7 +445,8 @@ beforeEach(() => {
   mockCancelTask.mockReset();
   mockCompleteTask.mockReset();
   mockUpdateTask.mockReset();
-  mockForkTask.mockReset();
+  mockConfirmFork.mockReset();
+  mockPreviewFork.mockReset();
   mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
@@ -522,7 +564,7 @@ describe('TasksPage', () => {
     );
   });
 
-  it('keeps a newly forked Task selected after the Task list refreshes', async () => {
+  it('previews a fork before explicit confirmation and selects the canonical target Task', async () => {
     const user = userEvent.setup();
     const forkedTask = {
       ...taskSummary,
@@ -537,17 +579,392 @@ describe('TasksPage', () => {
     mockGetTask.mockImplementation(async (taskId) => (
       taskId === forkedTask.task_id ? forkedRecord : taskRecord
     ));
-    mockForkTask.mockResolvedValue(forkedTask);
+    mockPreviewFork.mockResolvedValue({
+      ...forkPreview,
+      target_title: 'Forked task',
+    });
+    mockConfirmFork.mockResolvedValue(forkedTask);
 
     renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
 
     await screen.findByRole('heading', { name: 'Train model' });
     await user.click(screen.getByRole('button', { name: 'Task actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
-    await user.click(await screen.findByRole('button', { name: 'Fork Task' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+
+    expect(mockConfirmFork).not.toHaveBeenCalled();
+    expect(await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.')).toBeInTheDocument();
+    expect(screen.getByText('Source engine')).toBeInTheDocument();
+    expect(screen.getByText('codex (codex-app-server)')).toBeInTheDocument();
+    expect(screen.getByText('No')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Fork' }));
 
     expect(await screen.findByRole('heading', { name: 'Forked task' })).toBeInTheDocument();
+    await waitFor(() => expect(mockPreviewFork).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        target_engine_family: 'codex',
+        target_harness_engine: 'codex-app-server',
+        transfer_mode: 'full_transcript',
+      }),
+      expect.stringMatching(/^task\.fork\.preview/),
+    ));
+    await waitFor(() => expect(mockConfirmFork).toHaveBeenCalledWith(
+      'task-1',
+      'preview-task-1',
+      {
+        preview_hash: 'preview-hash-task-1',
+        source_revision: 'revision-task-1-1',
+        transfer_mode: 'full_transcript',
+        truncation_acknowledged: false,
+        full_transcript_confirmed: true,
+      },
+      expect.stringMatching(/^task\.fork\.confirm/),
+    ));
+    expect(mockPreviewFork.mock.calls[0]?.[2]).not.toBe(mockConfirmFork.mock.calls[0]?.[3]);
     await waitFor(() => expect(mockGetTask).toHaveBeenCalledWith('task-forked'));
+  });
+
+  it('invalidates a fork preview when switching from its source Task to another Task', async () => {
+    const user = userEvent.setup();
+    const reviewRecord = { ...taskRecord, ...reviewTaskSummary };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => taskId === 'task-review' ? reviewRecord : taskRecord);
+    mockPreviewFork.mockResolvedValue(forkPreview);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review paper draft', hidden: true }));
+    await screen.findByRole('heading', { name: 'Review paper draft' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument());
+
+    expect(screen.queryByRole('button', { name: 'Confirm Fork' })).not.toBeInTheDocument();
+    expect(mockConfirmFork).not.toHaveBeenCalled();
+  });
+
+  it('ignores a late preview response after switching Tasks while it is in flight', async () => {
+    const user = userEvent.setup();
+    const reviewRecord = { ...taskRecord, ...reviewTaskSummary };
+    const previewRequest = createDeferred<ForkPreview>();
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => taskId === 'task-review' ? reviewRecord : taskRecord);
+    mockPreviewFork.mockReturnValue(previewRequest.promise);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await waitFor(() => expect(mockPreviewFork).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review paper draft', hidden: true }));
+    await screen.findByRole('heading', { name: 'Review paper draft' });
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      previewRequest.resolve(forkPreview);
+      await previewRequest.promise;
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Source engine')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm Fork' })).not.toBeInTheDocument();
+  });
+
+  it('ignores a late preview success after leaving and returning to the same URL entry', async () => {
+    const user = userEvent.setup();
+    const previewRequest = createDeferred<ForkPreview>();
+    const navigateReady = createDeferred<NavigateFunction>();
+    mockPreviewFork.mockReturnValue(previewRequest.promise);
+
+    renderWithProviders(
+      <NavigableTasksPage onReady={navigateReady.resolve} />,
+      { route: '/tasks?task=task-1' },
+    );
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await waitFor(() => expect(mockPreviewFork).toHaveBeenCalledTimes(1));
+
+    const navigate = await navigateReady.promise;
+    act(() => {
+      navigate('/tasks?task=task-review');
+      navigate('/tasks?task=task-1');
+    });
+
+    await act(async () => {
+      previewRequest.resolve(forkPreview);
+      await previewRequest.promise;
+    });
+
+    expect(screen.queryByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Source engine')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Fork Task' })).toBeInTheDocument();
+  });
+
+  it('ignores a late preview error after leaving and returning to the same URL entry', async () => {
+    const user = userEvent.setup();
+    const previewRequest = createDeferred<ForkPreview>();
+    const navigateReady = createDeferred<NavigateFunction>();
+    const lateError = new Error('late preview failure');
+    mockPreviewFork.mockReturnValue(previewRequest.promise);
+
+    renderWithProviders(
+      <NavigableTasksPage onReady={navigateReady.resolve} />,
+      { route: '/tasks?task=task-1' },
+    );
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await waitFor(() => expect(mockPreviewFork).toHaveBeenCalledTimes(1));
+
+    const navigate = await navigateReady.promise;
+    act(() => {
+      navigate('/tasks?task=task-review');
+      navigate('/tasks?task=task-1');
+    });
+
+    await act(async () => {
+      previewRequest.reject(lateError);
+      await previewRequest.promise.catch(() => undefined);
+    });
+
+    expect(screen.queryByText('late preview failure')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Fork Task' })).toBeInTheDocument();
+  });
+
+  it('does not reopen or overwrite the fork dialog after closing during preview', async () => {
+    const user = userEvent.setup();
+    const previewRequest = createDeferred<ForkPreview>();
+    mockPreviewFork.mockReturnValue(previewRequest.promise);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await waitFor(() => expect(mockPreviewFork).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    await act(async () => {
+      previewRequest.resolve(forkPreview);
+      await previewRequest.promise;
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Source engine')).not.toBeInTheDocument();
+  });
+
+  it('clears preview state when the URL selection changes away and back', async () => {
+    const user = userEvent.setup();
+    const reviewRecord = { ...taskRecord, ...reviewTaskSummary };
+    const navigateReady = createDeferred<NavigateFunction>();
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => taskId === 'task-review' ? reviewRecord : taskRecord);
+    mockPreviewFork.mockResolvedValue(forkPreview);
+
+    renderWithProviders(
+      <NavigableTasksPage onReady={navigateReady.resolve} />,
+      { route: '/tasks?task=task-1' },
+    );
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+
+    const navigate = await navigateReady.promise;
+    act(() => navigate('/tasks?task=task-review'));
+    await screen.findByRole('heading', { name: 'Review paper draft' });
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+
+    act(() => navigate('/tasks?task=task-1'));
+    await screen.findByRole('heading', { name: 'Train model' });
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Source engine')).not.toBeInTheDocument();
+  });
+
+  it('does not navigate to a fork target after switching Tasks during confirmation', async () => {
+    const user = userEvent.setup();
+    const reviewRecord = { ...taskRecord, ...reviewTaskSummary };
+    const confirmationRequest = createDeferred<TaskSummary>();
+    const forkedTask = { ...taskSummary, task_id: 'task-forked', title: 'Forked task', status: 'queued' as const };
+    mockGetTasks.mockResolvedValue({ items: [taskSummary, reviewTaskSummary] });
+    mockGetTask.mockImplementation(async (taskId) => taskId === 'task-review' ? reviewRecord : taskRecord);
+    mockPreviewFork.mockResolvedValue(forkPreview);
+    mockConfirmFork.mockReturnValue(confirmationRequest.promise);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Fork' }));
+    await waitFor(() => expect(mockConfirmFork).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review paper draft', hidden: true }));
+    await screen.findByRole('heading', { name: 'Review paper draft' });
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      confirmationRequest.resolve(forkedTask);
+      await confirmationRequest.promise;
+    });
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Review paper draft' })).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Forked task' })).not.toBeInTheDocument();
+    expect(mockGetTask).not.toHaveBeenCalledWith('task-forked');
+  });
+
+  it('does not navigate to a fork target after leaving and returning to the same URL entry during confirmation', async () => {
+    const user = userEvent.setup();
+    const confirmationRequest = createDeferred<TaskSummary>();
+    const navigateReady = createDeferred<NavigateFunction>();
+    const forkedTask = { ...taskSummary, task_id: 'task-forked', title: 'Forked task', status: 'queued' as const };
+    mockPreviewFork.mockResolvedValue(forkPreview);
+    mockConfirmFork.mockReturnValue(confirmationRequest.promise);
+
+    renderWithProviders(
+      <NavigableTasksPage onReady={navigateReady.resolve} />,
+      { route: '/tasks?task=task-1' },
+    );
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Fork' }));
+    await waitFor(() => expect(mockConfirmFork).toHaveBeenCalledTimes(1));
+
+    const navigate = await navigateReady.promise;
+    act(() => {
+      navigate('/tasks?task=task-review');
+      navigate('/tasks?task=task-1');
+    });
+
+    await act(async () => {
+      confirmationRequest.resolve(forkedTask);
+      await confirmationRequest.promise;
+    });
+
+    expect(screen.getByRole('dialog', { name: 'Fork Task' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Forked task' })).not.toBeInTheDocument();
+    expect(mockGetTask).not.toHaveBeenCalledWith('task-forked');
+  });
+
+  it('does not navigate or reopen after closing during confirmation', async () => {
+    const user = userEvent.setup();
+    const confirmationRequest = createDeferred<TaskSummary>();
+    const forkedTask = { ...taskSummary, task_id: 'task-forked', title: 'Forked task', status: 'queued' as const };
+    mockPreviewFork.mockResolvedValue(forkPreview);
+    mockConfirmFork.mockReturnValue(confirmationRequest.promise);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Fork' }));
+    await waitFor(() => expect(mockConfirmFork).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    await act(async () => {
+      confirmationRequest.resolve(forkedTask);
+      await confirmationRequest.promise;
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Forked task' })).not.toBeInTheDocument();
+    expect(mockGetTask).not.toHaveBeenCalledWith('task-forked');
+  });
+
+  it('cancels a fork preview without confirming or creating a Task', async () => {
+    const user = userEvent.setup();
+    mockPreviewFork.mockResolvedValue(forkPreview);
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await screen.findByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(mockConfirmFork).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Fork Task' })).not.toBeInTheDocument();
+  });
+
+  it('requires truncation acknowledgement and full-transcript confirmation', async () => {
+    const user = userEvent.setup();
+    mockPreviewFork.mockResolvedValue({ ...forkPreview, truncated: true });
+    mockConfirmFork.mockResolvedValue({ ...taskSummary, task_id: 'task-forked' });
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm Fork' });
+    expect(confirmButton).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    expect(confirmButton).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'Acknowledge truncated transcript' }));
+    await user.click(confirmButton);
+
+    await waitFor(() => expect(mockConfirmFork).toHaveBeenCalledWith(
+      'task-1',
+      'preview-task-1',
+      expect.objectContaining({
+        truncation_acknowledged: true,
+        full_transcript_confirmed: true,
+      }),
+      expect.stringMatching(/^task\.fork\.confirm/),
+    ));
+  });
+
+  it('keeps stale confirmation errors inside the fork dialog', async () => {
+    const user = userEvent.setup();
+    mockPreviewFork.mockResolvedValue(forkPreview);
+    mockConfirmFork.mockRejectedValue(new Error('Fork confirmation failed with 409: preview is stale'));
+
+    renderWithProviders(<TasksPage />, { route: '/tasks?task=task-1' });
+
+    await screen.findByRole('heading', { name: 'Train model' });
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fork Task…' }));
+    await user.click(await screen.findByRole('button', { name: 'Preview Fork' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Confirm full transcript transfer' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Fork' }));
+
+    expect(await screen.findByText('Fork confirmation failed with 409: preview is stale')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 2: review this preview and explicitly confirm. No target Task was created by the preview.')).toBeInTheDocument();
+    expect(mockConfirmFork).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes the same Task conversation caches after retry', async () => {

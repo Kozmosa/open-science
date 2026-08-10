@@ -218,13 +218,6 @@ export type ComponentHealth = {
 };
 
 /**
- * ConversationReceiptResponse
- */
-export type ConversationReceiptResponse = {
-    [key: string]: unknown;
-};
-
-/**
  * ConversationTaskMutationResponse
  */
 export type ConversationTaskMutationResponse = {
@@ -1063,6 +1056,40 @@ export type ForkConfirmRequest = {
 };
 
 /**
+ * ForkConfirmResponse
+ */
+export type ForkConfirmResponse = {
+    /**
+     * Preview Id
+     */
+    preview_id: string;
+    /**
+     * Reserved Turn Id
+     */
+    reserved_turn_id: string;
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Status
+     */
+    status: 'transferred';
+    /**
+     * Submission Id
+     */
+    submission_id: string;
+    /**
+     * Target Task Id
+     */
+    target_task_id: string;
+    /**
+     * Transfer Id
+     */
+    transfer_id: string;
+};
+
+/**
  * ForkPreviewRequest
  */
 export type ForkPreviewRequest = {
@@ -1108,6 +1135,64 @@ export type ForkPreviewRequest = {
     transfer_range?: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * ForkPreviewResponse
+ */
+export type ForkPreviewResponse = {
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Preview Hash
+     */
+    preview_hash: string;
+    /**
+     * Preview Id
+     */
+    preview_id: string;
+    /**
+     * Source Engine Family
+     */
+    source_engine_family: 'codex' | 'claude';
+    /**
+     * Source Revision
+     */
+    source_revision: string;
+    /**
+     * Source Task Id
+     */
+    source_task_id: string;
+    /**
+     * Target Engine Family
+     */
+    target_engine_family: 'codex' | 'claude';
+    /**
+     * Target Harness Engine
+     */
+    target_harness_engine: 'codex-app-server' | 'agent-sdk' | 'claude-code';
+    /**
+     * Target Project Id
+     */
+    target_project_id: string;
+    /**
+     * Target Title
+     */
+    target_title: string;
+    /**
+     * Target Workspace Id
+     */
+    target_workspace_id: string;
+    /**
+     * Transfer Mode
+     */
+    transfer_mode: 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+    /**
+     * Truncated
+     */
+    truncated: boolean;
 };
 
 /**
@@ -7506,7 +7591,7 @@ export type PostApiTasksTaskIdForkPreviewResponses = {
     /**
      * Successful Response
      */
-    200: ConversationReceiptResponse;
+    200: ForkPreviewResponse;
 };
 
 export type PostApiTasksTaskIdForkPreviewResponse = PostApiTasksTaskIdForkPreviewResponses[keyof PostApiTasksTaskIdForkPreviewResponses];
@@ -7540,7 +7625,7 @@ export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses = {
     /**
      * Successful Response
      */
-    200: ConversationReceiptResponse;
+    200: ForkConfirmResponse;
 };
 
 export type PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponse = PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses[keyof PostApiTasksTaskIdForkPreviewPreviewIdConfirmResponses];

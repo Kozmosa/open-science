@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
-from ainrf.api.schemas import TaskSummaryResponse
+from ainrf.api.schemas import ForkConfirmResponse, ForkPreviewResponse, TaskSummaryResponse
 from ainrf.auth.service import AuthService
 from ainrf.domain import ConversationApplicationService, ProjectContextService
 from tests.testutil import CURRENT_ARTIFACT_SHA, prepare_current_test_state
@@ -333,3 +333,87 @@ async def test_task_mutation_responses_use_strict_projection_for_create_and_fork
             "item_count",
             "binding",
         }.isdisjoint(task)
+
+
+@pytest.mark.anyio
+async def test_task_fork_preview_is_read_only_and_confirm_returns_canonical_target(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    ids = _seed_frontend_contract(app, state_root)
+    headers = {"X-API-Key": _API_KEY}
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        listed_before = await client.get("/api/tasks", headers=headers)
+        source = next(
+            item
+            for item in listed_before.json()["items"]
+            if item["project_id"] == ids["project_id"]
+        )
+        source_task_id = str(source["task_id"])
+        preview_response = await client.post(
+            f"/api/tasks/{source_task_id}/fork-preview",
+            headers={**headers, "Idempotency-Key": "fork-preview-contract"},
+            json={
+                "target_engine_family": "codex",
+                "target_harness_engine": "codex-app-server",
+                "target_project_id": ids["project_id"],
+                "target_workspace_id": ids["workspace_id"],
+                "target_title": "Cross-engine contract fork",
+                "transfer_mode": "context_only",
+                "transfer_range": {},
+                "metrics": {},
+                "disclosure": {"caller": "frontend-contract"},
+            },
+        )
+        listed_after_preview = await client.get("/api/tasks", headers=headers)
+        preview = ForkPreviewResponse.model_validate(preview_response.json())
+        confirm_response = await client.post(
+            f"/api/tasks/{source_task_id}/fork-preview/{preview.preview_id}/confirm",
+            headers={**headers, "Idempotency-Key": "fork-confirm-contract"},
+            json={
+                "preview_hash": preview.preview_hash,
+                "source_revision": preview.source_revision,
+                "transfer_mode": preview.transfer_mode,
+                "truncation_acknowledged": False,
+                "full_transcript_confirmed": False,
+            },
+        )
+        confirmed = ForkConfirmResponse.model_validate(confirm_response.json())
+        target = await client.get(f"/api/tasks/{confirmed.target_task_id}", headers=headers)
+        listed_after_confirm = await client.get("/api/tasks", headers=headers)
+        relationships = await client.get(
+            f"/api/domain/projects/{ids['project_id']}/task-relationships",
+            headers=headers,
+        )
+
+    assert listed_before.status_code == 200
+    assert preview_response.status_code == 200
+    assert listed_after_preview.status_code == 200
+    assert len(listed_after_preview.json()["items"]) == len(listed_before.json()["items"])
+    assert preview.source_task_id == source_task_id
+    assert preview.source_engine_family == "claude"
+    assert preview.target_engine_family == "codex"
+    assert preview.target_harness_engine == "codex-app-server"
+    assert preview.transfer_mode == "context_only"
+    assert confirm_response.status_code == 200
+    assert confirmed.status == "transferred"
+    assert target.status_code == 200
+    target_projection = TaskSummaryResponse.model_validate(target.json())
+    assert target_projection.task_id == confirmed.target_task_id
+    assert target_projection.harness_engine == "codex-app-server"
+    assert target_projection.title == "Cross-engine contract fork"
+    assert listed_after_confirm.status_code == 200
+    assert len(listed_after_confirm.json()["items"]) == len(listed_before.json()["items"]) + 1
+    assert relationships.status_code == 200
+    assert any(
+        {
+            "source_task_id": confirmed.target_task_id,
+            "target_task_id": source_task_id,
+            "relationship_type": "derived_from",
+        }.items()
+        <= item.items()
+        for item in relationships.json()["items"]
+    )

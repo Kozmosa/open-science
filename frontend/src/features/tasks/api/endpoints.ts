@@ -4,6 +4,7 @@ import {
   adaptTaskList,
   adaptTaskTurn,
   adaptTaskTurnItem,
+  adaptForkPreview,
   toTaskCreateRequest,
 } from '../types';
 import type {
@@ -11,6 +12,7 @@ import type {
   TaskEdgeListResponse,
   TaskListResponse,
   TaskCreateInput,
+  ForkPreview,
   TaskSummary,
   TaskTurnItem,
   TaskTurnItemListResponse,
@@ -18,8 +20,11 @@ import type {
 } from '../types';
 import type {
   ConversationTaskMutationResponse,
+  ForkConfirmRequest,
+  ForkConfirmResponse,
+  ForkPreviewRequest,
+  ForkPreviewResponse,
   TaskCreateRequest,
-  TaskForkRequest,
   TaskListResponse as TransportTaskListResponse,
   TaskMoveRequest,
   TaskRelationshipCreateRequest,
@@ -149,15 +154,28 @@ export const moveTask = (
   headers: { 'Idempotency-Key': key },
 }).then(adaptTask);
 
-export const forkTask = async (
+export const previewFork = (
   taskId: string,
-  payload: TaskForkRequest,
+  payload: ForkPreviewRequest,
+  key: string,
+): Promise<ForkPreview> => api.post<ForkPreviewResponse>(`/tasks/${taskId}/fork-preview`, payload, {
+  headers: { 'Idempotency-Key': key },
+}).then(adaptForkPreview);
+
+export const confirmFork = async (
+  taskId: string,
+  previewId: string,
+  payload: ForkConfirmRequest,
   key: string,
 ): Promise<TaskSummary> => {
-  const response = await api.post<ConversationTaskMutationResponse>(`/tasks/${taskId}/fork`, payload, {
-    headers: { 'Idempotency-Key': key },
-  });
-  return adaptTask(response.task);
+  const response = await api.post<ForkConfirmResponse>(
+    `/tasks/${taskId}/fork-preview/${previewId}/confirm`,
+    payload,
+    {
+      headers: { 'Idempotency-Key': key },
+    },
+  );
+  return getTask(response.target_task_id);
 };
 
 export const updateTask = (
