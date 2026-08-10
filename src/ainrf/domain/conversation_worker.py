@@ -22,6 +22,7 @@ from ainrf.domain.conversation_execution import (
     SubmissionClaim,
 )
 from ainrf.domain.overview_jobs import OverviewSnapshotPlanner
+from ainrf.domain.service import DomainConflictError
 from ainrf.domain_control import (
     DomainMaintenanceService,
     DomainWriteParticipant,
@@ -213,6 +214,7 @@ class ConversationDispatcher:
             raise RuntimeError("Tenant lacks Workspace permissions")
 
     async def run_once(self) -> bool:
+        self._execution.recover_stale_control_delivery()
         claim = self._execution.claim_next_submission()
         if claim is None:
             return False
@@ -220,6 +222,16 @@ class ConversationDispatcher:
         try:
             context = self._context_factory(claim)
             adapter = self._adapter_factory(context.engine_type)
+        except asyncio.CancelledError:
+            self._execution.mark_delivery_unknown(
+                claim.submission_id,
+                failure_code="worker_cancelled_before_acceptance",
+                evidence={
+                    "source": "worker_setup",
+                    "replay_forbidden": True,
+                },
+            )
+            raise
         except Exception as exc:
             self._execution.mark_delivery_unknown(
                 claim.submission_id,
@@ -280,13 +292,20 @@ class ConversationDispatcher:
                 )
 
         run = asyncio.create_task(adapter.start_turn(context, emit))
+        cancelled_by_caller = False
         try:
             while not run.done():
                 await self._consume_controls(adapter, claim, execution)
                 await asyncio.sleep(0.05)
             await run
         except asyncio.CancelledError:
+            current_task = asyncio.current_task()
+            cancelled_by_caller = current_task is not None and current_task.cancelling() > 0
             terminal_status = TurnStatus.INTERRUPTED
+            if not run.done():
+                run.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await run
         except Exception:
             terminal_status = TurnStatus.FAILED
             failure_code = failure_code or "runtime_error"
@@ -296,6 +315,8 @@ class ConversationDispatcher:
                 failure_code="provider_acceptance_unproven",
                 evidence={"source": "runtime_adapter", "replay_forbidden": True},
             )
+            if cancelled_by_caller:
+                raise asyncio.CancelledError
             return True
         terminal_status = terminal_status or TurnStatus.COMPLETED
         self._execution.finish_execution(
@@ -304,6 +325,8 @@ class ConversationDispatcher:
             failure_code=failure_code,
             evidence={"source": "engine_terminal"},
         )
+        if cancelled_by_caller:
+            raise asyncio.CancelledError
         return True
 
     async def _consume_controls(
@@ -321,33 +344,127 @@ class ConversationDispatcher:
             if kind == "steer":
                 text = payload.get("text") if isinstance(payload, Mapping) else None
                 if not isinstance(text, str):
+                    with suppress(DomainConflictError):
+                        self._execution.transition_control(
+                            control_id,
+                            expected_status="requested",
+                            status="rejected",
+                            evidence={"reason": "steer text is missing"},
+                            failure_code="invalid_control_payload",
+                        )
+                    continue
+                try:
                     self._execution.transition_control(
                         control_id,
                         expected_status="requested",
-                        status="rejected",
-                        evidence={"reason": "steer text is missing"},
-                        failure_code="invalid_control_payload",
+                        status="delivering",
+                        evidence={"source": "worker", "phase": "control_delivery"},
                     )
+                except DomainConflictError:
                     continue
-                receipt = await adapter.steer_turn(
-                    task_id=claim.task_id,
-                    expected_turn_id=execution.turn_id,
-                    text=text,
-                    runtime_launch_key=claim.submission_id,
-                )
-            else:
+                try:
+                    receipt = await adapter.steer_turn(
+                        task_id=claim.task_id,
+                        expected_turn_id=execution.turn_id,
+                        text=text,
+                        runtime_launch_key=claim.submission_id,
+                    )
+                except asyncio.CancelledError:
+                    with suppress(DomainConflictError):
+                        self._execution.transition_control(
+                            control_id,
+                            expected_status="delivering",
+                            status="delivery_unknown",
+                            evidence={
+                                "source": "runtime_adapter",
+                                "phase": "control_delivery",
+                                "reason": "adapter_cancelled",
+                                "replay_forbidden": True,
+                            },
+                            failure_code="adapter_cancelled",
+                        )
+                    raise
+                except Exception as exc:
+                    with suppress(DomainConflictError):
+                        self._execution.transition_control(
+                            control_id,
+                            expected_status="delivering",
+                            status="delivery_unknown",
+                            evidence={
+                                "source": "runtime_adapter",
+                                "phase": "control_delivery",
+                                "error_type": type(exc).__name__,
+                                "replay_forbidden": True,
+                            },
+                            failure_code="adapter_error",
+                        )
+                    continue
+                try:
+                    self._execution.transition_control(
+                        control_id,
+                        expected_status="delivering",
+                        status="accepted" if receipt.accepted else "rejected",
+                        evidence=dict(receipt.evidence),
+                        failure_code=None if receipt.accepted else "capability_unsupported",
+                    )
+                except DomainConflictError:
+                    continue
+                continue
+
+            claim_id = uuid4().hex
+            try:
+                if not self._execution.claim_interrupt(control_id, claim_id=claim_id):
+                    continue
+            except DomainConflictError:
+                continue
+            try:
                 receipt = await adapter.interrupt_turn(
                     task_id=claim.task_id,
                     expected_turn_id=execution.turn_id,
                     runtime_launch_key=claim.submission_id,
                 )
-            self._execution.transition_control(
-                control_id,
-                expected_status="requested",
-                status="accepted" if receipt.accepted else "rejected",
-                evidence=dict(receipt.evidence),
-                failure_code=None if receipt.accepted else "capability_unsupported",
-            )
+            except asyncio.CancelledError:
+                with suppress(DomainConflictError):
+                    self._execution.transition_control(
+                        control_id,
+                        expected_status="requested",
+                        status="delivery_unknown",
+                        evidence={
+                            "source": "runtime_adapter",
+                            "phase": "control_delivery",
+                            "reason": "adapter_cancelled",
+                            "delivery_claim_id": claim_id,
+                            "replay_forbidden": True,
+                        },
+                        failure_code="adapter_cancelled",
+                    )
+                raise
+            except Exception as exc:
+                with suppress(DomainConflictError):
+                    self._execution.transition_control(
+                        control_id,
+                        expected_status="requested",
+                        status="delivery_unknown",
+                        evidence={
+                            "source": "runtime_adapter",
+                            "phase": "control_delivery",
+                            "error_type": type(exc).__name__,
+                            "delivery_claim_id": claim_id,
+                            "replay_forbidden": True,
+                        },
+                        failure_code="adapter_error",
+                    )
+                continue
+            try:
+                self._execution.transition_control(
+                    control_id,
+                    expected_status="requested",
+                    status="accepted" if receipt.accepted else "rejected",
+                    evidence=dict(receipt.evidence),
+                    failure_code=None if receipt.accepted else "capability_unsupported",
+                )
+            except DomainConflictError:
+                continue
 
     @staticmethod
     def _json_string_list(value: object) -> list[str]:

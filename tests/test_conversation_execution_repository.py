@@ -366,11 +366,8 @@ def test_controls_enforce_expected_turn_and_distinguish_interrupt_evidence(
         row = conn.execute("SELECT status, completed_at FROM turn_control_requests").fetchone()
         assert row is not None and tuple(row) == ("accepted", None)
         assert (
-            repository.transition_control_request(
-                control_request_id="interrupt-1",
-                expected_status="accepted",
-                status="completed",
-                evidence_json="{}",
+            repository.complete_accepted_interrupts(
+                runtime_execution_id="execution-1",
                 completed_at=_LATER,
                 updated_at=_LATER,
             )
@@ -382,6 +379,90 @@ def test_controls_enforce_expected_turn_and_distinguish_interrupt_evidence(
         ).fetchone()
         assert completed is not None
         assert tuple(completed) == ('{"rpc_ack":true}', _NOW, _LATER)
+
+        repository.insert_control_request(
+            control_request_id="steer-1",
+            task_id="task-1",
+            expected_turn_id="turn-1",
+            runtime_execution_id="execution-1",
+            runtime_generation=1,
+            kind="steer",
+            actor_user_id="user-1",
+            idempotency_key="steer-key",
+            request_hash="steer-hash",
+            payload_json='{"text":"focus"}',
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        with pytest.raises(sqlite3.IntegrityError, match="invalid Turn Control Request"):
+            repository.transition_control_request(
+                control_request_id="steer-1",
+                expected_status="requested",
+                status="accepted",
+                evidence_json='{"rpc_ack":true}',
+                accepted_at=_NOW,
+                updated_at=_NOW,
+            )
+        assert (
+            repository.transition_control_request(
+                control_request_id="steer-1",
+                expected_status="requested",
+                status="delivering",
+                evidence_json='{"phase":"delivery"}',
+                updated_at=_NOW,
+            )
+            == 1
+        )
+        assert (
+            repository.transition_control_request(
+                control_request_id="steer-1",
+                expected_status="delivering",
+                status="accepted",
+                evidence_json='{"rpc_ack":true}',
+                accepted_at=_LATER,
+                updated_at=_LATER,
+            )
+            == 1
+        )
+
+        repository.insert_control_request(
+            control_request_id="interrupt-claim",
+            task_id="task-1",
+            expected_turn_id="turn-1",
+            runtime_execution_id="execution-1",
+            runtime_generation=1,
+            kind="interrupt",
+            actor_user_id="user-1",
+            idempotency_key="interrupt-claim-key",
+            request_hash="interrupt-claim-hash",
+            payload_json="{}",
+            created_at=_NOW,
+            updated_at=_NOW,
+        )
+        assert (
+            repository.claim_interrupt_request(
+                control_request_id="interrupt-claim",
+                evidence_json='{"delivery_claim_id":"claim-1"}',
+                updated_at=_LATER,
+            )
+            == 1
+        )
+        assert (
+            repository.claim_interrupt_request(
+                control_request_id="interrupt-claim",
+                evidence_json='{"delivery_claim_id":"claim-2"}',
+                updated_at=_LATER,
+            )
+            == 0
+        )
+        claimed = conn.execute(
+            "SELECT status, evidence_json FROM turn_control_requests "
+            "WHERE control_request_id = 'interrupt-claim'"
+        ).fetchone()
+        assert claimed is not None and tuple(claimed) == (
+            "requested",
+            '{"delivery_claim_id":"claim-1"}',
+        )
 
         with pytest.raises(sqlite3.IntegrityError, match="runtime scope is stale"):
             repository.insert_control_request(

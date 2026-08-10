@@ -35,6 +35,14 @@ def _canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
 
 
+def _json_object(value: object) -> dict[str, object]:
+    try:
+        decoded = json.loads(str(value))
+    except (TypeError, ValueError):
+        return {}
+    return dict(decoded) if isinstance(decoded, Mapping) else {}
+
+
 @dataclass(frozen=True, slots=True)
 class SubmissionClaim:
     submission_id: str
@@ -357,6 +365,92 @@ class ConversationExecutionService:
                 dict(row) for row in repository.requested_controls(execution.runtime_execution_id)
             ]
 
+    def claim_interrupt(self, control_request_id: str, *, claim_id: str) -> bool:
+        """Durably serialize one interrupt adapter call.
+
+        Interrupt has no ``delivering`` state in the public contract.  Its
+        requested row therefore carries a durable claim marker while the
+        adapter call is in flight.  A competing worker cannot claim that row,
+        and recovery fences a stale marker as delivery-unknown instead of
+        replaying an external interrupt.
+        """
+
+        if not claim_id.strip():
+            raise ValueError("claim_id must not be empty")
+        claimed_at = _now()
+        evidence = {
+            "delivery_claim_id": claim_id,
+            "delivery_claimed_at": claimed_at,
+        }
+        with closing(connect(self._db_path)) as conn:
+            try:
+                self._begin(conn)
+                repository = SqliteConversationExecutionRepository(conn)
+                row = repository.control_request_by_id(control_request_id)
+                if row is None:
+                    raise DomainNotFoundError(control_request_id)
+                if str(row["kind"]) != "interrupt" or str(row["status"]) != "requested":
+                    conn.commit()
+                    return False
+                claimed = repository.claim_interrupt_request(
+                    control_request_id=control_request_id,
+                    evidence_json=_canonical_json(evidence),
+                    updated_at=claimed_at,
+                )
+                conn.commit()
+                return claimed == 1
+            except BaseException:
+                conn.rollback()
+                raise
+
+    def recover_stale_control_delivery(self, *, stale_after_seconds: float = 30.0) -> int:
+        """Fence controls left in-flight by a crashed worker without replay."""
+
+        if stale_after_seconds <= 0:
+            raise ValueError("stale_after_seconds must be positive")
+        stale_before = (
+            datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+        ).isoformat()
+        recovered_at = _now()
+        recovered = 0
+        with closing(connect(self._db_path)) as conn:
+            try:
+                self._begin(conn)
+                repository = SqliteConversationExecutionRepository(conn)
+                for row in repository.stale_control_requests(stale_before):
+                    current_status = str(row["status"])
+                    kind = str(row["kind"])
+                    evidence = _json_object(row["evidence_json"])
+                    if current_status == "requested" and (
+                        kind != "interrupt" or not evidence.get("delivery_claim_id")
+                    ):
+                        continue
+                    evidence.update(
+                        {
+                            "source": "worker_recovery",
+                            "failure": "control_delivery_stale",
+                            "replay_forbidden": True,
+                        }
+                    )
+                    if (
+                        repository.transition_control_request(
+                            control_request_id=str(row["control_request_id"]),
+                            expected_status=current_status,
+                            status="delivery_unknown",
+                            evidence_json=_canonical_json(evidence),
+                            updated_at=recovered_at,
+                            completed_at=recovered_at,
+                            failure_code="worker_lost_during_control_delivery",
+                        )
+                        == 1
+                    ):
+                        recovered += 1
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return recovered
+
     def transition_control(
         self,
         control_request_id: str,
@@ -394,6 +488,50 @@ class ConversationExecutionService:
                 conn.rollback()
                 raise
 
+    def _reconcile_terminal_controls(
+        self,
+        repository: SqliteConversationExecutionRepository,
+        execution: RuntimeExecutionClaim,
+        *,
+        terminal_status: str,
+        finished_at: str,
+        terminal_evidence: Mapping[str, object],
+    ) -> None:
+        for row in repository.pending_controls(execution.runtime_execution_id):
+            current_status = str(row["status"])
+            kind = str(row["kind"])
+            evidence = _json_object(row["evidence_json"])
+            delivery_unknown = current_status == "delivering" or (
+                kind == "interrupt" and bool(evidence.get("delivery_claim_id"))
+            )
+            status = "delivery_unknown" if delivery_unknown else "rejected"
+            evidence.update(
+                {
+                    "source": "runtime_terminal_reconciliation",
+                    "runtime_status": terminal_status,
+                    "replay_forbidden": delivery_unknown,
+                    "terminal_evidence": dict(terminal_evidence),
+                }
+            )
+            failure_code = (
+                "control_delivery_unknown_runtime_terminal"
+                if delivery_unknown
+                else "runtime_terminal_before_control_delivery"
+            )
+            if (
+                repository.transition_control_request(
+                    control_request_id=str(row["control_request_id"]),
+                    expected_status=current_status,
+                    status=status,
+                    evidence_json=_canonical_json(evidence),
+                    updated_at=finished_at,
+                    completed_at=finished_at,
+                    failure_code=failure_code,
+                )
+                != 1
+            ):
+                raise DomainConflictError("Terminal control reconciliation lost its state race")
+
     def finish_execution(
         self,
         execution: RuntimeExecutionClaim,
@@ -416,6 +554,19 @@ class ConversationExecutionService:
             if row is None:
                 raise DomainNotFoundError(execution.runtime_execution_id)
             if str(row["status"]) == execution_status:
+                if execution_status == "interrupted":
+                    repository.complete_accepted_interrupts(
+                        runtime_execution_id=execution.runtime_execution_id,
+                        completed_at=finished_at,
+                        updated_at=finished_at,
+                    )
+                self._reconcile_terminal_controls(
+                    repository,
+                    execution,
+                    terminal_status=execution_status,
+                    finished_at=finished_at,
+                    terminal_evidence=evidence,
+                )
                 return
             if (
                 repository.transition_runtime_execution(
@@ -430,6 +581,19 @@ class ConversationExecutionService:
                 != 1
             ):
                 raise DomainConflictError("Runtime terminal transition lost its state race")
+            if execution_status == "interrupted":
+                repository.complete_accepted_interrupts(
+                    runtime_execution_id=execution.runtime_execution_id,
+                    completed_at=finished_at,
+                    updated_at=finished_at,
+                )
+            self._reconcile_terminal_controls(
+                repository,
+                execution,
+                terminal_status=execution_status,
+                finished_at=finished_at,
+                terminal_evidence=evidence,
+            )
 
         return self._application.finish_turn(
             execution.task_id,

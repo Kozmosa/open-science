@@ -241,6 +241,26 @@ class SqliteConversationExecutionRepository:
             (runtime_execution_id,),
         ).fetchall()
 
+    def pending_controls(self, runtime_execution_id: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            """
+            SELECT * FROM turn_control_requests
+            WHERE runtime_execution_id = ? AND status IN ('requested', 'delivering')
+            ORDER BY created_at, control_request_id
+            """,
+            (runtime_execution_id,),
+        ).fetchall()
+
+    def stale_control_requests(self, stale_before: str) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            """
+            SELECT * FROM turn_control_requests
+            WHERE updated_at < ? AND status IN ('requested', 'delivering')
+            ORDER BY updated_at, control_request_id
+            """,
+            (stale_before,),
+        ).fetchall()
+
     def approval_by_id(self, approval_id: str) -> sqlite3.Row | None:
         return self._conn.execute(
             "SELECT * FROM runtime_approval_requests WHERE approval_id = ?",
@@ -390,6 +410,34 @@ class SqliteConversationExecutionRepository:
             ),
         )
 
+    def control_request_by_id(self, control_request_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM turn_control_requests WHERE control_request_id = ?",
+            (control_request_id,),
+        ).fetchone()
+
+    def claim_interrupt_request(
+        self,
+        *,
+        control_request_id: str,
+        evidence_json: str,
+        updated_at: str,
+    ) -> int:
+        return self._conn.execute(
+            """
+            UPDATE turn_control_requests
+            SET evidence_json = ?, updated_at = ?
+            WHERE control_request_id = ?
+              AND kind = 'interrupt'
+              AND status = 'requested'
+              AND evidence_json = '{}'
+              AND accepted_at IS NULL
+              AND completed_at IS NULL
+              AND failure_code IS NULL
+            """,
+            (evidence_json, updated_at, control_request_id),
+        ).rowcount
+
     def transition_control_request(
         self,
         *,
@@ -423,6 +471,31 @@ class SqliteConversationExecutionRepository:
                 control_request_id,
                 expected_status,
             ),
+        ).rowcount
+
+    def complete_accepted_interrupts(
+        self,
+        *,
+        runtime_execution_id: str,
+        completed_at: str,
+        updated_at: str,
+    ) -> int:
+        """Complete accepted interrupt controls with terminal runtime evidence.
+
+        An interrupt acknowledgement only proves that the provider accepted the
+        request.  The control becomes durable ``completed`` evidence in the same
+        transaction that records the interrupted RuntimeExecution/Turn.
+        """
+
+        return self._conn.execute(
+            """
+            UPDATE turn_control_requests
+            SET status = 'completed', completed_at = ?, updated_at = ?
+            WHERE runtime_execution_id = ?
+              AND kind = 'interrupt'
+              AND status = 'accepted'
+            """,
+            (completed_at, updated_at, runtime_execution_id),
         ).rowcount
 
     def insert_approval_request(
