@@ -805,13 +805,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_skills_skill_id_preview": {
-    "method": "GET",
-    "path": "/api/skills/{skill_id}/preview",
-    "clientPath": "/skills/{skill_id}/preview",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_tasks": {
     "method": "GET",
     "path": "/api/tasks",

@@ -24,10 +24,10 @@ def test_load_from_directory_success(tmp_path: Path) -> None:
         "author": "tester",
         "dependencies": ["dep1", "dep2"],
         "inject_mode": "prompt_only",
-        "settings_fragment": {"key": "value"},
-        "mcp_servers": ["server1"],
-        "hooks": ["hook1"],
-        "allowed_agents": ["agent1"],
+        "settings_fragment": {"legacy": True},
+        "mcp_servers": ["legacy-server"],
+        "hooks": ["legacy-hook"],
+        "allowed_agents": ["legacy-agent"],
     }
     (skill_dir / "skill.json").write_text(json.dumps(skill_data))
     (skill_dir / "SKILL.md").write_text("# My Skill\n\nThis is my skill.\n")
@@ -42,10 +42,10 @@ def test_load_from_directory_success(tmp_path: Path) -> None:
     assert result.author == "tester"
     assert result.dependencies == ["dep1", "dep2"]
     assert result.inject_mode == InjectMode.PROMPT_ONLY
-    assert result.settings_fragment == {"key": "value"}
-    assert result.mcp_servers == ["server1"]
-    assert result.hooks == ["hook1"]
-    assert result.allowed_agents == ["agent1"]
+    assert not hasattr(result, "settings_fragment")
+    assert not hasattr(result, "mcp_servers")
+    assert not hasattr(result, "hooks")
+    assert not hasattr(result, "allowed_agents")
 
 
 def test_load_from_directory_missing_json(tmp_path: Path) -> None:

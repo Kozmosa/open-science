@@ -5,6 +5,7 @@ import {
   getDeploymentVersion,
   getFrontendBuildVersion,
   getSearchSettings,
+  getSkillDetail,
   getSkillRegistries,
   getSkills,
 } from '@features/settings/api';
@@ -42,6 +43,7 @@ vi.mock('@features/settings/api', () => ({
   getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getDeploymentVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
   getFrontendBuildVersion: vi.fn(() => Promise.resolve({ short_commit: 'abc123', committed_at: '20260612-2004' })),
+  getSkillDetail: vi.fn(),
   getSkillRegistries: vi.fn(),
   getSkills: vi.fn(),
   getSearchSettings: vi.fn(() => Promise.resolve({
@@ -78,6 +80,7 @@ const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetSkills = vi.mocked(getSkills);
 const mockGetDeploymentVersion = vi.mocked(getDeploymentVersion);
 const mockGetFrontendBuildVersion = vi.mocked(getFrontendBuildVersion);
+const mockGetSkillDetail = vi.mocked(getSkillDetail);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetWorkspaces = vi.mocked(getWorkspaces);
 
@@ -119,6 +122,7 @@ beforeEach(() => {
   mockGetDeploymentVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
   mockGetFrontendBuildVersion.mockReset();
   mockGetFrontendBuildVersion.mockResolvedValue({ short_commit: 'abc123', committed_at: '20260612-2004' });
+  mockGetSkillDetail.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
   mockGetSkillRegistries.mockReset();
@@ -143,6 +147,48 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
+  it('shows only runtime-backed skill metadata in repository details', async () => {
+    mockGetSkills.mockResolvedValue({
+      items: [{
+        skill_id: 'runtime-skill',
+        label: 'Runtime Skill',
+        description: 'Mounted by the runtime adapter.',
+        inject_mode: 'prompt_only',
+        dependencies: ['dependency-skill'],
+        package: 'test-package',
+      }],
+    });
+    mockGetSkillDetail.mockResolvedValue({
+      skill_id: 'runtime-skill',
+      label: 'Runtime Skill',
+      description: 'Mounted by the runtime adapter.',
+      version: '1.2.3',
+      author: 'tester',
+      dependencies: ['dependency-skill'],
+      inject_mode: 'prompt_only',
+      skill_md: '# Runtime Skill',
+      package: 'test-package',
+    });
+
+    renderWithProviders(<SettingsPage />, { locale: 'en' });
+
+    const repositoryHeading = await screen.findByRole('heading', { name: 'Skill Repository' });
+    const repositoryCard =
+      repositoryHeading.closest('section') ??
+      repositoryHeading.parentElement?.parentElement?.parentElement;
+    if (!repositoryCard) throw new Error('Missing skill repository card');
+    fireEvent.click(
+      await within(repositoryCard).findByRole('button', { name: /Runtime Skill runtime-skill/ })
+    );
+
+    expect(await within(repositoryCard).findByText('# Runtime Skill')).toBeInTheDocument();
+    expect(within(repositoryCard).getByText('dependency-skill')).toBeInTheDocument();
+    expect(within(repositoryCard).queryByText('Preview Settings')).not.toBeInTheDocument();
+    expect(within(repositoryCard).queryByText('MCP Servers')).not.toBeInTheDocument();
+    expect(within(repositoryCard).queryByText('Hooks')).not.toBeInTheDocument();
+    expect(within(repositoryCard).queryByText('Allowed Agents')).not.toBeInTheDocument();
+  });
+
   it('renders localized settings copy without mixing CJK into English', async () => {
     const { unmount } = renderWithProviders(<SettingsPage />, {
       locale: 'en',

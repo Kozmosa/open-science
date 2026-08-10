@@ -486,21 +486,8 @@ class SkillDetailResponse(BaseModel):
     author: str
     dependencies: list[str] = Field(default_factory=list)
     inject_mode: str
-    settings_fragment: dict[str, Any] = Field(default_factory=dict)
-    mcp_servers: list[str] = Field(default_factory=list)
-    hooks: list[str] = Field(default_factory=list)
-    allowed_agents: list[str] = Field(default_factory=list)
     skill_md: str | None = None
     package: str | None = None
-
-
-class SkillPreviewResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    skill_id: str
-    label: str
-    settings_fragment: dict[str, Any] = Field(default_factory=dict)
-    merged_preview: dict[str, Any] = Field(default_factory=dict)
 
 
 class SkillImportRequest(BaseModel):

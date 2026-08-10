@@ -10,7 +10,6 @@ import type {
   SkillImportRequest,
   SkillImportResponse as TransportSkillImportResponse,
   SkillItemResponse,
-  SkillPreviewResponse,
   SkillRegistryInstallResponse as TransportSkillRegistryInstallResponse,
   SkillRegistryItemResponse,
   SkillRegistryStatusResponse,
@@ -125,8 +124,7 @@ export type SettingsRecoveryReason = 'invalid_document' | 'unsupported_version';
 export type CodexDefaults = CodexDefaultsResponse;
 export type SkillItem = SkillItemResponse & { description: string | null; dependencies: string[]; inject_mode: 'auto' | 'prompt_only' | 'disabled'; package?: string };
 export type SkillListResponse = { items: SkillItem[] };
-export type SkillDetail = SkillDetailResponse & { description: string | null; dependencies: string[]; hooks: string[]; allowed_agents: string[]; mcp_servers: string[]; settings_fragment: Record<string, unknown>; skill_md: string | null; package?: string };
-export type SkillPreview = SkillPreviewResponse & { settings_fragment: Record<string, unknown>; merged_preview: Record<string, unknown> };
+export type SkillDetail = SkillDetailResponse & { description: string | null; dependencies: string[]; skill_md: string | null; package?: string };
 export type SkillImportResponse = TransportSkillImportResponse;
 export type SkillImportInput = {
   source: 'git' | 'local';
@@ -180,17 +178,9 @@ export function adaptSkillDetail(value: SkillDetailResponse): SkillDetail {
     ...value,
     description: value.description ?? null,
     dependencies: value.dependencies ?? [],
-    hooks: value.hooks ?? [],
-    allowed_agents: value.allowed_agents ?? [],
-    mcp_servers: value.mcp_servers ?? [],
-    settings_fragment: value.settings_fragment ?? {},
     skill_md: value.skill_md ?? null,
     package: value.package ?? undefined,
   };
-}
-
-export function adaptSkillPreview(value: SkillPreviewResponse): SkillPreview {
-  return { ...value, settings_fragment: value.settings_fragment ?? {}, merged_preview: value.merged_preview ?? {} };
 }
 
 export function adaptSkillRegistries(value: { items: SkillRegistryItemResponse[] }): SkillRegistryListResponse {

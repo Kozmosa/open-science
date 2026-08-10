@@ -16,10 +16,8 @@ from ainrf.api.schemas import (
     SkillImportResponse,
     SkillItemResponse,
     SkillListResponse,
-    SkillPreviewResponse,
 )
 from ainrf.skills import SkillsDiscoveryService
-from ainrf.skills.merge import deep_merge_settings
 
 logger = logging.getLogger(__name__)
 
@@ -76,34 +74,8 @@ async def get_skill_detail(request: Request, skill_id: str) -> SkillDetailRespon
         author=skill.author,
         dependencies=list(skill.dependencies),
         inject_mode=skill.inject_mode.value,
-        settings_fragment=dict(skill.settings_fragment),
-        mcp_servers=list(skill.mcp_servers),
-        hooks=list(skill.hooks),
-        allowed_agents=list(skill.allowed_agents),
         skill_md=skill_md,
         package=skill.package,
-    )
-
-
-@router.get("/{skill_id}/preview", response_model=SkillPreviewResponse)
-async def preview_skill_settings(request: Request, skill_id: str) -> SkillPreviewResponse:
-    """Return the skill's settings fragment and a merged preview."""
-    service = _get_skills_discovery_service(request)
-    skills = service.discover_full()
-    skill = next((s for s in skills if s.skill_id == skill_id), None)
-    if skill is None:
-        raise HTTPException(status_code=404, detail="Skill not found")
-
-    merged_preview = deep_merge_settings(
-        {"permissionMode": "bypassPermissions"},
-        skill.settings_fragment,
-    )
-
-    return SkillPreviewResponse(
-        skill_id=skill.skill_id,
-        label=skill.label,
-        settings_fragment=dict(skill.settings_fragment),
-        merged_preview=merged_preview,
     )
 
 

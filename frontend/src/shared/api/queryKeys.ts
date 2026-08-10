@@ -80,7 +80,6 @@ export const queryKeys = {
   skills: {
     all: ['skills'] as const,
     detail: (skillId: string | null) => ['skillDetail', skillId] as const,
-    preview: (skillId: string | null) => ['skillPreview', skillId] as const,
     registries: ['skillRegistries'] as const,
   },
 

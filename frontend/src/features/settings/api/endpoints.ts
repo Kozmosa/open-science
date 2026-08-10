@@ -10,7 +10,6 @@ import type {
   SkillImportInput,
   SkillImportResponse,
   SkillListResponse,
-  SkillPreview,
   SkillRegistryInstallResponse,
   SkillRegistryListResponse,
   SkillRegistryStatus,
@@ -21,7 +20,6 @@ import type {
 import {
   adaptSkillDetail,
   adaptSkillList,
-  adaptSkillPreview,
   adaptSkillRegistries,
   adaptSkillRegistryStatus,
   toSkillImportRequest,
@@ -34,7 +32,6 @@ import type {
   EnvironmentAccessListResponse,
   SkillDetailResponse,
   SkillListResponse as TransportSkillListResponse,
-  SkillPreviewResponse,
   SkillRegistryListResponse as TransportSkillRegistryListResponse,
   SkillRegistryStatusResponse,
 } from '@/generated/transport';
@@ -49,8 +46,6 @@ import type {
 export const getSkills = (): Promise<SkillListResponse> => api.get<TransportSkillListResponse>('/skills').then(adaptSkillList);
 export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
   api.get<SkillDetailResponse>(`/skills/${skillId}`).then(adaptSkillDetail);
-export const previewSkillSettings = (skillId: string): Promise<SkillPreview> =>
-  api.get<SkillPreviewResponse>(`/skills/${skillId}/preview`).then(adaptSkillPreview);
 export const importSkill = (payload: SkillImportInput): Promise<SkillImportResponse> =>
   api.post('/skills/import', toSkillImportRequest(payload));
 

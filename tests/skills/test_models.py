@@ -21,10 +21,6 @@ def test_skill_definition_from_json():
         "author": "tester",
         "dependencies": ["dep1", "dep2"],
         "inject_mode": "prompt_only",
-        "settings_fragment": {"key": "value"},
-        "mcp_servers": ["server1"],
-        "hooks": ["hook1"],
-        "allowed_agents": ["claude-code", "custom-agent"],
     }
     skill = SkillDefinition.from_json(data)
     assert skill.skill_id == "test-skill"
@@ -34,10 +30,6 @@ def test_skill_definition_from_json():
     assert skill.author == "tester"
     assert skill.dependencies == ["dep1", "dep2"]
     assert skill.inject_mode == InjectMode.PROMPT_ONLY
-    assert skill.settings_fragment == {"key": "value"}
-    assert skill.mcp_servers == ["server1"]
-    assert skill.hooks == ["hook1"]
-    assert skill.allowed_agents == ["claude-code", "custom-agent"]
 
     item = skill.to_skill_item()
     assert isinstance(item, SkillItem)

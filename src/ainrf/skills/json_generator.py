@@ -68,10 +68,6 @@ def generate_skill_json(
         "author": "ARIS",
         "inject_mode": inject_mode,
         "dependencies": [],
-        "settings_fragment": {},
-        "mcp_servers": [],
-        "hooks": [],
-        "allowed_agents": [],
     }
     if package is not None:
         result["package"] = package

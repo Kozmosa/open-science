@@ -47,7 +47,6 @@ import {
   mockGetWorkspaces,
   mockImportSkill,
   mockListFiles,
-  mockPreviewSkillSettings,
   mockReadFile,
   mockResetTerminalSession,
   mockUpdateEnvironment,
@@ -155,7 +154,6 @@ export const legacyMockHandlers = [
 
   http.get('/api/skills', () => HttpResponse.json(mockGetSkills())),
   http.get('/api/skills/:skillId', ({ params }) => mockJson(() => mockGetSkillDetail(textParam(params, 'skillId')))),
-  http.get('/api/skills/:skillId/preview', ({ params }) => mockJson(() => mockPreviewSkillSettings(textParam(params, 'skillId')))),
   http.post('/api/skills/import', resolveJson(async ({ request }) => {
     const body = await request.json() as SkillImportRequest;
     return mockJson(() => mockImportSkill(body));

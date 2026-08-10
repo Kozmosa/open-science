@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Button, Dialog, FormField, Input, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { SkillDetail, SkillImportInput, SkillItem, SkillPreview, SkillRegistryItem } from '../types';
-import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, previewSkillSettings, updateSkillRegistry } from '../api';
+import type { SkillDetail, SkillImportInput, SkillItem, SkillRegistryItem } from '../types';
+import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, updateSkillRegistry } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
 export interface SkillRepositorySectionProps {
@@ -21,19 +21,12 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
   const [importPath, setImportPath] = useState('');
   const [importSkillId, setImportSkillId] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
   const [showDirtyConfirm, setShowDirtyConfirm] = useState(false);
   const [pendingRegistryId, setPendingRegistryId] = useState<string | null>(null);
 
   const detailQuery = useQuery<SkillDetail>({
     queryKey: queryKeys.skills.detail(selectedSkillId),
     queryFn: () => getSkillDetail(selectedSkillId!),
-    enabled: !!selectedSkillId,
-  });
-
-  const previewQuery = useQuery<SkillPreview>({
-    queryKey: queryKeys.skills.preview(selectedSkillId),
-    queryFn: () => previewSkillSettings(selectedSkillId!),
     enabled: !!selectedSkillId,
   });
 
@@ -267,7 +260,6 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
                 key={skill.skill_id}
                 onClick={() => {
                   setSelectedSkillId(skill.skill_id);
-                  setShowPreview(false);
                 }}
                 className={`flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors ${
                   selectedSkillId === skill.skill_id
@@ -323,28 +315,6 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
                       : '—'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.mcpServers')}</span>
-                  <span className="text-[var(--text-primary)]">
-                    {detailQuery.data.mcp_servers.length > 0
-                      ? detailQuery.data.mcp_servers.join(', ')
-                      : '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.hooks')}</span>
-                  <span className="text-[var(--text-primary)]">
-                    {detailQuery.data.hooks.length > 0 ? detailQuery.data.hooks.join(', ') : '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-secondary)]">{t('pages.settings.skillRepository.allowedAgents')}</span>
-                  <span className="text-[var(--text-primary)]">
-                    {detailQuery.data.allowed_agents.length > 0
-                      ? detailQuery.data.allowed_agents.join(', ')
-                      : '—'}
-                  </span>
-                </div>
               </div>
 
               {detailQuery.data.skill_md ? (
@@ -358,26 +328,6 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
                 </div>
               ) : null}
 
-              <Button
-                variant="secondary"
-                onClick={() => setShowPreview((current) => !current)}
-                disabled={previewQuery.isLoading}
-              >
-                {showPreview
-                  ? t('common.cancel')
-                  : t('pages.settings.skillRepository.previewSettings')}
-              </Button>
-
-              {showPreview && previewQuery.data ? (
-                <div className="space-y-2">
-                  <h4 className="text-xs font-medium text-[var(--text-secondary)]">
-                    {t('pages.settings.skillRepository.settingsPreviewTitle')}
-                  </h4>
-                  <pre className="whitespace-pre-wrap rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-3 text-xs text-[var(--text-primary)]">
-                    {JSON.stringify(previewQuery.data.merged_preview, null, 2)}
-                  </pre>
-                </div>
-              ) : null}
             </div>
           ) : null}
         </div>

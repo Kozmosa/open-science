@@ -61,10 +61,10 @@ async def test_get_skill_detail_success(tmp_path: Path) -> None:
         "author": "tester",
         "dependencies": ["dep-a", "dep-b"],
         "inject_mode": "prompt_only",
-        "settings_fragment": {"foo": {"bar": 1}},
-        "mcp_servers": ["server1"],
-        "hooks": ["hook1"],
-        "allowed_agents": ["claude-code", "custom-agent"],
+        "settings_fragment": {"retired": True},
+        "mcp_servers": ["retired-server"],
+        "hooks": ["retired-hook"],
+        "allowed_agents": ["retired-agent"],
     }
     skill_md = "# Test Skill\n\nThis is the SKILL.md content.\n"
     _create_skill_dir(skills_root, skill_id, skill_json, skill_md)
@@ -81,12 +81,19 @@ async def test_get_skill_detail_success(tmp_path: Path) -> None:
     assert payload["author"] == "tester"
     assert payload["dependencies"] == ["dep-a", "dep-b"]
     assert payload["inject_mode"] == "prompt_only"
-    assert payload["settings_fragment"] == {"foo": {"bar": 1}}
-    assert payload["mcp_servers"] == ["server1"]
-    assert payload["hooks"] == ["hook1"]
-    assert payload["allowed_agents"] == ["claude-code", "custom-agent"]
     assert payload["skill_md"] == skill_md
     assert payload["package"] is None
+    assert set(payload) == {
+        "skill_id",
+        "label",
+        "description",
+        "version",
+        "author",
+        "dependencies",
+        "inject_mode",
+        "skill_md",
+        "package",
+    }
 
 
 @pytest.mark.anyio
@@ -123,39 +130,20 @@ async def test_get_skill_detail_not_found(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_preview_skill_settings_success(tmp_path: Path) -> None:
+async def test_skill_settings_preview_route_is_retired(tmp_path: Path) -> None:
     skills_root = tmp_path / "skills"
-    skill_id = "preview-skill"
-    skill_json = {
-        "skill_id": skill_id,
-        "label": "Preview Skill",
-        "settings_fragment": {"permissionMode": "restricted", "extra": {"nested": True}},
-    }
-    _create_skill_dir(skills_root, skill_id, skill_json, "# Preview\n")
+    skill_id = "retired-preview"
+    _create_skill_dir(
+        skills_root,
+        skill_id,
+        {"skill_id": skill_id, "label": "Retired Preview"},
+        "# Retired Preview\n",
+    )
 
     async with make_client(tmp_path, scan_roots=[skills_root]) as client:
         response = await client.get(f"/api/skills/{skill_id}/preview")
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["skill_id"] == skill_id
-    assert payload["label"] == "Preview Skill"
-    assert payload["settings_fragment"] == {
-        "permissionMode": "restricted",
-        "extra": {"nested": True},
-    }
-    # merged_preview = deep_merge({"permissionMode": "bypassPermissions"}, settings_fragment)
-    assert payload["merged_preview"]["permissionMode"] == "restricted"
-    assert payload["merged_preview"]["extra"] == {"nested": True}
-
-
-@pytest.mark.anyio
-async def test_preview_skill_settings_not_found(tmp_path: Path) -> None:
-    async with make_client(tmp_path, scan_roots=[]) as client:
-        response = await client.get("/api/skills/nonexistent/preview")
-
     assert response.status_code == 404
-    assert response.json()["detail"] == "Skill not found"
 
 
 @pytest.mark.anyio

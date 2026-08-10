@@ -14,7 +14,7 @@ import type {
   AnthropicEnvStatus,
 } from '@features/environments/types';
 import type { FileListResponse, FileReadResponse } from '@features/workspaces/types';
-import type { SkillDetail, SkillImportResponse, SkillItem, SkillListResponse, SkillPreview } from '@features/settings/types';
+import type { SkillDetail, SkillImportResponse, SkillItem, SkillListResponse } from '@features/settings/types';
 import type { ResourcesResponse } from '@features/resources/types';
 import type { TerminalSession, UserSessionPair, UserSessionPairListResponse } from '@features/terminal/types';
 import type {
@@ -1219,24 +1219,7 @@ export function mockGetSkillDetail(skillId: string): SkillDetail {
     author: 'openscience',
     dependencies: [],
     inject_mode: 'auto',
-    settings_fragment: {},
-    mcp_servers: [],
-    hooks: [],
-    allowed_agents: ['claude-code'],
     skill_md: skill ? `# ${skill.label}\n\n${skill.description ?? ''}` : null,
-  };
-}
-
-export function mockPreviewSkillSettings(skillId: string): SkillPreview {
-  const skill = mockSkills.find((s) => s.skill_id === skillId);
-  return {
-    skill_id: skillId,
-    label: skill?.label ?? skillId,
-    settings_fragment: { env: { EXAMPLE_KEY: 'value' } },
-    merged_preview: {
-      permissionMode: 'bypassPermissions',
-      env: { EXAMPLE_KEY: 'value' },
-    },
   };
 }
 

@@ -28,10 +28,6 @@ class SkillDefinition:
     author: str = "ainrf"
     dependencies: list[str] = field(default_factory=list)
     inject_mode: InjectMode = InjectMode.AUTO
-    settings_fragment: dict[str, Any] = field(default_factory=dict)
-    mcp_servers: list[str] = field(default_factory=list)
-    hooks: list[str] = field(default_factory=list)
-    allowed_agents: list[str] = field(default_factory=lambda: ["claude-code"])
     package: str | None = None
 
     @classmethod
@@ -45,10 +41,6 @@ class SkillDefinition:
             author=data.get("author", "ainrf"),
             dependencies=data.get("dependencies", []),
             inject_mode=inject_mode,
-            settings_fragment=data.get("settings_fragment", {}),
-            mcp_servers=data.get("mcp_servers", []),
-            hooks=data.get("hooks", []),
-            allowed_agents=data.get("allowed_agents", ["claude-code"]),
             package=data.get("package"),
         )
 

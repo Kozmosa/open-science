@@ -2646,10 +2646,6 @@ export type SearchSettingsUpdateRequest = {
  */
 export type SkillDetailResponse = {
     /**
-     * Allowed Agents
-     */
-    allowed_agents?: Array<string>;
-    /**
      * Author
      */
     author: string;
@@ -2662,10 +2658,6 @@ export type SkillDetailResponse = {
      */
     description?: string | null;
     /**
-     * Hooks
-     */
-    hooks?: Array<string>;
-    /**
      * Inject Mode
      */
     inject_mode: string;
@@ -2674,19 +2666,9 @@ export type SkillDetailResponse = {
      */
     label: string;
     /**
-     * Mcp Servers
-     */
-    mcp_servers?: Array<string>;
-    /**
      * Package
      */
     package?: string | null;
-    /**
-     * Settings Fragment
-     */
-    settings_fragment?: {
-        [key: string]: unknown;
-    };
     /**
      * Skill Id
      */
@@ -2779,32 +2761,6 @@ export type SkillListResponse = {
      * Items
      */
     items: Array<SkillItemResponse>;
-};
-
-/**
- * SkillPreviewResponse
- */
-export type SkillPreviewResponse = {
-    /**
-     * Label
-     */
-    label: string;
-    /**
-     * Merged Preview
-     */
-    merged_preview?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Settings Fragment
-     */
-    settings_fragment?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Skill Id
-     */
-    skill_id: string;
 };
 
 /**
@@ -7195,36 +7151,6 @@ export type GetApiSkillsSkillIdResponses = {
 };
 
 export type GetApiSkillsSkillIdResponse = GetApiSkillsSkillIdResponses[keyof GetApiSkillsSkillIdResponses];
-
-export type GetApiSkillsSkillIdPreviewData = {
-    body?: never;
-    path: {
-        /**
-         * Skill Id
-         */
-        skill_id: string;
-    };
-    query?: never;
-    url: '/api/skills/{skill_id}/preview';
-};
-
-export type GetApiSkillsSkillIdPreviewErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type GetApiSkillsSkillIdPreviewError = GetApiSkillsSkillIdPreviewErrors[keyof GetApiSkillsSkillIdPreviewErrors];
-
-export type GetApiSkillsSkillIdPreviewResponses = {
-    /**
-     * Successful Response
-     */
-    200: SkillPreviewResponse;
-};
-
-export type GetApiSkillsSkillIdPreviewResponse = GetApiSkillsSkillIdPreviewResponses[keyof GetApiSkillsSkillIdPreviewResponses];
 
 export type GetApiTasksData = {
     body?: never;

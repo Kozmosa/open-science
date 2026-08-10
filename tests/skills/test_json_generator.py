@@ -54,10 +54,6 @@ class TestGenerateSkillJson:
             "author": "ARIS",
             "inject_mode": "disabled",
             "dependencies": [],
-            "settings_fragment": {},
-            "mcp_servers": [],
-            "hooks": [],
-            "allowed_agents": [],
         }
 
     def test_core_skill_uses_auto_inject_mode(self):
