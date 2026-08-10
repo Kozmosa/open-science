@@ -57,8 +57,9 @@ AINRF_TRUSTED_PROXY_CIDRS=127.0.0.1/32
 
 - 访问令牌为短有效期 JWT
 - 刷新令牌允许免重新认证续期
-- **两者都不会被记录** — 脱敏层从所有日志输出中剥离 `Authorization` 头、`api_key` 参数和 `token` 查询字符串
-- 审计日志仅记录认证发生的事实，永远不记录凭据本身
+- 常规请求日志只记录 method、稳定 route template、status 与耗时，不序列化 Authorization/Cookie、query string 或请求体
+- 安全审计 producer 只提交有界 ID、分类字段和文件 basename；domain telemetry 在自身边界执行字段脱敏
+- 通用 application logger 不提供“可以安全记录任意凭据 payload”的承诺，调用方不得把 token、密码或 API key 交给日志系统
 
 ## 相关文档
 

@@ -38,23 +38,17 @@ description: OpenScience 生产部署安全检查项与安全事件响应流程�
 排查安全事件时，搜索审计日志：
 
 ```bash
-# 所有认证事件
-grep '"component":"audit"' logs/backend-*.log | grep '"event":"auth.'
-
 # 敏感文件访问
 grep '"event":"files.sensitive_path_access"' logs/backend-*.log
 
 # 终端会话
 grep '"event":"terminal.' logs/backend-*.log
 
-# SSH 配置变更
-grep '"event":"environment.ssh_field_changed"' logs/backend-*.log
-
 # 所有 high/critical 级别事件
 grep '"severity":"high\|"severity":"critical"' logs/backend-*.log
 ```
 
-通过 `request_id` 字段关联事件 — 它将同一次 HTTP 请求或 WebSocket 会话内的所有日志行串联起来。
+HTTP 请求内的事件可通过 `request_id` 关联；Terminal WebSocket 生命周期使用 `attachment_id`、`session_id`、`environment_id` 与 `user_id` 关联。受审计的 Project、Environment、Workspace、Task 与 Conversation mutation 使用独立 `domain_audit_events` durable ledger，不能用 backend log grep 代替核验。
 
 ## 相关文档
 

@@ -3,79 +3,41 @@ title: 审计日志
 description: OpenScience 审计日志架构、事件目录与日志查询方法。
 ---
 
-OpenScience 通过 `structlog` 输出结构化 JSON 审计事件。每个事件包含 `event`（事件名）、`severity`（级别）、`timestamp`、`component`（固定为 `audit`）和 `request_id` 等字段。所有敏感值（token、密码、API key）自动脱敏。
-
-## 认证事件
-
-| 事件 | 级别 | 字段 |
-|------|------|------|
-| `auth.login.success` | info | user_id, client_ip |
-| `auth.login.failed` | warning | user_id, client_ip, reason |
-| `auth.register.submitted` | info | user_id |
-| `auth.refresh.failed` | warning | reason |
+OpenScience 通过 `structlog` 输出显式接线的结构化安全审计事件。每个事件包含 `event`、`severity`、`timestamp` 和 `component`（固定为 `audit`）；HTTP 请求内产生的事件还会携带 `request_id`。常规请求日志只记录 method、稳定 route template、status 与耗时，不序列化 Authorization/Cookie、query string 或请求体。审计 producer 只提交有界 ID、分类字段和文件 basename，不依赖一个可以安全接收任意敏感 payload 的“全局自动脱敏”承诺。
 
 ## 终端事件
 
 | 事件 | 级别 | 字段 |
 |------|------|------|
 | `terminal.session.created` | info | session_id, environment_id, user_id |
-| `terminal.session.reset` | info | session_id |
-| `terminal.websocket.opened` | info | session_id |
-| `terminal.websocket.closed` | info | session_id |
-
-## Code-Server 事件
-
-| 事件 | 级别 | 字段 |
-|------|------|------|
-| `code.session.created` | info | user_id, environment_id |
-| `code.session.stopped` | info | user_id |
-| `code.proxy.request` | info | — |
+| `terminal.session.reset` | info | session_id, environment_id, user_id |
+| `terminal.websocket.opened` | info | session_id, environment_id, user_id, attachment_id |
+| `terminal.websocket.closed` | info | session_id, environment_id, user_id, attachment_id |
 
 ## 文件事件
 
 | 事件 | 级别 | 字段 |
 |------|------|------|
-| `files.read` | info | path (basename), user_id |
-| `files.upload` | info | filename, user_id |
-| `files.sensitive_path_access` | high | path (basename), pattern, user_id |
+| `files.sensitive_path_access` | high | path (basename), pattern, user_id, environment_id |
 
-## 环境事件
+## Durable domain audit
 
-| 事件 | 级别 | 字段 |
-|------|------|------|
-| `environment.created` | info | environment_id, user_id |
-| `environment.updated` | info | environment_id, user_id |
-| `environment.ssh_field_changed` | warning | environment_id, user_id |
-| `environment.code_server_install_requested` | info | environment_id |
-
-## 任务事件
-
-| 事件 | 级别 | 字段 |
-|------|------|------|
-| `task.created` | info | task_id, user_id |
-| `task.deleted` | info | task_id, user_id |
-| `task.permanent_deleted` | warning | task_id, user_id |
+Domain Module 会把受审计的 Project、Environment、Workspace、Task 与 Conversation mutation 在同一 SQLite 事务中写入 `domain_audit_events` durable ledger。它与本页的 `component=audit` structlog 流不是同一个 Interface：不能通过 grep backend log 来证明或否定 domain mutation audit。认证成功/失败目前由 `ainrf_auth_login_*_total` 观测，锁定状态由 Auth Module 的持久化登录尝试记录管理；它们也不属于本页事件目录。
 
 ## 日志查询示例
 
 ```bash
-# 所有认证事件
-grep '"component":"audit"' logs/backend-*.log | grep '"event":"auth.'
-
 # 敏感文件访问
 grep '"event":"files.sensitive_path_access"' logs/backend-*.log
 
 # 终端会话
 grep '"event":"terminal.' logs/backend-*.log
 
-# SSH 配置变更
-grep '"event":"environment.ssh_field_changed"' logs/backend-*.log
-
 # 所有 high/critical 级别事件
 grep '"severity":"high\|"severity":"critical"' logs/backend-*.log
 ```
 
-通过 `request_id` 字段关联同一次 HTTP 请求或 WebSocket 会话内的所有事件。
+HTTP 请求内的事件可通过 `request_id` 与同一次请求的结构化日志关联。Terminal WebSocket 事件使用 `attachment_id`、`session_id`、`environment_id` 与 `user_id` 关联连接生命周期。
 
 ## 相关文档
 
