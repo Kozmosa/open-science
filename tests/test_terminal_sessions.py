@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import inspect
 import re
 import threading
 import time
@@ -7,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -39,6 +41,61 @@ def tmux_session_target(session_name: str) -> str:
 
 def assert_short_session_name(session_name: str, *, prefix: str) -> None:
     assert re.fullmatch(rf"{prefix}-[0-9a-f]{{10}}", session_name)
+
+
+def test_session_manager_defines_one_tenant_context_manager() -> None:
+    source_path = inspect.getsourcefile(SessionManager)
+    assert source_path is not None
+    tree = ast.parse(Path(source_path).read_text(encoding="utf-8"))
+    session_manager = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "SessionManager"
+    )
+
+    assert (
+        sum(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_as_tenant"
+            for node in session_manager.body
+        )
+        == 1
+    )
+
+
+def test_as_tenant_sets_and_restores_tmux_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, _ = make_terminal_manager(tmp_path)
+    adapter = manager.tmux_adapter
+    adapter.run_as_user = "existing-tenant"
+
+    def resolve_tenant(_app_user_id: str) -> str:
+        return "ainrf_browser"
+
+    monkeypatch.setattr(manager, "_resolve_tenant_user", resolve_tenant)
+
+    with manager._as_tenant("browser-user"):
+        assert adapter.run_as_user == "ainrf_browser"
+
+    assert adapter.run_as_user == "existing-tenant"
+
+
+def test_as_tenant_supports_adapter_without_run_as_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager, _ = make_terminal_manager(tmp_path)
+    adapter = object()
+    manager._tmux_adapter = cast(TmuxAdapter, adapter)
+
+    def resolve_tenant(_app_user_id: str) -> str:
+        return "ainrf_browser"
+
+    monkeypatch.setattr(manager, "_resolve_tenant_user", resolve_tenant)
+
+    with manager._as_tenant("browser-user"):
+        assert not hasattr(adapter, "run_as_user")
+
+    assert not hasattr(adapter, "run_as_user")
 
 
 def test_binding_upsert_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

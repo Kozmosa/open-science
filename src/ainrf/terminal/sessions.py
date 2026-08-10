@@ -137,17 +137,6 @@ class SessionManager:
                 return home
         return self._state_root
 
-    @contextmanager
-    def _as_tenant(self, app_user_id: str) -> Iterator[None]:
-        """Context manager: set tmux adapter run_as_user for the duration."""
-        tenant = self._resolve_tenant_user(app_user_id)
-        prev = self._tmux_adapter.run_as_user
-        try:
-            self._tmux_adapter.run_as_user = tenant
-            yield
-        finally:
-            self._tmux_adapter.run_as_user = prev
-
     @property
     def db_path(self) -> Path:
         return self._db_path
