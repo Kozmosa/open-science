@@ -190,6 +190,15 @@ class BlockingInterruptRuntimeAdapter(FakeRuntimeAdapter):
         return ControlReceipt(CapabilitySupport.NATIVE, True, {"rpc_ack": True})
 
 
+def _make_claim_stale(state_root: Path) -> None:
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        conn.execute(
+            "UPDATE turn_submissions SET claimed_at = '2000-01-01T00:00:00+00:00' "
+            "WHERE status = 'claimed'"
+        )
+        conn.commit()
+
+
 @pytest.fixture
 def state_root(tmp_path: Path) -> Path:
     root = tmp_path / "ainrf-state"
@@ -337,7 +346,122 @@ async def test_worker_does_not_start_adapter_for_environment_owner_without_grant
             "(SELECT submission_id FROM turn_submissions ORDER BY created_at LIMIT 1)"
         ).fetchone()
     assert row is not None
-    assert tuple(row) == ("delivery_unknown", "worker_failed_before_acceptance")
+    assert tuple(row) == ("claimed", None)
+
+
+@pytest.mark.anyio
+async def test_worker_retries_context_setup_failure_before_adapter_start(
+    state_root: Path,
+) -> None:
+    context_attempts = 0
+    starts = 0
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            nonlocal starts
+            starts += 1
+            await super().start_turn(context, emit)
+
+    def context_factory(claim: SubmissionClaim) -> ExecutionContext:
+        nonlocal context_attempts
+        context_attempts += 1
+        if context_attempts == 1:
+            raise RuntimeError("deterministic context setup failure")
+        return ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        )
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=lambda _engine: TrackingAdapter(),
+        context_factory=context_factory,
+    )
+    assert await dispatcher.run_once() is True
+    assert starts == 0
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        first = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+        assert first is not None
+        assert tuple(first) == ("claimed", None)
+        assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 0
+
+    assert await dispatcher.run_once() is False
+    assert context_attempts == 1
+    _make_claim_stale(state_root)
+    assert await dispatcher.run_once() is True
+    assert context_attempts == 2
+    assert starts == 1
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        assert conn.execute("SELECT status FROM turn_submissions").fetchone()[0] == "delivered"
+        assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 1
+
+
+@pytest.mark.anyio
+async def test_worker_retries_adapter_construction_failure_before_start(
+    state_root: Path,
+) -> None:
+    adapter_attempts = 0
+    starts = 0
+
+    class TrackingAdapter(FakeRuntimeAdapter):
+        async def start_turn(self, context: ExecutionContext, emit: object) -> None:
+            nonlocal starts
+            starts += 1
+            await super().start_turn(context, emit)
+
+    def adapter_factory(_engine: HarnessEngineType) -> ConversationRuntimeAdapter:
+        nonlocal adapter_attempts
+        adapter_attempts += 1
+        if adapter_attempts == 1:
+            raise RuntimeError("deterministic adapter construction failure")
+        return TrackingAdapter()
+
+    dispatcher = ConversationDispatcher(
+        state_root,
+        adapter_factory=adapter_factory,
+        context_factory=lambda claim: ExecutionContext(
+            task_id=claim.task_id,
+            working_directory="/tmp",
+            rendered_prompt=str(claim.input["text"]),
+            engine_type=HarnessEngineType.CODEX_APP_SERVER,
+            runtime_launch_key=claim.submission_id,
+        ),
+    )
+    assert await dispatcher.run_once() is True
+    assert starts == 0
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        first = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+    assert first is not None
+    assert tuple(first) == ("claimed", None)
+    _make_claim_stale(state_root)
+    assert await dispatcher.run_once() is True
+    assert adapter_attempts == 2
+    assert starts == 1
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        assert conn.execute("SELECT status FROM turn_submissions").fetchone()[0] == "delivered"
+
+
+@pytest.mark.anyio
+async def test_worker_cancellation_before_adapter_start_leaves_reclaimable_claim(
+    state_root: Path,
+) -> None:
+    def context_factory(_claim: SubmissionClaim) -> ExecutionContext:
+        raise asyncio.CancelledError
+
+    dispatcher = ConversationDispatcher(state_root, context_factory=context_factory)
+
+    with pytest.raises(asyncio.CancelledError):
+        await dispatcher.run_once()
+
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+        assert submission is not None
+        assert tuple(submission) == ("claimed", None)
+        assert conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0] == 0
 
 
 @pytest.mark.anyio
@@ -371,6 +495,10 @@ async def test_worker_rechecks_environment_grant_after_context_before_adapter_st
     )
     assert await dispatcher.run_once() is True
     assert starts == 0
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        row = conn.execute("SELECT status, failure_code FROM turn_submissions").fetchone()
+    assert row is not None
+    assert tuple(row) == ("claimed", None)
 
 
 def test_worker_scopes_checkpoint_to_submission_runtime_identity(state_root: Path) -> None:

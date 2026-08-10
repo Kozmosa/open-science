@@ -418,6 +418,8 @@ class ConversationExecutionService:
                 raise
 
     def begin_delivery(self, submission_id: str) -> None:
+        """Arm durable delivery immediately before the Runtime Adapter starts."""
+
         delivered_at = _now()
         with closing(connect(self._db_path)) as conn:
             try:
@@ -449,22 +451,6 @@ class ConversationExecutionService:
             except BaseException:
                 conn.rollback()
                 raise
-
-    def ensure_submission_open(self, submission_id: str) -> None:
-        """Recheck the Task gate immediately before an external adapter starts."""
-
-        with closing(connect(self._db_path)) as conn:
-            submission = SqliteConversationExecutionRepository(conn).submission_by_id(submission_id)
-            if submission is None:
-                raise DomainNotFoundError(submission_id)
-            state = SqliteConversationRepository(conn).task_state(str(submission["task_id"]))
-            if state is None or str(state["work_status"]) != TaskWorkStatus.OPEN:
-                raise ConversationContractError(
-                    ConversationErrorCode.TASK_NOT_OPEN,
-                    "Task was closed before the external adapter started",
-                )
-            if str(submission["status"]) != "delivering":
-                raise DomainConflictError("Submission is no longer delivering")
 
     def accept_and_open_execution(
         self,

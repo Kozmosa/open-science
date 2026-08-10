@@ -245,6 +245,23 @@ class ConversationDispatcher:
         if claim is None:
             return False
         try:
+            context = self._context_factory(claim)
+            adapter = self._adapter_factory(context.engine_type)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return True
+        try:
+            self._require_claim_environment_grant(claim)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return True
+        try:
+            # Cross into durable delivery only after every deterministic local
+            # setup and permission preflight succeeds.  Failures above leave a
+            # reclaimable claim; failures after Adapter start remain fenced as
+            # externally uncertain.
             self._execution.begin_delivery(claim.submission_id)
         except ConversationContractError as exc:
             if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
@@ -256,93 +273,6 @@ class ConversationDispatcher:
         except DomainConflictError:
             # A concurrent cancellation may have terminally consumed the
             # claim.  Treat it as handled rather than killing the worker loop.
-            return True
-        try:
-            self._execution.ensure_submission_open(claim.submission_id)
-        except ConversationContractError as exc:
-            if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
-                with suppress(DomainConflictError, ConversationContractError):
-                    self._execution.mark_delivery_unknown(
-                        claim.submission_id,
-                        failure_code="task_cancelled_before_adapter",
-                        evidence={
-                            "source": "worker_preflight",
-                            "reason": "task_cancelled_before_adapter",
-                            "replay_forbidden": True,
-                        },
-                    )
-                return True
-            raise
-        except DomainConflictError:
-            return True
-        try:
-            context = self._context_factory(claim)
-            adapter = self._adapter_factory(context.engine_type)
-        except asyncio.CancelledError:
-            with suppress(DomainConflictError, ConversationContractError):
-                self._execution.mark_delivery_unknown(
-                    claim.submission_id,
-                    failure_code="worker_cancelled_before_acceptance",
-                    evidence={
-                        "source": "worker_setup",
-                        "replay_forbidden": True,
-                    },
-                )
-            raise
-        except Exception as exc:
-            with suppress(DomainConflictError, ConversationContractError):
-                self._execution.mark_delivery_unknown(
-                    claim.submission_id,
-                    failure_code="worker_failed_before_acceptance",
-                    evidence={
-                        "source": "worker_setup",
-                        "error_type": type(exc).__name__,
-                        "replay_forbidden": True,
-                    },
-                )
-            return True
-        try:
-            self._execution.ensure_submission_open(claim.submission_id)
-        except ConversationContractError as exc:
-            if exc.code is ConversationErrorCode.TASK_NOT_OPEN:
-                with suppress(DomainConflictError, ConversationContractError):
-                    self._execution.mark_delivery_unknown(
-                        claim.submission_id,
-                        failure_code="task_cancelled_before_adapter_start",
-                        evidence={
-                            "source": "worker_preflight",
-                            "reason": "task_cancelled_before_adapter_start",
-                            "replay_forbidden": True,
-                        },
-                    )
-                return True
-            raise
-        except DomainConflictError:
-            return True
-        try:
-            self._require_claim_environment_grant(claim)
-        except asyncio.CancelledError:
-            with suppress(DomainConflictError, ConversationContractError):
-                self._execution.mark_delivery_unknown(
-                    claim.submission_id,
-                    failure_code="worker_cancelled_before_acceptance",
-                    evidence={
-                        "source": "worker_preflight",
-                        "replay_forbidden": True,
-                    },
-                )
-            raise
-        except Exception as exc:
-            with suppress(DomainConflictError, ConversationContractError):
-                self._execution.mark_delivery_unknown(
-                    claim.submission_id,
-                    failure_code="worker_failed_before_acceptance",
-                    evidence={
-                        "source": "worker_preflight",
-                        "error_type": type(exc).__name__,
-                        "replay_forbidden": True,
-                    },
-                )
             return True
         execution: RuntimeExecutionClaim | None = None
         terminal_status: TurnStatus | None = None
