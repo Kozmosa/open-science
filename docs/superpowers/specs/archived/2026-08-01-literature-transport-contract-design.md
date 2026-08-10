@@ -1,5 +1,5 @@
 ---
-doc_state: current
+doc_state: archived
 status: implemented
 last_reviewed: 2026-08-01
 review_by: 2026-08-31

@@ -7,7 +7,7 @@ tags:
   - observability
   - compatibility
   - architecture-cleanup
-doc_state: current
+doc_state: historical
 status: implemented
 ---
 
