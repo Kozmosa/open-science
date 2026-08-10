@@ -67,15 +67,22 @@ def test_frontend_fixture_worker_completes_tasks_without_external_runtime(tmp_pa
     assert result.task_outcome == "completed"
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         turn = conn.execute(
-            "SELECT turn_id, status FROM task_turns WHERE task_id = ?", (task["task_id"],)
+            "SELECT turn_id, binding_id, status FROM task_turns WHERE task_id = ?",
+            (task["task_id"],),
         ).fetchone()
         submission = conn.execute(
             "SELECT status FROM turn_submissions WHERE submission_id = ?",
             (task["submission_id"],),
         ).fetchone()
         runtime = conn.execute(
-            "SELECT status, native_runtime_kind FROM runtime_executions WHERE turn_id = ?",
+            "SELECT binding_id, status, native_runtime_kind "
+            "FROM runtime_executions WHERE turn_id = ?",
             (turn["turn_id"],),
+        ).fetchone()
+        binding = conn.execute(
+            "SELECT binding_id, native_conversation_kind, native_conversation_ref, status "
+            "FROM engine_conversation_bindings WHERE task_id = ?",
+            (task["task_id"],),
         ).fetchone()
         items = conn.execute(
             "SELECT item_type, payload_json FROM turn_items WHERE turn_id = ? ORDER BY turn_item_seq",
@@ -85,6 +92,14 @@ def test_frontend_fixture_worker_completes_tasks_without_external_runtime(tmp_pa
     assert submission["status"] == "delivered"
     assert runtime["status"] == "completed"
     assert runtime["native_runtime_kind"] == "worker"
+    assert binding is not None
+    assert tuple(binding[1:]) == (
+        "frontend_fixture_conversation",
+        f"frontend-fixture-conversation:{task['task_id']}",
+        "active",
+    )
+    assert turn["binding_id"] == binding["binding_id"]
+    assert runtime["binding_id"] == binding["binding_id"]
     assert any(
         "without starting an external runtime" in str(json.loads(row["payload_json"]))
         for row in items

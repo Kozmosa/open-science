@@ -20,7 +20,10 @@ from ainrf.harness_engine import (
     RuntimeProbeStatus,
 )
 from ainrf.harness_engine.base import EngineEmit
-from ainrf.harness_engine.conversation_adapter import ConversationRuntimeAdapter
+from ainrf.harness_engine.conversation_adapter import (
+    ConversationRuntimeAdapter,
+    NativeAcceptanceIdentity,
+)
 from ainrf.literature.tracking import LiteratureTrackingService, WorkItem
 
 
@@ -89,6 +92,25 @@ class FrontendFixtureEngine(HarnessEngine):
         return RuntimeProbeResult(status=RuntimeProbeStatus.ABSENT)
 
 
+class FrontendFixtureRuntimeAdapter(ConversationRuntimeAdapter):
+    """Expose deterministic synthetic identities for the closed-world fixture engine."""
+
+    def native_acceptance_identity(
+        self,
+        *,
+        runtime_launch_key: str,
+        fallback_task_id: str,
+        fallback_turn_id: str,
+    ) -> NativeAcceptanceIdentity:
+        _ = fallback_turn_id
+        return NativeAcceptanceIdentity(
+            conversation_kind="frontend_fixture_conversation",
+            conversation_ref=f"frontend-fixture-conversation:{fallback_task_id}",
+            turn_kind="frontend_fixture_turn",
+            turn_ref=f"frontend-fixture-turn:{runtime_launch_key}",
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class FrontendFixtureWorkerRunResult:
     outcome: str
@@ -111,7 +133,7 @@ class FrontendFixtureWorker:
         self._dispatcher = ConversationDispatcher(
             self.state_root,
             artifact_sha=self.artifact_sha,
-            adapter_factory=lambda engine_type: ConversationRuntimeAdapter(
+            adapter_factory=lambda engine_type: FrontendFixtureRuntimeAdapter(
                 FrontendFixtureEngine(engine_type)
             ),
         )
