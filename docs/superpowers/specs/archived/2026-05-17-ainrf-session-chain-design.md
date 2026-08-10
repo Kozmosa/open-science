@@ -148,5 +148,4 @@ Create Session → Attempt #1 (running → completed/failed)
 
 ## Visual Companion
 
-Brainstorming 过程中的可视化页面保存在:
-`docs/superpowers/specs/2026-05-17-ainrf-h2-brainstorm/visual-companion/`
+Brainstorming 过程中的可视化页面原先保存在 `visual-companion/`，但这些 HTML 页面已在后续文档清理中移除，未随历史 spec 保留。Brainstorm README 已归档至 [`2026-05-17-ainrf-h2-brainstorm.md`](2026-05-17-ainrf-h2-brainstorm.md)。

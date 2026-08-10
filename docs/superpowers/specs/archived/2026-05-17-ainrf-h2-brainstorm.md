@@ -1,4 +1,15 @@
+---
+doc_state: historical
+status: superseded
+last_reviewed: 2026-08-10
+review_by: 2026-09-09
+superseded_by: 2026-07-17-codex-aligned-conversation-domain-design.md
+---
+
 # AINRF ← Humanize2 Feature Brainstorm
+
+> [!warning] Superseded historical brainstorm
+> 本文仅保留 2026-05-17 的 brainstorm 记录，不能定义当前产品 contract。本文提出的 TaskAttempt/TaskSession、Session Chain、Token Track 与 Timeline 前提已被 Conversation Domain 取代；当前 authority 见 [`PROJECT_BASIS.md`](../../../../PROJECT_BASIS.md)、[`公开架构文档`](../../../../docs-site/docs/architecture.md) 与 [`Conversation Domain`](2026-07-17-codex-aligned-conversation-domain-design.md)。相关历史设计见 [`Session Chain`](2026-05-17-ainrf-session-chain-design.md)、[`Token Track`](2026-05-18-ainrf-token-track-design.md) 和 [`Timeline`](2026-05-18-ainrf-timeline-design.md)。
 
 Session: `ainrf-h2`, 2026-05-17
 
