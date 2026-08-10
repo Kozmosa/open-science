@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from ainrf.security.audit import audit_event
+from ainrf.telemetry.metrics import inc_counter
 
 _SENSITIVE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (".env files", re.compile(r"\.env(?:\.|$|\W)")),
@@ -56,12 +57,17 @@ def check_path_access(
     logged.
     """
     sensitive, pattern_name = is_sensitive_path(path)
-    if sensitive:
-        audit_event(
-            "files.sensitive_path_access",
-            severity="high",
-            path=Path(path).name,
-            pattern=pattern_name,
-            user_id=user_id,
-            environment_id=environment_id,
-        )
+    if not sensitive or pattern_name is None:
+        return
+    audit_event(
+        "files.sensitive_path_access",
+        severity="high",
+        path=Path(path).name,
+        pattern=pattern_name,
+        user_id=user_id,
+        environment_id=environment_id,
+    )
+    inc_counter(
+        "ainrf_files_sensitive_path_access_total",
+        labels={"pattern": pattern_name},
+    )

@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi import FastAPI
+import structlog
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
@@ -94,6 +95,66 @@ async def test_v2_runtime_facades_hide_ungranted_environments(
     assert outsider_session_pairs.json() == {"detail": "Environment not found"}
     assert outsider_files.status_code == 404
     assert outsider_files.json() == {"detail": "Environment not found"}
+
+
+@pytest.mark.anyio
+async def test_authorized_file_routes_emit_sensitive_path_audit_and_metrics(
+    state_root: Path,
+    tmp_path: Path,
+) -> None:
+    reset_metrics()
+    app = _v2_app(state_root, tmp_path)
+    owner_headers = _headers(app, "runtime-owner", "runtime-owner", "member")
+    environment_id = _environment_with_owner_grant(app, state_root, "runtime-owner")
+    workdir = state_root / "runtime-environment"
+    (workdir / ".ssh" / "private").mkdir(parents=True)
+    (workdir / ".env").write_text("TOKEN=secret")
+    (workdir / "certificate.pem").write_bytes(b"certificate")
+
+    try:
+        with structlog.testing.capture_logs() as logs:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+            ) as client:
+                listed = await client.get(
+                    f"/api/files/list?environment_id={environment_id}&path=.ssh/private",
+                    headers=owner_headers,
+                )
+                read = await client.get(
+                    f"/api/files/read?environment_id={environment_id}&path=.env",
+                    headers=owner_headers,
+                )
+                streamed = await client.get(
+                    f"/api/files/stream?environment_id={environment_id}&path=certificate.pem",
+                    headers=owner_headers,
+                )
+                uploaded = await client.post(
+                    "/api/files/upload",
+                    headers=owner_headers,
+                    data={"environment_id": environment_id, "path": "private.key"},
+                    files={"file": ("private.key", b"key")},
+                )
+
+        assert listed.status_code == 200
+        assert read.status_code == 200
+        assert streamed.status_code == 200
+        assert uploaded.status_code == 200
+        sensitive_logs = [
+            entry for entry in logs if entry.get("event") == "files.sensitive_path_access"
+        ]
+        assert [entry["pattern"] for entry in sensitive_logs] == [
+            "~/.ssh/*",
+            ".env files",
+            "*.pem",
+            "*.key",
+        ]
+        assert all(entry["user_id"] == "runtime-owner" for entry in sensitive_logs)
+        assert all(entry["environment_id"] == environment_id for entry in sensitive_logs)
+        metrics = get_metrics_text()
+        for pattern in ("~/.ssh/*", ".env files", "*.pem", "*.key"):
+            assert f'ainrf_files_sensitive_path_access_total{{pattern="{pattern}"}} 1.0' in metrics
+    finally:
+        reset_metrics()
 
 
 @pytest.mark.anyio

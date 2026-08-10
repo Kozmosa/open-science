@@ -35,7 +35,11 @@ _COUNTER_SPECS: list[tuple[str, list[str], str]] = [
     ("ainrf_auth_login_failed_total", ["reason"], "Failed login attempts"),
     ("ainrf_terminal_exec_total", [], "Terminal command executions"),
     ("ainrf_terminal_exec_denied_total", [], "Denied terminal command executions"),
-    ("ainrf_files_sensitive_path_access_total", [], "Sensitive file path access events"),
+    (
+        "ainrf_files_sensitive_path_access_total",
+        ["pattern"],
+        "Sensitive file path access events by bounded path pattern",
+    ),
     ("ainrf_environment_update_total", [], "Environment detection/update events"),
     ("ainrf_code_session_created_total", [], "Code session spawn events"),
     (

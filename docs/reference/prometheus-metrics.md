@@ -67,7 +67,7 @@ Metrics emitted by the `build_http_metrics_middleware` (every HTTP request excep
 
 | Metric | Type | Labels | Emitted When |
 |--------|------|--------|--------------|
-| `ainrf_files_sensitive_path_access_total` | Counter | _(none)_ | The file browser attempts to access a sensitive path (e.g. `/etc/passwd`) |
+| `ainrf_files_sensitive_path_access_total` | Counter | `pattern` (bounded sensitive-path category) | An authorized file route attempts to access a sensitive path (e.g. `.env` or `*.pem`) |
 
 ---
 

@@ -2,13 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import structlog
 
 from ainrf.security.audit import audit_event
 from ainrf.security.sensitive_paths import check_path_access, is_sensitive_path
+from ainrf.telemetry.metrics import get_metrics_text, reset_metrics
 import pytest
 
 pytestmark = [pytest.mark.middleware]
+
+
+@pytest.fixture(autouse=True)
+def _isolate_metrics() -> Iterator[None]:
+    reset_metrics()
+    yield
+    reset_metrics()
 
 
 class TestAuditEvent:
@@ -91,6 +101,10 @@ class TestCheckPathAccess:
         assert logs[0]["user_id"] == "alice"
         # Only basename logged, not full path
         assert logs[0]["path"] == ".env"
+        assert (
+            'ainrf_files_sensitive_path_access_total{pattern=".env files"} 1.0'
+            in get_metrics_text()
+        )
 
     def test_normal_path_no_audit(self) -> None:
         with structlog.testing.capture_logs() as logs:

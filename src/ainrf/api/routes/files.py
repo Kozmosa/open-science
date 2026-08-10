@@ -24,10 +24,20 @@ from ainrf.auth.permissions import get_current_user
 from ainrf.execution.ssh import SSHExecutor
 from ainrf.files import FileBrowserError, FileBrowserService, FileTooLargeError, PathNotFoundError
 from ainrf.files.service import _build_container_config
+from ainrf.security.sensitive_paths import check_path_access
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+def _record_path_access(user: dict[str, object], environment_id: str, path: str) -> None:
+    user_id = user.get("id")
+    check_path_access(
+        path,
+        user_id=str(user_id) if user_id is not None else None,
+        environment_id=environment_id,
+    )
 
 
 def _get_file_browser_service(request: Request) -> FileBrowserService:
@@ -107,6 +117,7 @@ async def list_files(
     user = get_current_user(request)
     require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    _record_path_access(user, environment_id, path)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
@@ -145,6 +156,7 @@ async def read_file(
     user = get_current_user(request)
     require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    _record_path_access(user, environment_id, path)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
@@ -178,6 +190,7 @@ async def stream_file(
     user = get_current_user(request)
     require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    _record_path_access(user, environment_id, path)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
     try:
@@ -268,6 +281,7 @@ async def upload_file(
     user = get_current_user(request)
     require_v2_environment_execution_grant(request, user, environment_id)
     _check_workspace_access(request, workspace_id, user)
+    _record_path_access(user, environment_id, path)
     tenant_user = _resolve_tenant_user(request)
     service = _get_file_browser_service(request)
 
