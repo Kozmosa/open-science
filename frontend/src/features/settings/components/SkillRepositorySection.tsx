@@ -3,6 +3,7 @@ import { Button, Dialog, FormField, Input, SectionCard, SectionHeader, NativeSel
 import { useT } from '@/shared/i18n';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SkillDetail, SkillImportInput, SkillItem, SkillRegistryItem } from '../types';
+import { parseSkillImportSource } from '../types';
 import { getSkillDetail, getSkillRegistries, importSkill, installSkillRegistry, updateSkillRegistry } from '../api';
 import { queryKeys } from '@/shared/api/queryKeys';
 
@@ -16,7 +17,7 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
   const queryClient = useQueryClient();
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [showImport, setShowImport] = useState(false);
-  const [importSource, setImportSource] = useState<'git' | 'local'>('git');
+  const [importSource, setImportSource] = useState<SkillImportInput['source']>('git');
   const [importUrl, setImportUrl] = useState('');
   const [importPath, setImportPath] = useState('');
   const [importSkillId, setImportSkillId] = useState('');
@@ -160,7 +161,10 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
             <NativeSelect
               aria-label={t('pages.settings.skillRepository.sourceLabel')}
               value={importSource}
-              onChange={(event) => setImportSource(event.target.value as 'git' | 'local')}
+              onChange={(event) => {
+                const source = parseSkillImportSource(event.target.value);
+                if (source !== null) setImportSource(source);
+              }}
             >
               <option value="git">{t('pages.settings.skillRepository.gitSource')}</option>
               <option value="local">{t('pages.settings.skillRepository.localSource')}</option>

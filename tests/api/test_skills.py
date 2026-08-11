@@ -38,6 +38,14 @@ def make_client(tmp_path: Path, scan_roots: list[Path] | None = None) -> httpx.A
     )
 
 
+def test_skill_import_source_openapi_is_closed_set(tmp_path: Path) -> None:
+    schema = _make_app(tmp_path).openapi()
+
+    source_schema = schema["components"]["schemas"]["SkillImportRequest"]["properties"]["source"]
+
+    assert source_schema["enum"] == ["git", "local"]
+
+
 def _create_skill_dir(parent: Path, skill_id: str, skill_json: dict, skill_md_content: str) -> Path:
     skill_dir = parent / skill_id
     skill_dir.mkdir(parents=True)

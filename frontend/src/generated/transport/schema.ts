@@ -2684,7 +2684,7 @@ export type SkillImportRequest = {
     /**
      * Source
      */
-    source: string;
+    source: 'git' | 'local';
     /**
      * Url
      */

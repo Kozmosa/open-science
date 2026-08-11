@@ -500,7 +500,7 @@ class SkillDetailResponse(BaseModel):
 class SkillImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    source: str = Field(..., pattern="^(git|local)$")
+    source: Literal["git", "local"]
     url: str | None = Field(default=None, min_length=1, pattern=r"^(https?|git|file)://")
     local_path: str | None = None
     skill_id: str | None = None

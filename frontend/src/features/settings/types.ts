@@ -55,8 +55,9 @@ export type SkillItem = SkillItemResponse & { description: string | null; depend
 export type SkillListResponse = { items: SkillItem[] };
 export type SkillDetail = SkillDetailResponse & { description: string | null; dependencies: string[]; skill_md: string | null; package?: string };
 export type SkillImportResponse = TransportSkillImportResponse;
+export type SkillImportSource = SkillImportRequest['source'];
 export type SkillImportInput = {
-  source: 'git' | 'local';
+  source: SkillImportSource;
   url: string | null;
   localPath: string | null;
   skillId: string | null;
@@ -76,6 +77,10 @@ export type SearchSettingsResponse = { active_backend: string; available_backend
 export type DeploymentVersionResponse = TransportDeploymentVersionResponse;
 export type MonitoringServiceItem = TransportMonitoringServiceItem;
 export type MonitoringSettingsResponse = { services: MonitoringServiceItem[] };
+
+export function parseSkillImportSource(value: string): SkillImportSource | null {
+  return value === 'git' || value === 'local' ? value : null;
+}
 
 export function toSkillImportRequest(value: SkillImportInput): SkillImportRequest {
   return {
