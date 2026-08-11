@@ -34,12 +34,13 @@ scripts/webui.sh dev    # 开发模式 Vite HMR（端口 5173）
 uv run openscience serve
 ```
 
-## 默认账户
+## 初始管理员
 
 首次启动时自动创建管理员账户：
 
 - **用户名**：`admin`
-- **密码**：`admin`
+- **密码**：随机生成并写入 `<state_root>/admin_initial_password.txt`
+- **密码文件权限**：`0600`
 - 首次登录后提示修改密码
 
 ## 访问地址

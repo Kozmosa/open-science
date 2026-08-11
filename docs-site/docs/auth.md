@@ -1,6 +1,6 @@
 ---
 title: 认证与授权
-description: JWT Bearer Token 认证、用户角色（admin/member）、注册审批、环境授权与项目协作者管理。
+description: JWT Bearer Token 认证、用户角色（admin/member）、注册审批、Environment execution grant 与 Project 成员管理。
 ---
 
 OpenScience 使用 JWT Bearer Token 认证机制，支持用户注册审批、角色权限、环境授权与项目协作。
@@ -17,17 +17,17 @@ OpenScience 使用 JWT Bearer Token 认证机制，支持用户注册审批、�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/auth/register` | 注册（状态为 `pending`） |
-| POST | `/auth/login` | 登录，返回 access + refresh |
-| POST | `/auth/refresh` | 使用 refresh token 刷新访问令牌 |
-| POST | `/auth/logout` | 登出（删除 refresh token） |
-| GET | `/auth/me` | 获取当前用户信息 |
-| POST | `/auth/change-password` | 修改密码 |
+| POST | `/api/auth/register` | 注册（状态为 `pending`） |
+| POST | `/api/auth/login` | 登录，返回 access + refresh |
+| POST | `/api/auth/refresh` | 使用 refresh token 刷新访问令牌 |
+| POST | `/api/auth/logout` | 登出（删除 refresh token） |
+| GET | `/api/auth/me` | 获取当前用户信息 |
+| POST | `/api/auth/change-password` | 修改密码 |
 
 ### 注册
 
 ```json
-POST /auth/register
+POST /api/auth/register
 {
   "username": "user1",
   "display_name": "用户一",
@@ -44,7 +44,7 @@ POST /auth/register
 ### 登录
 
 ```json
-POST /auth/login
+POST /api/auth/login
 {
   "username": "user1",
   "password": "secure-password"
@@ -57,8 +57,8 @@ POST /auth/login
 
 | 角色 | 权限范围 |
 |------|---------|
-| `admin` | 全部权限：用户管理、环境授权、项目管理、所有任务 |
-| `member` | 自有资源 + 协作项目资源，访问已被授权的环境 |
+| `admin` | 用户与 Environment grant 管理、全局 registry 可见性及 Project 管理；不自动获得 runtime execution 或 Project publish 能力 |
+| `member` | 自有资源与显式加入的 Project；runtime execution 仍要求对应 Environment 的 active grant |
 
 ## 用户状态
 
@@ -74,11 +74,14 @@ pending → active / disabled
 
 服务首次启动（`openscience serve`）时，若数据库中无用户，自动创建初始管理员：
 
-- 用户名：`admin` / 密码：`admin`
+- 用户名：`admin`
+- 密码：随机生成的 24 字符密码，写入 `<state_root>/admin_initial_password.txt`
+- 密码文件权限：`0600`
 - 标记 `must_change_password = true`
-- 自动激活并授予 `localhost` 环境权限
+- 自动激活并为 `env-localhost` 写入一条显式 seed execution grant
 
-首次登录 `/auth/me` 返回 `must_change_password: true`，前端引导用户修改密码。
+首次登录后，`GET /api/auth/me` 返回 `must_change_password: true`，前端引导用户修改密码。
+seed grant 与管理员角色是两个不同的授权事实；若该 grant 被撤销，管理员也不能绕过它执行 runtime I/O 或启动 Task delivery。
 
 ## Admin 面板
 
@@ -86,20 +89,21 @@ pending → active / disabled
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/admin/users` | 列出所有用户 |
-| PATCH | `/admin/users/{user_id}` | 激活/禁用用户 |
-| PUT | `/admin/users/{user_id}/password` | 重置用户密码 |
-| PUT | `/admin/environments/{env_id}/access` | 授予环境访问权限 |
-| DELETE | `/admin/environments/{env_id}/access/{user_id}` | 撤销环境访问权限 |
+| GET | `/api/admin/users` | 列出所有用户 |
+| PATCH | `/api/admin/users/{user_id}` | 激活/禁用用户 |
+| PUT | `/api/admin/users/{user_id}/password` | 重置用户密码 |
+| GET | `/api/admin/environments/{env_id}/access` | 列出 Environment 的 active grants |
+| PUT | `/api/admin/environments/{env_id}/access` | 授予或更新 Environment execution grant |
+| DELETE | `/api/admin/environments/{env_id}/access/{user_id}` | 撤销 Environment execution grant |
 
 管理员可以：审批 `pending` 用户、禁用/启用用户、重置密码、授予或撤销环境访问、设置并发任务配额。
 
 ## 环境授权
 
-每个用户可以独立授权访问不同环境，并限制并发任务数：
+管理员可以为每个用户管理不同 Environment 的显式 execution grant，并限制并发任务数：
 
 ```json
-PUT /admin/environments/env-localhost/access
+PUT /api/admin/environments/env-localhost/access
 {
   "user_id": "abc123",
   "max_concurrent_tasks": 3
@@ -111,20 +115,28 @@ PUT /admin/environments/env-localhost/access
 为防止重复外调，acceptance 尚不确定的 `delivery_unknown` Task 在 reconciliation
 完成前仍计入并发槽。
 
+Environment registry 可见性不是 execution grant。runtime file/terminal I/O 与 Task
+delivery 都会重新校验 explicit active grant；可见但无 grant 返回 403，不可见返回
+404。owner 与 admin 身份均不能绕过这项检查。
+
 ## 项目协作者
 
-项目所有者可以添加协作者：
+Project owner 或 admin 可以添加、更新和移除成员：
 
 | 角色 | 权限 |
 |------|------|
-| `member` | 完全协作权限 |
+| `editor` | 可编辑 Project 资源；仅当 `can_publish=true` 时可发布 Project Context |
 | `viewer` | 只读权限 |
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/projects/{project_id}/collaborators` | 查看协作者 |
-| PUT | `/projects/{project_id}/collaborators` | 添加协作者 |
-| DELETE | `/projects/{project_id}/collaborators/{user_id}` | 移除协作者 |
+| GET | `/api/domain/projects/{project_id}/members` | 查看成员 |
+| PUT | `/api/domain/projects/{project_id}/members/{member_user_id}` | 添加或更新成员的 `role` 与 `can_publish` |
+| DELETE | `/api/domain/projects/{project_id}/members/{member_user_id}` | 移除成员 |
+
+`can_publish=true` 只允许与 `role="editor"` 一起使用。全局 admin 可以管理成员，
+但不会仅凭 admin 角色获得 Project publish 能力；发布仍要求实际 Project owner 或
+带 `can_publish` 的 editor membership。
 
 ## CLI 登录
 

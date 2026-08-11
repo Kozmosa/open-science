@@ -15,7 +15,7 @@ OpenScience 设置页面管理用户偏好、系统配置、用户与权限、�
 | Monitoring & Audit | 所有用户 |
 | Users | 仅 Admin |
 | Env Access | 仅 Admin |
-| Collaborators | 所有用户 |
+| Collaborators | 仅 Admin |
 
 ## General 标签
 
@@ -42,7 +42,7 @@ provider credentials 或每环境 Task 模板。
 
 用户管理面板：
 
-- 列出所有已注册用户（用户名、邮箱、角色和状态）
+- 列出所有已注册用户（用户名、显示名称、角色、状态、最近登录与在线状态）
 - 审批 `pending` 状态的用户
 - 激活 / 禁用用户账户
 - 重置用户密码
@@ -51,7 +51,7 @@ provider credentials 或每环境 Task 模板。
 
 ## Env Access 标签（仅 Admin）
 
-环境授权管理：
+Environment execution grant 管理：
 
 - 为每个用户授予或撤销特定环境的访问权限
 - 配置每个用户的 `max_concurrent_tasks` 上限
@@ -61,16 +61,21 @@ provider credentials 或每环境 Task 模板。
 queued/claimed Task 会等待容量；`delivery_unknown` 仍可能对应已接受的外部调用，
 因此在完成 reconciliation 前继续占用一个槽位。
 
+admin 身份只负责管理 grant，不会自动获得 execution grant；runtime I/O 与 Task
+delivery 仍要求对应用户和 Environment 的 explicit active grant。
+
 ## Collaborators 标签
 
 项目协作者管理：
 
 | 角色 | 权限 |
 |------|------|
-| `member`（读写） | 查看、创建和修改项目资源 |
+| `editor`（读写） | 查看、创建和修改 Project 资源；可选 `can_publish` |
 | `viewer`（只读） | 仅可查看项目资源 |
 
-支持添加新协作者和调整已有协作者的角色。
+Settings 中的 Collaborators 标签仅对 admin 可见；Project owner 也可在 Project
+设置中管理成员。正式成员角色为 `editor` / `viewer`，发布能力由独立的
+`can_publish` 标志控制。
 
 ## Skill Registries
 
