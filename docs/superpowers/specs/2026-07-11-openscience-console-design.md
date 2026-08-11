@@ -142,7 +142,7 @@ OpenScience 是桌面研究工作台，保留左侧导航而不是照搬 Apple �
 - 导航中的项目必须按用户目标而不是实现模块组织。管理员专有工具必须与普通研究工作分隔。
 - 不把任务运行统计、说明文字或所有二级入口长期堆进导航；它们应进入页面状态区、二级导航或按需展开的菜单。
 
-当前 `Projects`、`Terminal`、`Tasks`、`Workspaces`、文件浏览、`Environments`、`Resources`、`Literature`、`Sessions`、`Timeline` 和 `Settings` 平铺于导航中。这是本设计需要重新分组的主要对象。
+当前 `Projects`、`Terminal`、`Tasks`、`Workspaces`、文件浏览、`Environments`、`Resources`、`Literature`、`Runs`、`Timeline` 和 `Settings` 平铺于导航中。这是本设计需要重新分组的主要对象。
 
 已确认的首版分组如下；分组只使用小标签与细分隔线，不使用下拉菜单或可折叠的“文件夹式”导航：
 
@@ -160,7 +160,7 @@ OpenScience 是桌面研究工作台，保留左侧导航而不是照搬 Apple �
   Resources
 
 管理（仅管理员）
-  Sessions
+  Runs
   Timeline
 
 固定在底部
@@ -198,7 +198,7 @@ PageHeader 是页面标题的唯一归属。不要在 TopBar、侧栏和正文�
 OpenScience 提供一个类似 macOS Spotlight、Listary 与 VS Code Command Palette 的极简命令面板，但不复制其商标、图形或完整实现。
 
 - 快捷键：Windows/Linux 使用 `Ctrl+Shift+P`，macOS 使用 `Cmd+Shift+P`；`Esc` 关闭，方向键选择，`Enter` 执行。
-- 首版只支持“前往页面”命令：今日概览、Projects、Tasks、Literature、Workspaces、Terminal、Environments、Resources、Settings；管理员额外看到 Sessions 与 Timeline。
+- 首版只支持“前往页面”命令：今日概览、Projects、Tasks、Literature、Workspaces、Terminal、Environments、Resources、Settings；管理员额外看到 Runs 与 Timeline。
 - 输入框自动获得焦点，结果按“页面”分组，提供图标、名称和一句用途说明；不伪装成尚不存在的全文搜索。命令名称、描述和分组随当前界面语言切换，同时保留英文页面关键词匹配，方便技术用户直接输入路由或产品术语。
 - 面板居中靠近视窗上方，宽度受限，使用 `--osci-surface-glass`、弱背景遮罩和明确的键盘焦点；视觉上取其安静和即时，不复制 macOS 的品牌细节。
 - 后续可扩展为对象搜索和有限命令，但必须先有可解释、可授权的真实动作，不允许把任意后台操作直接暴露为命令。
@@ -454,7 +454,7 @@ DraggableCardGrid
 2. 侧栏按“研究 / 运行 / 管理”轻量分组，以标签与分隔线表达，不做下拉或可折叠分组。Settings 固定在底部。
 3. Projects 是一级核心入口；其与 Tasks、Workspaces 的职责边界以 Project / Task / Workspace 领域设计为准。
 4. 新增 Command Palette，快捷键为 `Ctrl+Shift+P` / `Cmd+Shift+P`，首期仅实现页面切换命令。
-5. Resources 对普通研究者保持可见；Sessions 与 Timeline 继续受管理员权限控制。
+5. Resources 对普通研究者保持可见；Runs 与 Timeline 继续受管理员权限控制。
 6. 第一批实现范围为全局外壳、今日概览、Command Palette、Literature、Tasks、Resources；Workspaces 紧随其后。
 7. 设计系统明确支持浅色和深色官方主题，并为更多配色和受控第三方主题预留稳定契约；默认主题为浅色。
 8. 采用原创、矢量优先的 Open Orbit 标识作为 OpenScience 首版 Logo。

@@ -114,7 +114,7 @@ bash scripts/ci.sh l1-frontend
 bash scripts/ci.sh l1-docs
 ```
 
-使用锁定依赖构建 `docs-site/` 的 Astro + Starlight 站点，确保产品文档在进入 `master` 前即可验证，而不是等 GitHub Pages 部署阶段才发现破坏。
+使用锁定依赖构建 `docs-site/` 的 VitePress 站点，确保产品文档在进入 `master` 前即可验证，而不是等 GitHub Pages 部署阶段才发现破坏。
 
 ### 4.5 聚合命令
 
