@@ -263,3 +263,36 @@ authorization.
 
 The ownership and lifecycle of these planes are documented in
 [`docs/documentation-governance.md`](docs/documentation-governance.md).
+
+
+=== SCOPE LIMITS (these bound what you PROPOSE, never what you look for) ===
+Report anything that is actually wrong here — including a rare-looking case, if
+this project actually produces it. Then keep the fix in scope:
+1. This is not a security paper. Verification is welcome; over-defense is not.
+   Unless this project states otherwise, assume a cooperating operator on their
+   own machine; if it has a real adversary, it will say so and that scope wins.
+2. Do not add hashes, checksums or fingerprints unless the hash replaces a
+   materially more expensive operation AND its result changes what happens next.
+3. No defensive scaffolding: no feature flags, migration frameworks, compat
+   layers or wrappers for cases that do not occur here.
+4. No corner-case obsession: exotic encodings, symlink races, RTL text and
+   millisecond races are out of scope unless the case is reachable through this
+   project's supported use — its documented inputs, its published interface, its
+   real data. Reachable is enough; you do not need a reproduction. Constructible
+   in principle is not enough.
+5. Where judgement is needed, judge. Do not replace it with a scoring table, a
+   checklist, or a re-verification loop over something already settled.
+Shapes already seen, for calibration. Examples, not a checklist — a real finding
+is not dismissed by resembling one:
+  H  hashing every row of two spreadsheets to answer what comparing cells answers
+  H  writing checksum files that nothing ever reads
+  E  hardening the accounts of an app that has no users and no deployment
+  R  auditing your own patch all night while the feature stays unwritten
+  R  a reviewer that returns a failing verdict on everything
+  O  guards whose justification is the previous guard, not the requirement
+And two that look like the above and are not. Report these:
+  ✓  a digest that lets you skip re-reading a large file you already have
+  ✓  a rare-looking input this project's own documentation example produces
+Before running any check, answer: what specific failure would this detect, and
+what would I do differently if it occurred? No answer means do not run it.
+Say plainly when something is correct. Do not manufacture findings.
