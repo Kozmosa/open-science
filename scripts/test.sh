@@ -7,6 +7,7 @@
 #   bash scripts/test.sh middleware  # middleware/security tests
 #   bash scripts/test.sh api         # HTTP API integration tests
 #   bash scripts/test.sh engine      # execution engine / terminal tests
+#   bash scripts/test.sh cli         # CLI and repository script tests
 #   bash scripts/test.sh concurrent  # race/contention tests (serial, -n0)
 #   bash scripts/test.sh json_edge   # JSON persistence edge cases
 #   bash scripts/test.sh db_race     # SQLite contention tests (serial, -n0)
@@ -50,6 +51,7 @@ case "${1:-fast}" in
   middleware)  run_parallel -m middleware -q --timeout=30 ;;
   api)         run_partitioned api 60 120 ;;
   engine)      run_partitioned engine 60 120 ;;
+  cli)         run_partitioned cli 60 120 ;;
   concurrent)  run_serial -m concurrent -q --timeout=120 ;;
   json_edge)   run_parallel -m json_edge -q --timeout=30 ;;
   db_race)     run_serial -m db_race -q --timeout=120 ;;
@@ -72,7 +74,7 @@ case "${1:-fast}" in
     ;;
   *)
     echo "Unknown test suite: $1" >&2
-    echo "Usage: bash scripts/test.sh {fast|unit|middleware|api|engine|concurrent|json_edge|db_race|production-contract|all|staging}" >&2
+    echo "Usage: bash scripts/test.sh {fast|unit|middleware|api|engine|cli|concurrent|json_edge|db_race|production-contract|all|staging}" >&2
     exit 1
     ;;
 esac

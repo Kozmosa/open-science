@@ -155,6 +155,25 @@ def test_selective_unit_lane_keeps_race_tests_serial(tmp_path: Path) -> None:
     assert ("uv run pytest -m (unit) and (concurrent or db_race) -q --timeout=120 -n 0") in commands
 
 
+def test_cli_lane_keeps_race_tests_serial(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+
+    result, log_path = _run_repo_script(
+        repo_root,
+        tmp_path,
+        "test.sh",
+        ["cli"],
+        env_overrides={"OPENSCIENCE_PYTEST_WORKERS": "2"},
+    )
+
+    assert result.returncode == 0, result.stderr
+    commands = _command_lines(log_path)
+    assert (
+        "uv run pytest -m (cli) and not concurrent and not db_race -q --timeout=60 -n 2"
+    ) in commands
+    assert ("uv run pytest -m (cli) and (concurrent or db_race) -q --timeout=120 -n 0") in commands
+
+
 def test_backend_runner_rejects_unbounded_worker_value(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parent.parent
 
