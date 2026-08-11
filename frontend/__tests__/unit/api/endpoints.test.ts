@@ -598,12 +598,6 @@ describe('api endpoints', () => {
         new Response(
           JSON.stringify({
             workspace_id: 'workspace-new',
-            label: 'New workspace',
-            description: null,
-            default_workdir: '/workspace/new',
-            workspace_prompt: 'Prompt',
-            created_at: '2026-04-27T00:00:00Z',
-            updated_at: '2026-04-27T00:00:00Z',
           }),
           { status: 200, headers: { 'content-type': 'application/json' } }
         )
@@ -614,10 +608,26 @@ describe('api endpoints', () => {
             workspace_id: 'workspace-new',
             label: 'Updated workspace',
             description: 'Updated',
-            default_workdir: '/workspace/updated',
-            workspace_prompt: 'Updated prompt',
+            canonical_path: '/workspace/new',
+            workspace_context: 'Updated prompt',
+            status: 'active',
+            owner_user_id: 'user-1',
             created_at: '2026-04-27T00:00:00Z',
             updated_at: '2026-04-27T00:01:00Z',
+            recent_activity_at: '2026-04-27T00:01:00Z',
+            environment: {
+              environment_id: 'env-1',
+              alias: 'local',
+              display_name: 'Local',
+              status: 'active',
+            },
+            project_links: [],
+            task_count: 0,
+            active_task_count: 0,
+            can_execute: true,
+            cannot_execute_reason: null,
+            can_manage_registry: true,
+            git_status: { state: 'not_collected' },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } }
         )

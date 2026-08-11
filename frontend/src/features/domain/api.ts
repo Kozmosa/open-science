@@ -1,9 +1,60 @@
+import type {
+  DomainCapabilitiesResponse,
+  DomainContextCandidateAcceptResponse,
+  DomainContextCandidateListResponse,
+  DomainContextCandidateResponse,
+  DomainContextDiffResponse,
+  DomainContextDraftMutationResponse,
+  DomainContextVersionListResponse,
+  DomainContextVersionResponse,
+  DomainOverviewRefreshJobResponse,
+  DomainOverviewSnapshotResponse,
+  DomainProjectContextResponse,
+  DomainProjectCreateRequest,
+  DomainProjectCreateResponse,
+  DomainProjectListResponse,
+  DomainProjectSummaryResponse,
+  DomainTaskContextResponse,
+  DomainWorkspaceCreateRequest,
+  DomainWorkspaceCreateResponse,
+  DomainWorkspaceLinkResponse,
+  DomainWorkspaceListResponse,
+  DomainWorkspaceResponse,
+  ProjectContextCandidateRejectRequest,
+  ProjectContextDraftRequest,
+  ProjectMemberListResponse,
+  ProjectMemberRequest,
+  ProjectMemberResponse,
+  ProjectUpdateRequest,
+  WorkspaceUpdateRequest,
+} from '@/generated/transport';
 import { api } from '@/shared/api/client';
 import { idempotencyHeaders } from '@/shared/api/idempotency';
+import {
+  adaptDomainCapabilities,
+  adaptDomainContextCandidate,
+  adaptDomainContextCandidateAcceptance,
+  adaptDomainContextCandidateList,
+  adaptDomainContextDraft,
+  adaptDomainContextVersion,
+  adaptDomainContextVersionList,
+  adaptDomainProject,
+  adaptDomainProjectContext,
+  adaptDomainProjectList,
+  adaptDomainProjectMember,
+  adaptDomainProjectMemberList,
+  adaptDomainTaskContext,
+  adaptDomainWorkspace,
+  adaptDomainWorkspaceList,
+  adaptOverviewRefreshJob,
+  adaptOverviewSnapshot,
+} from './adapters';
 import type {
   DomainCapabilities,
   DomainContextCandidate,
+  DomainContextCandidateAcceptance,
   DomainContextDiff,
+  DomainContextDraft,
   DomainContextVersion,
   DomainProjectContext,
   DomainProjectMember,
@@ -13,41 +64,51 @@ import type {
   OverviewRefreshJob,
   OverviewSnapshot,
 } from './types';
-import type {
-  ProjectUpdateRequest,
-  WorkspaceUpdateRequest,
-} from '@/generated/transport';
 
 interface ItemList<T> {
   items: T[];
 }
 
 export function getDomainCapabilities(): Promise<DomainCapabilities> {
-  return api.get('/domain/capabilities');
+  return api
+    .get<DomainCapabilitiesResponse>('/domain/capabilities')
+    .then(adaptDomainCapabilities);
 }
 
-export function getDomainProjects(includeArchived = false): Promise<ItemList<DomainProjectProjection>> {
-  return api.get(`/domain/projects?include_archived=${includeArchived}`);
+export function getDomainProjects(
+  includeArchived = false,
+): Promise<ItemList<DomainProjectProjection>> {
+  return api
+    .get<DomainProjectListResponse>(`/domain/projects?include_archived=${includeArchived}`)
+    .then(adaptDomainProjectList);
 }
 
 export function getDomainProject(projectId: string): Promise<DomainProjectProjection> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}`);
+  return api
+    .get<DomainProjectSummaryResponse>(`/domain/projects/${encodeURIComponent(projectId)}`)
+    .then(adaptDomainProject);
 }
 
 export function getDomainWorkspaces(
   includeUnregistered = false,
 ): Promise<ItemList<DomainWorkspaceProjection>> {
-  return api.get(`/domain/workspaces?include_unregistered=${includeUnregistered}`);
+  return api
+    .get<DomainWorkspaceListResponse>(
+      `/domain/workspaces?include_unregistered=${includeUnregistered}`,
+    )
+    .then(adaptDomainWorkspaceList);
 }
 
 export function getDomainWorkspace(workspaceId: string): Promise<DomainWorkspaceProjection> {
-  return api.get(`/domain/workspaces/${encodeURIComponent(workspaceId)}`);
+  return api
+    .get<DomainWorkspaceResponse>(`/domain/workspaces/${encodeURIComponent(workspaceId)}`)
+    .then(adaptDomainWorkspace);
 }
 
 export function createDomainWorkspace(
-  payload: { environment_id: string; canonical_path: string; label: string },
+  payload: DomainWorkspaceCreateRequest,
   idempotencyKey: string,
-): Promise<{ workspace_id: string }> {
+): Promise<DomainWorkspaceCreateResponse> {
   return domainPost('/domain/workspaces', payload, idempotencyKey);
 }
 
@@ -55,7 +116,7 @@ export function attachDomainWorkspace(
   projectId: string,
   workspaceId: string,
   idempotencyKey: string,
-): Promise<Record<string, unknown>> {
+): Promise<DomainWorkspaceLinkResponse> {
   return domainPost(
     `/domain/projects/${encodeURIComponent(projectId)}/workspaces/${encodeURIComponent(workspaceId)}`,
     {},
@@ -67,7 +128,7 @@ export function setDomainPrimaryWorkspace(
   projectId: string,
   workspaceId: string,
   idempotencyKey: string,
-): Promise<Record<string, unknown>> {
+): Promise<DomainWorkspaceLinkResponse> {
   return api.put(
     `/domain/projects/${encodeURIComponent(projectId)}/primary-workspace/${encodeURIComponent(workspaceId)}`,
     {},
@@ -76,17 +137,23 @@ export function setDomainPrimaryWorkspace(
 }
 
 export function getDomainTaskContext(taskId: string): Promise<DomainTaskContextSnapshot> {
-  return api.get(`/domain/tasks/${encodeURIComponent(taskId)}/context`);
+  return api
+    .get<DomainTaskContextResponse>(`/domain/tasks/${encodeURIComponent(taskId)}/context`)
+    .then(adaptDomainTaskContext);
 }
 
 export function getDomainProjectContext(projectId: string): Promise<DomainProjectContext> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context`);
+  return api
+    .get<DomainProjectContextResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/context`,
+    )
+    .then(adaptDomainProjectContext);
 }
 
 export function createDomainProject(
-  payload: { name: string; description: string | null },
+  payload: DomainProjectCreateRequest,
   idempotencyKey: string,
-): Promise<{ project_id: string }> {
+): Promise<DomainProjectCreateResponse> {
   return domainPost('/domain/projects', payload, idempotencyKey);
 }
 
@@ -107,7 +174,7 @@ export function replaceDomainPrimaryWorkspace(
   previousWorkspaceId: string,
   workspaceId: string,
   idempotencyKey: string,
-): Promise<Record<string, unknown>> {
+): Promise<DomainWorkspaceLinkResponse> {
   return api.put(
     `/domain/projects/${encodeURIComponent(projectId)}/primary-workspace/${encodeURIComponent(workspaceId)}?previous_workspace_id=${encodeURIComponent(previousWorkspaceId)}`,
     {},
@@ -115,52 +182,143 @@ export function replaceDomainPrimaryWorkspace(
   );
 }
 
-export function saveDomainProjectContextDraft(projectId: string, content: string, idempotencyKey: string): Promise<DomainProjectContext> {
-  return api.put(`/domain/projects/${encodeURIComponent(projectId)}/context/draft`, { content }, { headers: idempotencyHeaders(idempotencyKey) });
+export function saveDomainProjectContextDraft(
+  projectId: string,
+  content: string,
+  idempotencyKey: string,
+): Promise<DomainContextDraft> {
+  const payload: ProjectContextDraftRequest = { content };
+  return api
+    .put<DomainContextDraftMutationResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/context/draft`,
+      payload,
+      { headers: idempotencyHeaders(idempotencyKey) },
+    )
+    .then(adaptDomainContextDraft);
 }
 
-export function publishDomainProjectContext(projectId: string, idempotencyKey: string): Promise<DomainContextVersion> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/publish`, {}, idempotencyKey);
+export function publishDomainProjectContext(
+  projectId: string,
+  idempotencyKey: string,
+): Promise<DomainContextVersion> {
+  return domainPost<DomainContextVersionResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/context/publish`,
+    {},
+    idempotencyKey,
+  ).then(adaptDomainContextVersion);
 }
 
-export function getDomainProjectContextVersions(projectId: string): Promise<ItemList<DomainContextVersion>> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/versions`);
+export function getDomainProjectContextVersions(
+  projectId: string,
+): Promise<ItemList<DomainContextVersion>> {
+  return api
+    .get<DomainContextVersionListResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/context/versions`,
+    )
+    .then(adaptDomainContextVersionList);
 }
 
-export function getDomainProjectContextDiff(projectId: string, contextVersionId: string, against: string): Promise<DomainContextDiff> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/versions/${encodeURIComponent(contextVersionId)}/diff?against=${encodeURIComponent(against)}`);
+export function getDomainProjectContextDiff(
+  projectId: string,
+  contextVersionId: string,
+  against: string,
+): Promise<DomainContextDiff> {
+  return api.get<DomainContextDiffResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/context/versions/${encodeURIComponent(contextVersionId)}/diff?against=${encodeURIComponent(against)}`,
+  );
 }
 
-export function getDomainProjectContextCandidates(projectId: string): Promise<ItemList<DomainContextCandidate>> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates`);
+export function getDomainProjectContextCandidates(
+  projectId: string,
+): Promise<ItemList<DomainContextCandidate>> {
+  return api
+    .get<DomainContextCandidateListResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/context/candidates`,
+    )
+    .then(adaptDomainContextCandidateList);
 }
 
-export function acceptDomainContextCandidate(projectId: string, candidateId: string, idempotencyKey: string): Promise<DomainContextCandidate> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/accept`, {}, idempotencyKey);
+export function acceptDomainContextCandidate(
+  projectId: string,
+  candidateId: string,
+  idempotencyKey: string,
+): Promise<DomainContextCandidateAcceptance> {
+  return domainPost<DomainContextCandidateAcceptResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/accept`,
+    {},
+    idempotencyKey,
+  ).then(adaptDomainContextCandidateAcceptance);
 }
 
-export function rejectDomainContextCandidate(projectId: string, candidateId: string, reason: string, idempotencyKey: string): Promise<DomainContextCandidate> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/reject`, { reason }, idempotencyKey);
+export function rejectDomainContextCandidate(
+  projectId: string,
+  candidateId: string,
+  reason: string,
+  idempotencyKey: string,
+): Promise<DomainContextCandidate> {
+  const payload: ProjectContextCandidateRejectRequest = { reason };
+  return domainPost<DomainContextCandidateResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}/context/candidates/${encodeURIComponent(candidateId)}/reject`,
+    payload,
+    idempotencyKey,
+  ).then(adaptDomainContextCandidate);
 }
 
-export function getDomainProjectMembers(projectId: string): Promise<ItemList<DomainProjectMember>> {
-  return api.get(`/domain/projects/${encodeURIComponent(projectId)}/members`);
+export function getDomainProjectMembers(
+  projectId: string,
+): Promise<ItemList<DomainProjectMember>> {
+  return api
+    .get<ProjectMemberListResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/members`,
+    )
+    .then(adaptDomainProjectMemberList);
 }
 
-export function upsertDomainProjectMember(projectId: string, userId: string, role: DomainProjectMember['role'], canPublish: boolean, idempotencyKey: string): Promise<DomainProjectMember> {
-  return api.put(`/domain/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, { role, can_publish: canPublish }, { headers: idempotencyHeaders(idempotencyKey) });
+export function upsertDomainProjectMember(
+  projectId: string,
+  userId: string,
+  role: DomainProjectMember['role'],
+  canPublish: boolean,
+  idempotencyKey: string,
+): Promise<DomainProjectMember> {
+  const payload: ProjectMemberRequest = { role, can_publish: canPublish };
+  return api
+    .put<ProjectMemberResponse>(
+      `/domain/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+      payload,
+      { headers: idempotencyHeaders(idempotencyKey) },
+    )
+    .then(adaptDomainProjectMember);
 }
 
-export function removeDomainProjectMember(projectId: string, userId: string, idempotencyKey: string): Promise<void> {
-  return api.delete(`/domain/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, { headers: idempotencyHeaders(idempotencyKey) });
+export function removeDomainProjectMember(
+  projectId: string,
+  userId: string,
+  idempotencyKey: string,
+): Promise<void> {
+  return api.delete(
+    `/domain/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`,
+    { headers: idempotencyHeaders(idempotencyKey) },
+  );
 }
 
 export function archiveDomainProject(projectId: string, idempotencyKey: string): Promise<void> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/archive`, {}, idempotencyKey);
+  return domainPost(
+    `/domain/projects/${encodeURIComponent(projectId)}/archive`,
+    {},
+    idempotencyKey,
+  );
 }
 
-export function unarchiveDomainProject(projectId: string, idempotencyKey: string): Promise<void> {
-  return domainPost(`/domain/projects/${encodeURIComponent(projectId)}/unarchive`, {}, idempotencyKey);
+export function unarchiveDomainProject(
+  projectId: string,
+  idempotencyKey: string,
+): Promise<void> {
+  return domainPost(
+    `/domain/projects/${encodeURIComponent(projectId)}/unarchive`,
+    {},
+    idempotencyKey,
+  );
 }
 
 export function updateDomainProject(
@@ -168,7 +326,11 @@ export function updateDomainProject(
   payload: ProjectUpdateRequest,
   idempotencyKey: string,
 ): Promise<DomainProjectProjection> {
-  return domainPatch(`/domain/projects/${encodeURIComponent(projectId)}`, payload, idempotencyKey);
+  return domainPatch<DomainProjectSummaryResponse>(
+    `/domain/projects/${encodeURIComponent(projectId)}`,
+    payload,
+    idempotencyKey,
+  ).then(adaptDomainProject);
 }
 
 export function updateDomainWorkspace(
@@ -176,31 +338,49 @@ export function updateDomainWorkspace(
   payload: WorkspaceUpdateRequest,
   idempotencyKey: string,
 ): Promise<DomainWorkspaceProjection> {
-  return domainPatch(`/domain/workspaces/${encodeURIComponent(workspaceId)}`, payload, idempotencyKey);
+  return domainPatch<DomainWorkspaceResponse>(
+    `/domain/workspaces/${encodeURIComponent(workspaceId)}`,
+    payload,
+    idempotencyKey,
+  ).then(adaptDomainWorkspace);
 }
 
 export function unregisterDomainWorkspace(
   workspaceId: string,
   idempotencyKey: string,
 ): Promise<void> {
-  return domainPost(`/domain/workspaces/${encodeURIComponent(workspaceId)}/unregister`, {}, idempotencyKey);
+  return domainPost(
+    `/domain/workspaces/${encodeURIComponent(workspaceId)}/unregister`,
+    {},
+    idempotencyKey,
+  );
 }
 
 export function getTodayOverview(): Promise<OverviewSnapshot> {
-  return api.get('/domain/overview/today');
+  return api
+    .get<DomainOverviewSnapshotResponse>('/domain/overview/today')
+    .then(adaptOverviewSnapshot);
 }
 
-export function requestTodayOverviewRefresh(idempotencyKey: string): Promise<OverviewRefreshJob> {
-  return api.post('/domain/overview/today/refresh', {}, {
-    headers: idempotencyHeaders(idempotencyKey),
-  });
+export function requestTodayOverviewRefresh(
+  idempotencyKey: string,
+): Promise<OverviewRefreshJob> {
+  return api
+    .post<DomainOverviewRefreshJobResponse>('/domain/overview/today/refresh', {}, {
+      headers: idempotencyHeaders(idempotencyKey),
+    })
+    .then(adaptOverviewRefreshJob);
 }
 
 export function getOverviewRefreshJob(jobId: string): Promise<OverviewRefreshJob> {
-  return api.get(`/domain/overview/refresh/${encodeURIComponent(jobId)}`);
+  return api
+    .get<DomainOverviewRefreshJobResponse>(
+      `/domain/overview/refresh/${encodeURIComponent(jobId)}`,
+    )
+    .then(adaptOverviewRefreshJob);
 }
 
-export function domainPost<TResponse>(
+function domainPost<TResponse = void>(
   path: string,
   body: unknown,
   idempotencyKey: string,
@@ -208,25 +388,10 @@ export function domainPost<TResponse>(
   return api.post(path, body, { headers: idempotencyHeaders(idempotencyKey) });
 }
 
-export function domainPut<TResponse>(
-  path: string,
-  body: unknown,
-  idempotencyKey: string,
-): Promise<TResponse> {
-  return api.put(path, body, { headers: idempotencyHeaders(idempotencyKey) });
-}
-
-export function domainPatch<TResponse>(
+function domainPatch<TResponse>(
   path: string,
   body: unknown,
   idempotencyKey: string,
 ): Promise<TResponse> {
   return api.patch(path, body, { headers: idempotencyHeaders(idempotencyKey) });
-}
-
-export function domainDelete<TResponse>(
-  path: string,
-  idempotencyKey: string,
-): Promise<TResponse> {
-  return api.delete(path, { headers: idempotencyHeaders(idempotencyKey) });
 }

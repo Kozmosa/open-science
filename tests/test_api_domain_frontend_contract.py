@@ -12,6 +12,7 @@ from fastapi import FastAPI
 
 from ainrf.api.app import create_app
 from ainrf.api.config import ApiConfig, hash_api_key
+from ainrf.api.domain_schemas import DomainContextCandidateResponse
 from ainrf.api.schemas import ForkConfirmResponse, ForkPreviewResponse, TaskSummaryResponse
 from ainrf.auth.service import AuthService
 from ainrf.db import connect
@@ -55,6 +56,49 @@ def test_task_list_schema_exposes_sort_union(tmp_path: Path) -> None:
     sort_parameter = next(parameter for parameter in parameters if parameter["name"] == "sort")
     sort_schema = sort_parameter["schema"]
     assert sort_schema["enum"] == ["updated", "created", "name", "status"]
+
+
+def test_domain_frontend_routes_expose_named_response_models(tmp_path: Path) -> None:
+    app = _v2_app(tmp_path / "state", tmp_path)
+    paths = app.openapi()["paths"]
+    expected = {
+        ("/api/domain/capabilities", "get", "200"): "DomainCapabilitiesResponse",
+        ("/api/domain/projects", "post", "200"): "DomainProjectCreateResponse",
+        ("/api/domain/workspaces", "post", "200"): "DomainWorkspaceCreateResponse",
+        (
+            "/api/domain/projects/{project_id}/context",
+            "get",
+            "200",
+        ): "DomainProjectContextResponse",
+        (
+            "/api/domain/projects/{project_id}/context/draft",
+            "put",
+            "200",
+        ): "DomainContextDraftMutationResponse",
+        (
+            "/api/domain/projects/{project_id}/context/candidates/{candidate_id}/accept",
+            "post",
+            "200",
+        ): "DomainContextCandidateAcceptResponse",
+        ("/api/domain/overview/today", "get", "200"): "DomainOverviewSnapshotResponse",
+        (
+            "/api/domain/overview/today/refresh",
+            "post",
+            "202",
+        ): "DomainOverviewRefreshJobResponse",
+    }
+    for (path, method, status_code), model_name in expected.items():
+        schema = paths[path][method]["responses"][status_code]["content"]["application/json"][
+            "schema"
+        ]
+        assert schema == {"$ref": f"#/components/schemas/{model_name}"}
+
+    candidate_schema = DomainContextCandidateResponse.model_json_schema()
+    assert candidate_schema["properties"]["status"]["enum"] == [
+        "proposed",
+        "accepted",
+        "rejected",
+    ]
 
 
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:

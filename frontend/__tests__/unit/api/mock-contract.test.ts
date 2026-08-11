@@ -113,9 +113,9 @@ describe('frontend v2 mock contract', () => {
       'context-project-alpha-v1',
     );
 
-    expect(accepted.status).toBe('accepted');
-    expect(afterAccept.draft?.content).toContain(accepted.content);
-    expect(saved.draft?.fingerprint).toContain('draft-project-alpha');
+    expect(accepted.candidate.status).toBe('accepted');
+    expect(afterAccept.draft?.content).toContain(accepted.candidate.content);
+    expect(saved.fingerprint).toContain('draft-project-alpha');
     expect(published).toMatchObject({ is_active: true, assembly_eligible: true });
     expect(versions.items).toHaveLength(2);
     expect(diff).toMatchObject({

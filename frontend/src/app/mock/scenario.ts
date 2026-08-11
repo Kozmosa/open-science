@@ -8,10 +8,21 @@ import type {
 } from '@features/tasks/types';
 import type { AdminUserItem, EnvAccessItem, SearchSettingsResponse } from '@features/settings/types';
 import type {
+  DomainCapabilitiesResponse,
+  DomainContextCandidateResponse,
+  DomainContextVersionResponse,
+  DomainOverviewDisplayCardResponse,
+  DomainOverviewRefreshJobResponse,
+  DomainOverviewSnapshotResponse,
+  DomainOverviewSourceCardResponse,
+  DomainProjectContextResponse,
+  DomainProjectSummaryResponse,
+  DomainWorkspaceResponse,
   ForkConfirmRequest,
   ForkConfirmResponse,
   ForkPreviewRequest,
   ForkPreviewResponse,
+  ProjectMemberResponse,
   TaskCreateRequest,
 } from '@/generated/transport';
 import type {
@@ -27,18 +38,6 @@ import type {
   LiteratureTopicRequest,
   LiteratureTopicUpdateRequest,
 } from '@/generated/transport';
-import type {
-  DomainCapabilities,
-  DomainContextCandidate,
-  DomainContextVersion,
-  DomainProjectContext,
-  DomainProjectMember,
-  DomainProjectProjection,
-  DomainWorkspaceProjection,
-  OverviewDisplayCard,
-  OverviewRefreshJob,
-  OverviewSnapshot,
-} from '@/features/domain/types';
 import { createTransportMockAdapter } from '@/shared/api/transport';
 
 const http = createTransportMockAdapter(mswHttp);
@@ -51,9 +50,13 @@ const FORK_PREVIEW_VALIDITY_SECONDS = 900;
 type Params = Record<string, string | readonly string[] | undefined>;
 
 interface MockRefreshJob {
-  job: OverviewRefreshJob;
+  job: DomainOverviewRefreshJobResponse;
   poll_count: number;
 }
+
+type MockDomainWorkspace = Omit<DomainWorkspaceResponse, 'project_links'> & {
+  project_links: NonNullable<DomainWorkspaceResponse['project_links']>;
+};
 
 interface MockSummary {
   summary: LiteratureSummary;
@@ -77,25 +80,25 @@ interface FrontendV2MockState {
   context_version_counter: number;
   check_counter: number;
   intent_counter: number;
-  projects: DomainProjectProjection[];
-  workspaces: DomainWorkspaceProjection[];
+  projects: DomainProjectSummaryResponse[];
+  workspaces: MockDomainWorkspace[];
   tasks: TaskSummary[];
   messages: Record<string, MessageItem[]>;
   task_edges: TaskEdge[];
   fork_previews: Record<string, ForkPreviewResponse>;
   fork_preview_idempotency: Record<string, MockIdempotencyRecord<ForkPreviewResponse>>;
   fork_confirmations: Record<string, MockIdempotencyRecord<ForkConfirmResponse>>;
-  contexts: Record<string, DomainProjectContext>;
-  context_versions: Record<string, DomainContextVersion[]>;
-  context_candidates: Record<string, DomainContextCandidate[]>;
-  project_members: Record<string, DomainProjectMember[]>;
+  contexts: Record<string, DomainProjectContextResponse>;
+  context_versions: Record<string, DomainContextVersionResponse[]>;
+  context_candidates: Record<string, DomainContextCandidateResponse[]>;
+  project_members: Record<string, ProjectMemberResponse[]>;
   topics: LiteratureTopic[];
   papers: LiteraturePaperDetail[];
   summaries: Record<string, MockSummary>;
   checks: LiteratureCheck[];
   check_polls: Record<string, number>;
   intents: Record<string, MockIntent>;
-  overview: OverviewSnapshot;
+  overview: DomainOverviewSnapshotResponse;
   refresh_jobs: Record<string, MockRefreshJob>;
   admin_users: AdminUserItem[];
   environment_access: Record<string, EnvAccessItem[]>;
@@ -179,10 +182,10 @@ function forkConfirmRequestSignature(
   });
 }
 
-function makeCapabilities(): DomainCapabilities {
+function makeCapabilities(): DomainCapabilitiesResponse {
   return {
     domain_contract_version: 2,
-    mode: 'synthetic-mock',
+    mode: 'v2',
     standard_task_create: true,
     project_context: true,
     workspace_links: true,
@@ -203,7 +206,7 @@ function makeCapabilities(): DomainCapabilities {
     overview_snapshot_planner: {
       job_store_ready: true,
       planner_ready: true,
-      planner_status: 'ready',
+      planner_status: 'running',
     },
   };
 }
@@ -225,7 +228,7 @@ function makeProject(
   workspaceId: string,
   workspaceLabel: string,
   isDefault: boolean,
-): DomainProjectProjection {
+): DomainProjectSummaryResponse {
   return {
     project_id: projectId,
     name,
@@ -264,7 +267,7 @@ function makeWorkspace(
   label: string,
   projectId: string,
   projectName: string,
-): DomainWorkspaceProjection {
+): MockDomainWorkspace {
   return {
     workspace_id: workspaceId,
     label,
@@ -378,14 +381,18 @@ function makeTask(
   };
 }
 
-function makeContextVersion(projectId: string, sequence: number, content: string): DomainContextVersion {
+function makeContextVersion(
+  projectId: string,
+  sequence: number,
+  content: string,
+): DomainContextVersionResponse {
   return {
     context_version_id: `context-${projectId}-v${sequence}`,
     project_id: projectId,
     content,
     fingerprint: `fingerprint-${projectId}-${sequence}`,
     fragment_manifest: [],
-    fragment_provenance_status: 'complete',
+    fragment_provenance_status: 'verified',
     fragment_provenance_evidence: { source: 'frontend-v2-mock' },
     assembly_eligible: true,
     is_active: true,
@@ -394,7 +401,7 @@ function makeContextVersion(projectId: string, sequence: number, content: string
   };
 }
 
-function makeOverviewCards(): OverviewDisplayCard[] {
+function makeOverviewCards(): DomainOverviewDisplayCardResponse[] {
   return [
     {
       id: 'attention',
@@ -406,7 +413,7 @@ function makeOverviewCards(): OverviewDisplayCard[] {
     },
     {
       id: 'progress',
-      data: { items: [{ task_id: 'task-seed', title: 'Review seeded frontend flow', status: 'succeeded' }] },
+      data: { tasks: [{ task_id: 'task-seed', title: 'Review seeded frontend flow', status: 'succeeded' }] },
       data_cutoff_at: LATER_TIME,
       source_status: 'ok',
       attention_required: false,
@@ -431,6 +438,35 @@ function makeOverviewCards(): OverviewDisplayCard[] {
     {
       id: 'resources',
       data: { environment_count: 1, environments: [{ environment_id: 'env-localhost', status: 'ok' }] },
+      data_cutoff_at: LATER_TIME,
+      source_status: 'ok',
+      attention_required: false,
+      error_summary: null,
+    },
+  ];
+}
+
+function makeOverviewSourceCards(): DomainOverviewSourceCardResponse[] {
+  return [
+    {
+      id: 'domain',
+      data: { projects_active: 2, recent_tasks: [], recent_entities: [], attention_items: [] },
+      data_cutoff_at: LATER_TIME,
+      source_status: 'ok',
+      attention_required: false,
+      error_summary: null,
+    },
+    {
+      id: 'literature',
+      data: { unread_count: 1, updated_count: 1, papers: [] },
+      data_cutoff_at: LATER_TIME,
+      source_status: 'ok',
+      attention_required: false,
+      error_summary: null,
+    },
+    {
+      id: 'resources',
+      data: { environment_count: 1, intervention_required: [] },
       data_cutoff_at: LATER_TIME,
       source_status: 'ok',
       attention_required: false,
@@ -479,6 +515,7 @@ function createState(): FrontendV2MockState {
     'succeeded',
   );
   const displayCards = makeOverviewCards();
+  const sourceCards = makeOverviewSourceCards();
   return {
     task_counter: 1,
     project_counter: 1,
@@ -535,7 +572,7 @@ function createState(): FrontendV2MockState {
         candidate_id: 'candidate-alpha-1',
         project_id: 'project-alpha',
         content: 'Record browser acceptance evidence after each deterministic scenario.',
-        status: 'pending',
+        status: 'proposed',
         created_at: LATER_TIME,
         created_by_user_id: OWNER_ID,
         source_metadata: { source: 'task-seed' },
@@ -587,9 +624,13 @@ function createState(): FrontendV2MockState {
       data_cutoff_at: LATER_TIME,
       source_status: 'ok',
       attention_required: false,
-      cards: displayCards,
+      cards: sourceCards,
       display_cards: displayCards,
       next_scheduled_at: '2026-07-17T06:00:00+08:00',
+      source: 'control_plane_only',
+      projects_active: 2,
+      tasks_by_status: { succeeded: 1 },
+      active_turns: 0,
     },
     refresh_jobs: {},
     admin_users: [
@@ -742,15 +783,15 @@ function engineFamilyForHarnessEngine(engine: string): 'codex' | 'claude' | null
   return null;
 }
 
-function projectById(projectId: string): DomainProjectProjection | undefined {
+function projectById(projectId: string): DomainProjectSummaryResponse | undefined {
   return state.projects.find((project) => project.project_id === projectId);
 }
 
-function workspaceById(workspaceId: string): DomainWorkspaceProjection | undefined {
+function workspaceById(workspaceId: string): MockDomainWorkspace | undefined {
   return state.workspaces.find((workspace) => workspace.workspace_id === workspaceId);
 }
 
-function projectWithCounts(project: DomainProjectProjection): DomainProjectProjection {
+function projectWithCounts(project: DomainProjectSummaryResponse): DomainProjectSummaryResponse {
   const tasks = state.tasks.filter((task) => task.project_id === project.project_id);
   const workspaces = state.workspaces.filter((workspace) => workspace.project_links.some(
     (link) => link.project_id === project.project_id && link.link_status === 'active',
@@ -765,7 +806,7 @@ function projectWithCounts(project: DomainProjectProjection): DomainProjectProje
   };
 }
 
-function workspaceWithCounts(workspace: DomainWorkspaceProjection): DomainWorkspaceProjection {
+function workspaceWithCounts(workspace: MockDomainWorkspace): MockDomainWorkspace {
   const tasks = state.tasks.filter((task) => task.workspace_id === workspace.workspace_id);
   return {
     ...workspace,
@@ -857,7 +898,7 @@ function advanceIntent(record: MockIntent): LiteratureTaskIntent {
   return record.intent;
 }
 
-function advanceRefreshJob(record: MockRefreshJob): OverviewRefreshJob {
+function advanceRefreshJob(record: MockRefreshJob): DomainOverviewRefreshJobResponse {
   record.poll_count += 1;
   if (record.poll_count === 1) {
     record.job.status = 'running';
@@ -919,7 +960,7 @@ export const frontendV2MockHandlers = [
       updated_by_user_id: OWNER_ID,
       updated_at: LATER_TIME,
     };
-    return HttpResponse.json(candidate);
+    return HttpResponse.json({ candidate, draft: context.draft });
   }),
   http.post('/api/domain/projects/:projectId/context/candidates/:candidateId/reject', async ({ params, request }) => {
     const projectId = textParam(params, 'projectId');
@@ -949,7 +990,7 @@ export const frontendV2MockHandlers = [
       updated_by_user_id: OWNER_ID,
       updated_at: LATER_TIME,
     };
-    return HttpResponse.json(context);
+    return HttpResponse.json({ project_id: projectId, ...context.draft });
   }),
   http.post('/api/domain/projects/:projectId/context/publish', ({ params }) => {
     const projectId = textParam(params, 'projectId');
@@ -1066,7 +1107,14 @@ export const frontendV2MockHandlers = [
       can_execute: workspace.can_execute,
       cannot_execute_reason: workspace.cannot_execute_reason,
     });
-    return HttpResponse.json({ project_id: projectId, workspace_id: workspaceId, link_status: 'active' });
+    return HttpResponse.json({
+      project_id: projectId,
+      workspace_id: workspaceId,
+      is_primary: false,
+      environment_id: workspace.environment.environment_id,
+      can_execute: workspace.can_execute,
+      cannot_execute_reason: workspace.cannot_execute_reason ?? null,
+    });
   }),
   http.put('/api/domain/projects/:projectId/primary-workspace/:workspaceId', ({ params }) => {
     const projectId = textParam(params, 'projectId');
@@ -1092,7 +1140,14 @@ export const frontendV2MockHandlers = [
       cannot_execute_reason: workspace.cannot_execute_reason,
     };
     project.permissions.can_create_task = workspace.can_execute;
-    return HttpResponse.json({ project_id: projectId, workspace_id: workspaceId, is_primary: true });
+    return HttpResponse.json({
+      project_id: projectId,
+      workspace_id: workspaceId,
+      is_primary: true,
+      environment_id: workspace.environment.environment_id,
+      can_execute: workspace.can_execute,
+      cannot_execute_reason: workspace.cannot_execute_reason ?? null,
+    });
   }),
 
   http.get('/api/domain/tasks/:taskId/context', ({ params }) => {
@@ -1475,7 +1530,7 @@ export const frontendV2MockHandlers = [
     if (!projectById(projectId)) return notFound('Project', projectId);
     const payload = await requestJson<{ role: 'viewer' | 'editor'; can_publish: boolean }>(request);
     const user = state.admin_users.find((item) => item.id === userId);
-    const member: DomainProjectMember = {
+    const member: ProjectMemberResponse = {
       user_id: userId,
       username: user?.username ?? userId,
       display_name: user?.display_name ?? userId,
@@ -1754,7 +1809,7 @@ export const frontendV2MockHandlers = [
     const jobId = `overview-refresh-${key.replace(/[^a-zA-Z0-9_-]/g, '-').slice(-40)}`;
     const existing = state.refresh_jobs[jobId];
     if (existing) return HttpResponse.json(existing.job);
-    const job: OverviewRefreshJob = {
+    const job: DomainOverviewRefreshJobResponse = {
       job_id: jobId,
       owner_user_id: OWNER_ID,
       trigger: 'manual',

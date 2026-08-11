@@ -44,16 +44,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getDomainProjectContext).mockResolvedValue({ project_id: 'project-1', active_version: version, draft: { content: 'Draft context', fingerprint: 'draft-fp', updated_by_user_id: 'user-1', updated_at: '2026-07-14T01:00:00Z' } });
   vi.mocked(getDomainProjectContextVersions).mockResolvedValue({ items: [version] });
-  vi.mocked(getDomainProjectContextCandidates).mockResolvedValue({ items: [{ candidate_id: 'candidate-1', project_id: 'project-1', content: 'Candidate fact', status: 'pending', created_at: '2026-07-14T01:00:00Z', created_by_user_id: 'user-1', source_metadata: {}, source_task_id: null, accepted_by_user_id: null, accepted_at: null, rejected_by_user_id: null, rejected_at: null, rejection_reason: null }] });
+  vi.mocked(getDomainProjectContextCandidates).mockResolvedValue({ items: [{ candidate_id: 'candidate-1', project_id: 'project-1', content: 'Candidate fact', status: 'proposed', created_at: '2026-07-14T01:00:00Z', created_by_user_id: 'user-1', source_metadata: {}, source_task_id: null, accepted_by_user_id: null, accepted_at: null, rejected_by_user_id: null, rejected_at: null, rejection_reason: null }] });
   vi.mocked(getDomainProjectMembers).mockResolvedValue({ items: [] });
 });
 
 describe('Project F8 consoles', () => {
   it('saves Draft, publishes and accepts candidates through permission-gated mutations', async () => {
     const user = userEvent.setup();
-    vi.mocked(saveDomainProjectContextDraft).mockResolvedValue({ project_id: 'project-1', active_version: version, draft: null });
+    vi.mocked(saveDomainProjectContextDraft).mockResolvedValue({ content: 'Revised durable context', fingerprint: 'draft-fp-2', updated_by_user_id: 'user-1', updated_at: '2026-07-14T01:01:00Z' });
     vi.mocked(publishDomainProjectContext).mockResolvedValue(version);
-    vi.mocked(acceptDomainContextCandidate).mockResolvedValue({} as never);
+    vi.mocked(acceptDomainContextCandidate).mockResolvedValue({
+      candidate: {
+        candidate_id: 'candidate-1', project_id: 'project-1', content: 'Candidate fact', status: 'accepted', created_at: '2026-07-14T01:00:00Z', created_by_user_id: 'user-1', source_metadata: {}, source_task_id: null, accepted_by_user_id: 'user-1', accepted_at: '2026-07-14T01:02:00Z', rejected_by_user_id: null, rejected_at: null, rejection_reason: null,
+      },
+      draft: { content: 'Draft context\n\nCandidate fact', fingerprint: 'draft-fp-accepted', updated_by_user_id: 'user-1', updated_at: '2026-07-14T01:02:00Z' },
+    });
     renderWithProviders(<ProjectContextConsole project={project} />);
 
     const draft = await screen.findByLabelText('Project Context draft');

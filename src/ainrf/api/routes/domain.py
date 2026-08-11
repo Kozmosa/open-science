@@ -7,8 +7,25 @@ from typing import NotRequired, TypedDict
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from ainrf.api.domain_schemas import (
+    DomainCapabilitiesResponse,
+    DomainContextCandidateAcceptResponse,
+    DomainContextCandidateListResponse,
+    DomainContextCandidateResponse,
+    DomainContextDiffResponse,
+    DomainContextDraftMutationResponse,
+    DomainContextVersionListResponse,
+    DomainContextVersionResponse,
+    DomainOverviewRefreshJobResponse,
+    DomainOverviewSnapshotResponse,
+    DomainProjectContextResponse,
+    DomainProjectCreateRequest,
+    DomainProjectCreateResponse,
     DomainProjectListResponse,
     DomainProjectSummaryResponse,
+    DomainTaskContextResponse,
+    DomainWorkspaceCreateRequest,
+    DomainWorkspaceCreateResponse,
+    DomainWorkspaceLinkResponse,
     DomainWorkspaceListResponse,
     DomainWorkspaceResponse,
 )
@@ -70,8 +87,8 @@ class _WorkspaceUpdateKwargs(TypedDict):
 router = APIRouter(prefix="/domain", tags=["domain-v2"])
 
 
-@router.get("/capabilities")
-async def capabilities(request: Request) -> dict[str, object]:
+@router.get("/capabilities", response_model=DomainCapabilitiesResponse)
+async def capabilities(request: Request) -> DomainCapabilitiesResponse:
     project_module = getattr(request.app.state, "project_module", None)
     workspace_module = getattr(request.app.state, "workspace_module", None)
     ready = (
@@ -124,24 +141,26 @@ async def capabilities(request: Request) -> dict[str, object]:
         and isinstance(literature_saga, LiteratureTaskSagaService)
         and literature_saga.ready()
     )
-    return {
-        "domain_contract_version": 2 if ready else 1,
-        "mode": "v2",
-        "standard_task_create": task_ready,
-        "project_context": context_ready,
-        "workspace_links": workspace_links_ready,
-        "task_dispatcher": dispatcher_readiness,
-        # Each capability reports its own runtime evidence rather than being
-        # inferred from the common contract version alone.
-        "literature_research_task": literature_ready,
-        "overview_snapshot": overview_ready,
-        "overview_snapshot_job_store": bool(overview_readiness.get("job_store_ready")),
-        "overview_snapshot_planner": overview_readiness,
-    }
+    return DomainCapabilitiesResponse.model_validate(
+        {
+            "domain_contract_version": 2 if ready else 1,
+            "mode": "v2",
+            "standard_task_create": task_ready,
+            "project_context": context_ready,
+            "workspace_links": workspace_links_ready,
+            "task_dispatcher": dispatcher_readiness,
+            # Each capability reports its own runtime evidence rather than being
+            # inferred from the common contract version alone.
+            "literature_research_task": literature_ready,
+            "overview_snapshot": overview_ready,
+            "overview_snapshot_job_store": bool(overview_readiness.get("job_store_ready")),
+            "overview_snapshot_planner": overview_readiness,
+        }
+    )
 
 
-@router.get("/overview/today")
-async def today_overview(request: Request) -> dict[str, object]:
+@router.get("/overview/today", response_model=DomainOverviewSnapshotResponse)
+async def today_overview(request: Request) -> DomainOverviewSnapshotResponse:
     snapshot_service = _overview_service(request)
     user = get_current_user(request)
     user_id = user.get("id")
@@ -150,11 +169,15 @@ async def today_overview(request: Request) -> dict[str, object]:
     payload = snapshot_service.latest(user_id)
     if payload is None:
         raise HTTPException(status_code=404, detail="No overview snapshot is available")
-    return payload
+    return DomainOverviewSnapshotResponse.model_validate(payload)
 
 
-@router.post("/overview/today/refresh", status_code=status.HTTP_202_ACCEPTED)
-async def request_today_overview_refresh(request: Request) -> dict[str, object]:
+@router.post(
+    "/overview/today/refresh",
+    response_model=DomainOverviewRefreshJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_today_overview_refresh(request: Request) -> DomainOverviewRefreshJobResponse:
     """Enqueue (or reuse) the caller's durable manual refresh job."""
 
     snapshot_service = _overview_service(request)
@@ -163,17 +186,21 @@ async def request_today_overview_refresh(request: Request) -> dict[str, object]:
     if not isinstance(user_id, str):
         raise HTTPException(status_code=401, detail="Authenticated user ID is required")
     try:
-        return snapshot_service.request_refresh(
-            user_id,
-            trigger="manual",
-            idempotency_key=require_idempotency_key(request),
+        return DomainOverviewRefreshJobResponse.model_validate(
+            snapshot_service.request_refresh(
+                user_id,
+                trigger="manual",
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get("/overview/refresh/{job_id}")
-async def get_today_overview_refresh(job_id: str, request: Request) -> dict[str, object]:
+@router.get("/overview/refresh/{job_id}", response_model=DomainOverviewRefreshJobResponse)
+async def get_today_overview_refresh(
+    job_id: str, request: Request
+) -> DomainOverviewRefreshJobResponse:
     """Return one caller-owned refresh job without exposing other users' work."""
 
     snapshot_service = _overview_service(request)
@@ -184,7 +211,7 @@ async def get_today_overview_refresh(job_id: str, request: Request) -> dict[str,
     job = snapshot_service.get_job(user_id, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Overview refresh job not found")
-    return job
+    return DomainOverviewRefreshJobResponse.model_validate(job)
 
 
 def _project_module(request: Request) -> ProjectModule:
@@ -239,19 +266,18 @@ def _translate(exc: Exception) -> HTTPException:
     raise exc
 
 
-@router.post("/projects")
-async def create_project(request: Request, payload: dict[str, object]) -> dict[str, object]:
+@router.post("/projects", response_model=DomainProjectCreateResponse)
+async def create_project(
+    request: Request, payload: DomainProjectCreateRequest
+) -> DomainProjectCreateResponse:
     try:
-        if "idempotency_key" in payload:
-            raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
-        description_value = payload.get("description")
-        description = description_value if isinstance(description_value, str) else None
-        return _project_module(request).create_project(
+        created = _project_module(request).create_project(
             get_current_user(request),
-            name=str(payload["name"]),
-            description=description,
+            name=payload.name,
+            description=payload.description,
             idempotency_key=require_idempotency_key(request),
         )
+        return DomainProjectCreateResponse(project_id=str(created["project_id"]))
     except Exception as exc:
         raise _translate(exc) from exc
 
@@ -482,19 +508,19 @@ async def remove_domain_project_member(
         raise _translate(exc) from exc
 
 
-@router.post("/workspaces")
-async def create_workspace(request: Request, payload: dict[str, object]) -> dict[str, object]:
+@router.post("/workspaces", response_model=DomainWorkspaceCreateResponse)
+async def create_workspace(
+    request: Request, payload: DomainWorkspaceCreateRequest
+) -> DomainWorkspaceCreateResponse:
     try:
-        if "idempotency_key" in payload:
-            raise HTTPException(status_code=422, detail="Use the Idempotency-Key header")
         service = _project_module(request)
         user = get_current_user(request)
         user_id = user.get("id")
         if not isinstance(user_id, str):
             raise ValueError("Authenticated user ID is required")
-        environment_id = str(payload["environment_id"])
-        canonical_path = service.canonical_workspace_path(str(payload["canonical_path"]))
-        label = str(payload["label"])
+        environment_id = payload.environment_id
+        canonical_path = service.canonical_workspace_path(payload.canonical_path)
+        label = payload.label
         idempotency_key = require_idempotency_key(request)
         replay = service.workspace_create_replay(
             user,
@@ -504,20 +530,21 @@ async def create_workspace(request: Request, payload: dict[str, object]) -> dict
             idempotency_key=idempotency_key,
         )
         if replay is not None:
-            return replay
+            return DomainWorkspaceCreateResponse(workspace_id=str(replay["workspace_id"]))
         await validate_workspace_registration_path(
             request,
             environment_id=environment_id,
             canonical_path=canonical_path,
             user_id=user_id,
         )
-        return service.create_workspace(
+        created = service.create_workspace(
             user,
             environment_id=environment_id,
             canonical_path=canonical_path,
             label=label,
             idempotency_key=idempotency_key,
         )
+        return DomainWorkspaceCreateResponse(workspace_id=str(created["workspace_id"]))
     except Exception as exc:
         raise _translate(exc) from exc
 
@@ -628,16 +655,21 @@ async def unregister_domain_workspace(workspace_id: str, request: Request) -> No
         raise _translate(exc) from exc
 
 
-@router.post("/projects/{project_id}/workspaces/{workspace_id}")
+@router.post(
+    "/projects/{project_id}/workspaces/{workspace_id}",
+    response_model=DomainWorkspaceLinkResponse,
+)
 async def attach_workspace(
     project_id: str, workspace_id: str, request: Request
-) -> dict[str, object]:
+) -> DomainWorkspaceLinkResponse:
     try:
-        return _workspace_module(request).attach_workspace(
-            project_id,
-            workspace_id,
-            get_current_user(request),
-            idempotency_key=require_idempotency_key(request),
+        return DomainWorkspaceLinkResponse.model_validate(
+            _workspace_module(request).attach_workspace(
+                project_id,
+                workspace_id,
+                get_current_user(request),
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -665,28 +697,35 @@ async def detach_domain_workspace(
         raise _translate(exc) from exc
 
 
-@router.put("/projects/{project_id}/primary-workspace/{workspace_id}")
+@router.put(
+    "/projects/{project_id}/primary-workspace/{workspace_id}",
+    response_model=DomainWorkspaceLinkResponse,
+)
 async def set_primary_workspace(
     project_id: str,
     workspace_id: str,
     request: Request,
     previous_workspace_id: str | None = Query(None),
-) -> dict[str, object]:
+) -> DomainWorkspaceLinkResponse:
     try:
         module = _project_module(request)
         if previous_workspace_id is not None:
-            return module.replace_primary_workspace(
+            return DomainWorkspaceLinkResponse.model_validate(
+                module.replace_primary_workspace(
+                    project_id,
+                    previous_workspace_id,
+                    workspace_id,
+                    get_current_user(request),
+                    idempotency_key=require_idempotency_key(request),
+                )
+            )
+        return DomainWorkspaceLinkResponse.model_validate(
+            module.set_primary_workspace(
                 project_id,
-                previous_workspace_id,
                 workspace_id,
                 get_current_user(request),
                 idempotency_key=require_idempotency_key(request),
             )
-        return module.set_primary_workspace(
-            project_id,
-            workspace_id,
-            get_current_user(request),
-            idempotency_key=require_idempotency_key(request),
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -914,147 +953,198 @@ async def delete_domain_project_environment_ref(
     )
 
 
-@router.get("/projects/{project_id}/context")
-async def get_project_context(project_id: str, request: Request) -> dict[str, object]:
+@router.get("/projects/{project_id}/context", response_model=DomainProjectContextResponse)
+async def get_project_context(project_id: str, request: Request) -> DomainProjectContextResponse:
     try:
-        return _context_service(request).get_context(project_id, get_current_user(request))
+        return DomainProjectContextResponse.model_validate(
+            _context_service(request).get_context(project_id, get_current_user(request))
+        )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.put("/projects/{project_id}/context/draft")
+@router.put(
+    "/projects/{project_id}/context/draft", response_model=DomainContextDraftMutationResponse
+)
 async def save_project_context_draft(
     project_id: str,
     payload: ProjectContextDraftRequest,
     request: Request,
-) -> dict[str, object]:
+) -> DomainContextDraftMutationResponse:
     try:
-        return _context_service(request).save_draft(
-            project_id,
-            payload.content,
-            get_current_user(request),
-            idempotency_key=require_idempotency_key(request),
+        return DomainContextDraftMutationResponse.model_validate(
+            _context_service(request).save_draft(
+                project_id,
+                payload.content,
+                get_current_user(request),
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.post("/projects/{project_id}/context/publish")
-async def publish_project_context(project_id: str, request: Request) -> dict[str, object]:
+@router.post("/projects/{project_id}/context/publish", response_model=DomainContextVersionResponse)
+async def publish_project_context(
+    project_id: str, request: Request
+) -> DomainContextVersionResponse:
     try:
-        return _context_service(request).publish(
-            project_id,
-            get_current_user(request),
-            idempotency_key=require_idempotency_key(request),
+        return DomainContextVersionResponse.model_validate(
+            _context_service(request).publish(
+                project_id,
+                get_current_user(request),
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.get("/projects/{project_id}/context/versions")
-async def list_project_context_versions(project_id: str, request: Request) -> dict[str, object]:
+@router.get(
+    "/projects/{project_id}/context/versions",
+    response_model=DomainContextVersionListResponse,
+)
+async def list_project_context_versions(
+    project_id: str, request: Request
+) -> DomainContextVersionListResponse:
     try:
-        return {
-            "items": _context_service(request).list_versions(project_id, get_current_user(request))
-        }
+        return DomainContextVersionListResponse.model_validate(
+            {
+                "items": _context_service(request).list_versions(
+                    project_id, get_current_user(request)
+                )
+            }
+        )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.get("/projects/{project_id}/context/versions/{context_version_id}")
+@router.get(
+    "/projects/{project_id}/context/versions/{context_version_id}",
+    response_model=DomainContextVersionResponse,
+)
 async def get_project_context_version(
     project_id: str, context_version_id: str, request: Request
-) -> dict[str, object]:
+) -> DomainContextVersionResponse:
     try:
-        return _context_service(request).get_version(
-            project_id, context_version_id, get_current_user(request)
+        return DomainContextVersionResponse.model_validate(
+            _context_service(request).get_version(
+                project_id, context_version_id, get_current_user(request)
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.get("/projects/{project_id}/context/versions/{context_version_id}/diff")
+@router.get(
+    "/projects/{project_id}/context/versions/{context_version_id}/diff",
+    response_model=DomainContextDiffResponse,
+)
 async def diff_project_context_version(
     project_id: str,
     context_version_id: str,
     request: Request,
     against: str = Query(..., min_length=1),
-) -> dict[str, object]:
+) -> DomainContextDiffResponse:
     try:
-        return _context_service(request).diff_versions(
-            project_id,
-            against,
-            context_version_id,
-            get_current_user(request),
+        return DomainContextDiffResponse.model_validate(
+            _context_service(request).diff_versions(
+                project_id,
+                against,
+                context_version_id,
+                get_current_user(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.get("/projects/{project_id}/context/candidates")
-async def list_project_context_candidates(project_id: str, request: Request) -> dict[str, object]:
+@router.get(
+    "/projects/{project_id}/context/candidates",
+    response_model=DomainContextCandidateListResponse,
+)
+async def list_project_context_candidates(
+    project_id: str, request: Request
+) -> DomainContextCandidateListResponse:
     try:
-        return {
-            "items": _context_service(request).list_candidates(
-                project_id, get_current_user(request)
-            )
-        }
+        return DomainContextCandidateListResponse.model_validate(
+            {
+                "items": _context_service(request).list_candidates(
+                    project_id, get_current_user(request)
+                )
+            }
+        )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.post("/projects/{project_id}/context/candidates")
+@router.post(
+    "/projects/{project_id}/context/candidates",
+    response_model=DomainContextCandidateResponse,
+)
 async def create_project_context_candidate(
     project_id: str,
     payload: ProjectContextCandidateCreateRequest,
     request: Request,
-) -> dict[str, object]:
+) -> DomainContextCandidateResponse:
     try:
-        return _context_service(request).create_candidate(
-            project_id,
-            payload.content,
-            get_current_user(request),
-            source_metadata=payload.source_metadata,
-            source_task_id=payload.source_task_id,
-            source_message_start_seq=payload.source_message_start_seq,
-            source_message_end_seq=payload.source_message_end_seq,
-            source_output_start_seq=payload.source_output_start_seq,
-            source_output_end_seq=payload.source_output_end_seq,
-            idempotency_key=require_idempotency_key(request),
+        return DomainContextCandidateResponse.model_validate(
+            _context_service(request).create_candidate(
+                project_id,
+                payload.content,
+                get_current_user(request),
+                source_metadata=payload.source_metadata,
+                source_task_id=payload.source_task_id,
+                source_message_start_seq=payload.source_message_start_seq,
+                source_message_end_seq=payload.source_message_end_seq,
+                source_output_start_seq=payload.source_output_start_seq,
+                source_output_end_seq=payload.source_output_end_seq,
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.post("/projects/{project_id}/context/candidates/{candidate_id}/accept")
+@router.post(
+    "/projects/{project_id}/context/candidates/{candidate_id}/accept",
+    response_model=DomainContextCandidateAcceptResponse,
+)
 async def accept_project_context_candidate(
     project_id: str, candidate_id: str, request: Request
-) -> dict[str, object]:
+) -> DomainContextCandidateAcceptResponse:
     try:
-        return _context_service(request).accept_candidate(
-            project_id,
-            candidate_id,
-            get_current_user(request),
-            idempotency_key=require_idempotency_key(request),
+        return DomainContextCandidateAcceptResponse.model_validate(
+            _context_service(request).accept_candidate(
+                project_id,
+                candidate_id,
+                get_current_user(request),
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
 
 
-@router.post("/projects/{project_id}/context/candidates/{candidate_id}/reject")
+@router.post(
+    "/projects/{project_id}/context/candidates/{candidate_id}/reject",
+    response_model=DomainContextCandidateResponse,
+)
 async def reject_project_context_candidate(
     project_id: str,
     candidate_id: str,
     payload: ProjectContextCandidateRejectRequest,
     request: Request,
-) -> dict[str, object]:
+) -> DomainContextCandidateResponse:
     try:
-        return _context_service(request).reject_candidate(
-            project_id,
-            candidate_id,
-            get_current_user(request),
-            reason=payload.reason,
-            idempotency_key=require_idempotency_key(request),
+        return DomainContextCandidateResponse.model_validate(
+            _context_service(request).reject_candidate(
+                project_id,
+                candidate_id,
+                get_current_user(request),
+                reason=payload.reason,
+                idempotency_key=require_idempotency_key(request),
+            )
         )
     except Exception as exc:
         raise _translate(exc) from exc
@@ -1092,10 +1182,12 @@ async def create_project_context_fragment(
         raise _translate(exc) from exc
 
 
-@router.get("/tasks/{task_id}/context")
-async def get_task_context(task_id: str, request: Request) -> dict[str, object]:
+@router.get("/tasks/{task_id}/context", response_model=DomainTaskContextResponse)
+async def get_task_context(task_id: str, request: Request) -> DomainTaskContextResponse:
     try:
-        return _context_service(request).task_context(task_id, get_current_user(request))
+        return DomainTaskContextResponse.model_validate(
+            _context_service(request).task_context(task_id, get_current_user(request))
+        )
     except Exception as exc:
         raise _translate(exc) from exc
 

@@ -221,6 +221,542 @@ export type DeploymentVersionResponse = {
 export type DetectionStatus = 'success' | 'partial' | 'failed';
 
 /**
+ * DomainCapabilitiesResponse
+ */
+export type DomainCapabilitiesResponse = {
+    /**
+     * Domain Contract Version
+     */
+    domain_contract_version: 1 | 2;
+    /**
+     * Literature Research Task
+     */
+    literature_research_task: boolean;
+    /**
+     * Mode
+     */
+    mode: 'v2';
+    /**
+     * Overview Snapshot
+     */
+    overview_snapshot: boolean;
+    /**
+     * Overview Snapshot Job Store
+     */
+    overview_snapshot_job_store: boolean;
+    overview_snapshot_planner: DomainOverviewPlannerReadinessResponse;
+    /**
+     * Project Context
+     */
+    project_context: boolean;
+    /**
+     * Standard Task Create
+     */
+    standard_task_create: boolean;
+    task_dispatcher: DomainParticipantReadinessResponse;
+    /**
+     * Workspace Links
+     */
+    workspace_links: boolean;
+};
+
+/**
+ * DomainContextCandidateAcceptResponse
+ */
+export type DomainContextCandidateAcceptResponse = {
+    candidate: DomainContextCandidateResponse;
+    draft: DomainContextDraftResponse | null;
+};
+
+/**
+ * DomainContextCandidateListResponse
+ */
+export type DomainContextCandidateListResponse = {
+    /**
+     * Items
+     */
+    items: Array<DomainContextCandidateResponse>;
+};
+
+/**
+ * DomainContextCandidateResponse
+ */
+export type DomainContextCandidateResponse = {
+    /**
+     * Accepted At
+     */
+    accepted_at: string | null;
+    /**
+     * Accepted By User Id
+     */
+    accepted_by_user_id: string | null;
+    /**
+     * Candidate Id
+     */
+    candidate_id: string;
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id: string | null;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Rejected At
+     */
+    rejected_at: string | null;
+    /**
+     * Rejected By User Id
+     */
+    rejected_by_user_id: string | null;
+    /**
+     * Rejection Reason
+     */
+    rejection_reason: string | null;
+    /**
+     * Source Message End Seq
+     */
+    source_message_end_seq?: number | null;
+    /**
+     * Source Message Start Seq
+     */
+    source_message_start_seq?: number | null;
+    /**
+     * Source Metadata
+     */
+    source_metadata: {
+        [key: string]: unknown;
+    };
+    /**
+     * Source Output End Seq
+     */
+    source_output_end_seq?: number | null;
+    /**
+     * Source Output Start Seq
+     */
+    source_output_start_seq?: number | null;
+    /**
+     * Source Task Id
+     */
+    source_task_id: string | null;
+    /**
+     * Status
+     */
+    status: 'proposed' | 'accepted' | 'rejected';
+};
+
+/**
+ * DomainContextDiffResponse
+ */
+export type DomainContextDiffResponse = {
+    /**
+     * After Context Version Id
+     */
+    after_context_version_id: string;
+    /**
+     * Before Context Version Id
+     */
+    before_context_version_id: string;
+    /**
+     * Diff
+     */
+    diff: string;
+    /**
+     * Project Id
+     */
+    project_id: string;
+};
+
+/**
+ * DomainContextDraftMutationResponse
+ */
+export type DomainContextDraftMutationResponse = {
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By User Id
+     */
+    updated_by_user_id: string;
+};
+
+/**
+ * DomainContextDraftResponse
+ */
+export type DomainContextDraftResponse = {
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By User Id
+     */
+    updated_by_user_id: string;
+};
+
+/**
+ * DomainContextVersionListResponse
+ */
+export type DomainContextVersionListResponse = {
+    /**
+     * Items
+     */
+    items: Array<DomainContextVersionResponse>;
+};
+
+/**
+ * DomainContextVersionResponse
+ */
+export type DomainContextVersionResponse = {
+    /**
+     * Assembly Eligible
+     */
+    assembly_eligible?: boolean;
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Context Version Id
+     */
+    context_version_id: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By User Id
+     */
+    created_by_user_id: string;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string;
+    /**
+     * Fragment Manifest
+     */
+    fragment_manifest: Array<unknown>;
+    /**
+     * Fragment Provenance Evidence
+     */
+    fragment_provenance_evidence: {
+        [key: string]: unknown;
+    };
+    /**
+     * Fragment Provenance Status
+     */
+    fragment_provenance_status: 'verified' | 'attention_needed';
+    /**
+     * Is Active
+     */
+    is_active: boolean;
+    /**
+     * Project Id
+     */
+    project_id: string;
+};
+
+/**
+ * DomainOverviewDisplayCardResponse
+ */
+export type DomainOverviewDisplayCardResponse = {
+    /**
+     * Attention Required
+     */
+    attention_required: boolean;
+    /**
+     * Data
+     */
+    data: {
+        [key: string]: unknown;
+    };
+    /**
+     * Data Cutoff At
+     */
+    data_cutoff_at: string;
+    /**
+     * Error Summary
+     */
+    error_summary: string | null;
+    /**
+     * Id
+     */
+    id: 'attention' | 'progress' | 'literature' | 'continue' | 'resources';
+    /**
+     * Source Status
+     */
+    source_status: 'ok' | 'partial' | 'stale' | 'unavailable' | 'failed';
+};
+
+/**
+ * DomainOverviewPlannerReadinessResponse
+ */
+export type DomainOverviewPlannerReadinessResponse = {
+    /**
+     * Heartbeat At
+     */
+    heartbeat_at?: string | null;
+    /**
+     * Job Store Ready
+     */
+    job_store_ready: boolean;
+    /**
+     * Last Error
+     */
+    last_error?: string | null;
+    /**
+     * Last Schedule At
+     */
+    last_schedule_at?: string | null;
+    /**
+     * Planner Id
+     */
+    planner_id?: string | null;
+    /**
+     * Planner Ready
+     */
+    planner_ready: boolean;
+    /**
+     * Planner Status
+     */
+    planner_status: 'unavailable' | 'missing' | 'running' | 'stopped';
+};
+
+/**
+ * DomainOverviewRefreshJobResponse
+ */
+export type DomainOverviewRefreshJobResponse = {
+    /**
+     * Attempt Count
+     */
+    attempt_count: number;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Error Summary
+     */
+    error_summary: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Heartbeat At
+     */
+    heartbeat_at: string | null;
+    /**
+     * Job Id
+     */
+    job_id: string;
+    /**
+     * Last Failure At
+     */
+    last_failure_at: string | null;
+    /**
+     * Next Retry At
+     */
+    next_retry_at: string | null;
+    /**
+     * Owner User Id
+     */
+    owner_user_id: string;
+    /**
+     * Retry Count
+     */
+    retry_count: number;
+    /**
+     * Scheduled For Date
+     */
+    scheduled_for_date: string | null;
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string | null;
+    /**
+     * Source Status
+     */
+    source_status: 'ok' | 'partial' | 'failed' | null;
+    /**
+     * Started At
+     */
+    started_at: string | null;
+    /**
+     * Status
+     */
+    status: 'queued' | 'retry_wait' | 'running' | 'succeeded' | 'partial' | 'failed';
+    /**
+     * Trigger
+     */
+    trigger: 'manual' | 'scheduled' | 'catchup';
+};
+
+/**
+ * DomainOverviewSnapshotResponse
+ */
+export type DomainOverviewSnapshotResponse = {
+    /**
+     * Active Turns
+     */
+    active_turns?: number;
+    /**
+     * Attention Required
+     */
+    attention_required: boolean;
+    /**
+     * Cards
+     */
+    cards: Array<DomainOverviewSourceCardResponse>;
+    /**
+     * Data Cutoff At
+     */
+    data_cutoff_at: string;
+    /**
+     * Display Cards
+     */
+    display_cards?: Array<DomainOverviewDisplayCardResponse>;
+    /**
+     * Next Scheduled At
+     */
+    next_scheduled_at?: string | null;
+    /**
+     * Owner User Id
+     */
+    owner_user_id: string;
+    /**
+     * Projects Active
+     */
+    projects_active?: number;
+    /**
+     * Snapshot Date
+     */
+    snapshot_date: string;
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Source
+     */
+    source?: 'control_plane_only';
+    /**
+     * Source Status
+     */
+    source_status: 'ok' | 'partial';
+    /**
+     * Tasks By Status
+     */
+    tasks_by_status?: {
+        [key: string]: number;
+    };
+};
+
+/**
+ * DomainOverviewSourceCardResponse
+ */
+export type DomainOverviewSourceCardResponse = {
+    /**
+     * Attention Required
+     */
+    attention_required: boolean;
+    /**
+     * Data
+     */
+    data: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Data Cutoff At
+     */
+    data_cutoff_at: string;
+    /**
+     * Error Summary
+     */
+    error_summary: string | null;
+    /**
+     * Id
+     */
+    id: 'domain' | 'literature' | 'resources';
+    /**
+     * Source Status
+     */
+    source_status: 'ok' | 'partial' | 'stale' | 'unavailable' | 'failed';
+};
+
+/**
+ * DomainParticipantReadinessResponse
+ */
+export type DomainParticipantReadinessResponse = {
+    /**
+     * Active Participant Ids
+     */
+    active_participant_ids: Array<string>;
+    /**
+     * Fresh Participant Ids
+     */
+    fresh_participant_ids: Array<string>;
+    /**
+     * Maintenance Active
+     */
+    maintenance_active: boolean;
+    /**
+     * Maintenance Epoch
+     */
+    maintenance_epoch: number | null;
+    /**
+     * Participant Type
+     */
+    participant_type: 'task-dispatcher';
+    /**
+     * Ready
+     */
+    ready: boolean;
+    /**
+     * Registered Participant Ids
+     */
+    registered_participant_ids: Array<string>;
+    /**
+     * Stale After Seconds
+     */
+    stale_after_seconds: number;
+    /**
+     * Stale Participant Ids
+     */
+    stale_participant_ids: Array<string>;
+};
+
+/**
  * DomainPrimaryWorkspaceResponse
  */
 export type DomainPrimaryWorkspaceResponse = {
@@ -260,6 +796,42 @@ export type DomainPrimaryWorkspaceResponse = {
      * Workspace Id
      */
     workspace_id: string;
+};
+
+/**
+ * DomainProjectContextResponse
+ */
+export type DomainProjectContextResponse = {
+    active_version: DomainContextVersionResponse | null;
+    draft: DomainContextDraftResponse | null;
+    /**
+     * Project Id
+     */
+    project_id: string;
+};
+
+/**
+ * DomainProjectCreateRequest
+ */
+export type DomainProjectCreateRequest = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * DomainProjectCreateResponse
+ */
+export type DomainProjectCreateResponse = {
+    /**
+     * Project Id
+     */
+    project_id: string;
 };
 
 /**
@@ -379,6 +951,72 @@ export type DomainProjectSummaryResponse = {
 };
 
 /**
+ * DomainTaskContextResponse
+ */
+export type DomainTaskContextResponse = {
+    /**
+     * Byte Budget
+     */
+    byte_budget?: number | null;
+    /**
+     * Content
+     */
+    content: string;
+    /**
+     * Context Snapshot Id
+     */
+    context_snapshot_id: string | null;
+    /**
+     * Context Version Id
+     */
+    context_version_id: string | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string | null;
+    /**
+     * Source Manifest
+     */
+    source_manifest: Array<unknown>;
+    /**
+     * Truncated
+     */
+    truncated: boolean;
+};
+
+/**
+ * DomainWorkspaceCreateRequest
+ */
+export type DomainWorkspaceCreateRequest = {
+    /**
+     * Canonical Path
+     */
+    canonical_path: string;
+    /**
+     * Environment Id
+     */
+    environment_id: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * DomainWorkspaceCreateResponse
+ */
+export type DomainWorkspaceCreateResponse = {
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
+};
+
+/**
  * DomainWorkspaceEnvironmentResponse
  */
 export type DomainWorkspaceEnvironmentResponse = {
@@ -420,6 +1058,36 @@ export type DomainWorkspaceGitStatusResponse = {
      * State
      */
     state: 'not_collected' | 'available' | 'unavailable';
+};
+
+/**
+ * DomainWorkspaceLinkResponse
+ */
+export type DomainWorkspaceLinkResponse = {
+    /**
+     * Can Execute
+     */
+    can_execute: boolean;
+    /**
+     * Cannot Execute Reason
+     */
+    cannot_execute_reason?: string | null;
+    /**
+     * Environment Id
+     */
+    environment_id: string;
+    /**
+     * Is Primary
+     */
+    is_primary: boolean;
+    /**
+     * Project Id
+     */
+    project_id: string;
+    /**
+     * Workspace Id
+     */
+    workspace_id: string;
 };
 
 /**
@@ -4258,13 +4926,9 @@ export type GetApiDomainCapabilitiesData = {
 
 export type GetApiDomainCapabilitiesResponses = {
     /**
-     * Response Get Api Domain Capabilities
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainCapabilitiesResponse;
 };
 
 export type GetApiDomainCapabilitiesResponse = GetApiDomainCapabilitiesResponses[keyof GetApiDomainCapabilitiesResponses];
@@ -4453,13 +5117,9 @@ export type GetApiDomainOverviewRefreshJobIdError = GetApiDomainOverviewRefreshJ
 
 export type GetApiDomainOverviewRefreshJobIdResponses = {
     /**
-     * Response Get Api Domain Overview Refresh Job Id
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainOverviewRefreshJobResponse;
 };
 
 export type GetApiDomainOverviewRefreshJobIdResponse = GetApiDomainOverviewRefreshJobIdResponses[keyof GetApiDomainOverviewRefreshJobIdResponses];
@@ -4473,13 +5133,9 @@ export type GetApiDomainOverviewTodayData = {
 
 export type GetApiDomainOverviewTodayResponses = {
     /**
-     * Response Get Api Domain Overview Today
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainOverviewSnapshotResponse;
 };
 
 export type GetApiDomainOverviewTodayResponse = GetApiDomainOverviewTodayResponses[keyof GetApiDomainOverviewTodayResponses];
@@ -4493,13 +5149,9 @@ export type PostApiDomainOverviewTodayRefreshData = {
 
 export type PostApiDomainOverviewTodayRefreshResponses = {
     /**
-     * Response Post Api Domain Overview Today Refresh
-     *
      * Successful Response
      */
-    202: {
-        [key: string]: unknown;
-    };
+    202: DomainOverviewRefreshJobResponse;
 };
 
 export type PostApiDomainOverviewTodayRefreshResponse = PostApiDomainOverviewTodayRefreshResponses[keyof PostApiDomainOverviewTodayRefreshResponses];
@@ -4535,12 +5187,7 @@ export type GetApiDomainProjectsResponses = {
 export type GetApiDomainProjectsResponse = GetApiDomainProjectsResponses[keyof GetApiDomainProjectsResponses];
 
 export type PostApiDomainProjectsData = {
-    /**
-     * Payload
-     */
-    body: {
-        [key: string]: unknown;
-    };
+    body: DomainProjectCreateRequest;
     path?: never;
     query?: never;
     url: '/api/domain/projects';
@@ -4557,13 +5204,9 @@ export type PostApiDomainProjectsError = PostApiDomainProjectsErrors[keyof PostA
 
 export type PostApiDomainProjectsResponses = {
     /**
-     * Response Post Api Domain Projects
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainProjectCreateResponse;
 };
 
 export type PostApiDomainProjectsResponse = PostApiDomainProjectsResponses[keyof PostApiDomainProjectsResponses];
@@ -4681,13 +5324,9 @@ export type GetApiDomainProjectsProjectIdContextError = GetApiDomainProjectsProj
 
 export type GetApiDomainProjectsProjectIdContextResponses = {
     /**
-     * Response Get Api Domain Projects Project Id Context
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainProjectContextResponse;
 };
 
 export type GetApiDomainProjectsProjectIdContextResponse = GetApiDomainProjectsProjectIdContextResponses[keyof GetApiDomainProjectsProjectIdContextResponses];
@@ -4715,13 +5354,9 @@ export type GetApiDomainProjectsProjectIdContextCandidatesError = GetApiDomainPr
 
 export type GetApiDomainProjectsProjectIdContextCandidatesResponses = {
     /**
-     * Response Get Api Domain Projects Project Id Context Candidates
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextCandidateListResponse;
 };
 
 export type GetApiDomainProjectsProjectIdContextCandidatesResponse = GetApiDomainProjectsProjectIdContextCandidatesResponses[keyof GetApiDomainProjectsProjectIdContextCandidatesResponses];
@@ -4749,13 +5384,9 @@ export type PostApiDomainProjectsProjectIdContextCandidatesError = PostApiDomain
 
 export type PostApiDomainProjectsProjectIdContextCandidatesResponses = {
     /**
-     * Response Post Api Domain Projects Project Id Context Candidates
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextCandidateResponse;
 };
 
 export type PostApiDomainProjectsProjectIdContextCandidatesResponse = PostApiDomainProjectsProjectIdContextCandidatesResponses[keyof PostApiDomainProjectsProjectIdContextCandidatesResponses];
@@ -4787,13 +5418,9 @@ export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdAcceptErro
 
 export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdAcceptResponses = {
     /**
-     * Response Post Api Domain Projects Project Id Context Candidates Candidate Id Accept
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextCandidateAcceptResponse;
 };
 
 export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdAcceptResponse = PostApiDomainProjectsProjectIdContextCandidatesCandidateIdAcceptResponses[keyof PostApiDomainProjectsProjectIdContextCandidatesCandidateIdAcceptResponses];
@@ -4825,13 +5452,9 @@ export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdRejectErro
 
 export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdRejectResponses = {
     /**
-     * Response Post Api Domain Projects Project Id Context Candidates Candidate Id Reject
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextCandidateResponse;
 };
 
 export type PostApiDomainProjectsProjectIdContextCandidatesCandidateIdRejectResponse = PostApiDomainProjectsProjectIdContextCandidatesCandidateIdRejectResponses[keyof PostApiDomainProjectsProjectIdContextCandidatesCandidateIdRejectResponses];
@@ -4859,13 +5482,9 @@ export type PutApiDomainProjectsProjectIdContextDraftError = PutApiDomainProject
 
 export type PutApiDomainProjectsProjectIdContextDraftResponses = {
     /**
-     * Response Put Api Domain Projects Project Id Context Draft
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextDraftMutationResponse;
 };
 
 export type PutApiDomainProjectsProjectIdContextDraftResponse = PutApiDomainProjectsProjectIdContextDraftResponses[keyof PutApiDomainProjectsProjectIdContextDraftResponses];
@@ -4961,13 +5580,9 @@ export type PostApiDomainProjectsProjectIdContextPublishError = PostApiDomainPro
 
 export type PostApiDomainProjectsProjectIdContextPublishResponses = {
     /**
-     * Response Post Api Domain Projects Project Id Context Publish
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextVersionResponse;
 };
 
 export type PostApiDomainProjectsProjectIdContextPublishResponse = PostApiDomainProjectsProjectIdContextPublishResponses[keyof PostApiDomainProjectsProjectIdContextPublishResponses];
@@ -4995,13 +5610,9 @@ export type GetApiDomainProjectsProjectIdContextVersionsError = GetApiDomainProj
 
 export type GetApiDomainProjectsProjectIdContextVersionsResponses = {
     /**
-     * Response Get Api Domain Projects Project Id Context Versions
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextVersionListResponse;
 };
 
 export type GetApiDomainProjectsProjectIdContextVersionsResponse = GetApiDomainProjectsProjectIdContextVersionsResponses[keyof GetApiDomainProjectsProjectIdContextVersionsResponses];
@@ -5033,13 +5644,9 @@ export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdError = 
 
 export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdResponses = {
     /**
-     * Response Get Api Domain Projects Project Id Context Versions Context Version Id
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextVersionResponse;
 };
 
 export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdResponse = GetApiDomainProjectsProjectIdContextVersionsContextVersionIdResponses[keyof GetApiDomainProjectsProjectIdContextVersionsContextVersionIdResponses];
@@ -5076,13 +5683,9 @@ export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffErro
 
 export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponses = {
     /**
-     * Response Get Api Domain Projects Project Id Context Versions Context Version Id Diff
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainContextDiffResponse;
 };
 
 export type GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponse = GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponses[keyof GetApiDomainProjectsProjectIdContextVersionsContextVersionIdDiffResponses];
@@ -5345,13 +5948,9 @@ export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdError = PutA
 
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses = {
     /**
-     * Response Put Api Domain Projects Project Id Primary Workspace Workspace Id
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainWorkspaceLinkResponse;
 };
 
 export type PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponse = PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses[keyof PutApiDomainProjectsProjectIdPrimaryWorkspaceWorkspaceIdResponses];
@@ -5576,13 +6175,9 @@ export type PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdError = PostApiDo
 
 export type PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses = {
     /**
-     * Response Post Api Domain Projects Project Id Workspaces Workspace Id
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainWorkspaceLinkResponse;
 };
 
 export type PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponse = PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses[keyof PostApiDomainProjectsProjectIdWorkspacesWorkspaceIdResponses];
@@ -5610,13 +6205,9 @@ export type GetApiDomainTasksTaskIdContextError = GetApiDomainTasksTaskIdContext
 
 export type GetApiDomainTasksTaskIdContextResponses = {
     /**
-     * Response Get Api Domain Tasks Task Id Context
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainTaskContextResponse;
 };
 
 export type GetApiDomainTasksTaskIdContextResponse = GetApiDomainTasksTaskIdContextResponses[keyof GetApiDomainTasksTaskIdContextResponses];
@@ -5720,12 +6311,7 @@ export type GetApiDomainWorkspacesResponses = {
 export type GetApiDomainWorkspacesResponse = GetApiDomainWorkspacesResponses[keyof GetApiDomainWorkspacesResponses];
 
 export type PostApiDomainWorkspacesData = {
-    /**
-     * Payload
-     */
-    body: {
-        [key: string]: unknown;
-    };
+    body: DomainWorkspaceCreateRequest;
     path?: never;
     query?: never;
     url: '/api/domain/workspaces';
@@ -5742,13 +6328,9 @@ export type PostApiDomainWorkspacesError = PostApiDomainWorkspacesErrors[keyof P
 
 export type PostApiDomainWorkspacesResponses = {
     /**
-     * Response Post Api Domain Workspaces
-     *
      * Successful Response
      */
-    200: {
-        [key: string]: unknown;
-    };
+    200: DomainWorkspaceCreateResponse;
 };
 
 export type PostApiDomainWorkspacesResponse = PostApiDomainWorkspacesResponses[keyof PostApiDomainWorkspacesResponses];
