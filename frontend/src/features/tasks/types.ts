@@ -102,7 +102,7 @@ export type MessageItem = { id: string; type: 'user' | 'assistant' | 'thinking' 
 export type DisplayMessageItem = { kind: 'single'; message: MessageItem } | { kind: 'group'; id: string; messages: MessageItem[]; collapsed: boolean };
 export type TaskMessagesResponse = { messages: MessageItem[]; has_more: boolean; next_sequence: number | null };
 export type TaskTurn = {
-  status: string;
+  status: TurnResponse['status'];
   task_id: string;
   turn_id: string;
   turn_seq: number;
@@ -113,9 +113,9 @@ export type TaskTurn = {
   context_snapshot_ref: string | null;
 };
 export type TaskTurnItem = {
-  actor: string;
+  actor: TurnItemResponse['actor'];
   item_id: string;
-  item_type: string;
+  item_type: TurnItemResponse['item_type'];
   payload: Record<string, unknown>;
   task_id: string;
   task_item_seq: number;

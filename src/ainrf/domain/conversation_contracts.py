@@ -45,6 +45,12 @@ class TurnSubmissionStatus(StrEnum):
     FAILED_DELIVERY = "failed_delivery"
 
 
+class TurnSubmissionIntent(StrEnum):
+    CREATE = "create"
+    RETRY = "retry"
+    NEXT_TURN = "next_turn"
+
+
 class ContextSnapshotSource(StrEnum):
     TASK_PIN = "task_pin"
     SUBMISSION_OVERRIDE = "submission_override"

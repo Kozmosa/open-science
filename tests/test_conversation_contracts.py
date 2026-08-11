@@ -24,6 +24,7 @@ from ainrf.domain.conversation_contracts import (
     TaskWorkStatus,
     TurnAcceptanceBoundary,
     TurnStatus,
+    TurnSubmissionIntent,
     TurnSubmissionStatus,
     require_control_transition,
     require_runtime_execution_transition,
@@ -37,6 +38,14 @@ from ainrf.domain.conversation_contracts import (
 )
 
 pytestmark = [pytest.mark.unit]
+
+
+def test_submission_intent_matches_durable_admission_kinds() -> None:
+    assert list(TurnSubmissionIntent) == [
+        TurnSubmissionIntent.CREATE,
+        TurnSubmissionIntent.RETRY,
+        TurnSubmissionIntent.NEXT_TURN,
+    ]
 
 
 def test_task_work_status_allows_close_cancel_and_explicit_reopen() -> None:

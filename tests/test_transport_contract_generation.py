@@ -54,6 +54,43 @@ def test_file_entry_kind_uses_the_domain_union_in_transport() -> None:
     assert "kind: 'file' | 'directory' | 'symlink';" in generated_types[start:end]
 
 
+def test_conversation_responses_use_domain_enums_in_transport() -> None:
+    schema = build_transport_openapi()
+    schemas = schema["components"]["schemas"]
+    assert schemas["TurnSubmissionIntent"]["enum"] == ["create", "retry", "next_turn"]
+    expected_refs = {
+        ("TurnSubmissionResponse", "status"): "TurnSubmissionStatus",
+        ("TurnSubmissionResponse", "intent"): "TurnSubmissionIntent",
+        ("TurnResponse", "status"): "TurnStatus",
+        ("TurnItemResponse", "item_type"): "TurnItemType",
+        ("TurnItemResponse", "actor"): "TurnItemActor",
+        ("TurnControlResponse", "kind"): "ControlKind",
+        ("TurnControlResponse", "status"): "ControlRequestStatus",
+        ("TaskHealthResponse", "status"): "ConversationTaskStatus",
+    }
+    for (response_name, field_name), enum_name in expected_refs.items():
+        assert schemas[response_name]["properties"][field_name]["$ref"] == (
+            f"#/components/schemas/{enum_name}"
+        )
+
+    generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
+    expected_types = {
+        "TurnSubmissionResponse": (
+            "status: TurnSubmissionStatus;",
+            "intent: TurnSubmissionIntent;",
+        ),
+        "TurnResponse": ("status: TurnStatus;",),
+        "TurnItemResponse": ("item_type: TurnItemType;", "actor: TurnItemActor;"),
+        "TurnControlResponse": ("kind: ControlKind;", "status: ControlRequestStatus;"),
+        "TaskHealthResponse": ("status: ConversationTaskStatus;",),
+    }
+    for response_name, declarations in expected_types.items():
+        start = generated_types.index(f"export type {response_name} = {{")
+        end = generated_types.index("};", start) + 2
+        for declaration in declarations:
+            assert declaration in generated_types[start:end]
+
+
 def test_operation_ids_are_unique_stable_and_cover_canonical_metadata() -> None:
     schema = build_transport_openapi()
     operations: list[tuple[str, str, str, bool]] = []

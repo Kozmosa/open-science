@@ -169,6 +169,16 @@ export type ComponentHealth = {
 };
 
 /**
+ * ControlKind
+ */
+export type ControlKind = 'steer' | 'interrupt';
+
+/**
+ * ControlRequestStatus
+ */
+export type ControlRequestStatus = 'requested' | 'delivering' | 'accepted' | 'completed' | 'rejected' | 'delivery_unknown';
+
+/**
  * ConversationTaskMutationResponse
  */
 export type ConversationTaskMutationResponse = {
@@ -3060,10 +3070,7 @@ export type TaskHealthResponse = {
      * Last Event At
      */
     last_event_at?: string | null;
-    /**
-     * Status
-     */
-    status: string;
+    status: ConversationTaskStatus;
     /**
      * Task Id
      */
@@ -3493,14 +3500,8 @@ export type TurnControlResponse = {
      * Expected Turn Id
      */
     expected_turn_id: string;
-    /**
-     * Kind
-     */
-    kind: string;
-    /**
-     * Status
-     */
-    status: string;
+    kind: ControlKind;
+    status: ControlRequestStatus;
     /**
      * Task Id
      */
@@ -3537,6 +3538,11 @@ export type TurnInterruptRequest = {
 };
 
 /**
+ * TurnItemActor
+ */
+export type TurnItemActor = 'user' | 'agent' | 'tool' | 'system';
+
+/**
  * TurnItemListResponse
  */
 export type TurnItemListResponse = {
@@ -3550,18 +3556,12 @@ export type TurnItemListResponse = {
  * TurnItemResponse
  */
 export type TurnItemResponse = {
-    /**
-     * Actor
-     */
-    actor: string;
+    actor: TurnItemActor;
     /**
      * Item Id
      */
     item_id: string;
-    /**
-     * Item Type
-     */
-    item_type: string;
+    item_type: TurnItemType;
     /**
      * Payload
      */
@@ -3588,6 +3588,11 @@ export type TurnItemResponse = {
 };
 
 /**
+ * TurnItemType
+ */
+export type TurnItemType = 'user_message' | 'agent_message' | 'reasoning_summary' | 'command_execution' | 'file_change' | 'tool_call' | 'tool_result' | 'approval_request' | 'approval_result' | 'system_notice' | 'plan_update' | 'error';
+
+/**
  * TurnListResponse
  */
 export type TurnListResponse = {
@@ -3601,10 +3606,7 @@ export type TurnListResponse = {
  * TurnResponse
  */
 export type TurnResponse = {
-    /**
-     * Status
-     */
-    status: string;
+    status: TurnStatus;
     /**
      * Task Id
      */
@@ -3621,6 +3623,11 @@ export type TurnResponse = {
 };
 
 /**
+ * TurnStatus
+ */
+export type TurnStatus = 'in_progress' | 'completed' | 'interrupted' | 'failed';
+
+/**
  * TurnSteerRequest
  */
 export type TurnSteerRequest = {
@@ -3635,21 +3642,20 @@ export type TurnSteerRequest = {
 };
 
 /**
+ * TurnSubmissionIntent
+ */
+export type TurnSubmissionIntent = 'create' | 'retry' | 'next_turn';
+
+/**
  * TurnSubmissionResponse
  */
 export type TurnSubmissionResponse = {
-    /**
-     * Intent
-     */
-    intent: string;
+    intent: TurnSubmissionIntent;
     /**
      * Reserved Turn Id
      */
     reserved_turn_id: string;
-    /**
-     * Status
-     */
-    status: string;
+    status: TurnSubmissionStatus;
     /**
      * Submission Id
      */
@@ -3659,6 +3665,11 @@ export type TurnSubmissionResponse = {
      */
     task_id: string;
 };
+
+/**
+ * TurnSubmissionStatus
+ */
+export type TurnSubmissionStatus = 'queued' | 'claimed' | 'delivering' | 'delivered' | 'cancelled' | 'delivery_unknown' | 'failed_delivery';
 
 /**
  * UserInfoResponse

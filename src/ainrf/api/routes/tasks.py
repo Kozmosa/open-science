@@ -20,7 +20,11 @@ from ainrf.domain import (
     DomainPermissionError,
     TaskProjectionService,
 )
-from ainrf.domain.conversation_contracts import ConversationContractError, TaskSort
+from ainrf.domain.conversation_contracts import (
+    ConversationContractError,
+    ConversationTaskStatus,
+    TaskSort,
+)
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -164,7 +168,7 @@ async def get_task_health(request: Request, task_id: str) -> TaskHealthResponse:
         inactive_seconds = _inactive_seconds(last_event_at_iso)
         return TaskHealthResponse(
             task_id=task_id,
-            status=str(health["status"]),
+            status=ConversationTaskStatus(str(health["status"])),
             engine_alive=bool(health["engine_alive"]),
             last_event_at=last_event_at_iso,
             inactive_seconds=inactive_seconds,

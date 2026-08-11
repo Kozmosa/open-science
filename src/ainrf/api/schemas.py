@@ -12,7 +12,17 @@ from ainrf.auth.username import (
     USERNAME_MIN_LENGTH,
     USERNAME_PATTERN,
 )
-from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
+from ainrf.domain.conversation_contracts import (
+    ControlKind,
+    ControlRequestStatus,
+    ConversationTaskStatus,
+    TaskWorkStatus,
+    TurnItemActor,
+    TurnItemType,
+    TurnStatus,
+    TurnSubmissionIntent,
+    TurnSubmissionStatus,
+)
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
 from ainrf.files.models import FileKind
 from ainrf.skills.models import InjectMode
@@ -591,8 +601,8 @@ class TurnSubmissionResponse(BaseModel):
     submission_id: str
     task_id: str
     reserved_turn_id: str
-    status: str
-    intent: str
+    status: TurnSubmissionStatus
+    intent: TurnSubmissionIntent
 
 
 class ConversationTaskMutationResponse(BaseModel):
@@ -613,7 +623,7 @@ class TurnResponse(BaseModel):
     turn_id: str
     task_id: str
     turn_seq: int
-    status: str
+    status: TurnStatus
 
 
 class TurnListResponse(BaseModel):
@@ -628,8 +638,8 @@ class TurnItemResponse(BaseModel):
     turn_id: str
     task_item_seq: int
     turn_item_seq: int
-    item_type: str
-    actor: str
+    item_type: TurnItemType
+    actor: TurnItemActor
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -654,8 +664,8 @@ class TurnControlResponse(BaseModel):
     control_request_id: str
     task_id: str
     expected_turn_id: str
-    kind: str
-    status: str
+    kind: ControlKind
+    status: ControlRequestStatus
 
 
 class ForkPreviewRequest(BaseModel):
@@ -792,7 +802,7 @@ class TaskHealthResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     task_id: str
-    status: str
+    status: ConversationTaskStatus
     engine_alive: bool
     last_event_at: str | None = None
     inactive_seconds: float | None = None
