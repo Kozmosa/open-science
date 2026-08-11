@@ -17,6 +17,8 @@ _BASELINE_VERSIONS = {
 _RETIRED_LITERATURE_TABLES = ("literature_task_sagas",)
 _TASK_RESEARCHER_TYPE_CHECK = "researcher_type IN ('vanilla', 'aris-researcher')"
 _TASK_HARNESS_ENGINE_CHECK = "harness_engine IN ('claude-code', 'agent-sdk', 'codex-app-server')"
+_AUTH_USER_ROLE_CHECK = "role IN ('admin', 'member')"
+_AUTH_USER_STATUS_CHECK = "status IN ('pending', 'active', 'disabled')"
 
 
 def _apply_baseline(conn: sqlite3.Connection, database_name: str) -> None:
@@ -137,6 +139,64 @@ def _task_runtime_type_rebuild_requires_foreign_keys_off(conn: sqlite3.Connectio
     return _has_table(conn, "tasks") and not _tasks_have_canonical_runtime_type_checks(conn)
 
 
+def _schema_objects_referencing_table(
+    conn: sqlite3.Connection,
+    table_name: str,
+) -> list[tuple[str, str, str]]:
+    return [
+        (str(row[0]), str(row[1]), str(row[2]))
+        for row in conn.execute(
+            """
+            SELECT type, name, sql
+            FROM sqlite_master
+            WHERE type IN ('trigger', 'view')
+              AND sql IS NOT NULL
+              AND (instr(lower(sql), ?) > 0 OR instr(lower(sql), ?) > 0)
+            ORDER BY type, name
+            """,
+            (f" {table_name.lower()}", f'"{table_name.lower()}"'),
+        )
+    ]
+
+
+def _table_index_statements(conn: sqlite3.Connection, table_name: str) -> list[str]:
+    return [
+        str(row[0])
+        for row in conn.execute(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL
+            ORDER BY name
+            """,
+            (table_name,),
+        )
+    ]
+
+
+def _drop_preserved_schema_objects(
+    conn: sqlite3.Connection,
+    objects: list[tuple[str, str, str]],
+) -> None:
+    for object_type, name, _statement in sorted(
+        objects,
+        key=lambda item: (item[0] != "trigger", item[1]),
+    ):
+        quoted_name = '"' + name.replace('"', '""') + '"'
+        conn.execute(f"DROP {object_type.upper()} {quoted_name}")
+
+
+def _restore_preserved_schema_objects(
+    conn: sqlite3.Connection,
+    objects: list[tuple[str, str, str]],
+) -> None:
+    for _object_type, _name, statement in sorted(
+        objects,
+        key=lambda item: (item[0] != "view", item[1]),
+    ):
+        conn.execute(statement)
+
+
 @registry.register(
     "agentic_researcher",
     requires_foreign_keys_off=_task_runtime_type_rebuild_requires_foreign_keys_off,
@@ -165,36 +225,9 @@ def migration_038_constrain_task_runtime_types(conn: sqlite3.Connection) -> None
             f"task_id={invalid[0]}, researcher_type={invalid[1]}, harness_engine={invalid[2]}"
         )
 
-    dependent_objects = [
-        (str(row[0]), str(row[1]), str(row[2]))
-        for row in conn.execute(
-            """
-            SELECT type, name, sql
-            FROM sqlite_master
-            WHERE type IN ('trigger', 'view')
-              AND sql IS NOT NULL
-              AND (instr(lower(sql), ' tasks') > 0 OR instr(lower(sql), '"tasks"') > 0)
-            ORDER BY type, name
-            """
-        )
-    ]
-    index_statements = [
-        str(row[0])
-        for row in conn.execute(
-            """
-            SELECT sql
-            FROM sqlite_master
-            WHERE type = 'index' AND tbl_name = 'tasks' AND sql IS NOT NULL
-            ORDER BY name
-            """
-        )
-    ]
-    for object_type, name, _statement in sorted(
-        dependent_objects,
-        key=lambda item: (item[0] != "trigger", item[1]),
-    ):
-        quoted_name = '"' + name.replace('"', '""') + '"'
-        conn.execute(f"DROP {object_type.upper()} {quoted_name}")
+    dependent_objects = _schema_objects_referencing_table(conn, "tasks")
+    index_statements = _table_index_statements(conn, "tasks")
+    _drop_preserved_schema_objects(conn, dependent_objects)
     conn.execute(
         """
         CREATE TABLE tasks_migration_038 (
@@ -266,11 +299,7 @@ def migration_038_constrain_task_runtime_types(conn: sqlite3.Connection) -> None
     conn.execute("ALTER TABLE tasks_migration_038 RENAME TO tasks")
     for statement in index_statements:
         conn.execute(statement)
-    for _object_type, _name, statement in sorted(
-        dependent_objects,
-        key=lambda item: (item[0] != "view", item[1]),
-    ):
-        conn.execute(statement)
+    _restore_preserved_schema_objects(conn, dependent_objects)
 
 
 @registry.register("literature")
@@ -667,6 +696,88 @@ def migration_009_retire_legacy_project_collaborators(conn: sqlite3.Connection) 
             "auth migration 009 refuses to drop non-empty legacy project_collaborators"
         )
     conn.execute("DROP TABLE project_collaborators")
+
+
+def _users_have_canonical_role_status_checks(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+    ).fetchone()
+    if row is None or row[0] is None:
+        return False
+    table_sql = str(row[0])
+    return _AUTH_USER_ROLE_CHECK in table_sql and _AUTH_USER_STATUS_CHECK in table_sql
+
+
+def _auth_user_rebuild_requires_foreign_keys_off(conn: sqlite3.Connection) -> bool:
+    return _has_table(conn, "users") and not _users_have_canonical_role_status_checks(conn)
+
+
+@registry.register(
+    "auth",
+    requires_foreign_keys_off=_auth_user_rebuild_requires_foreign_keys_off,
+)
+def migration_010_constrain_user_role_status(conn: sqlite3.Connection) -> None:
+    """Make durable user role and status columns match Auth Domain contracts."""
+
+    if _users_have_canonical_role_status_checks(conn):
+        return
+    if not _has_table(conn, "users"):
+        raise RuntimeError("auth migration 010 requires the users table")
+
+    invalid = conn.execute(
+        """
+        SELECT id, role, status
+        FROM users
+        WHERE role NOT IN ('admin', 'member')
+           OR status NOT IN ('pending', 'active', 'disabled')
+        ORDER BY id
+        LIMIT 1
+        """
+    ).fetchone()
+    if invalid is not None:
+        raise RuntimeError(
+            "auth migration 010 refuses non-canonical user role/status: "
+            f"user_id={invalid[0]}, role={invalid[1]}, status={invalid[2]}"
+        )
+
+    dependent_objects = _schema_objects_referencing_table(conn, "users")
+    index_statements = _table_index_statements(conn, "users")
+    _drop_preserved_schema_objects(conn, dependent_objects)
+    conn.execute(
+        """
+        CREATE TABLE users_migration_010 (
+            id TEXT PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'member'
+                CHECK (role IN ('admin', 'member')),
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'active', 'disabled')),
+            created_at TEXT NOT NULL,
+            activated_at TEXT,
+            last_login_at TEXT,
+            must_change_password INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO users_migration_010 (
+            id, username, password_hash, display_name, role, status, created_at,
+            activated_at, last_login_at, must_change_password
+        )
+        SELECT
+            id, username, password_hash, display_name, role, status, created_at,
+            activated_at, last_login_at, must_change_password
+        FROM users
+        """
+    )
+    conn.execute("DROP TABLE users")
+    conn.execute("ALTER TABLE users_migration_010 RENAME TO users")
+    for statement in index_statements:
+        conn.execute(statement)
+    _restore_preserved_schema_objects(conn, dependent_objects)
 
 
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])

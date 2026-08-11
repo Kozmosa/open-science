@@ -186,6 +186,29 @@ def _build_v8_auth_collaborator_artifact(path: Path, *, non_empty: bool) -> None
         connection.commit()
 
 
+def _build_v9_unconstrained_user_artifact(path: Path) -> None:
+    """Build the prior final auth schema before user role/status CHECK constraints."""
+
+    current_baseline = files("ainrf.db.baselines").joinpath("auth.sql").read_text(encoding="utf-8")
+    prior_baseline = current_baseline.replace(
+        "role TEXT NOT NULL DEFAULT 'member'\n"
+        "                CHECK (role IN ('admin', 'member')),\n",
+        "role TEXT NOT NULL DEFAULT 'member',\n",
+    ).replace(
+        "status TEXT NOT NULL DEFAULT 'pending'\n"
+        "                CHECK (status IN ('pending', 'active', 'disabled')),\n",
+        "status TEXT NOT NULL DEFAULT 'pending',\n",
+    )
+    assert prior_baseline != current_baseline
+    with _connect(path) as connection:
+        connection.executescript(prior_baseline)
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('auth', 9)")
+        connection.commit()
+
+
 def _build_v9_literature_artifact(path: Path) -> None:
     """Build the prior topic schema with its unused legacy mapping column."""
 
@@ -415,7 +438,7 @@ def _build_v37_unconstrained_task_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 9), ("agentic_researcher", 38), ("literature", 11), ("terminal", 1)],
+    [("auth", 10), ("agentic_researcher", 38), ("literature", 11), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -429,13 +452,13 @@ def test_auth_v7_access_event_ledger_migrates_to_fresh_schema(tmp_path: Path) ->
     fresh_path = tmp_path / "fresh-auth.sqlite3"
     artifact_path = tmp_path / "v7-auth.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "auth") == 3
+        assert run_pending(connection, "auth") == 4
         fresh_schema = _schema_objects(connection)
 
     _build_v7_auth_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "auth") == 2
-        assert current_version(connection, "auth") == 9
+        assert run_pending(connection, "auth") == 3
+        assert current_version(connection, "auth") == 10
         artifact_schema = _schema_objects(connection)
         authorities = connection.execute(
             """
@@ -461,13 +484,13 @@ def test_auth_v8_empty_legacy_collaborator_table_migrates_to_fresh_schema(
     fresh_path = tmp_path / "fresh-auth.sqlite3"
     artifact_path = tmp_path / "v8-auth.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "auth") == 3
+        assert run_pending(connection, "auth") == 4
         fresh_schema = _schema_objects(connection)
 
     _build_v8_auth_collaborator_artifact(artifact_path, non_empty=False)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "auth") == 1
-        assert current_version(connection, "auth") == 9
+        assert run_pending(connection, "auth") == 2
+        assert current_version(connection, "auth") == 10
         artifact_schema = _schema_objects(connection)
 
     assert artifact_schema == fresh_schema
@@ -492,6 +515,77 @@ def test_auth_v8_non_empty_legacy_collaborator_table_is_preserved(tmp_path: Path
 
     assert row is not None
     assert tuple(row) == ("legacy-project", "legacy-user", "member", "legacy-admin", "t1")
+
+
+def test_auth_migration_010_constrains_user_role_status_and_preserves_references(
+    tmp_path: Path,
+) -> None:
+    fresh_path = tmp_path / "fresh-auth.sqlite3"
+    artifact_path = tmp_path / "v9-auth-users.sqlite3"
+    with _connect(fresh_path) as connection:
+        run_pending(connection, "auth")
+        fresh_schema = _schema_objects(connection)
+
+    _build_v9_unconstrained_user_artifact(artifact_path)
+    with _connect(artifact_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO users (
+                id, username, password_hash, display_name, role, status, created_at
+            ) VALUES (
+                'user-canonical', 'canonical', 'hash', 'Canonical', 'member', 'active', 'now'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO domain_default_project_provisioning (
+                user_id, username, status, created_at, updated_at
+            ) VALUES ('user-canonical', 'canonical', 'queued', 'now', 'now')
+            """
+        )
+        connection.commit()
+
+        assert run_pending(connection, "auth") == 1
+        assert current_version(connection, "auth") == 10
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert tuple(
+            connection.execute(
+                "SELECT role, status FROM users WHERE id = 'user-canonical'"
+            ).fetchone()
+        ) == ("member", "active")
+        assert _schema_objects(connection) == fresh_schema
+
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+            connection.execute("UPDATE users SET role = 'owner' WHERE id = 'user-canonical'")
+
+
+def test_auth_migration_010_refuses_non_canonical_historical_rows(tmp_path: Path) -> None:
+    path = tmp_path / "v9-auth-invalid-users.sqlite3"
+    _build_v9_unconstrained_user_artifact(path)
+    with _connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO users (
+                id, username, password_hash, display_name, role, status, created_at
+            ) VALUES (
+                'user-invalid', 'invalid', 'hash', 'Invalid', 'owner', 'locked', 'now'
+            )
+            """
+        )
+        connection.commit()
+
+        with pytest.raises(RuntimeError, match="user_id=user-invalid"):
+            run_pending(connection, "auth")
+
+        assert current_version(connection, "auth") == 9
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert tuple(
+            connection.execute(
+                "SELECT role, status FROM users WHERE id = 'user-invalid'"
+            ).fetchone()
+        ) == ("owner", "locked")
 
 
 def test_auth_v7_access_event_migration_refuses_orphan_history(tmp_path: Path) -> None:

@@ -33,17 +33,20 @@ CREATE TABLE refresh_tokens (
             expires_at TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
-CREATE TABLE users (
+CREATE TABLE "users" (
             id TEXT PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             display_name TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'member',
-            status TEXT NOT NULL DEFAULT 'pending',
+            role TEXT NOT NULL DEFAULT 'member'
+                CHECK (role IN ('admin', 'member')),
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'active', 'disabled')),
             created_at TEXT NOT NULL,
             activated_at TEXT,
-            last_login_at TEXT
-        , must_change_password INTEGER NOT NULL DEFAULT 0);
+            last_login_at TEXT,
+            must_change_password INTEGER NOT NULL DEFAULT 0
+        );
 CREATE INDEX idx_env_access_user ON environment_access(user_id);
 CREATE INDEX idx_users_status ON users(status);
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
