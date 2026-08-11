@@ -369,6 +369,45 @@ def migration_010_retire_legacy_topic_mapping(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX idx_lit_matches_paper ON literature_topic_matches(paper_id)")
 
 
+@registry.register("literature")
+def migration_011_retire_duplicate_research_task_links(conn: sqlite3.Connection) -> None:
+    """Drop the write-only Task link mirror after proving intent equivalence."""
+
+    if not _has_table(conn, "literature_research_task_links"):
+        return
+    if not _has_table(conn, "literature_research_task_intents"):
+        raise RuntimeError("literature research Task intents are required by migration 011")
+
+    mismatch = conn.execute(
+        """
+        SELECT link.link_id
+        FROM literature_research_task_links AS link
+        LEFT JOIN literature_research_task_intents AS intent
+          ON intent.task_idempotency_key = link.idempotency_key
+        WHERE intent.intent_id IS NULL
+           OR link.link_id IS NOT ('research-link:' || intent.intent_id)
+           OR link.user_id IS NOT intent.user_id
+           OR link.paper_id IS NOT intent.paper_id
+           OR link.task_id IS NOT intent.task_id
+           OR link.status IS NOT 'completed'
+           OR intent.status IS NOT 'completed'
+           OR link.payload_json IS NOT intent.request_input_json
+           OR link.created_at IS NOT intent.created_at
+           OR link.completed_at IS NOT intent.completed_at
+           OR link.last_error IS NOT NULL
+           OR intent.last_error IS NOT NULL
+        ORDER BY link.link_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if mismatch is not None:
+        raise RuntimeError(
+            "literature migration 011 refuses to drop a non-canonical research Task link: "
+            f"{mismatch[0]}"
+        )
+    conn.execute("DROP TABLE literature_research_task_links")
+
+
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])
 def agentic_researcher_baseline(conn: sqlite3.Connection) -> None:
     _apply_baseline(conn, "agentic_researcher")

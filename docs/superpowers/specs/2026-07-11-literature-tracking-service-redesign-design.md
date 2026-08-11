@@ -1,8 +1,8 @@
 ---
 doc_state: current
 status: accepted
-last_reviewed: 2026-07-30
-review_by: 2026-08-29
+last_reviewed: 2026-08-11
+review_by: 2026-09-10
 ---
 
 # OpenScience 文献追踪服务重设计
@@ -333,7 +333,7 @@ review_by: 2026-08-29
 | `literature_source_snapshots` | 原始来源响应及校验信息 | 响应成功后优先保存；允许设置保留期限 |
 | `literature_api_attempts` | 每次外部调用的开始、结果与未知状态 | 失败、超时和可能已发送必须可区分 |
 | `literature_summaries` | 某论文版本的摘要 | 按论文版本、摘要版本和语言唯一 |
-| `literature_research_task_links` | 论文与研究任务关系 | 按用户、论文和任务唯一 |
+| `literature_research_task_intents` | 论文转研究任务的 durable intent 与最终 Task 关系 | 按用户、论文和幂等键唯一；完成后保存 canonical `task_id` |
 | `literature_work_items` | 待处理、处理中和待重试工作 | 不绑定具体队列框架；可在重启后恢复 |
 
 ### 5.3 论文身份与版本

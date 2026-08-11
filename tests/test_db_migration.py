@@ -115,6 +115,84 @@ def _build_v9_literature_artifact(path: Path) -> None:
         connection.commit()
 
 
+def _build_v10_literature_artifact(path: Path) -> None:
+    """Build the prior schema with its write-only research Task link mirror."""
+
+    baseline = files("ainrf.db.baselines").joinpath("literature.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.execute(
+            """
+            CREATE TABLE literature_research_task_links (
+                link_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                paper_id TEXT NOT NULL,
+                task_id TEXT,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                completed_at TEXT,
+                last_error TEXT,
+                FOREIGN KEY (paper_id) REFERENCES literature_catalog_papers(paper_id)
+            )
+            """
+        )
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('literature', 10)")
+        connection.commit()
+
+
+def _seed_completed_research_task_link(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """
+        INSERT INTO literature_catalog_papers (
+            paper_id, provider, external_id, title, first_seen_at, last_seen_at
+        ) VALUES ('paper-1', 'arxiv', '2401.00001', 'Paper', 'created', 'seen')
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO literature_work_items (
+            work_item_id, kind, idempotency_key, status, payload_json,
+            available_at, created_at, updated_at
+        ) VALUES (
+            'work-1', 'research_task', 'research-task:intent-1', 'completed',
+            '{"intent_id":"intent-1"}', 'created', 'created', 'completed'
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO literature_research_task_intents (
+            intent_id, user_id, paper_id, project_id, workspace_id, actor_role,
+            task_preset, title, request_input_json, request_hash, idempotency_key,
+            task_idempotency_key, task_id, status, work_item_id, created_at,
+            updated_at, completed_at
+        ) VALUES (
+            'intent-1', 'owner', 'paper-1', 'project-1', 'workspace-1', 'member',
+            'raw_prompt', 'Research Paper', '{"prompt":"inspect"}', 'request-hash',
+            'request-key', 'task-key', 'task-1', 'completed', 'work-1',
+            'created', 'completed', 'completed'
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO literature_research_task_links (
+            link_id, user_id, paper_id, task_id, idempotency_key, status,
+            payload_json, created_at, completed_at, last_error
+        ) VALUES (
+            'research-link:intent-1', 'owner', 'paper-1', 'task-1', 'task-key',
+            'completed', '{"prompt":"inspect"}', 'created', 'completed', NULL
+        )
+        """
+    )
+    connection.commit()
+
+
 def _schema_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str | None]]:
     return {
         (str(row["type"]), str(row["name"]), row["sql"])
@@ -173,7 +251,7 @@ def _build_v36_approval_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 37), ("literature", 10), ("terminal", 1)],
+    [("auth", 7), ("agentic_researcher", 37), ("literature", 11), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -188,12 +266,12 @@ def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_autho
 ) -> None:
     path = tmp_path / "literature.sqlite3"
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 4
+        assert run_pending(connection, "literature") == 5
         tables = {
             str(row["name"])
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
-        assert current_version(connection, "literature") == 10
+        assert current_version(connection, "literature") == 11
 
     assert {
         "literature_research_task_intents",
@@ -202,19 +280,20 @@ def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_autho
     } <= tables
     assert "literature_api_attempts" in tables
     assert "literature_task_sagas" not in tables
+    assert "literature_research_task_links" not in tables
 
 
 def test_literature_v7_empty_artifact_migrates_to_fresh_schema(tmp_path: Path) -> None:
     fresh_path = tmp_path / "fresh.sqlite3"
     artifact_path = tmp_path / "v7-artifact.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "literature") == 4
+        assert run_pending(connection, "literature") == 5
         fresh_schema = _schema_objects(connection)
 
     _build_v7_literature_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "literature") == 3
-        assert current_version(connection, "literature") == 10
+        assert run_pending(connection, "literature") == 4
+        assert current_version(connection, "literature") == 11
         artifact_schema = _schema_objects(connection)
 
     assert artifact_schema == fresh_schema
@@ -227,8 +306,8 @@ def test_literature_v7_artifact_without_retired_tables_advances(tmp_path: Path) 
         include_task_sagas=False,
     )
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 3
-        assert current_version(connection, "literature") == 10
+        assert run_pending(connection, "literature") == 4
+        assert current_version(connection, "literature") == 11
 
 
 def test_literature_v9_topic_mapping_migrates_without_losing_topics_or_matches(
@@ -270,8 +349,8 @@ def test_literature_v9_topic_mapping_migrates_without_losing_topics_or_matches(
         )
         connection.commit()
 
-        assert run_pending(connection, "literature") == 1
-        assert current_version(connection, "literature") == 10
+        assert run_pending(connection, "literature") == 2
+        assert current_version(connection, "literature") == 11
         assert "legacy_subscription_id" not in {
             str(row[1]) for row in connection.execute("PRAGMA table_info(literature_topics)")
         }
@@ -363,8 +442,51 @@ def test_literature_v9_topic_mapping_drop_failure_rolls_back_data_and_version(
             == []
         )
 
+        assert run_pending(connection, "literature") == 2
+        assert current_version(connection, "literature") == 11
+
+
+def test_literature_v10_retires_canonical_research_task_link_mirror(tmp_path: Path) -> None:
+    path = tmp_path / "v10-research-task-links.sqlite3"
+    _build_v10_literature_artifact(path)
+    with _connect(path) as connection:
+        _seed_completed_research_task_link(connection)
+
         assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 11
+        assert (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'literature_research_task_links'"
+            ).fetchone()
+            is None
+        )
+        intent = connection.execute(
+            "SELECT status, task_id, request_input_json FROM literature_research_task_intents"
+        ).fetchone()
+        assert intent is not None
+        assert tuple(intent) == ("completed", "task-1", '{"prompt":"inspect"}')
+
+
+def test_literature_v10_research_task_link_mismatch_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "v10-research-task-link-mismatch.sqlite3"
+    _build_v10_literature_artifact(path)
+    with _connect(path) as connection:
+        _seed_completed_research_task_link(connection)
+        connection.execute("UPDATE literature_research_task_links SET task_id = 'conflicting-task'")
+        connection.commit()
+
+        with pytest.raises(RuntimeError, match="non-canonical research Task link"):
+            run_pending(connection, "literature")
+
         assert current_version(connection, "literature") == 10
+        link = connection.execute("SELECT task_id FROM literature_research_task_links").fetchone()
+        assert link is not None and link["task_id"] == "conflicting-task"
+
+        connection.execute("UPDATE literature_research_task_links SET task_id = 'task-1'")
+        connection.commit()
+        assert run_pending(connection, "literature") == 1
+        assert current_version(connection, "literature") == 11
 
 
 @pytest.mark.parametrize(
@@ -496,8 +618,8 @@ def test_literature_api_attempt_migration_upgrades_v8_shape_and_adds_guards(
         connection.commit()
 
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 2
-        assert current_version(connection, "literature") == 10
+        assert run_pending(connection, "literature") == 3
+        assert current_version(connection, "literature") == 11
         columns = {
             str(row[1]) for row in connection.execute("PRAGMA table_info(literature_api_attempts)")
         }
@@ -593,7 +715,7 @@ def test_literature_api_attempt_migration_quarantines_legacy_succeeded_rows(
         connection.commit()
 
     with _connect(path) as connection:
-        assert run_pending(connection, "literature") == 2
+        assert run_pending(connection, "literature") == 3
         row = connection.execute(
             "SELECT state, legacy_state, response_hash, completed_at FROM literature_api_attempts WHERE attempt_id = 'legacy-1'"
         ).fetchone()

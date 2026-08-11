@@ -149,19 +149,6 @@ CREATE TABLE literature_research_task_intents (
             completed_at TEXT,
             UNIQUE(user_id, paper_id, idempotency_key)
         );
-CREATE TABLE literature_research_task_links (
-            link_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            paper_id TEXT NOT NULL,
-            task_id TEXT,
-            idempotency_key TEXT NOT NULL UNIQUE,
-            status TEXT NOT NULL,
-            payload_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            completed_at TEXT,
-            last_error TEXT,
-            FOREIGN KEY (paper_id) REFERENCES literature_catalog_papers(paper_id)
-        );
 CREATE TABLE literature_source_snapshots (
             snapshot_id TEXT PRIMARY KEY,
             attempt_id TEXT,

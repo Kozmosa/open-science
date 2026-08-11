@@ -1058,31 +1058,6 @@ class LiteratureTaskSagaService:
                         """,
                         (task_id, row["subscription_id"], row["paper_id"]),
                     )
-                catalog_row = conn.execute(
-                    "SELECT 1 FROM literature_catalog_papers WHERE paper_id = ?", (row["paper_id"],)
-                ).fetchone()
-                if catalog_row is not None:
-                    conn.execute(
-                        """
-                        INSERT INTO literature_research_task_links (
-                            link_id, user_id, paper_id, task_id, idempotency_key, status,
-                            payload_json, created_at, completed_at, last_error
-                        ) VALUES (?, ?, ?, ?, ?, 'completed', ?, ?, ?, NULL)
-                        ON CONFLICT(idempotency_key) DO UPDATE SET
-                            task_id = excluded.task_id, status = 'completed',
-                            completed_at = excluded.completed_at, last_error = NULL
-                        """,
-                        (
-                            f"research-link:{intent_id}",
-                            row["user_id"],
-                            row["paper_id"],
-                            task_id,
-                            row["task_idempotency_key"],
-                            row["request_input_json"],
-                            row["created_at"],
-                            now,
-                        ),
-                    )
                 conn.execute(
                     """
                     UPDATE literature_work_items
