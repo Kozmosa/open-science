@@ -1,7 +1,7 @@
 import { api } from '@/shared/api/client';
-import type { FileListResponse as TransportFileListResponse, FileReadResponse as TransportFileReadResponse, FileUploadResponse as TransportFileUploadResponse } from '@/generated/transport';
-import { adaptFileList, adaptFileRead, adaptFileUpload } from './types';
-import type { FileListResponse, FileReadResponse, FileUploadResponse } from './types';
+import type { FileListResponse as TransportFileListResponse, FileReadResponse as TransportFileReadResponse } from '@/generated/transport';
+import { adaptFileList, adaptFileRead } from './types';
+import type { FileListResponse, FileReadResponse } from './types';
 
 function fileQuery(environmentId: string, path: string, workspaceId?: string): string {
   const search = new URLSearchParams({ environment_id: environmentId, path });
@@ -26,17 +26,3 @@ export const buildFileStreamUrl = (
   path: string,
   workspaceId?: string,
 ): string => `/api/files/stream?${fileQuery(environmentId, path, workspaceId)}`;
-
-export const uploadFile = (params: {
-  environmentId: string;
-  path: string;
-  workspaceId?: string;
-  file: File;
-}): Promise<FileUploadResponse> => {
-  const formData = new FormData();
-  formData.append('environment_id', params.environmentId);
-  formData.append('path', params.path);
-  if (params.workspaceId) formData.append('workspace_id', params.workspaceId);
-  formData.append('file', params.file);
-  return api.post<TransportFileUploadResponse>('/files/upload', formData).then(adaptFileUpload);
-};
