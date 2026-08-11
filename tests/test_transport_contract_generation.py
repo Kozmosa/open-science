@@ -43,6 +43,17 @@ def test_task_mutation_response_uses_strict_task_summary_reference() -> None:
     assert "task: TaskSummaryResponse;" in generated_types[start:end]
 
 
+def test_file_entry_kind_uses_the_domain_union_in_transport() -> None:
+    schema = build_transport_openapi()
+    kind_schema = schema["components"]["schemas"]["FileEntryResponse"]["properties"]["kind"]
+    assert kind_schema["enum"] == ["file", "directory", "symlink"]
+
+    generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
+    start = generated_types.index("export type FileEntryResponse = {")
+    end = generated_types.index("};", start) + 2
+    assert "kind: 'file' | 'directory' | 'symlink';" in generated_types[start:end]
+
+
 def test_operation_ids_are_unique_stable_and_cover_canonical_metadata() -> None:
     schema = build_transport_openapi()
     operations: list[tuple[str, str, str, bool]] = []

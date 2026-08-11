@@ -5,7 +5,7 @@ import type {
   FileUploadResponse as TransportFileUploadResponse,
 } from '@/generated/transport';
 
-export type FileKind = 'file' | 'directory' | 'symlink';
+export type FileKind = FileEntryResponse['kind'];
 export type FileEntry = { name: string; path: string; kind: FileKind; size: number | null; modified_at: string | null };
 export type FileListResponse = { path: string; entries: FileEntry[] };
 export type FileReadResponse = { path: string; content: string; is_binary: boolean; size: number; language: string | null; mime_type: string | null };
@@ -19,7 +19,7 @@ function adaptFileEntry(value: FileEntryResponse): FileEntry {
   return {
     name: value.name,
     path: value.path,
-    kind: value.kind as FileKind,
+    kind: value.kind,
     size: value.size ?? null,
     modified_at: value.modified_at ?? null,
   };

@@ -910,7 +910,7 @@ export type FileEntryResponse = {
     /**
      * Kind
      */
-    kind: string;
+    kind: 'file' | 'directory' | 'symlink';
     /**
      * Modified At
      */

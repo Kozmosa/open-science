@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
+from ainrf.files.models import FileKind
 from ainrf.terminal.models import TerminalAttachmentMode
 
 
@@ -749,7 +750,7 @@ class FileEntryResponse(BaseModel):
 
     name: str
     path: str
-    kind: str
+    kind: FileKind
     size: int | None = None
     modified_at: str | None = None
 
