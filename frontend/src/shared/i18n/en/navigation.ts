@@ -47,13 +47,6 @@ const navigation = {
       },
     },
     layout: {
-      brandLine:
-        'A unified control surface for research agents, environments, and workspaces.',
-      headerEyebrow: 'WebUI control surface',
-      headerDescription:
-        'Health, terminal bench, environment control plane, and workspace browser shell during backend realignment.',
-      footerDescription:
-        'Health, terminal bench, environment control plane, and workspace browser shell during backend realignment.',
       collapseSidebar: 'Collapse sidebar',
       expandSidebar: 'Expand sidebar',
       resizeSidebar: 'Resize sidebar',

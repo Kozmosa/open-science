@@ -1,16 +1,7 @@
 // components messages — English
 const components = {
     components: {
-      healthStatusBar: {
-        loading: 'Loading system status...',
-        unable: 'Unable to fetch system status',
-        apiLabel: 'API:',
-        containerLabel: 'Container:',
-        sshLabel: 'SSH:',
-        workspaceLabel: 'Workspace:',
-      },
       environmentSelector: {
-        eyebrow: 'Environment selector',
         title: 'Shared environment selection',
         description:
           'Pick the execution environment once and reuse it across the frontend. Selection priority is: settings project default, remembered local choice, localhost seed, then the first available environment.',
@@ -31,12 +22,10 @@ const components = {
       terminalBench: {
         eyebrow: 'PERSONAL TERMINAL SESSION',
         title: 'Personal terminal session',
-        description: '',
         statusPrefix: 'Status:',
         detailsAction: 'Details',
         detailsTitle: 'Session details',
         detailUpdated: 'Terminal session details updated:',
-        sessionSource: 'Session source',
         loading: 'Loading:',
         websocketUrl: 'WebSocket URL:',
         environment: 'Environment:',
@@ -64,11 +53,6 @@ const components = {
         exited: 'Session exited with code {{code}}',
       },
       environmentEditor: {
-        eyebrow: 'Environment editor',
-        createTitle: 'Create environment',
-        editTitle: 'Edit environment',
-        description:
-          'Define SSH target details, runtime preferences, and the minimal metadata that powers the Containers control plane.',
         activeLabel: 'Active environment:',
         noActive: 'No environment has been marked as active yet.',
         alias: 'Alias',

@@ -1,16 +1,7 @@
 // components messages — 中文
 const components = {
     components: {
-      healthStatusBar: {
-        loading: '正在加载系统状态...',
-        unable: '无法获取系统状态',
-        apiLabel: 'API：',
-        containerLabel: '容器：',
-        sshLabel: 'SSH：',
-        workspaceLabel: '工作区：',
-      },
       environmentSelector: {
-        eyebrow: '环境选择器',
         title: '共享环境选择',
         description:
           '只需选择一次执行环境，前端各页面都会复用它。优先级固定为设置页中的项目默认环境、本地记忆选择、localhost，最后才是列表首项。',
@@ -30,12 +21,10 @@ const components = {
       terminalBench: {
         eyebrow: 'PERSONAL TERMINAL SESSION',
         title: '个人终端会话',
-        description: '',
         statusPrefix: '状态：',
         detailsAction: '详情',
         detailsTitle: '会话详情',
         detailUpdated: '终端会话详情已更新：',
-        sessionSource: '会话来源',
         loading: '加载中：',
         websocketUrl: 'WebSocket URL:',
         environment: '环境：',
@@ -63,10 +52,6 @@ const components = {
         exited: '会话已退出，退出码 {{code}}',
       },
       environmentEditor: {
-        eyebrow: '环境编辑器',
-        createTitle: '创建环境',
-        editTitle: '编辑环境',
-        description: '定义 SSH 目标详情、运行时偏好，以及支撑环境控制平面的最小元数据。',
         activeLabel: '当前活动环境：',
         noActive: '尚未标记任何活动环境。',
         alias: '别名',

@@ -47,10 +47,6 @@ const navigation = {
       },
     },
     layout: {
-      brandLine: '与后端健康检查、终端工作台、环境控制平面和托管工作区浏览器对齐的轻量前端壳。',
-      headerEyebrow: 'WebUI 控制面',
-      headerDescription: '后端重整期间的健康、终端工作台、环境控制平面和工作区浏览器外壳。',
-      footerDescription: '后端重整期间的健康、终端工作台、环境控制平面和工作区浏览器外壳。',
       collapseSidebar: '收起侧边栏',
       expandSidebar: '展开侧边栏',
       resizeSidebar: '调整侧边栏宽度',
