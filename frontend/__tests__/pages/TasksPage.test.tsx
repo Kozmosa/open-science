@@ -515,6 +515,19 @@ beforeEach(() => {
 });
 
 describe('TasksPage', () => {
+  it('requests the canonical name sort exposed by the Task transport', async () => {
+    renderWithProviders(<TasksPage />, { route: '/tasks?drawer=closed' });
+
+    await screen.findByRole('button', { name: 'Train model' });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'name' } });
+
+    await waitFor(() => expect(mockGetTasks).toHaveBeenLastCalledWith({
+      includeArchived: false,
+      limit: 200,
+      sort: 'name',
+    }));
+  });
+
   it('hides failed and cancelled Tasks by default and reveals them on request', async () => {
     const failedTask = { ...taskSummary, task_id: 'task-failed', title: 'Failed task', status: 'failed' as const };
     const cancelledTask = { ...taskSummary, task_id: 'task-cancelled', title: 'Cancelled task', status: 'cancelled' as const };

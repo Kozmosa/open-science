@@ -1,5 +1,6 @@
 import type {
   ForkPreviewResponse,
+  GetApiTasksData,
   TaskCreateRequest,
   TaskSummaryResponse,
   TurnItemResponse,
@@ -8,6 +9,9 @@ import type {
 
 export type TaskStatus = TaskSummaryResponse['status'];
 export type TaskWorkStatus = TaskSummaryResponse['work_status'];
+export type TaskSort = NonNullable<NonNullable<GetApiTasksData['query']>['sort']>;
+export const TASK_LIST_SORTS = ['updated', 'created', 'name'] as const satisfies readonly TaskSort[];
+export type TaskListSort = (typeof TASK_LIST_SORTS)[number];
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 export type ResearcherType = 'vanilla' | 'aris-researcher';
 export type HarnessEngine = 'claude-code' | 'agent-sdk' | 'codex-app-server';
@@ -40,6 +44,10 @@ export function engineFamilyForHarnessEngine(engine: string): ForkEngineFamily |
   if (engine === 'codex-app-server') return 'codex';
   if (engine === 'agent-sdk' || engine === 'claude-code') return 'claude';
   return null;
+}
+
+export function isTaskListSort(value: string): value is TaskListSort {
+  return TASK_LIST_SORTS.some((sort) => sort === value);
 }
 
 export function adaptForkPreview(value: ForkPreviewResponse): ForkPreview {

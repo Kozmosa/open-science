@@ -20,7 +20,7 @@ from ainrf.domain import (
     DomainPermissionError,
     TaskProjectionService,
 )
-from ainrf.domain.conversation_contracts import ConversationContractError
+from ainrf.domain.conversation_contracts import ConversationContractError, TaskSort
 from ainrf.domain.service import DomainNotFoundError
 from ainrf.domain_control import MaintenanceModeError
 
@@ -116,7 +116,7 @@ async def list_tasks(
     project_id: str | None = Query(None),
     include_archived: bool = Query(False),
     limit: int = Query(200, ge=1, le=1000),
-    sort: str = Query("updated"),
+    sort: TaskSort = Query("updated"),
 ) -> TaskListResponse:
     user = get_current_user(request)
     projection = _get_task_projection_service(request)

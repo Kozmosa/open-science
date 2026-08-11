@@ -38,6 +38,14 @@ def test_task_summary_schema_exposes_conversation_status_union() -> None:
     ]
 
 
+def test_task_list_schema_exposes_sort_union(tmp_path: Path) -> None:
+    app = _v2_app(tmp_path / "state", tmp_path)
+    parameters = app.openapi()["paths"]["/api/tasks"]["get"]["parameters"]
+    sort_parameter = next(parameter for parameter in parameters if parameter["name"] == "sort")
+    sort_schema = sort_parameter["schema"]
+    assert sort_schema["enum"] == ["updated", "created", "name", "status"]
+
+
 def _v2_app(state_root: Path, tmp_path: Path) -> FastAPI:
     prepare_current_test_state(state_root)
     return create_app(
@@ -137,6 +145,49 @@ def _seed_frontend_contract(app: FastAPI, state_root: Path) -> dict[str, str]:
         "blocked_workspace_id": blocked_workspace_id,
         "primary_environment_id": primary_environment_id,
     }
+
+
+@pytest.mark.anyio
+async def test_task_list_name_sort_is_authoritative_and_invalid_values_fail_closed(
+    state_root: Path, tmp_path: Path
+) -> None:
+    app = _v2_app(state_root, tmp_path)
+    ids = _seed_frontend_contract(app, state_root)
+    conversation = ConversationApplicationService(
+        state_root,
+        artifact_sha=CURRENT_ARTIFACT_SHA,
+    )
+    for title, key in (("Zulu task", "task-sort-zulu"), ("alpha task", "task-sort-alpha")):
+        conversation.create_task(
+            _API_USER,
+            project_id=ids["project_id"],
+            workspace_id=ids["workspace_id"],
+            title=title,
+            prompt=title,
+            researcher_type="vanilla",
+            harness_engine="claude-code",
+            idempotency_key=key,
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        by_name = await client.get(
+            "/api/tasks?sort=name",
+            headers={"X-API-Key": _API_KEY},
+        )
+        invalid = await client.get(
+            "/api/tasks?sort=unexpected",
+            headers={"X-API-Key": _API_KEY},
+        )
+
+    assert by_name.status_code == 200
+    assert [item["title"] for item in by_name.json()["items"]] == [
+        "alpha task",
+        "Queued frontend task",
+        "Zulu task",
+    ]
+    assert invalid.status_code == 422
 
 
 @pytest.mark.anyio

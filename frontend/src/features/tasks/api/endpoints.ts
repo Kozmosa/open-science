@@ -11,6 +11,7 @@ import type {
   TaskEdge,
   TaskEdgeListResponse,
   TaskListResponse,
+  TaskSort,
   TaskCreateInput,
   ForkPreview,
   TaskSummary,
@@ -42,7 +43,7 @@ export const getTasks = (params: {
   includeArchived?: boolean;
   projectId?: string;
   limit?: number;
-  sort?: 'updated' | 'created' | 'name';
+  sort?: TaskSort;
 } = {}): Promise<TaskListResponse> => {
   const search = new URLSearchParams({ include_archived: String(params.includeArchived ?? false) });
   if (params.projectId) search.set('project_id', params.projectId);

@@ -12,7 +12,7 @@ from ainrf.domain.conversation_projection import (
     ConversationProjectionService,
     ConversationTaskProjection,
 )
-from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
+from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskSort, TaskWorkStatus
 from ainrf.domain.service import DomainAuthorizationService, DomainNotFoundError
 
 
@@ -36,7 +36,7 @@ class TaskProjectionService:
         project_id: str | None,
         include_archived: bool,
         limit: int,
-        sort: str,
+        sort: TaskSort,
     ) -> list[dict[str, object]]:
         if limit <= 0:
             raise ValueError("limit must be positive")
@@ -57,8 +57,9 @@ class TaskProjectionService:
         order_by = {
             "updated": "updated_at DESC, task_id ASC",
             "created": "created_at DESC, task_id ASC",
+            "name": "title COLLATE NOCASE ASC, task_id ASC",
             "status": "updated_at DESC, task_id ASC",
-        }.get(sort, "updated_at DESC, task_id ASC")
+        }[sort]
         limit_clause = "" if status_sort else " LIMIT ?"
         query = (
             f"SELECT * FROM tasks WHERE {' AND '.join(clauses)} ORDER BY {order_by}{limit_clause}"
@@ -86,7 +87,7 @@ class TaskProjectionService:
         *,
         include_archived: bool,
         limit: int,
-        sort: str,
+        sort: TaskSort,
     ) -> dict[str, object]:
         if limit <= 0:
             raise ValueError("limit must be positive")
@@ -94,8 +95,9 @@ class TaskProjectionService:
         order_by = {
             "updated": "updated_at DESC, task_id ASC",
             "created": "created_at DESC, task_id ASC",
+            "name": "title COLLATE NOCASE ASC, task_id ASC",
             "status": "updated_at DESC, task_id ASC",
-        }.get(sort, "updated_at DESC, task_id ASC")
+        }[sort]
         clauses = ["project_id = ?"]
         params: list[object] = [project_id]
         if not include_archived:

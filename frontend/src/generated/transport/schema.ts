@@ -7141,7 +7141,7 @@ export type GetApiTasksData = {
         /**
          * Sort
          */
-        sort?: string;
+        sort?: 'updated' | 'created' | 'name' | 'status';
     };
     url: '/api/tasks';
 };

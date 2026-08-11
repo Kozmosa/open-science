@@ -22,6 +22,7 @@ import { extractErrorMessage } from '@/shared/utils/error';
 import {
   engineFamilyForHarnessEngine,
   FORK_HARNESS_ENGINES_BY_FAMILY,
+  isTaskListSort,
 } from '../types';
 import type {
   ForkEngineFamily,
@@ -29,6 +30,7 @@ import type {
   ForkPreview,
   ForkTransferMode,
   TaskListResponse,
+  TaskListSort,
   TaskSummary,
 } from '../types';
 import { useAuth } from '@features/auth';
@@ -128,7 +130,7 @@ function TasksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
   const [showFailedOrCancelled, setShowFailedOrCancelled] = useState(false);
-  const [taskSort, setTaskSort] = useState<'updated' | 'created' | 'name'>('updated');
+  const [taskSort, setTaskSort] = useState<TaskListSort>('updated');
   const pageVisible = usePageVisibility();
   const isNarrow = useMediaQuery(NARROW_TASKS_QUERY);
   const requestedTaskId = searchParams.get('task');
@@ -830,7 +832,9 @@ function TasksPage() {
           </Button>
           <NativeSelect
             value={taskSort}
-            onChange={(e) => setTaskSort(e.target.value as 'updated' | 'created' | 'name')}
+            onChange={(event) => {
+              if (isTaskListSort(event.target.value)) setTaskSort(event.target.value);
+            }}
             className="w-full rounded-lg py-1 text-[11px]"
           >
             <option value="updated">{t('pages.tasks.sort.updated')}</option>

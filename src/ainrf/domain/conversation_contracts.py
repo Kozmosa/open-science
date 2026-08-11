@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Set
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Final, Literal
+
+
+TaskSort = Literal["updated", "created", "name", "status"]
 
 
 class TaskWorkStatus(StrEnum):
