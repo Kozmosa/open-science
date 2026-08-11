@@ -91,6 +91,44 @@ def test_conversation_responses_use_domain_enums_in_transport() -> None:
             assert declaration in generated_types[start:end]
 
 
+def test_auth_responses_use_domain_enums_and_typed_user_transport() -> None:
+    schema = build_transport_openapi()
+    schemas = schema["components"]["schemas"]
+    assert schemas["UserRole"]["enum"] == ["admin", "member"]
+    assert schemas["UserStatus"]["enum"] == ["pending", "active", "disabled"]
+    assert schemas["UserInfoResponse"]["properties"]["role"] == {
+        "$ref": "#/components/schemas/UserRole"
+    }
+    assert schemas["UserInfoResponse"]["properties"]["status"] == {
+        "$ref": "#/components/schemas/UserStatus"
+    }
+    assert schemas["AuthTokenResponse"]["properties"]["user"] == {
+        "$ref": "#/components/schemas/UserInfoResponse"
+    }
+    assert schemas["AdminUserResponse"]["properties"]["role"] == {
+        "$ref": "#/components/schemas/UserRole"
+    }
+    assert schemas["AdminUserResponse"]["properties"]["status"] == {
+        "$ref": "#/components/schemas/UserStatus"
+    }
+    update_status = schemas["AdminUserUpdateRequest"]["properties"]["status"]
+    assert update_status["enum"] == ["active", "disabled"]
+    assert schemas["AdminUserUpdateRequest"]["required"] == ["status"]
+
+    generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
+    expected_types = {
+        "UserInfoResponse": ("role: UserRole;", "status: UserStatus;"),
+        "AuthTokenResponse": ("user: UserInfoResponse;",),
+        "AdminUserResponse": ("role: UserRole;", "status: UserStatus;"),
+        "AdminUserUpdateRequest": ("status: 'active' | 'disabled';",),
+    }
+    for response_name, declarations in expected_types.items():
+        start = generated_types.index(f"export type {response_name} = {{")
+        end = generated_types.index("};", start) + 2
+        for declaration in declarations:
+            assert declaration in generated_types[start:end]
+
+
 def test_operation_ids_are_unique_stable_and_cover_canonical_metadata() -> None:
     schema = build_transport_openapi()
     operations: list[tuple[str, str, str, bool]] = []

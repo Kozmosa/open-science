@@ -15,7 +15,7 @@ vi.mock('@features/auth', async (importOriginal) => {
   return {
     ...actual,
     useAuth: () => ({
-      user: { id: 'today-user', username: 'today', display_name: 'Today User', role: 'user', status: 'active' },
+      user: { id: 'today-user', username: 'today', display_name: 'Today User', role: 'member', status: 'active' },
       loading: false,
       login: vi.fn(),
       register: vi.fn(),

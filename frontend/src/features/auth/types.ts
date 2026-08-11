@@ -5,7 +5,7 @@ export type AuthToken = AuthTokenResponse & { user: UserInfo };
 export type AccessToken = AccessTokenResponse;
 
 export function adaptAuthToken(value: AuthTokenResponse): AuthToken {
-  return { access_token: value.access_token, refresh_token: value.refresh_token, user: value.user as UserInfo };
+  return { access_token: value.access_token, refresh_token: value.refresh_token, user: value.user };
 }
 
 export function adaptUser(value: UserInfoResponse): UserInfo {

@@ -4,6 +4,7 @@ import { getAdminUsers, updateAdminUser, resetUserPassword } from '../../api';
 import { useT } from '@/shared/i18n';
 import { useAuth } from '@features/auth';
 import { queryKeys } from '@/shared/api/queryKeys';
+import type { AdminUserUpdateStatus } from '../../types';
 
 /** Format an ISO-8601 timestamp as a human-readable relative time string. */
 function formatRelativeTime(iso: string): string {
@@ -36,7 +37,7 @@ export function UsersTab() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
+    mutationFn: ({ id, status }: { id: string; status: AdminUserUpdateStatus }) =>
       updateAdminUser(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.users }),
   });

@@ -115,7 +115,7 @@ const MOCK_USER = {
   id: 'user-001',
   username: 'testuser',
   display_name: 'Test User',
-  role: 'user',
+  role: 'member',
   status: 'active',
 }
 

@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ainrf.auth.models import UserRole, UserStatus
 from ainrf.auth.username import (
     USERNAME_DESCRIPTION,
     USERNAME_MAX_LENGTH,
@@ -930,11 +931,21 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=4)
 
 
+class UserInfoResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    username: str
+    display_name: str
+    role: UserRole
+    status: UserStatus
+    must_change_password: bool = False
+
+
 class AuthTokenResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     access_token: str
     refresh_token: str
-    user: dict
+    user: UserInfoResponse
 
 
 class RefreshRequest(BaseModel):
@@ -947,22 +958,12 @@ class AccessTokenResponse(BaseModel):
     access_token: str
 
 
-class UserInfoResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: str
-    username: str
-    display_name: str
-    role: str
-    status: str
-    must_change_password: bool = False
-
-
 # ── Admin schemas ─────────────────────────────────────────
 
 
 class AdminUserUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    status: str | None = None  # 'active' | 'disabled'
+    status: Literal["active", "disabled"]
 
 
 class AdminPasswordResetRequest(BaseModel):
@@ -975,8 +976,8 @@ class AdminUserResponse(BaseModel):
     id: str
     username: str
     display_name: str
-    role: str
-    status: str
+    role: UserRole
+    status: UserStatus
     created_at: str
     last_login_at: str | None = None
     is_online: bool = False

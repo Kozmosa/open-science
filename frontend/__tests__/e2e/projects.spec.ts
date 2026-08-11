@@ -20,7 +20,7 @@ test.describe('Projects E2E', () => {
           id: 'user-001',
           username: 'testuser',
           display_name: 'Test User',
-          role: 'user',
+          role: 'member',
           status: 'active',
         }),
       })

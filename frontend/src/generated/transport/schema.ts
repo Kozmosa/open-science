@@ -58,14 +58,8 @@ export type AdminUserResponse = {
      * Last Login At
      */
     last_login_at?: string | null;
-    /**
-     * Role
-     */
-    role: string;
-    /**
-     * Status
-     */
-    status: string;
+    role: UserRole;
+    status: UserStatus;
     /**
      * Username
      */
@@ -79,7 +73,7 @@ export type AdminUserUpdateRequest = {
     /**
      * Status
      */
-    status?: string | null;
+    status: 'active' | 'disabled';
 };
 
 /**
@@ -104,12 +98,7 @@ export type AuthTokenResponse = {
      * Refresh Token
      */
     refresh_token: string;
-    /**
-     * User
-     */
-    user: {
-        [key: string]: unknown;
-    };
+    user: UserInfoResponse;
 };
 
 /**
@@ -3687,19 +3676,18 @@ export type UserInfoResponse = {
      * Must Change Password
      */
     must_change_password?: boolean;
-    /**
-     * Role
-     */
-    role: string;
-    /**
-     * Status
-     */
-    status: string;
+    role: UserRole;
+    status: UserStatus;
     /**
      * Username
      */
     username: string;
 };
+
+/**
+ * UserRole
+ */
+export type UserRole = 'admin' | 'member';
 
 /**
  * UserSessionPairListResponse
@@ -3762,6 +3750,11 @@ export type UserSessionPairResponse = {
      */
     updated_at?: string | null;
 };
+
+/**
+ * UserStatus
+ */
+export type UserStatus = 'pending' | 'active' | 'disabled';
 
 /**
  * ValidationError

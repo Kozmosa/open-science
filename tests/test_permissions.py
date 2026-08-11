@@ -110,6 +110,20 @@ class TestAdminApi:
             resp = await client.get("/api/admin/users")
             assert resp.status_code in (403, 404)
 
+    async def test_user_update_rejects_missing_or_unknown_status(self, tmp_path: Path) -> None:
+        from tests.testutil import make_client_and_app
+
+        app, client, _ = make_client_and_app(tmp_path)
+        target_user_id = _ensure_user(app.state.auth_service, "status_user", "status-pass")
+        async with client:
+            missing = await client.patch(f"/api/admin/users/{target_user_id}", json={})
+            unknown = await client.patch(
+                f"/api/admin/users/{target_user_id}", json={"status": "pending"}
+            )
+
+        assert missing.status_code == 422
+        assert unknown.status_code == 422
+
     async def test_environment_access_round_trips_concurrency_limit(self, tmp_path: Path) -> None:
         from tests.testutil import make_client_and_app
 

@@ -1,5 +1,6 @@
 import type { ThemePreference } from '@design-system';
 import type {
+  AdminUserUpdateRequest,
   AdminUserResponse as TransportAdminUserResponse,
   DeploymentVersionResponse as TransportDeploymentVersionResponse,
   EnvironmentAccessResponse,
@@ -71,6 +72,7 @@ export type SkillRegistryUpdateResponse = TransportSkillRegistryUpdateResponse;
 export type AdminUserItem = TransportAdminUserResponse;
 export type AdminUserResponse = TransportAdminUserResponse;
 export type AdminUserListResponse = { items: AdminUserItem[] };
+export type AdminUserUpdateStatus = AdminUserUpdateRequest['status'];
 export type EnvAccessItem = EnvironmentAccessResponse;
 export type EnvAccessListResponse = { items: EnvAccessItem[] };
 export type SearchBackendItem = TransportSearchBackendItem;

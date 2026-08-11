@@ -46,7 +46,7 @@ describe('osci shell contracts', () => {
   });
 
   it('hides the Task summary until cached Task data exists', () => {
-    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'user', status: 'active' } as const;
+    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'member', status: 'active' } as const;
     const { rerender } = render(
       <LocaleProvider initialLocale="en">
         <TopBar user={user} taskStatusSummary={null} onOpenNavigation={() => undefined} onOpenCommandPalette={() => undefined} onLogout={() => undefined} />
@@ -67,7 +67,7 @@ describe('osci shell contracts', () => {
   it('uses the Command glyph shortcut on Apple platforms', () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
     Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' });
-    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'user', status: 'active' } as const;
+    const user = { id: 'user-1', username: 'alice', display_name: 'Alice', role: 'member', status: 'active' } as const;
 
     render(
       <LocaleProvider initialLocale="en">
