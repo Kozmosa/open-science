@@ -100,6 +100,52 @@ def test_version_outputs_package_version() -> None:
     assert result.stdout.strip() == f"ainrf {__version__}"
 
 
+def test_login_uses_canonical_api_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+                "user": {"username": "alice", "role": "member"},
+            }
+
+    def fake_post(
+        url: str,
+        *,
+        json: dict[str, str],
+        timeout: int,
+    ) -> FakeResponse:
+        captured.update({"url": url, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    token_file = tmp_path / "token.json"
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr("getpass.getpass", lambda _prompt: "secret")
+    monkeypatch.setattr("ainrf.command._TOKEN_FILE", token_file)
+
+    result = runner.invoke(
+        app,
+        ["login", "--server", "https://openscience.example/"],
+        input="alice\n",
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "url": "https://openscience.example/api/auth/login",
+        "json": {"username": "alice", "password": "secret"},
+        "timeout": 10,
+    }
+    assert json.loads(token_file.read_text()) == {
+        "access_token": "access-token",
+        "refresh_token": "refresh-token",
+    }
+
+
 def test_serve_help_lists_expected_flags() -> None:
     result = runner.invoke(app, ["serve", "--help"])
 

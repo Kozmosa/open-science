@@ -314,7 +314,7 @@ def login(
 
     try:
         resp = requests.post(
-            f"{server}/auth/login",
+            f"{server.rstrip('/')}/api/auth/login",
             json={"username": username, "password": password},
             timeout=10,
         )
