@@ -14,6 +14,10 @@ class MigrationFn(Protocol):
     def __call__(self, conn: sqlite3.Connection) -> None: ...
 
 
+class MigrationForeignKeyModePredicate(Protocol):
+    def __call__(self, conn: sqlite3.Connection) -> bool: ...
+
+
 class SchemaBaselineError(RuntimeError):
     """The database must be handled by an explicit baseline migration."""
 
@@ -24,6 +28,9 @@ class MigrationRegistry:
     def __init__(self) -> None:
         self._migrations: dict[str, dict[int, MigrationFn]] = {}
         self._baselines: dict[str, tuple[int, MigrationFn]] = {}
+        self._foreign_keys_off_predicates: dict[
+            str, dict[int, MigrationForeignKeyModePredicate]
+        ] = {}
 
     def register_baseline(
         self, database_name: str, version: int
@@ -40,7 +47,12 @@ class MigrationRegistry:
 
         return decorator
 
-    def register(self, database_name: str) -> Callable[[MigrationFn], MigrationFn]:
+    def register(
+        self,
+        database_name: str,
+        *,
+        requires_foreign_keys_off: MigrationForeignKeyModePredicate | None = None,
+    ) -> Callable[[MigrationFn], MigrationFn]:
         """Decorator to register a migration for a database.
 
         Migrations are ordered by their function name convention
@@ -57,6 +69,9 @@ class MigrationRegistry:
             if version in migrations:
                 raise ValueError(f"duplicate {database_name} migration version {version}")
             migrations[version] = fn
+            if requires_foreign_keys_off is not None:
+                predicates = self._foreign_keys_off_predicates.setdefault(database_name, {})
+                predicates[version] = requires_foreign_keys_off
             return fn
 
         return decorator
@@ -64,6 +79,19 @@ class MigrationRegistry:
     def get_pending(self, database_name: str, current_version: int) -> list[MigrationFn]:
         migrations = self._migrations.get(database_name, {})
         return [migrations[version] for version in sorted(migrations) if version > current_version]
+
+    def pending_requires_foreign_keys_off(
+        self,
+        database_name: str,
+        current_version: int,
+        conn: sqlite3.Connection,
+    ) -> bool:
+        predicates = self._foreign_keys_off_predicates.get(database_name, {})
+        return any(
+            predicate(conn)
+            for version, predicate in sorted(predicates.items())
+            if version > current_version
+        )
 
     def baseline(self, database_name: str) -> tuple[int, MigrationFn] | None:
         return self._baselines.get(database_name)
@@ -193,6 +221,26 @@ def _has_user_tables(conn: sqlite3.Connection) -> bool:
     )
 
 
+def _pending_requires_foreign_keys_off(
+    conn: sqlite3.Connection,
+    database_name: str,
+    registry: MigrationRegistry,
+) -> bool:
+    version = _current_version_without_creating(conn, database_name)
+    return registry.pending_requires_foreign_keys_off(database_name, version, conn)
+
+
+def _assert_foreign_key_integrity(conn: sqlite3.Connection, database_name: str) -> None:
+    violation = conn.execute("PRAGMA foreign_key_check").fetchone()
+    if violation is None:
+        return
+    table, row_id, parent, foreign_key_id = violation
+    raise RuntimeError(
+        f"{database_name} migration produced a foreign-key violation: "
+        f"table={table}, rowid={row_id}, parent={parent}, foreign_key_id={foreign_key_id}"
+    )
+
+
 def _run_pending_uncommitted(
     conn: sqlite3.Connection,
     database_name: str,
@@ -300,22 +348,42 @@ def run_pending(
     transaction remains intact.
     """
 
+    r = reg or registry
+    requires_foreign_keys_off = _pending_requires_foreign_keys_off(conn, database_name, r)
+    foreign_keys_enabled = bool(conn.execute("PRAGMA foreign_keys").fetchone()[0])
+
     if conn.in_transaction:
+        if requires_foreign_keys_off and foreign_keys_enabled:
+            raise RuntimeError(
+                f"{database_name} pending migration requires foreign keys disabled before "
+                "the caller transaction starts"
+            )
         savepoint = f"ainrf_run_pending_{uuid4().hex}"
         conn.execute(f"SAVEPOINT {savepoint}")
         try:
-            result = _run_pending_uncommitted(conn, database_name, reg)
+            result = _run_pending_uncommitted(conn, database_name, r)
+            if requires_foreign_keys_off:
+                _assert_foreign_key_integrity(conn, database_name)
             conn.execute(f"RELEASE {savepoint}")
         except BaseException:
             _rollback_migration_savepoint(conn, savepoint)
             raise
         return result
 
-    conn.execute("BEGIN IMMEDIATE")
+    foreign_keys_toggled = requires_foreign_keys_off and foreign_keys_enabled
+    if foreign_keys_toggled:
+        conn.execute("PRAGMA foreign_keys = OFF")
     try:
-        result = _run_pending_uncommitted(conn, database_name, reg)
-        conn.commit()
-    except BaseException:
-        conn.rollback()
-        raise
-    return result
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            result = _run_pending_uncommitted(conn, database_name, r)
+            if requires_foreign_keys_off:
+                _assert_foreign_key_integrity(conn, database_name)
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        return result
+    finally:
+        if foreign_keys_toggled:
+            conn.execute("PRAGMA foreign_keys = ON")

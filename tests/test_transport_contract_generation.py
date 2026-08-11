@@ -91,6 +91,32 @@ def test_conversation_responses_use_domain_enums_in_transport() -> None:
             assert declaration in generated_types[start:end]
 
 
+def test_task_runtime_types_use_domain_enums_in_transport() -> None:
+    schema = build_transport_openapi()
+    schemas = schema["components"]["schemas"]
+    assert schemas["AgenticResearcherType"]["enum"] == ["vanilla", "aris-researcher"]
+    assert schemas["HarnessEngineType"]["enum"] == [
+        "claude-code",
+        "agent-sdk",
+        "codex-app-server",
+    ]
+    for schema_name in ("TaskCreateRequest", "TaskSummaryResponse"):
+        assert schemas[schema_name]["properties"]["researcher_type"] == {
+            "$ref": "#/components/schemas/AgenticResearcherType"
+        }
+        assert schemas[schema_name]["properties"]["harness_engine"] == {
+            "$ref": "#/components/schemas/HarnessEngineType"
+        }
+
+    generated_types = (_GENERATED_ROOT / "schema.ts").read_text(encoding="utf-8")
+    for schema_name in ("TaskCreateRequest", "TaskSummaryResponse"):
+        start = generated_types.index(f"export type {schema_name} = {{")
+        end = generated_types.index("};", start) + 2
+        declaration = generated_types[start:end]
+        assert "researcher_type: AgenticResearcherType;" in declaration
+        assert "harness_engine: HarnessEngineType;" in declaration
+
+
 def test_auth_responses_use_domain_enums_and_typed_user_transport() -> None:
     schema = build_transport_openapi()
     schemas = schema["components"]["schemas"]

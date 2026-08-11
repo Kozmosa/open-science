@@ -536,13 +536,15 @@ CREATE TABLE task_turns (
                     AND engine_driver IN ('claude-code', 'agent-sdk'))
             )
         );
-CREATE TABLE tasks (
+CREATE TABLE "tasks" (
             task_id TEXT PRIMARY KEY,
             project_id TEXT NOT NULL,
             workspace_id TEXT NOT NULL,
             environment_id TEXT NOT NULL,
-            researcher_type TEXT NOT NULL,
-            harness_engine TEXT NOT NULL,
+            researcher_type TEXT NOT NULL
+                CHECK (researcher_type IN ('vanilla', 'aris-researcher')),
+            harness_engine TEXT NOT NULL
+                CHECK (harness_engine IN ('claude-code', 'agent-sdk', 'codex-app-server')),
             user_skills TEXT,
             user_mcp_servers TEXT,
             title TEXT NOT NULL,
@@ -555,8 +557,24 @@ CREATE TABLE tasks (
             owner_user_id TEXT NOT NULL,
             exit_code INTEGER,
             error_summary TEXT,
-            token_usage_json TEXT
-        , api_base_url TEXT, api_key TEXT, codex_base_url TEXT, codex_api_key TEXT, codex_model TEXT, codex_app_server_command TEXT, codex_approval_policy TEXT, project_context_version_id TEXT, archived_at TEXT, archive_reason TEXT, stop_reason TEXT, latest_attempt_id TEXT, runtime_config_fingerprint TEXT, source_fingerprint TEXT, project_context_snapshot_id TEXT REFERENCES context_snapshots(context_snapshot_id) ON DELETE RESTRICT);
+            token_usage_json TEXT,
+            api_base_url TEXT,
+            api_key TEXT,
+            codex_base_url TEXT,
+            codex_api_key TEXT,
+            codex_model TEXT,
+            codex_app_server_command TEXT,
+            codex_approval_policy TEXT,
+            project_context_version_id TEXT,
+            archived_at TEXT,
+            archive_reason TEXT,
+            stop_reason TEXT,
+            latest_attempt_id TEXT,
+            runtime_config_fingerprint TEXT,
+            source_fingerprint TEXT,
+            project_context_snapshot_id TEXT
+                REFERENCES context_snapshots(context_snapshot_id) ON DELETE RESTRICT
+        );
 CREATE TABLE turn_control_requests (
             control_request_id TEXT PRIMARY KEY,
             task_id TEXT NOT NULL,

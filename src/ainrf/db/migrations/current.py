@@ -15,6 +15,8 @@ _BASELINE_VERSIONS = {
     "terminal": 1,
 }
 _RETIRED_LITERATURE_TABLES = ("literature_task_sagas",)
+_TASK_RESEARCHER_TYPE_CHECK = "researcher_type IN ('vanilla', 'aris-researcher')"
+_TASK_HARNESS_ENGINE_CHECK = "harness_engine IN ('claude-code', 'agent-sdk', 'codex-app-server')"
 
 
 def _apply_baseline(conn: sqlite3.Connection, database_name: str) -> None:
@@ -119,6 +121,156 @@ def migration_037_retire_unproduced_runtime_approvals(conn: sqlite3.Connection) 
             "agentic_researcher migration 037 refuses to drop non-empty runtime_approval_requests"
         )
     conn.execute("DROP TABLE runtime_approval_requests")
+
+
+def _tasks_have_canonical_runtime_type_checks(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tasks'"
+    ).fetchone()
+    if row is None or row[0] is None:
+        return False
+    table_sql = str(row[0])
+    return _TASK_RESEARCHER_TYPE_CHECK in table_sql and _TASK_HARNESS_ENGINE_CHECK in table_sql
+
+
+def _task_runtime_type_rebuild_requires_foreign_keys_off(conn: sqlite3.Connection) -> bool:
+    return _has_table(conn, "tasks") and not _tasks_have_canonical_runtime_type_checks(conn)
+
+
+@registry.register(
+    "agentic_researcher",
+    requires_foreign_keys_off=_task_runtime_type_rebuild_requires_foreign_keys_off,
+)
+def migration_038_constrain_task_runtime_types(conn: sqlite3.Connection) -> None:
+    """Make the durable Task runtime type columns match their Domain contracts."""
+
+    if _tasks_have_canonical_runtime_type_checks(conn):
+        return
+    if not _has_table(conn, "tasks"):
+        raise RuntimeError("agentic_researcher migration 038 requires the tasks table")
+
+    invalid = conn.execute(
+        """
+        SELECT task_id, researcher_type, harness_engine
+        FROM tasks
+        WHERE researcher_type NOT IN ('vanilla', 'aris-researcher')
+           OR harness_engine NOT IN ('claude-code', 'agent-sdk', 'codex-app-server')
+        ORDER BY task_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if invalid is not None:
+        raise RuntimeError(
+            "agentic_researcher migration 038 refuses non-canonical Task runtime types: "
+            f"task_id={invalid[0]}, researcher_type={invalid[1]}, harness_engine={invalid[2]}"
+        )
+
+    dependent_objects = [
+        (str(row[0]), str(row[1]), str(row[2]))
+        for row in conn.execute(
+            """
+            SELECT type, name, sql
+            FROM sqlite_master
+            WHERE type IN ('trigger', 'view')
+              AND sql IS NOT NULL
+              AND (instr(lower(sql), ' tasks') > 0 OR instr(lower(sql), '"tasks"') > 0)
+            ORDER BY type, name
+            """
+        )
+    ]
+    index_statements = [
+        str(row[0])
+        for row in conn.execute(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'index' AND tbl_name = 'tasks' AND sql IS NOT NULL
+            ORDER BY name
+            """
+        )
+    ]
+    for object_type, name, _statement in sorted(
+        dependent_objects,
+        key=lambda item: (item[0] != "trigger", item[1]),
+    ):
+        quoted_name = '"' + name.replace('"', '""') + '"'
+        conn.execute(f"DROP {object_type.upper()} {quoted_name}")
+    conn.execute(
+        """
+        CREATE TABLE tasks_migration_038 (
+            task_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            workspace_id TEXT NOT NULL,
+            environment_id TEXT NOT NULL,
+            researcher_type TEXT NOT NULL
+                CHECK (researcher_type IN ('vanilla', 'aris-researcher')),
+            harness_engine TEXT NOT NULL
+                CHECK (harness_engine IN ('claude-code', 'agent-sdk', 'codex-app-server')),
+            user_skills TEXT,
+            user_mcp_servers TEXT,
+            title TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            latest_output_seq INTEGER NOT NULL DEFAULT 0,
+            owner_user_id TEXT NOT NULL,
+            exit_code INTEGER,
+            error_summary TEXT,
+            token_usage_json TEXT,
+            api_base_url TEXT,
+            api_key TEXT,
+            codex_base_url TEXT,
+            codex_api_key TEXT,
+            codex_model TEXT,
+            codex_app_server_command TEXT,
+            codex_approval_policy TEXT,
+            project_context_version_id TEXT,
+            archived_at TEXT,
+            archive_reason TEXT,
+            stop_reason TEXT,
+            latest_attempt_id TEXT,
+            runtime_config_fingerprint TEXT,
+            source_fingerprint TEXT,
+            project_context_snapshot_id TEXT
+                REFERENCES context_snapshots(context_snapshot_id) ON DELETE RESTRICT
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO tasks_migration_038 (
+            task_id, project_id, workspace_id, environment_id, researcher_type,
+            harness_engine, user_skills, user_mcp_servers, title, prompt, created_at,
+            updated_at, started_at, completed_at, latest_output_seq, owner_user_id,
+            exit_code, error_summary, token_usage_json, api_base_url, api_key,
+            codex_base_url, codex_api_key, codex_model, codex_app_server_command,
+            codex_approval_policy, project_context_version_id, archived_at,
+            archive_reason, stop_reason, latest_attempt_id, runtime_config_fingerprint,
+            source_fingerprint, project_context_snapshot_id
+        )
+        SELECT
+            task_id, project_id, workspace_id, environment_id, researcher_type,
+            harness_engine, user_skills, user_mcp_servers, title, prompt, created_at,
+            updated_at, started_at, completed_at, latest_output_seq, owner_user_id,
+            exit_code, error_summary, token_usage_json, api_base_url, api_key,
+            codex_base_url, codex_api_key, codex_model, codex_app_server_command,
+            codex_approval_policy, project_context_version_id, archived_at,
+            archive_reason, stop_reason, latest_attempt_id, runtime_config_fingerprint,
+            source_fingerprint, project_context_snapshot_id
+        FROM tasks
+        """
+    )
+    conn.execute("DROP TABLE tasks")
+    conn.execute("ALTER TABLE tasks_migration_038 RENAME TO tasks")
+    for statement in index_statements:
+        conn.execute(statement)
+    for _object_type, _name, statement in sorted(
+        dependent_objects,
+        key=lambda item: (item[0] != "view", item[1]),
+    ):
+        conn.execute(statement)
 
 
 @registry.register("literature")

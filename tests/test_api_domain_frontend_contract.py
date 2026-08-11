@@ -36,6 +36,17 @@ def test_task_summary_schema_exposes_conversation_status_union() -> None:
         "cancelled",
         "completed",
     ]
+    assert schema["$defs"]["AgenticResearcherType"]["enum"] == [
+        "vanilla",
+        "aris-researcher",
+    ]
+    assert schema["$defs"]["HarnessEngineType"]["enum"] == [
+        "claude-code",
+        "agent-sdk",
+        "codex-app-server",
+    ]
+    assert schema["properties"]["researcher_type"] == {"$ref": "#/$defs/AgenticResearcherType"}
+    assert schema["properties"]["harness_engine"] == {"$ref": "#/$defs/HarnessEngineType"}
 
 
 def test_task_list_schema_exposes_sort_union(tmp_path: Path) -> None:

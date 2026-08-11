@@ -77,6 +77,11 @@ export type AdminUserUpdateRequest = {
 };
 
 /**
+ * AgenticResearcherType
+ */
+export type AgenticResearcherType = 'vanilla' | 'aris-researcher';
+
+/**
  * AnthropicEnvStatus
  */
 export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
@@ -1187,6 +1192,11 @@ export type HttpValidationError = {
      */
     detail?: Array<ValidationError>;
 };
+
+/**
+ * HarnessEngineType
+ */
+export type HarnessEngineType = 'claude-code' | 'agent-sdk' | 'codex-app-server';
 
 /**
  * HealthResponse
@@ -2983,10 +2993,7 @@ export type TaskContextConfirmRequest = {
  * TaskCreateRequest
  */
 export type TaskCreateRequest = {
-    /**
-     * Harness Engine
-     */
-    harness_engine: 'claude-code' | 'agent-sdk' | 'codex-app-server';
+    harness_engine: HarnessEngineType;
     /**
      * Mcp Servers
      */
@@ -2999,10 +3006,7 @@ export type TaskCreateRequest = {
      * Prompt
      */
     prompt: string;
-    /**
-     * Researcher Type
-     */
-    researcher_type: 'vanilla' | 'aris-researcher';
+    researcher_type: AgenticResearcherType;
     /**
      * Skills
      */
@@ -3186,10 +3190,7 @@ export type TaskSummaryResponse = {
      * Exit Code
      */
     exit_code?: number | null;
-    /**
-     * Harness Engine
-     */
-    harness_engine: string;
+    harness_engine: HarnessEngineType;
     /**
      * Latest Output Seq
      */
@@ -3210,10 +3211,7 @@ export type TaskSummaryResponse = {
      * Prompt
      */
     prompt: string;
-    /**
-     * Researcher Type
-     */
-    researcher_type: string;
+    researcher_type: AgenticResearcherType;
     /**
      * Started At
      */

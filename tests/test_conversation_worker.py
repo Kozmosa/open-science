@@ -260,7 +260,7 @@ def state_root(tmp_path: Path) -> Path:
                 harness_engine, title, prompt, created_at, updated_at,
                 owner_user_id
             ) VALUES (
-                'task-1', 'project-1', 'workspace-1', 'environment-1', 'general',
+                'task-1', 'project-1', 'workspace-1', 'environment-1', 'vanilla',
                 'codex-app-server', 'Conversation', 'hello', 'now', 'now', 'user-1'
             )
             """

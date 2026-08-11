@@ -118,7 +118,7 @@ def _insert_task(state_root: Path, task_id: str = "task-1") -> None:
                 harness_engine, title, prompt, created_at, updated_at,
                 owner_user_id
             ) VALUES (?, 'project-legacy', 'workspace-legacy', 'environment-legacy',
-                'general', 'codex-app-server', 'Conversation', 'test',
+                'vanilla', 'codex-app-server', 'Conversation', 'test',
                 ?, ?, 'user-1')
             """,
             (task_id, _NOW, _NOW),
@@ -2039,7 +2039,9 @@ def test_no_turn_fork_uses_persisted_harness_engine_not_caller_metrics(
     assert preview["source_engine_family"] == "codex"
 
     with closing(connect(_db_path(state_root))) as conn:
+        conn.execute("PRAGMA ignore_check_constraints = ON")
         conn.execute("UPDATE tasks SET harness_engine = 'unknown-engine' WHERE task_id = 'task-1'")
+        conn.execute("PRAGMA ignore_check_constraints = OFF")
         conn.commit()
     with pytest.raises(ConversationContractError) as unknown:
         service.preview_fork(

@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ainrf.agentic_researcher.models import AgenticResearcherType
 from ainrf.auth.models import UserRole, UserStatus
 from ainrf.auth.username import (
     USERNAME_DESCRIPTION,
@@ -26,6 +27,7 @@ from ainrf.domain.conversation_contracts import (
 )
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
 from ainrf.files.models import FileKind
+from ainrf.harness_engine.base import HarnessEngineType
 from ainrf.skills.models import InjectMode
 from ainrf.terminal.models import TerminalAttachmentMode
 
@@ -444,8 +446,8 @@ class TaskCreateRequest(BaseModel):
 
     project_id: str = Field(min_length=1)
     workspace_id: str = Field(min_length=1)
-    researcher_type: Literal["vanilla", "aris-researcher"]
-    harness_engine: Literal["claude-code", "agent-sdk", "codex-app-server"]
+    researcher_type: AgenticResearcherType
+    harness_engine: HarnessEngineType
     prompt: str = Field(min_length=1)
     skills: list[str] = []
     mcp_servers: list[str] = []
@@ -553,8 +555,8 @@ class TaskSummaryResponse(BaseModel):
     project_id: str
     workspace_id: str
     environment_id: str
-    researcher_type: str
-    harness_engine: str
+    researcher_type: AgenticResearcherType
+    harness_engine: HarnessEngineType
     status: ConversationTaskStatus
     work_status: TaskWorkStatus
     title: str
