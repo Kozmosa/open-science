@@ -868,7 +868,6 @@ class SkillRegistryCreateRequest(BaseModel):
     git_ref: str = "main"
     source_skills_path: str = "skills"
     core_skill_ids: list[str] = Field(default_factory=list)
-    install_mode: str = "copy"
     enabled: bool = True
 
 
@@ -880,7 +879,6 @@ class SkillRegistryUpdateConfigRequest(BaseModel):
     git_ref: str | None = Field(default=None, min_length=1)
     source_skills_path: str | None = Field(default=None, min_length=1)
     core_skill_ids: list[str] | None = None
-    install_mode: str | None = Field(default=None, pattern="^(copy|symlink)$")
     enabled: bool | None = None
 
 

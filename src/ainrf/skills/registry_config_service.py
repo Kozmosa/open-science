@@ -97,7 +97,6 @@ class SkillRegistryConfigService:
         git_ref: str | None = None,
         source_skills_path: str | None = None,
         core_skill_ids: list[str] | None = None,
-        install_mode: str | None = None,
         enabled: bool | None = None,
     ) -> SkillRegistryConfig:
         """Update an existing registry. Built-in registries may be edited but not deleted."""
@@ -119,7 +118,6 @@ class SkillRegistryConfigService:
                 core_skill_ids=core_skill_ids
                 if core_skill_ids is not None
                 else existing.core_skill_ids,
-                install_mode=install_mode if install_mode is not None else existing.install_mode,
                 enabled=enabled if enabled is not None else existing.enabled,
             )
             self._registries[registry_id] = updated

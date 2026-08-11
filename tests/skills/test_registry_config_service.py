@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,6 @@ def test_service_persists_custom_registries(tmp_path: Path) -> None:
         git_ref="develop",
         source_skills_path="skills",
         core_skill_ids=["custom-core"],
-        install_mode="copy",
         enabled=True,
     )
     service.add_registry(custom)
@@ -51,6 +51,34 @@ def test_service_persists_custom_registries(tmp_path: Path) -> None:
     ids = {r.registry_id for r in new_service.list_registries()}
     assert ids == _default_registry_ids() | {"custom"}
     assert new_service.get_registry("custom").git_ref == "develop"
+
+
+def test_service_retires_legacy_install_mode_on_load(tmp_path: Path) -> None:
+    registry_path = tmp_path / "runtime" / "skill_registries.json"
+    registry_path.parent.mkdir(parents=True)
+    registry_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "registry_id": "custom",
+                        "display_name": "Custom Registry",
+                        "git_url": "https://github.com/example/custom-skills.git",
+                        "install_mode": "symlink",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    service = SkillRegistryConfigService(state_root=tmp_path)
+    service.initialize()
+
+    assert service.get_registry("custom").display_name == "Custom Registry"
+    persisted = json.loads(registry_path.read_text(encoding="utf-8"))
+    custom = next(item for item in persisted["items"] if item["registry_id"] == "custom")
+    assert "install_mode" not in custom
 
 
 def test_service_merges_new_defaults(tmp_path: Path) -> None:

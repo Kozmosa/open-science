@@ -17,7 +17,6 @@ class SkillRegistryConfig:
     git_ref: str = "main"
     source_skills_path: str = "skills"
     core_skill_ids: list[str] = field(default_factory=list)
-    install_mode: str = "copy"
     enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -28,7 +27,6 @@ class SkillRegistryConfig:
             "git_ref": self.git_ref,
             "source_skills_path": self.source_skills_path,
             "core_skill_ids": self.core_skill_ids,
-            "install_mode": self.install_mode,
             "enabled": self.enabled,
         }
 
@@ -41,7 +39,6 @@ class SkillRegistryConfig:
             git_ref=data.get("git_ref", "main"),
             source_skills_path=data.get("source_skills_path", "skills"),
             core_skill_ids=data.get("core_skill_ids", []),
-            install_mode=data.get("install_mode", "copy"),
             enabled=data.get("enabled", True),
         )
 
@@ -63,7 +60,6 @@ DEFAULT_REGISTRIES: list[SkillRegistryConfig] = [
             "exa-search",
             "gemini-search",
         ],
-        install_mode="copy",
         enabled=True,
     )
 ]

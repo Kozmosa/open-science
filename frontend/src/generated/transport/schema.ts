@@ -2773,10 +2773,6 @@ export type SkillRegistryCreateRequest = {
      */
     git_url: string;
     /**
-     * Install Mode
-     */
-    install_mode?: string;
-    /**
      * Registry Id
      */
     registry_id: string;
@@ -2934,10 +2930,6 @@ export type SkillRegistryUpdateConfigRequest = {
      * Git Url
      */
     git_url?: string | null;
-    /**
-     * Install Mode
-     */
-    install_mode?: string | null;
     /**
      * Source Skills Path
      */

@@ -106,7 +106,6 @@ async def test_create_update_delete_custom_registry(tmp_path: Path) -> None:
                 "git_ref": "main",
                 "source_skills_path": "skills",
                 "core_skill_ids": ["core-one"],
-                "install_mode": "copy",
                 "enabled": True,
             },
         )
@@ -158,6 +157,13 @@ async def test_create_duplicate_registry_returns_409(tmp_path: Path) -> None:
 
         second = await client.post("/api/skill-registries", json=payload)
         assert second.status_code == 409
+
+
+def test_registry_config_openapi_does_not_expose_unused_install_mode(tmp_path: Path) -> None:
+    schemas = _make_app(tmp_path).openapi()["components"]["schemas"]
+
+    assert "install_mode" not in schemas["SkillRegistryCreateRequest"]["properties"]
+    assert "install_mode" not in schemas["SkillRegistryUpdateConfigRequest"]["properties"]
 
 
 @pytest.mark.anyio

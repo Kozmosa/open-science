@@ -152,7 +152,6 @@ async def create_registry(
         git_ref=payload.git_ref,
         source_skills_path=payload.source_skills_path,
         core_skill_ids=payload.core_skill_ids,
-        install_mode=payload.install_mode,
         enabled=payload.enabled,
     )
     try:
@@ -189,7 +188,6 @@ async def update_registry_config(
             git_ref=payload.git_ref,
             source_skills_path=payload.source_skills_path,
             core_skill_ids=payload.core_skill_ids,
-            install_mode=payload.install_mode,
             enabled=payload.enabled,
         )
     except SkillRegistryNotFoundError as exc:
