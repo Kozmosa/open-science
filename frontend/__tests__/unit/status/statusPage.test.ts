@@ -6,6 +6,8 @@ import {
   collectEvents,
   newestResult,
   overallTone,
+  parseStatusLocale,
+  parseStatusTheme,
   parseUptime,
   resultTone,
   type ComponentStatus,
@@ -31,6 +33,19 @@ const component = (tone: ComponentStatus['tone'], results: GatusResult[]): Compo
 })
 
 describe('status page model', () => {
+  it('normalizes stored and DOM preference values at the status model interface', () => {
+    expect(parseStatusLocale('en')).toBe('en')
+    expect(parseStatusLocale('zh-CN')).toBe('zh-CN')
+    expect(parseStatusLocale('fr')).toBe('en')
+    expect(parseStatusLocale(null)).toBe('en')
+
+    expect(parseStatusTheme('light')).toBe('light')
+    expect(parseStatusTheme('dark')).toBe('dark')
+    expect(parseStatusTheme('system')).toBe('system')
+    expect(parseStatusTheme('sepia')).toBe('system')
+    expect(parseStatusTheme(undefined)).toBe('system')
+  })
+
   it('selects the newest result independently of API ordering', () => {
     const older = result(true, '2026-08-02T00:00:00Z')
     const newer = result(false, '2026-08-02T00:01:00Z', 503)

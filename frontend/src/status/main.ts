@@ -8,6 +8,8 @@ import {
   monthLabel,
   newestResult,
   overallTone,
+  parseStatusLocale,
+  parseStatusTheme,
   parseUptime,
   periodLabel,
   resultDurationMs,
@@ -15,11 +17,10 @@ import {
   type ComponentStatus,
   type GatusEndpoint,
   type StatusEvent,
+  type StatusLocale,
+  type StatusTheme,
   type StatusTone,
 } from './model'
-
-type Locale = 'en' | 'zh-CN'
-type Theme = 'light' | 'dark' | 'system'
 
 const translations = {
   en: {
@@ -86,8 +87,8 @@ const primaryNames = new Set(['Web App', 'Backend API'])
 const root = document.querySelector<HTMLDivElement>('#status-root')
 if (!root) throw new Error('Status page root is missing')
 
-let locale: Locale = (localStorage.getItem('openscience-status-locale') as Locale | null) ?? 'en'
-let theme: Theme = (localStorage.getItem('openscience-status-theme') as Theme | null) ?? 'system'
+let locale: StatusLocale = parseStatusLocale(localStorage.getItem('openscience-status-locale'))
+let theme: StatusTheme = parseStatusTheme(localStorage.getItem('openscience-status-theme'))
 let components: ComponentStatus[] = []
 let events: StatusEvent[] = []
 let selectedMonth = new Date()
@@ -332,13 +333,13 @@ function bindInteractions(): void {
   bindPopover('theme-button', 'theme-popover')
 
   document.querySelectorAll<HTMLButtonElement>('#language-popover [data-locale]').forEach((button) => button.addEventListener('click', () => {
-    locale = button.dataset.locale as Locale
+    locale = parseStatusLocale(button.dataset.locale)
     localStorage.setItem('openscience-status-locale', locale)
     document.documentElement.lang = locale
     render()
   }))
   document.querySelectorAll<HTMLButtonElement>('#theme-popover [data-theme]').forEach((button) => button.addEventListener('click', () => {
-    theme = button.dataset.theme as Theme
+    theme = parseStatusTheme(button.dataset.theme)
     localStorage.setItem('openscience-status-theme', theme)
     applyTheme()
     render()

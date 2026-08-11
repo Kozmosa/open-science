@@ -1,4 +1,17 @@
 export type StatusTone = 'healthy' | 'degraded' | 'outage' | 'unknown'
+export type StatusLocale = 'en' | 'zh-CN'
+export type StatusTheme = 'light' | 'dark' | 'system'
+
+export function parseStatusLocale(value: string | null | undefined): StatusLocale {
+  return value === 'zh-CN' ? 'zh-CN' : 'en'
+}
+
+export function parseStatusTheme(value: string | null | undefined): StatusTheme {
+  if (value === 'light' || value === 'dark') {
+    return value
+  }
+  return 'system'
+}
 
 export interface GatusConditionResult {
   condition: string
