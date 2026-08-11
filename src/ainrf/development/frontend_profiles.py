@@ -18,7 +18,7 @@ from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.literature.tracking import LiteratureTrackingService
 
 
-FRONTEND_DEV_FIXTURE_VERSION = 4
+FRONTEND_DEV_FIXTURE_VERSION = 5
 _NOW = "2026-07-14T09:00:00+00:00"
 _LATER = "2026-07-14T10:00:00+00:00"
 
@@ -346,17 +346,18 @@ def _seed_representative_tasks(
             task_id = f"task-frontend-{task_status}"
             conn.execute(
                 """
-                INSERT OR IGNORE INTO tasks (
+                INSERT INTO tasks (
                     task_id, project_id, workspace_id, environment_id, researcher_type,
                     harness_engine, title, prompt, created_at, updated_at,
                     started_at, completed_at, owner_user_id, error_summary,
                     project_context_version_id, project_context_snapshot_id, token_usage_json
                 ) VALUES (
                     ?, 'project-frontend-dev', 'workspace-frontend-primary',
-                    'environment-frontend-dev', 'vsa', 'codex-app-server', ?, ?,
+                    'environment-frontend-dev', 'vanilla', 'codex-app-server', ?, ?,
                     ?, ?, ?, ?, ?, ?, 'context-version-frontend-dev',
                     'context-snapshot-frontend-dev', ?
                 )
+                ON CONFLICT(task_id) DO NOTHING
                 """,
                 (
                     task_id,
@@ -930,11 +931,12 @@ def _seed_large_profile(state_root: Path, *, users: FrontendDevUsers) -> Fronten
             workspace_ordinal = project_index * 3 + task_index % 3 + 1
             conn.execute(
                 """
-                INSERT OR IGNORE INTO tasks (
+                INSERT INTO tasks (
                     task_id, project_id, workspace_id, environment_id, researcher_type,
                     harness_engine, title, prompt, created_at, updated_at,
                     completed_at, owner_user_id
-                ) VALUES (?, ?, ?, 'environment-large', 'vsa', 'codex-app-server', ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, 'environment-large', 'vanilla', 'codex-app-server', ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(task_id) DO NOTHING
                 """,
                 (
                     f"task-large-{task_index + 1:04d}",

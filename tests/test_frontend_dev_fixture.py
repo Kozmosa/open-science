@@ -51,7 +51,7 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
     assert first_payload["state_root"] == str(state_root)
     assert first_payload["artifact_sha"] == artifact_sha
     assert first_payload["profile"] == "full"
-    assert first_payload["fixture_version"] == 4
+    assert first_payload["fixture_version"] == 5
     assert first_payload["fault_profile"] == "none"
     assert first_payload["owner_user_id"] == "frontend-owner-user"
     assert set(first_payload["login_users"]) == {"owner", "editor", "viewer", "admin"}
@@ -127,6 +127,10 @@ def test_frontend_dev_prepare_is_idempotent_and_seeds_console_states(tmp_path: P
             str(row["owner_user_id"])
             for row in conn.execute("SELECT DISTINCT owner_user_id FROM tasks").fetchall()
         } == {"frontend-owner-user"}
+        assert {
+            str(row["researcher_type"])
+            for row in conn.execute("SELECT DISTINCT researcher_type FROM tasks").fetchall()
+        } == {"vanilla"}
         assert (
             conn.execute("SELECT owner_user_id FROM overview_snapshots").fetchone()["owner_user_id"]
             == "frontend-owner-user"
@@ -213,6 +217,11 @@ def test_frontend_dev_profiles_seed_deterministic_bounded_states(
     assert payload["profile"] == profile
     assert payload["counts"] == expected_counts
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        expected_researcher_types = {"vanilla"} if expected_counts["tasks"] else set()
+        assert {
+            str(row["researcher_type"])
+            for row in conn.execute("SELECT DISTINCT researcher_type FROM tasks").fetchall()
+        } == expected_researcher_types
         assert (
             conn.execute(
                 "SELECT COUNT(*) FROM turn_submissions "
