@@ -508,7 +508,7 @@ const pages = {
           addUser: 'Add user...',
           remove: 'Remove',
           role: {
-            member: 'Member',
+            editor: 'Editor',
             viewer: 'Viewer',
           },
           noProjectSelected: 'Select a project to manage collaborators.',

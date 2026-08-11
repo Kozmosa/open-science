@@ -147,7 +147,7 @@ export function getDomainProjectMembers(projectId: string): Promise<ItemList<Dom
   return api.get(`/domain/projects/${encodeURIComponent(projectId)}/members`);
 }
 
-export function upsertDomainProjectMember(projectId: string, userId: string, role: 'viewer' | 'editor', canPublish: boolean, idempotencyKey: string): Promise<DomainProjectMember> {
+export function upsertDomainProjectMember(projectId: string, userId: string, role: DomainProjectMember['role'], canPublish: boolean, idempotencyKey: string): Promise<DomainProjectMember> {
   return api.put(`/domain/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(userId)}`, { role, can_publish: canPublish }, { headers: idempotencyHeaders(idempotencyKey) });
 }
 

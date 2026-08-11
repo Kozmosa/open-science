@@ -3,8 +3,10 @@ import { useState, type ReactNode } from 'react';
 import {
   getDomainProjectMembers,
   getDomainProjects,
+  parseDomainProjectMemberRole,
   removeDomainProjectMember,
   upsertDomainProjectMember,
+  type DomainProjectMemberRole,
 } from '@features/domain';
 import { getAdminUsers } from '../../api';
 import { useAuth } from '@features/auth';
@@ -20,7 +22,7 @@ export function CollaboratorsTab() {
   const queryClient = useQueryClient();
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [addUserId, setAddUserId] = useState('');
-  const [addRole, setAddRole] = useState<'editor' | 'viewer'>('editor');
+  const [addRole, setAddRole] = useState<DomainProjectMemberRole>('editor');
 
   const { data: projects } = useQuery({
     queryKey: queryKeys.domain.projects(false),
@@ -59,15 +61,15 @@ export function CollaboratorsTab() {
 
   const renderRoleBadge = (role: string): ReactNode => {
     const roleLabel = role === 'editor'
-      ? t('pages.settings.collaborators.role.member')
+      ? t('pages.settings.collaborators.role.editor')
       : role === 'viewer'
         ? t('pages.settings.collaborators.role.viewer')
         : role; // fallback: display raw role value for unknown roles
-    const isMember = role === 'editor';
+    const isEditor = role === 'editor';
     return (
       <span
         className={`text-xs px-2 py-0.5 rounded-full ${
-          isMember
+          isEditor
             ? 'bg-[var(--apple-blue)]/10 text-[var(--apple-blue)]'
             : 'bg-[var(--text-secondary)]/10 text-[var(--text-secondary)]'
         }`}
@@ -138,11 +140,14 @@ export function CollaboratorsTab() {
             extraField={
               <select
                 value={addRole}
-                onChange={(e) => setAddRole(e.target.value as 'editor' | 'viewer')}
+                onChange={(event) => {
+                  const role = parseDomainProjectMemberRole(event.target.value);
+                  if (role !== null) setAddRole(role);
+                }}
                 className="text-xs px-2 py-1.5 rounded bg-[var(--surface)] border border-[var(--border)] text-[var(--text)]"
               >
                 <option value="editor">
-                  {t('pages.settings.collaborators.role.member')}
+                  {t('pages.settings.collaborators.role.editor')}
                 </option>
                 <option value="viewer">
                   {t('pages.settings.collaborators.role.viewer')}

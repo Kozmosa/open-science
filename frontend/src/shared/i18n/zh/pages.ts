@@ -501,7 +501,7 @@ const pages = {
           addUser: '添加用户...',
           remove: '移除',
           role: {
-            member: '成员',
+            editor: '编辑者',
             viewer: '观察者',
           },
           noProjectSelected: '选择一个项目以管理协作者。',
