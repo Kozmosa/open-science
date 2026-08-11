@@ -15,6 +15,7 @@ import math
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
+from ainrf.api.request_identity import client_ip
 from ainrf.telemetry.metrics import observe_histogram
 from ainrf.telemetry.rate_limit import rate_limited
 
@@ -58,9 +59,9 @@ def _is_rate_limited(client_ip: str) -> bool:
 @router.post("", status_code=204)
 async def ingest_client_metrics(request: Request) -> Response:
     """Accept a batch of client-side web vitals metrics."""
-    client_ip = request.client.host if request.client else "unknown"
+    resolved_client_ip = client_ip(request)
 
-    if _is_rate_limited(client_ip):
+    if _is_rate_limited(resolved_client_ip):
         rate_limited("ip_quota", "/client-metrics")
         return PlainTextResponse("rate limited", status_code=429)
 
@@ -86,7 +87,7 @@ async def ingest_client_metrics(request: Request) -> Response:
         _LOGGER.info(
             "web_vital",
             extra={
-                "client_ip": client_ip,
+                "client_ip": resolved_client_ip,
                 "metric_name": metric_name,
                 "value": value,
                 "rating": rating,

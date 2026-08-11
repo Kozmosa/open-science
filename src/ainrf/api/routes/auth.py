@@ -15,6 +15,7 @@ from ainrf.api.schemas import (
     RegisterRequest,
     UserInfoResponse,
 )
+from ainrf.api.request_identity import client_ip
 from ainrf.auth import AuthService
 from ainrf.telemetry.metrics import inc_counter
 
@@ -101,10 +102,7 @@ async def login(payload: LoginRequest, request: Request) -> Response:
     if not api_config.interactive_auth_enabled:
         raise HTTPException(status_code=403, detail="Interactive authentication is disabled")
     service = _get_service(request)
-    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    if not client_ip and request.client:
-        client_ip = request.client.host
-    ip = client_ip or "unknown"
+    ip = client_ip(request)
     try:
         service.check_login_lockout(username=payload.username, ip_address=ip)
     except service.AccountLockedError as exc:

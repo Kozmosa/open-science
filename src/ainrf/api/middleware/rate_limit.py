@@ -24,6 +24,8 @@ from collections.abc import Awaitable, Callable
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from ainrf.api.request_identity import client_ip
+
 _LOG = logging.getLogger(__name__)
 
 # Default configuration — overridable via env vars.
@@ -133,8 +135,7 @@ def build_rate_limit_middleware() -> Callable[
         if user and isinstance(user, dict):
             client_key = f"user:{user.get('id', 'unknown')}"
         else:
-            client_ip = request.client.host if request.client else "unknown"
-            client_key = f"ip:{client_ip}"
+            client_key = f"ip:{client_ip(request)}"
 
         bucket = _buckets.get(client_key)
         if bucket is None:

@@ -20,6 +20,8 @@ def _make_app(
     *,
     production: bool = False,
     allowed_cidrs: tuple[str, ...] = (),
+    trusted_proxy_cidrs: tuple[str, ...] = (),
+    client_host: str = "127.0.0.1",
 ) -> tuple[httpx.AsyncClient, Path]:
     tmp = Path(tempfile.mkdtemp())
     config = ApiConfig(
@@ -27,10 +29,11 @@ def _make_app(
         state_root=tmp,
         production=production,
         allowed_cidrs=allowed_cidrs,
+        trusted_proxy_cidrs=trusted_proxy_cidrs,
     )
     app = create_app(config)
     client = httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
+        transport=httpx.ASGITransport(app=app, client=(client_host, 123)),
         base_url="http://testserver",
     )
     return client, tmp
@@ -73,6 +76,48 @@ class TestIpAllowlist:
                 headers={"X-Forwarded-For": "10.1.2.3"},
             )
             assert resp.status_code == 200
+        finally:
+            await client.aclose()
+
+    async def test_forwarded_for_from_untrusted_peer_is_ignored(self):
+        client, tmp = _make_app(
+            allowed_cidrs=("10.0.0.0/8",),
+            trusted_proxy_cidrs=("192.0.2.0/24",),
+        )
+        try:
+            resp = await client.get(
+                "/api/health",
+                headers={"X-Forwarded-For": "10.1.2.3"},
+            )
+            assert resp.status_code == 403
+        finally:
+            await client.aclose()
+
+    async def test_forwarded_for_from_trusted_peer_is_respected(self):
+        client, tmp = _make_app(
+            allowed_cidrs=("10.0.0.0/8",),
+            trusted_proxy_cidrs=("127.0.0.0/8",),
+        )
+        try:
+            resp = await client.get(
+                "/api/health",
+                headers={"X-Forwarded-For": "10.1.2.3"},
+            )
+            assert resp.status_code == 200
+        finally:
+            await client.aclose()
+
+    async def test_trusted_proxy_chain_rejects_prepended_spoof(self):
+        client, tmp = _make_app(
+            allowed_cidrs=("10.0.0.0/8",),
+            trusted_proxy_cidrs=("127.0.0.0/8",),
+        )
+        try:
+            resp = await client.get(
+                "/api/health",
+                headers={"X-Forwarded-For": "10.1.2.3, 203.0.113.9"},
+            )
+            assert resp.status_code == 403
         finally:
             await client.aclose()
 

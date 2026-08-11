@@ -13,6 +13,7 @@ import logging
 from fastapi import APIRouter, Request, Response
 from starlette.responses import PlainTextResponse
 
+from ainrf.api.request_identity import client_ip
 from ainrf.telemetry.metrics import inc_counter
 from ainrf.telemetry.rate_limit import rate_limited
 
@@ -43,9 +44,9 @@ def _is_rate_limited(client_ip: str) -> bool:
 @router.post("", status_code=204)
 async def ingest_client_logs(request: Request) -> Response:
     """Accept a batch of client-side error events."""
-    client_ip = request.client.host if request.client else "unknown"
+    resolved_client_ip = client_ip(request)
 
-    if _is_rate_limited(client_ip):
+    if _is_rate_limited(resolved_client_ip):
         rate_limited("ip_quota", "/client-logs")
         return PlainTextResponse("rate limited", status_code=429)
 
@@ -64,7 +65,7 @@ async def ingest_client_logs(request: Request) -> Response:
         _logger.warning(
             "client_error",
             extra={
-                "client_ip": client_ip,
+                "client_ip": resolved_client_ip,
                 "message": event.get("message", ""),
                 "url": event.get("url", ""),
                 "request_id": event.get("requestId", ""),

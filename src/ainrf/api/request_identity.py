@@ -17,23 +17,45 @@ def parse_cidrs(raw: tuple[str, ...]) -> list[ipaddress.IPv4Network | ipaddress.
     return networks
 
 
-def client_ip(request: Request, trusted_cidrs: tuple[str, ...] | None = None) -> str:
-    """Extract a client IP while trusting forwarding only from configured proxies."""
+def _trusted_proxy_cidrs(request: Request) -> tuple[str, ...]:
+    config = getattr(request.app.state, "api_config", None)
+    trusted_cidrs = getattr(config, "trusted_proxy_cidrs", ())
+    return trusted_cidrs if isinstance(trusted_cidrs, tuple) else ()
+
+
+def client_ip(request: Request) -> str:
+    """Extract the client IP using the configured trusted-proxy chain."""
 
     direct_ip = request.client.host if request.client else "0.0.0.0"
-    if trusted_cidrs:
-        networks = parse_cidrs(trusted_cidrs)
+    forwarded = request.headers.get("x-forwarded-for")
+    if not forwarded:
+        return direct_ip
+
+    trusted_cidrs = _trusted_proxy_cidrs(request)
+    networks = parse_cidrs(trusted_cidrs)
+    try:
+        direct_address = ipaddress.ip_address(direct_ip)
+    except ValueError:
+        return direct_ip
+
+    if trusted_cidrs and (
+        not networks or not any(direct_address in network for network in networks)
+    ):
+        return direct_ip
+
+    forwarded_addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for raw_address in forwarded.split(","):
         try:
-            address = ipaddress.ip_address(direct_ip)
-            host_network = ipaddress.ip_network(
-                f"{address}/128" if address.version == 6 else f"{address}/32"
-            )
-            if any(network.supernet_of(host_network) for network in networks):
-                forwarded = request.headers.get("x-forwarded-for")
-                if forwarded:
-                    return forwarded.split(",")[0].strip()
+            forwarded_addresses.append(ipaddress.ip_address(raw_address.strip()))
         except ValueError:
-            pass
-    elif request.headers.get("x-forwarded-for"):
-        return request.headers["x-forwarded-for"].split(",")[0].strip()
-    return direct_ip
+            return direct_ip
+    if not forwarded_addresses:
+        return direct_ip
+
+    if not trusted_cidrs:
+        return str(forwarded_addresses[0])
+
+    for address in reversed(forwarded_addresses):
+        if not any(address in network for network in networks):
+            return str(address)
+    return str(forwarded_addresses[0])
