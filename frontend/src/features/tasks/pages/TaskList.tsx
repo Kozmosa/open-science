@@ -1,4 +1,4 @@
-import { RefreshCw, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/shared/i18n';
 import type { TaskSummary } from '../types';
@@ -145,15 +145,6 @@ export default function TaskList({
                     </button>
                   )}
                   <span className="flex shrink-0 items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={t('pages.tasks.actions.refreshTaskName')}
-                      title={t('pages.tasks.actions.refreshTaskNameTodo')}
-                      onClick={() => { /* TODO: Generate and persist a Task title with an LLM. */ }}
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osci-color-text-muted)] transition hover:bg-[var(--osci-color-surface)] hover:text-[var(--osci-color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osci-color-focus)]"
-                    >
-                      <RefreshCw size={13} />
-                    </button>
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${taskStatusClassName(task.status)}`}
                     >

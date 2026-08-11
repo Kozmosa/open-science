@@ -301,8 +301,6 @@ const pages = {
           retry: '重试',
           showArchived: '显示已归档',
           showFailedOrCancelled: '显示失败/取消',
-          refreshTaskName: '使用 AI 刷新任务名称',
-          refreshTaskNameTodo: 'AI 任务命名功能即将推出',
           pause: '暂停',
           resume: '继续',
           pauseFailed: '暂停失败：{{error}}',

@@ -534,7 +534,7 @@ describe('TasksPage', () => {
     expect(screen.getByText('3 total · canonical Item polling')).toBeInTheDocument();
   });
 
-  it('renames a Task inline from its title and exposes the AI rename placeholder', async () => {
+  it('renames a Task inline without exposing an unimplemented AI title action', async () => {
     const renamedTask = { ...taskSummary, title: 'Renamed task' };
     mockUpdateTask.mockResolvedValue(renamedTask);
 
@@ -551,10 +551,7 @@ describe('TasksPage', () => {
       expect.stringMatching(/^task\.rename/),
     ));
     expect(await screen.findByText('Renamed task')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh task name with AI' })).toHaveAttribute(
-      'title',
-      'AI task naming is coming soon',
-    );
+    expect(screen.queryByRole('button', { name: 'Refresh task name with AI' })).not.toBeInTheDocument();
   });
 
   it('previews a fork before explicit confirmation and selects the canonical target Task', async () => {

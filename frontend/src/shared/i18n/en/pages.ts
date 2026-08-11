@@ -305,8 +305,6 @@ const pages = {
           retry: 'Retry',
           showArchived: 'Show archived',
           showFailedOrCancelled: 'Show failed/cancelled',
-          refreshTaskName: 'Refresh task name with AI',
-          refreshTaskNameTodo: 'AI task naming is coming soon',
           pause: 'Pause',
           resume: 'Resume',
           pauseFailed: 'Pause failed: {{error}}',
