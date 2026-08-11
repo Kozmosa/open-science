@@ -1,109 +1,94 @@
 ---
 title: 项目管理
-description: ReactFlow Canvas DAG 可视化、任务节点、手动/自动连线与 dagre 布局。
+description: Project 生命周期、Workspace 关联、Task 视图、显式关系图与项目上下文。
 ---
 
-OpenScience 以项目（Project）为任务组织单元，提供 ReactFlow 画布、任务节点、手动/自动连线和 dagre 布局。
+OpenScience 以项目（Project）组织研究任务、Workspace 关联、成员权限和项目上下文。Project 本身不直接保存 Environment 引用；任务的执行 Environment 来自所选 Workspace。
 
-## 项目侧边栏
+## WebUI
 
-左侧边栏显示项目列表，支持：
+项目控制台位于 `/projects`。页面提供：
 
-- 项目选择与切换
-- 按名称搜索过滤
-- 创建新项目
-- 显示项目描述和更新时间
+- 创建、搜索和切换 Project
+- 查看 active 或 archived 生命周期状态
+- Overview、Tasks、Workspaces、Context、Settings 五个视图
+- 关联或解除 Workspace，并为 Project 设置一个 primary Workspace
+- 按当前用户权限创建 Task、编辑 Project、管理成员或归档 Project
 
-**API 端点：**
+Project 可以关联多个 Workspace。primary Workspace 是该 Project 的首选执行上下文，但创建 Task 时仍会校验 Workspace 是否 active、是否关联到当前 Project，以及当前用户是否具备执行能力。
+
+## Canonical HTTP Interface
+
+WebUI 路由与后端 HTTP 路径是两个不同的 Interface。Project 的 canonical product HTTP prefix 是 `/api`，核心操作如下：
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/projects` | 列出所有项目 |
-| POST | `/projects` | 创建项目 |
-| GET | `/projects/{project_id}` | 读取项目详情 |
-| PATCH | `/projects/{project_id}` | 更新项目名称/描述/默认环境/默认工作区 |
-| DELETE | `/projects/{project_id}` | 删除项目 |
+| --- | --- | --- |
+| GET | `/api/domain/projects?include_archived=false` | 列出当前用户可见的 Project projection |
+| POST | `/api/domain/projects` | 创建 Project；body 包含 `name` 和可选 `description` |
+| GET | `/api/domain/projects/{project_id}` | 读取 Project projection、权限和 primary Workspace |
+| PATCH | `/api/domain/projects/{project_id}` | 只更新 `name` 或 `description` |
+| POST | `/api/domain/projects/{project_id}/archive` | 归档 Project |
+| POST | `/api/domain/projects/{project_id}/unarchive` | 恢复 Project |
+| POST / DELETE | `/api/domain/projects/{project_id}/workspaces/{workspace_id}` | 关联或解除 Workspace |
+| PUT | `/api/domain/projects/{project_id}/primary-workspace/{workspace_id}` | 设置或替换 primary Workspace |
+| GET | `/api/domain/projects/{project_id}/members` | 列出 Project 成员 |
+| PUT / DELETE | `/api/domain/projects/{project_id}/members/{member_user_id}` | 添加、更新或移除成员 |
 
-每个项目关联一组环境引用（`environment-refs`），指定项目可用的计算环境。
+所有 Project mutation 使用 `Idempotency-Key` header。Workspace 选择不能混入 Project PATCH；它由专门的 Project–Workspace Interface 管理。
 
-## ReactFlow 画布
+## Tasks 视图
 
-项目详情页以 ReactFlow（`@xyflow/react`）画布展示任务拓扑图：
+Tasks 视图支持列表和关系图两种呈现。Task 状态来自 Conversation projection，当前 transport union 为：
 
-- **Background**：网格背景
-- **Controls**：缩放与适配控件
-- **MiniMap**：缩略图导航
+- `queued`
+- `running`
+- `succeeded`
+- `failed`
+- `cancelled`
+- `completed`
 
-### 节点（TaskNode）
+点击 Task 会进入 `/tasks?task={task_id}`。具有相应权限的用户也可以把 Task 移动到另一个 active Project；移动会重新固定目标 Project 的当前 Context Version。
 
-任务节点使用 `TaskNode` 自定义组件，呈现为圆角卡片：
+## 显式 Task 关系图
 
-- 左侧状态圆点（queued / starting / running / succeeded / failed / cancelled）
-- 任务标题
-- 环境别名与创建时间
-- 左侧 **target Handle**（输入连接点）
-- 右侧 **source Handle**（输出连接点）
+关系图使用 React Flow、Controls、MiniMap 和 dagre 初始布局。图中只展示后端已经持久化的 Task relationship，不会根据创建时间自动生成或持久化线性关系。
 
-### 边（TaskEdge）
+具有编辑权限的用户可以：
 
-连接线默认类型为 `smoothstep`，带箭头标记。手动拖拽创建的边使用蓝色描边动画样式。
+1. 从 source Task 拖线到 target Task。
+2. 通过 `/api/domain/projects/{project_id}/task-relationships` 创建显式关系。
+3. 删除已有关系；失败时 WebUI 会恢复原来的边。
 
-### 手动连线
+Fork 等领域操作可以产生带 `derived_from` 等 relationship type 的边；手动连线使用后端的 canonical relationship 记录。
 
-1. 从源任务的右侧 source Handle 拖拽
-2. 连线到目标任务的左侧 target Handle
-3. 松开后调用 `createTaskEdge` API 持久化到后端
+节点位置保存在浏览器 `localStorage` 的 `openscience:project-layout:{projectId}`。Reset Layout 会清除该 Project 的保存位置并重新运行 dagre；旧 `ainrf:project-layout:{projectId}` 仅作为一次性读取迁移来源。
 
-```typescript
-// 前端自动创建的边数据
-{
-  id: "edge_{source}_{target}",
-  source: source_task_id,
-  target: target_task_id,
-  type: "smoothstep",
-  animated: true,
-}
-```
+## 创建 Task
 
-### 自动连线
-
-当项目任务没有人工连边时，画布按 `created_at` 时间从旧到新自动线性连接所有任务，自动边也会异步持久化到后端。
-
-## 布局
-
-### Dagre 自动布局
-
-首次渲染或点击 "Reset Layout" 时，使用 dagre 算法自动排布节点位置。
-
-### localStorage 持久化
-
-用户手动拖拽节点后，位置信息保存到 `localStorage`，键为 `ainrf:project-layout:{projectId}`。刷新页面后优先恢复已保存的位置。
-
-## 工具栏
-
-画布顶部工具栏包含：
-
-- **New Task**：打开任务创建表单
-- **Reset Layout**：清除已保存的布局，触发 dagre 重新排布
-
-### 空态
-
-项目无任务时，画布区域显示空态提示文字，引导用户创建第一个任务。
-
-## 任务创建
-
-TaskCreateForm 表单配置项：
+Task 创建对话框使用 Conversation Module 的正式 Task Interface。普通创建流程包含：
 
 | 字段 | 说明 |
-|------|------|
-| 环境 | 选择该项目关联的计算环境 |
-| 工作区 | 选择或输入工作目录 |
-| 技能 | 选择要执行的 OpenScience 技能 |
-| 任务配置 | JSON 格式的技能参数 |
-| 引擎类型 | 任务引擎（Python 运行时等） |
+| --- | --- |
+| Project | 目标 active Project；需要 `can_create_task` 权限 |
+| Workspace | 必须 active、可执行并与所选 Project 保持 active link |
+| Environment | 从 Workspace projection 派生，只读展示 |
+| Task preset | 同时选择一组 researcher / engine 默认值 |
+| Execution engine | `claude-code`、`agent-sdk` 或 `codex-app-server` |
+| Researcher type | `vanilla` 或 `aris-researcher` |
+| Title | 可选标题 |
+| Prompt | 普通 Task 的必填研究输入 |
+| Skills | 仅 `vanilla` researcher 可选择；运行时按正式 skill registry 解析 |
+
+Task 不再使用旧的 JSON “任务配置”或 Python runtime 选择器。最终执行仍会在 Conversation admission 和 worker Adapter seam 再次校验 Workspace、Environment grant、容量与 runtime preflight。
+
+## Project Context 与成员
+
+Context 视图维护 draft、发布后的 immutable Context Version、历史 diff 和候选片段。新建或移动 Task 时会固定当时的 active Context Version，而不是在执行期间读取可变草稿。
+
+Settings 视图维护 Project 名称、描述和成员。成员角色为 viewer 或 editor；owner/admin projection 由领域权限 Module 计算。是否能编辑、发布、管理成员、归档或创建 Task，以 Project response 中的 `permissions` 为准。
 
 ## 相关文档
 
-- [终端管理](/terminal) — 任务代理终端与会话管理
-- [工作区](/workspace) — 工作区与目录管理
-- [运行记录](/runs) — Task 与 Turn/Item 执行历史
+- [工作区](/workspace) — Workspace 注册、Project 关联与文件浏览
+- [终端管理](/terminal) — Environment terminal session
+- [运行记录](/runs) — Task、Turn 与 Item 执行历史
