@@ -5,6 +5,7 @@ import json
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Literal
 
 from ainrf.db import connect
 from ainrf.development.frontend_profiles import FRONTEND_DEV_FIXTURE_VERSION
@@ -113,8 +114,8 @@ class FrontendFixtureRuntimeAdapter(ConversationRuntimeAdapter):
 
 @dataclass(frozen=True, slots=True)
 class FrontendFixtureWorkerRunResult:
-    outcome: str
-    task_outcome: str
+    outcome: Literal["processed", "idle"]
+    task_outcome: Literal["processed", "idle"]
     literature_outcome: str
 
     def as_dict(self) -> dict[str, str]:
@@ -166,7 +167,7 @@ class FrontendFixtureWorker:
         literature_outcome = self._run_literature_once()
         self._overview.run_once()
         task_processed = await self._dispatcher.run_once()
-        task_outcome = "completed" if task_processed else "idle"
+        task_outcome = "processed" if task_processed else "idle"
         outcome = "idle" if task_outcome == "idle" and literature_outcome == "idle" else "processed"
         return FrontendFixtureWorkerRunResult(
             outcome=outcome,

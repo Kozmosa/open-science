@@ -1039,7 +1039,7 @@ async def test_worker_runtime_advertises_current_dispatch_and_overview_readiness
     try:
         result = await worker.run_once()
 
-        assert result.outcome == "completed"
+        assert result.outcome == "processed"
         dispatcher = DomainMaintenanceService(state_root).participant_readiness("task-dispatcher")
         assert dispatcher["ready"] is True
         assert dispatcher["active_participant_ids"] == ["domain-worker-test"]
@@ -1054,6 +1054,32 @@ async def test_worker_runtime_advertises_current_dispatch_and_overview_readiness
 
     dispatcher = DomainMaintenanceService(state_root).participant_readiness("task-dispatcher")
     assert dispatcher["ready"] is False
+
+
+@pytest.mark.anyio
+async def test_worker_runtime_reports_reclaimable_setup_attempt_as_processed(
+    state_root: Path,
+) -> None:
+    def fail_context(_: SubmissionClaim) -> ExecutionContext:
+        raise RuntimeError("deterministic setup is unavailable")
+
+    worker = ConversationWorkerRuntime(
+        state_root,
+        artifact_sha="a" * 64,
+        worker_id="domain-worker-setup-failure",
+        context_factory=fail_context,
+    )
+    try:
+        result = await worker.run_once()
+    finally:
+        worker.stop()
+
+    assert result.outcome == "processed"
+    with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
+        submission = conn.execute("SELECT status FROM turn_submissions").fetchone()
+        runtime_count = conn.execute("SELECT COUNT(*) FROM runtime_executions").fetchone()[0]
+    assert submission is not None and submission["status"] == "claimed"
+    assert runtime_count == 0
 
 
 @pytest.mark.anyio

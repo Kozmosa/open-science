@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 from contextlib import closing, suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from ainrf.db import connect
@@ -584,7 +584,7 @@ class ConversationDispatcher:
 class ConversationWorkerRunResult:
     """Observable result of one current domain-worker cycle."""
 
-    outcome: str
+    outcome: Literal["processed", "idle", "maintenance_drained"]
 
 
 class ConversationWorkerRuntime:
@@ -713,7 +713,7 @@ class ConversationWorkerRuntime:
             self._maintenance.check_lease(lease)
             processed = await self._dispatcher.run_once()
             self._participant.heartbeat()
-            return ConversationWorkerRunResult(outcome="completed" if processed else "idle")
+            return ConversationWorkerRunResult(outcome="processed" if processed else "idle")
         except MaintenanceModeError:
             self._participant.drain()
             return ConversationWorkerRunResult(outcome="maintenance_drained")

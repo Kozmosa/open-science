@@ -64,7 +64,7 @@ def test_frontend_fixture_worker_completes_tasks_without_external_runtime(tmp_pa
     worker.stop()
 
     assert result.outcome == "processed"
-    assert result.task_outcome == "completed"
+    assert result.task_outcome == "processed"
     with closing(connect(state_root / "runtime" / "agentic_researcher.sqlite3")) as conn:
         turn = conn.execute(
             "SELECT turn_id, binding_id, status FROM task_turns WHERE task_id = ?",
