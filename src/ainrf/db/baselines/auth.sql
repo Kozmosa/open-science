@@ -19,18 +19,6 @@ CREATE TABLE environment_access (
             granted_at TEXT NOT NULL, grant_version INTEGER NOT NULL DEFAULT 1, status TEXT NOT NULL DEFAULT 'active', updated_at TEXT, revoked_at TEXT, grant_reason TEXT, revoked_by_user_id TEXT, revocation_reason TEXT,
             PRIMARY KEY (environment_id, user_id)
         );
-CREATE TABLE environment_access_audit_events (
-            event_id TEXT PRIMARY KEY,
-            environment_id TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            grant_version INTEGER NOT NULL CHECK (grant_version >= 1),
-            event_type TEXT NOT NULL CHECK (event_type IN ('granted', 'revoked')),
-            actor_user_id TEXT NOT NULL,
-            max_concurrent_tasks INTEGER,
-            reason TEXT,
-            occurred_at TEXT NOT NULL,
-            UNIQUE(environment_id, user_id, grant_version)
-        );
 CREATE TABLE login_attempts (
             id TEXT PRIMARY KEY,
             username TEXT NOT NULL,
@@ -73,18 +61,6 @@ CREATE INDEX idx_login_attempts_username_time ON login_attempts(username, attemp
 CREATE INDEX idx_login_attempts_ip_time ON login_attempts(ip_address, attempted_at);
 CREATE INDEX idx_login_attempts_attempted_at ON login_attempts(attempted_at);
 CREATE INDEX idx_env_access_active ON environment_access(user_id, status);
-CREATE INDEX idx_env_access_audit_subject
-        ON environment_access_audit_events(environment_id, user_id, grant_version DESC);
-CREATE TRIGGER trg_env_access_audit_prevent_update
-        BEFORE UPDATE ON environment_access_audit_events
-        BEGIN
-            SELECT RAISE(ABORT, 'environment access audit events are append-only');
-        END;
-CREATE TRIGGER trg_env_access_audit_prevent_delete
-        BEFORE DELETE ON environment_access_audit_events
-        BEGIN
-            SELECT RAISE(ABORT, 'environment access audit events are append-only');
-        END;
 CREATE TRIGGER trg_env_access_status_insert
         BEFORE INSERT ON environment_access
         WHEN NEW.status NOT IN ('active', 'revoked')
@@ -112,7 +88,7 @@ CREATE TRIGGER trg_env_access_version_update
 CREATE TRIGGER trg_env_access_prevent_delete
         BEFORE DELETE ON environment_access
         BEGIN
-            SELECT RAISE(ABORT, 'environment access grants are retained for audit history');
+            SELECT RAISE(ABORT, 'environment access grant authority must be revoked, not deleted');
         END;
 CREATE INDEX idx_domain_default_project_provisioning_pending
         ON domain_default_project_provisioning(status, updated_at, user_id)

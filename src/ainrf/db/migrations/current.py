@@ -408,6 +408,102 @@ def migration_011_retire_duplicate_research_task_links(conn: sqlite3.Connection)
     conn.execute("DROP TABLE literature_research_task_links")
 
 
+@registry.register("auth")
+def migration_008_retire_environment_access_audit_events(conn: sqlite3.Connection) -> None:
+    """Drop the write-only grant event ledger after proving current authority alignment."""
+
+    if not _has_table(conn, "environment_access_audit_events"):
+        return
+    if not _has_table(conn, "environment_access"):
+        raise RuntimeError("auth migration 008 requires environment access authority")
+
+    orphan = conn.execute(
+        """
+        SELECT event.event_id
+        FROM environment_access_audit_events AS event
+        LEFT JOIN environment_access AS access
+          ON access.environment_id = event.environment_id
+         AND access.user_id = event.user_id
+        WHERE access.environment_id IS NULL
+        ORDER BY event.event_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if orphan is not None:
+        raise RuntimeError(
+            f"auth migration 008 refuses to drop an orphan Environment access event: {orphan[0]}"
+        )
+
+    mismatch = conn.execute(
+        """
+        WITH history AS (
+            SELECT environment_id, user_id,
+                   COUNT(*) AS event_count,
+                   COUNT(DISTINCT grant_version) AS distinct_versions,
+                   MIN(grant_version) AS first_version,
+                   MAX(grant_version) AS last_version
+            FROM environment_access_audit_events
+            GROUP BY environment_id, user_id
+        )
+        SELECT access.environment_id || '/' || access.user_id
+        FROM environment_access AS access
+        LEFT JOIN history
+          ON history.environment_id = access.environment_id
+         AND history.user_id = access.user_id
+        LEFT JOIN environment_access_audit_events AS latest
+          ON latest.environment_id = access.environment_id
+         AND latest.user_id = access.user_id
+         AND latest.grant_version = access.grant_version
+        WHERE history.environment_id IS NULL
+           OR history.first_version != 1
+           OR history.last_version != access.grant_version
+           OR history.event_count != access.grant_version
+           OR history.distinct_versions != access.grant_version
+           OR latest.event_id IS NULL
+           OR latest.event_type IS NOT CASE
+                WHEN access.status = 'active' THEN 'granted'
+                WHEN access.status = 'revoked' THEN 'revoked'
+                ELSE NULL
+              END
+           OR latest.actor_user_id IS NOT CASE
+                WHEN access.status = 'active' THEN access.granted_by_user_id
+                WHEN access.status = 'revoked' THEN access.revoked_by_user_id
+                ELSE NULL
+              END
+           OR latest.max_concurrent_tasks IS NOT access.max_concurrent_tasks
+           OR latest.reason IS NOT CASE
+                WHEN access.status = 'active' THEN access.grant_reason
+                WHEN access.status = 'revoked' THEN access.revocation_reason
+                ELSE NULL
+              END
+           OR latest.occurred_at IS NOT CASE
+                WHEN access.status = 'active' THEN access.granted_at
+                WHEN access.status = 'revoked' THEN access.revoked_at
+                ELSE NULL
+              END
+        ORDER BY access.environment_id, access.user_id
+        LIMIT 1
+        """
+    ).fetchone()
+    if mismatch is not None:
+        raise RuntimeError(
+            "auth migration 008 refuses to drop non-canonical Environment access history: "
+            f"{mismatch[0]}"
+        )
+
+    conn.execute("DROP TABLE environment_access_audit_events")
+    conn.execute("DROP TRIGGER IF EXISTS trg_env_access_prevent_delete")
+    conn.execute(
+        """
+        CREATE TRIGGER trg_env_access_prevent_delete
+        BEFORE DELETE ON environment_access
+        BEGIN
+            SELECT RAISE(ABORT, 'environment access grant authority must be revoked, not deleted');
+        END
+        """
+    )
+
+
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])
 def agentic_researcher_baseline(conn: sqlite3.Connection) -> None:
     _apply_baseline(conn, "agentic_researcher")

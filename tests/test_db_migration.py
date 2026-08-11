@@ -60,6 +60,88 @@ def _build_v7_literature_artifact(
         connection.commit()
 
 
+def _build_v7_auth_artifact(path: Path) -> None:
+    """Build the prior auth shape with its write-only access event ledger."""
+
+    baseline = files("ainrf.db.baselines").joinpath("auth.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.executescript(
+            """
+            CREATE TABLE environment_access_audit_events (
+                event_id TEXT PRIMARY KEY,
+                environment_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                grant_version INTEGER NOT NULL CHECK (grant_version >= 1),
+                event_type TEXT NOT NULL CHECK (event_type IN ('granted', 'revoked')),
+                actor_user_id TEXT NOT NULL,
+                max_concurrent_tasks INTEGER,
+                reason TEXT,
+                occurred_at TEXT NOT NULL,
+                UNIQUE(environment_id, user_id, grant_version)
+            );
+            CREATE INDEX idx_env_access_audit_subject
+                ON environment_access_audit_events(
+                    environment_id, user_id, grant_version DESC
+                );
+            CREATE TRIGGER trg_env_access_audit_prevent_update
+                BEFORE UPDATE ON environment_access_audit_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'environment access audit events are append-only');
+                END;
+            CREATE TRIGGER trg_env_access_audit_prevent_delete
+                BEFORE DELETE ON environment_access_audit_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'environment access audit events are append-only');
+                END;
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO environment_access (
+                environment_id, user_id, max_concurrent_tasks, granted_by_user_id,
+                granted_at, grant_version, status, updated_at, revoked_at,
+                grant_reason, revoked_by_user_id, revocation_reason
+            ) VALUES (
+                'env-1', 'user-1', 2, 'admin-2', 't3', 3, 'active', 't3', NULL,
+                'renewed', NULL, NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO environment_access (
+                environment_id, user_id, max_concurrent_tasks, granted_by_user_id,
+                granted_at, grant_version, status, updated_at, revoked_at,
+                grant_reason, revoked_by_user_id, revocation_reason
+            ) VALUES (
+                'env-2', 'user-1', NULL, 'admin-1', 't1', 2, 'revoked', 't2', 't2',
+                'initial', 'admin-2', 'retired'
+            )
+            """
+        )
+        connection.executemany(
+            """
+            INSERT INTO environment_access_audit_events (
+                event_id, environment_id, user_id, grant_version, event_type,
+                actor_user_id, max_concurrent_tasks, reason, occurred_at
+            ) VALUES (?, ?, 'user-1', ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("event-1", "env-1", 1, "granted", "admin-1", 1, "initial", "t1"),
+                ("event-2", "env-1", 2, "revoked", "admin-1", 1, "paused", "t2"),
+                ("event-3", "env-1", 3, "granted", "admin-2", 2, "renewed", "t3"),
+                ("event-4", "env-2", 1, "granted", "admin-1", None, "initial", "t1"),
+                ("event-5", "env-2", 2, "revoked", "admin-2", None, "retired", "t2"),
+            ],
+        )
+        connection.execute(
+            "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES ('auth', 7)")
+        connection.commit()
+
+
 def _build_v9_literature_artifact(path: Path) -> None:
     """Build the prior topic schema with its unused legacy mapping column."""
 
@@ -202,6 +284,16 @@ def _schema_objects(connection: sqlite3.Connection) -> set[tuple[str, str, str |
     }
 
 
+def _has_table_for_test(connection: sqlite3.Connection, table_name: str) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
+        ).fetchone()
+        is not None
+    )
+
+
 def _build_v34_artifact(path: Path) -> None:
     _build_v33_artifact(path)
     with _connect(path) as connection:
@@ -251,7 +343,7 @@ def _build_v36_approval_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 7), ("agentic_researcher", 37), ("literature", 11), ("terminal", 1)],
+    [("auth", 8), ("agentic_researcher", 37), ("literature", 11), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -259,6 +351,77 @@ def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, vers
         assert run_pending(connection, database) >= 1
         assert current_version(connection, database) == version
         assert run_pending(connection, database) == 0
+
+
+def test_auth_v7_access_event_ledger_migrates_to_fresh_schema(tmp_path: Path) -> None:
+    fresh_path = tmp_path / "fresh-auth.sqlite3"
+    artifact_path = tmp_path / "v7-auth.sqlite3"
+    with _connect(fresh_path) as connection:
+        assert run_pending(connection, "auth") == 2
+        fresh_schema = _schema_objects(connection)
+
+    _build_v7_auth_artifact(artifact_path)
+    with _connect(artifact_path) as connection:
+        assert run_pending(connection, "auth") == 1
+        assert current_version(connection, "auth") == 8
+        artifact_schema = _schema_objects(connection)
+        authorities = connection.execute(
+            """
+            SELECT environment_id, grant_version, status, granted_by_user_id,
+                   grant_reason, max_concurrent_tasks, granted_at,
+                   revoked_by_user_id, revocation_reason, revoked_at
+            FROM environment_access
+            WHERE user_id = 'user-1'
+            ORDER BY environment_id
+            """
+        ).fetchall()
+
+    assert artifact_schema == fresh_schema
+    assert [tuple(authority) for authority in authorities] == [
+        ("env-1", 3, "active", "admin-2", "renewed", 2, "t3", None, None, None),
+        ("env-2", 2, "revoked", "admin-1", "initial", None, "t1", "admin-2", "retired", "t2"),
+    ]
+
+
+def test_auth_v7_access_event_migration_refuses_orphan_history(tmp_path: Path) -> None:
+    path = tmp_path / "v7-auth-orphan.sqlite3"
+    _build_v7_auth_artifact(path)
+    with _connect(path) as connection:
+        connection.execute(
+            """
+            INSERT INTO environment_access_audit_events (
+                event_id, environment_id, user_id, grant_version, event_type,
+                actor_user_id, max_concurrent_tasks, reason, occurred_at
+            ) VALUES (
+                'orphan-event', 'missing-env', 'missing-user', 1, 'granted',
+                'admin', NULL, NULL, 't1'
+            )
+            """
+        )
+        connection.commit()
+
+        with pytest.raises(RuntimeError, match="orphan Environment access event"):
+            run_pending(connection, "auth")
+
+        assert current_version(connection, "auth") == 7
+        assert _has_table_for_test(connection, "environment_access_audit_events")
+
+
+def test_auth_v7_access_event_migration_refuses_authority_drift(tmp_path: Path) -> None:
+    path = tmp_path / "v7-auth-drift.sqlite3"
+    _build_v7_auth_artifact(path)
+    with _connect(path) as connection:
+        connection.execute("DROP TRIGGER trg_env_access_audit_prevent_update")
+        connection.execute(
+            "UPDATE environment_access_audit_events SET reason = 'drift' WHERE event_id = 'event-3'"
+        )
+        connection.commit()
+
+        with pytest.raises(RuntimeError, match="non-canonical Environment access history"):
+            run_pending(connection, "auth")
+
+        assert current_version(connection, "auth") == 7
+        assert _has_table_for_test(connection, "environment_access_audit_events")
 
 
 def test_fresh_literature_schema_retires_superseded_saga_and_keeps_current_authority(

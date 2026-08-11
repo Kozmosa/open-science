@@ -63,39 +63,6 @@ def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def _record_environment_access_event(
-    conn: sqlite3.Connection,
-    *,
-    env_id: str,
-    user_id: str,
-    grant_version: int,
-    event_type: str,
-    actor_user_id: str,
-    max_tasks: int | None,
-    reason: str | None,
-    occurred_at: str,
-) -> None:
-    conn.execute(
-        """
-        INSERT INTO environment_access_audit_events (
-            event_id, environment_id, user_id, grant_version, event_type,
-            actor_user_id, max_concurrent_tasks, reason, occurred_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            uuid.uuid4().hex,
-            env_id,
-            user_id,
-            grant_version,
-            event_type,
-            actor_user_id,
-            max_tasks,
-            reason,
-            occurred_at,
-        ),
-    )
-
-
 def _upsert_environment_grant(
     conn: sqlite3.Connection,
     *,
@@ -107,7 +74,7 @@ def _upsert_environment_grant(
     reason: str | None,
     reactivate_only: bool,
 ) -> bool:
-    """Create or renew a grant and write exactly one matching audit event.
+    """Create or renew one versioned Environment authorization grant.
 
     Seed provisioning is deliberately idempotent for already-active grants;
     explicit administrator grants always advance the version so a dispatcher
@@ -140,27 +107,6 @@ def _upsert_environment_grant(
     )
     if cursor.rowcount == 0:
         return False
-    row = conn.execute(
-        """
-        SELECT grant_version, max_concurrent_tasks
-        FROM environment_access
-        WHERE environment_id = ? AND user_id = ?
-        """,
-        (env_id, user_id),
-    ).fetchone()
-    if row is None:
-        raise AuthError("Environment grant disappeared during update")
-    _record_environment_access_event(
-        conn,
-        env_id=env_id,
-        user_id=user_id,
-        grant_version=int(row["grant_version"]),
-        event_type="granted",
-        actor_user_id=granted_by,
-        max_tasks=row["max_concurrent_tasks"],
-        reason=reason,
-        occurred_at=now,
-    )
     return True
 
 
@@ -603,7 +549,7 @@ class AuthService:
         self.initialize()
         now = _now_iso()
         with self._connect() as conn:
-            cursor = conn.execute(
+            conn.execute(
                 """
                 UPDATE environment_access
                 SET status = 'revoked',
@@ -616,28 +562,6 @@ class AuthService:
                 """,
                 (now, now, revoked_by, reason, env_id, user_id),
             )
-            if cursor.rowcount:
-                row = conn.execute(
-                    """
-                    SELECT grant_version, max_concurrent_tasks
-                    FROM environment_access
-                    WHERE environment_id = ? AND user_id = ?
-                    """,
-                    (env_id, user_id),
-                ).fetchone()
-                if row is None:
-                    raise AuthError("Environment grant disappeared during revocation")
-                _record_environment_access_event(
-                    conn,
-                    env_id=env_id,
-                    user_id=user_id,
-                    grant_version=int(row["grant_version"]),
-                    event_type="revoked",
-                    actor_user_id=revoked_by,
-                    max_tasks=row["max_concurrent_tasks"],
-                    reason=reason,
-                    occurred_at=now,
-                )
             conn.commit()
 
     def get_user_environment_ids(self, user_id: str) -> list[str]:

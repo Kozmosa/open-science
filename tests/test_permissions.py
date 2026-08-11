@@ -244,12 +244,6 @@ class TestEnvironmentAccessCrud:
             ).fetchone()
             assert revoked is not None
             assert tuple(revoked) == (2, "revoked", "admin", "access expired")
-            events = conn.execute(
-                "SELECT grant_version, event_type FROM environment_access_audit_events "
-                "WHERE environment_id = 'env1' AND user_id = ? ORDER BY grant_version",
-                (uid,),
-            ).fetchall()
-            assert [tuple(event) for event in events] == [(1, "granted"), (2, "revoked")]
             with pytest.raises(sqlite3.IntegrityError):
                 conn.execute(
                     "DELETE FROM environment_access WHERE environment_id = 'env1' AND user_id = ?",
