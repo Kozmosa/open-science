@@ -1239,6 +1239,11 @@ export type HealthResponse = {
 };
 
 /**
+ * InjectMode
+ */
+export type InjectMode = 'auto' | 'prompt_only' | 'disabled';
+
+/**
  * LegacyLiteratureFetchResponse
  */
 export type LegacyLiteratureFetchResponse = {
@@ -2643,10 +2648,7 @@ export type SkillDetailResponse = {
      * Description
      */
     description?: string | null;
-    /**
-     * Inject Mode
-     */
-    inject_mode: string;
+    inject_mode: InjectMode;
     /**
      * Label
      */
@@ -2721,10 +2723,7 @@ export type SkillItemResponse = {
      * Description
      */
     description?: string | null;
-    /**
-     * Inject Mode
-     */
-    inject_mode?: string;
+    inject_mode?: InjectMode;
     /**
      * Label
      */

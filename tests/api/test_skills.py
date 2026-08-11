@@ -46,6 +46,18 @@ def test_skill_import_source_openapi_is_closed_set(tmp_path: Path) -> None:
     assert source_schema["enum"] == ["git", "local"]
 
 
+def test_skill_inject_mode_openapi_uses_domain_enum(tmp_path: Path) -> None:
+    schemas = _make_app(tmp_path).openapi()["components"]["schemas"]
+
+    assert schemas["InjectMode"]["enum"] == ["auto", "prompt_only", "disabled"]
+    for response_name in ("SkillItemResponse", "SkillDetailResponse"):
+        assert (
+            schemas[response_name]["properties"]["inject_mode"]["$ref"]
+            == "#/components/schemas/InjectMode"
+        )
+    assert schemas["SkillItemResponse"]["properties"]["inject_mode"]["default"] == "auto"
+
+
 def _create_skill_dir(parent: Path, skill_id: str, skill_json: dict, skill_md_content: str) -> Path:
     skill_dir = parent / skill_id
     skill_dir.mkdir(parents=True)

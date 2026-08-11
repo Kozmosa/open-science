@@ -15,6 +15,7 @@ from ainrf.auth.username import (
 from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
 from ainrf.files.models import FileKind
+from ainrf.skills.models import InjectMode
 from ainrf.terminal.models import TerminalAttachmentMode
 
 
@@ -472,7 +473,7 @@ class SkillItemResponse(BaseModel):
     skill_id: str
     label: str
     description: str | None = None
-    inject_mode: str = "auto"
+    inject_mode: InjectMode = InjectMode.AUTO
     dependencies: list[str] = Field(default_factory=list)
     package: str | None = None
 
@@ -492,7 +493,7 @@ class SkillDetailResponse(BaseModel):
     version: str
     author: str
     dependencies: list[str] = Field(default_factory=list)
-    inject_mode: str
+    inject_mode: InjectMode
     skill_md: str | None = None
     package: str | None = None
 

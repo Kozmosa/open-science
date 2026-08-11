@@ -51,7 +51,8 @@ export interface WebUiSettingsDocument {
 
 export type SettingsRecoveryReason = 'invalid_document' | 'unsupported_version';
 
-export type SkillItem = SkillItemResponse & { description: string | null; dependencies: string[]; inject_mode: 'auto' | 'prompt_only' | 'disabled'; package?: string };
+export type SkillInjectMode = NonNullable<SkillItemResponse['inject_mode']>;
+export type SkillItem = SkillItemResponse & { description: string | null; dependencies: string[]; inject_mode: SkillInjectMode; package?: string };
 export type SkillListResponse = { items: SkillItem[] };
 export type SkillDetail = SkillDetailResponse & { description: string | null; dependencies: string[]; skill_md: string | null; package?: string };
 export type SkillImportResponse = TransportSkillImportResponse;
@@ -92,12 +93,11 @@ export function toSkillImportRequest(value: SkillImportInput): SkillImportReques
 }
 
 export function adaptSkill(value: SkillItemResponse): SkillItem {
-  const injectMode = value.inject_mode === 'prompt_only' || value.inject_mode === 'disabled' ? value.inject_mode : 'auto';
   return {
     skill_id: value.skill_id,
     label: value.label,
     description: value.description ?? null,
-    inject_mode: injectMode,
+    inject_mode: value.inject_mode ?? 'auto',
     dependencies: value.dependencies ?? [],
     package: value.package ?? undefined,
   };

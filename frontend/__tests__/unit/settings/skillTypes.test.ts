@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSkillImportSource, toSkillImportRequest } from '@/features/settings/types';
+import { adaptSkill, parseSkillImportSource, toSkillImportRequest } from '@/features/settings/types';
 
 describe('skill import transport types', () => {
   it('accepts only generated Skill import sources at the DOM boundary', () => {
@@ -20,5 +20,17 @@ describe('skill import transport types', () => {
       local_path: '/tmp/example-skill',
       skill_id: null,
     });
+  });
+
+  it('preserves the generated Skill inject mode', () => {
+    expect(adaptSkill({
+      skill_id: 'paper-reading',
+      label: 'Paper Reading',
+      inject_mode: 'disabled',
+    }).inject_mode).toBe('disabled');
+    expect(adaptSkill({
+      skill_id: 'default-skill',
+      label: 'Default Skill',
+    }).inject_mode).toBe('auto');
   });
 });

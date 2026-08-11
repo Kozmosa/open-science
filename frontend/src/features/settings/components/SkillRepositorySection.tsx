@@ -92,7 +92,7 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
     importMutation.mutate(payload);
   };
 
-  const getInjectModeBadgeClasses = (mode: string) => {
+  const getInjectModeBadgeClasses = (mode: SkillDetail['inject_mode']) => {
     switch (mode) {
       case 'auto':
         return 'rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800';
