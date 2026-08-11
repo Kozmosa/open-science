@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useT } from '@/shared/i18n';
 import { BrandMark, Button, Input } from '@design-system';
+import {
+  isValidUsername,
+  normalizeUsernameInput,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  USERNAME_PATTERN,
+} from '../usernamePolicy';
 
 export default function RegisterPage() {
   const t = useT();
@@ -54,14 +61,14 @@ export default function RegisterPage() {
         {error && <p id={errorId} role="alert" className="mb-4 text-sm text-[var(--danger)]">{error}</p>}
         <div className="flex flex-col gap-4">
           <label htmlFor="register-username" className="text-xs text-[var(--text-secondary)]">{t('auth.username')} <span className="text-[var(--text-tertiary)]">({t('auth.usernameHint')})</span></label>
-          <Input id="register-username" name="username" autoComplete="username" placeholder={t('auth.username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/[^a-z0-9_-]/g, '').slice(0, 31))} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} autoFocus />
+          <Input id="register-username" name="username" autoComplete="username" placeholder={t('auth.username')} value={username} minLength={USERNAME_MIN_LENGTH} maxLength={USERNAME_MAX_LENGTH} pattern={USERNAME_PATTERN} onChange={(e) => setUsername(normalizeUsernameInput(e.target.value))} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} autoFocus />
           <label htmlFor="register-display-name" className="text-xs text-[var(--text-secondary)]">{t('auth.displayName')}</label>
           <Input id="register-display-name" name="display_name" autoComplete="name" placeholder={t('auth.displayName')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
           <label htmlFor="register-password" className="text-xs text-[var(--text-secondary)]">{t('auth.password')}</label>
           <Input id="register-password" name="password" type="password" autoComplete="new-password" placeholder={t('auth.password')} value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
           <label htmlFor="register-password-confirmation" className="text-xs text-[var(--text-secondary)]">{t('auth.confirmPassword')}</label>
           <Input id="register-password-confirmation" name="password_confirmation" type="password" autoComplete="new-password" placeholder={t('auth.confirmPassword')} value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-describedby={error ? errorId : undefined} aria-invalid={error ? true : undefined} />
-          <Button type="submit" disabled={submitting || !username || !displayName || !password || !confirm}>
+          <Button type="submit" disabled={submitting || !isValidUsername(username) || !displayName || !password || !confirm}>
             {submitting ? t('common.loading') : t('auth.register')}
           </Button>
         </div>

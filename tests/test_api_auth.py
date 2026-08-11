@@ -289,3 +289,35 @@ async def test_v2_registration_uses_durable_default_project_provisioning(
     assert defaults[0]["name"] == "v2alice's Project"
     assert app.state.auth_service.pending_domain_default_project_provisioning() == []
     assert not hasattr(app.state, "project_service")
+
+
+@pytest.mark.anyio
+async def test_registration_transport_rejects_username_outside_tenant_policy(
+    tmp_path: Path,
+) -> None:
+    prepare_current_test_state(tmp_path)
+    app = create_app(
+        ApiConfig(
+            api_key_hashes=frozenset({hash_api_key("secret-key")}),
+            state_root=tmp_path,
+            domain_artifact_sha=CURRENT_ARTIFACT_SHA,
+            public_registration_enabled=True,
+        )
+    )
+    app.state.auth_service.initialize()
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        for username in ("a", "_alice", "Alice", "alice.test", "a" * 32):
+            response = await client.post(
+                "/api/auth/register",
+                json={
+                    "username": username,
+                    "display_name": "Rejected User",
+                    "password": "secret123",
+                },
+            )
+            assert response.status_code == 422, (username, response.text)
+
+    assert app.state.auth_service.list_users() == []

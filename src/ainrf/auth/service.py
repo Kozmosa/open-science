@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import re
 import shutil
 import sqlite3
 import subprocess
@@ -24,14 +23,10 @@ from ainrf.auth.models import (
     UserRole,
     UserStatus,
 )
+from ainrf.auth.username import USERNAME_REQUIREMENT, is_valid_username
 from ainrf.runtime import tenant_identity
 
 _LOG = logging.getLogger(__name__)
-
-# Linux usernames: lowercase ASCII + digits + hyphen + underscore, start with
-# a letter or digit, 2–31 chars.  The OpenScience prefix ``ainrf_`` is added
-# automatically, so the final Linux username will be ``ainrf_<username>``.
-_USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
 
 
 # Fixed GID for the ``ainrf_tenants`` group created in the Dockerfile.
@@ -146,11 +141,8 @@ class AuthService:
         must_change_password: bool = False,
     ) -> User:
         self.initialize()
-        if not _USERNAME_RE.fullmatch(username):
-            raise AuthError(
-                "Username must be 2-31 characters, start with a letter or digit, "
-                "and contain only lowercase letters, digits, underscores, or hyphens"
-            )
+        if not is_valid_username(username):
+            raise AuthError(USERNAME_REQUIREMENT)
         with self._connect() as conn:
             row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
         if row is not None:

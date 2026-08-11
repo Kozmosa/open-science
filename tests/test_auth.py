@@ -27,6 +27,31 @@ class TestAuthService:
         assert user.status.value == "pending"
         assert user.role.value == "member"
 
+    @pytest.mark.parametrize("username", ["a0", "0_a-b", "a" * 31])
+    def test_register_accepts_tenant_safe_username_boundaries(self, service, username):
+        assert (
+            service.register(
+                username=username,
+                display_name="Allowed User",
+                password="secret123",
+            ).username
+            == username
+        )
+
+    @pytest.mark.parametrize(
+        "username",
+        ["a", "_alice", "-alice", "Alice", "alice.test", "alice name", "a" * 32],
+    )
+    def test_register_rejects_username_outside_tenant_policy(self, service, username):
+        from ainrf.auth import AuthError
+
+        with pytest.raises(AuthError, match="Username must be 2-31 characters"):
+            service.register(
+                username=username,
+                display_name="Rejected User",
+                password="secret123",
+            )
+
     def test_register_duplicate_fails(self, service):
         service.register(username="alice", display_name="Alice", password="secret")
         with pytest.raises(Exception):

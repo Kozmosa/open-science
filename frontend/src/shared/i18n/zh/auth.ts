@@ -4,7 +4,7 @@ const auth = {
       login: '登录',
       logout: '退出',
       username: '用户名',
-      usernameHint: '仅限字母、数字、点、下划线、连字符',
+      usernameHint: '2–31 位小写字母、数字、下划线或连字符，首位须为字母或数字',
       password: '密码',
       displayName: '显示名称',
       confirmPassword: '确认密码',

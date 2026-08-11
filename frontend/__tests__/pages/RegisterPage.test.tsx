@@ -15,8 +15,13 @@ afterAll(() => server.close())
 describe('RegisterPage', () => {
   it('renders registration form with username field', () => {
     renderWithProviders(<RegisterPage />, { route: '/register' })
-    expect(screen.getByLabelText(/username/i)).toHaveAttribute('name', 'username')
-    expect(screen.getByLabelText(/username/i)).toHaveAttribute('autocomplete', 'username')
+    const username = screen.getByLabelText(/username/i)
+    expect(username).toHaveAttribute('name', 'username')
+    expect(username).toHaveAttribute('autocomplete', 'username')
+    expect(username).toHaveAttribute('minlength', '2')
+    expect(username).toHaveAttribute('maxlength', '31')
+    expect(username).toHaveAttribute('pattern', '[a-z0-9][a-z0-9_-]{1,30}')
+    expect(screen.getByText(/2–31 lowercase letters/i)).toBeInTheDocument()
   })
 
   it('renders display name field', () => {

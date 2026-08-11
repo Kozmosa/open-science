@@ -4,7 +4,7 @@ const auth = {
       login: 'Log in',
       logout: 'Log out',
       username: 'Username',
-      usernameHint: 'letters, digits, dot, underscore, hyphen only',
+      usernameHint: '2–31 lowercase letters, digits, underscores, or hyphens; start with a letter or digit',
       password: 'Password',
       displayName: 'Display Name',
       confirmPassword: 'Confirm Password',

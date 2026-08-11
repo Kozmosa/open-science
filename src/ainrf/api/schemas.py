@@ -6,6 +6,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ainrf.auth.username import (
+    USERNAME_DESCRIPTION,
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+    USERNAME_PATTERN,
+)
 from ainrf.domain.conversation_contracts import ConversationTaskStatus, TaskWorkStatus
 from ainrf.environments.models import AnthropicEnvStatus, DetectionStatus, EnvironmentAuthKind
 from ainrf.files.models import FileKind
@@ -906,10 +912,10 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(
-        min_length=1,
-        max_length=64,
-        pattern=r"^[a-zA-Z0-9._-]+$",
-        description="ASCII letters, digits, dots, underscores, hyphens only",
+        min_length=USERNAME_MIN_LENGTH,
+        max_length=USERNAME_MAX_LENGTH,
+        pattern=USERNAME_PATTERN,
+        description=USERNAME_DESCRIPTION,
     )
     display_name: str = Field(min_length=1, max_length=128)
     password: str = Field(min_length=4)

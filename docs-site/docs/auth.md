@@ -35,7 +35,7 @@ POST /api/auth/register
 }
 ```
 
-- `username`：仅允许 ASCII 字母、数字、点（`.`）、下划线（`_`）、连字符（`-`），1-64 字符
+- `username`：2–31 字符；首位必须是小写 ASCII 字母或数字，其余仅允许小写字母、数字、下划线（`_`）和连字符（`-`）
 - `display_name`：任意 Unicode，1-128 字符，用于 WebUI 显示
 - `password`：最少 4 字符
 

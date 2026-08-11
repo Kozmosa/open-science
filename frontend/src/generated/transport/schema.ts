@@ -2526,7 +2526,7 @@ export type RegisterRequest = {
     /**
      * Username
      *
-     * ASCII letters, digits, dots, underscores, hyphens only
+     * 2-31 characters; start with a lowercase letter or digit; use only lowercase letters, digits, underscores, or hyphens
      */
     username: string;
 };
