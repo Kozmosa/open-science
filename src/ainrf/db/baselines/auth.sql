@@ -26,14 +26,6 @@ CREATE TABLE login_attempts (
             success INTEGER NOT NULL,
             attempted_at TEXT NOT NULL
         );
-CREATE TABLE project_collaborators (
-            project_id TEXT NOT NULL,
-            user_id TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'member',
-            added_by_user_id TEXT NOT NULL,
-            added_at TEXT NOT NULL,
-            PRIMARY KEY (project_id, user_id)
-        );
 CREATE TABLE refresh_tokens (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -52,7 +44,6 @@ CREATE TABLE users (
             activated_at TEXT,
             last_login_at TEXT
         , must_change_password INTEGER NOT NULL DEFAULT 0);
-CREATE INDEX idx_collab_user ON project_collaborators(user_id);
 CREATE INDEX idx_env_access_user ON environment_access(user_id);
 CREATE INDEX idx_users_status ON users(status);
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);

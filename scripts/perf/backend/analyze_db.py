@@ -43,10 +43,6 @@ EXPLAIN_QUERIES: dict[str, list[tuple[str, str]]] = {
     ],
     "auth.sqlite3": [
         ("login_lookup", "SELECT id, password_hash, role, status FROM users WHERE username = ?"),
-        (
-            "list_collaborators",
-            "SELECT user_id, role FROM project_collaborators WHERE project_id = ?",
-        ),
     ],
 }
 

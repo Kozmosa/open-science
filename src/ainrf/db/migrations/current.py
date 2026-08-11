@@ -504,6 +504,19 @@ def migration_008_retire_environment_access_audit_events(conn: sqlite3.Connectio
     )
 
 
+@registry.register("auth")
+def migration_009_retire_legacy_project_collaborators(conn: sqlite3.Connection) -> None:
+    """Drop the superseded auth collaborator table only when it has no rows."""
+
+    if not _has_table(conn, "project_collaborators"):
+        return
+    if conn.execute("SELECT 1 FROM project_collaborators LIMIT 1").fetchone() is not None:
+        raise RuntimeError(
+            "auth migration 009 refuses to drop non-empty legacy project_collaborators"
+        )
+    conn.execute("DROP TABLE project_collaborators")
+
+
 @registry.register_baseline("agentic_researcher", _BASELINE_VERSIONS["agentic_researcher"])
 def agentic_researcher_baseline(conn: sqlite3.Connection) -> None:
     _apply_baseline(conn, "agentic_researcher")

@@ -460,58 +460,6 @@ class AuthService:
             )
             conn.commit()
 
-    # --- Collaborator Management ---
-
-    def add_collaborator(self, *, project_id: str, user_id: str, role: str, added_by: str) -> None:
-        self.initialize()
-        now = _now_iso()
-        with self._connect() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO project_collaborators "
-                "(project_id, user_id, role, added_by_user_id, added_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (project_id, user_id, role, added_by, now),
-            )
-            conn.commit()
-
-    def remove_collaborator(self, project_id: str, user_id: str) -> None:
-        self.initialize()
-        with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM project_collaborators WHERE project_id = ? AND user_id = ?",
-                (project_id, user_id),
-            )
-            conn.commit()
-
-    def list_collaborators(self, project_id: str) -> list[dict]:
-        self.initialize()
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT pc.role, pc.user_id, u.username, u.display_name "
-                "FROM project_collaborators pc JOIN users u ON pc.user_id = u.id "
-                "WHERE pc.project_id = ?",
-                (project_id,),
-            ).fetchall()
-        return [
-            {
-                "user_id": r["user_id"],
-                "username": r["username"],
-                "display_name": r["display_name"],
-                "role": r["role"],
-            }
-            for r in rows
-        ]
-
-    def get_user_project_ids(self, user_id: str) -> list[str]:
-        """Return project_ids where user is a collaborator (not including owned projects)."""
-        self.initialize()
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT project_id FROM project_collaborators WHERE user_id = ?",
-                (user_id,),
-            ).fetchall()
-        return [r["project_id"] for r in rows]
-
     # --- Environment Access ---
 
     def grant_environment(

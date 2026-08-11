@@ -68,6 +68,15 @@ def _build_v7_auth_artifact(path: Path) -> None:
         connection.executescript(baseline)
         connection.executescript(
             """
+            CREATE TABLE project_collaborators (
+                project_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                added_by_user_id TEXT NOT NULL,
+                added_at TEXT NOT NULL,
+                PRIMARY KEY (project_id, user_id)
+            );
+            CREATE INDEX idx_collab_user ON project_collaborators(user_id);
             CREATE TABLE environment_access_audit_events (
                 event_id TEXT PRIMARY KEY,
                 environment_id TEXT NOT NULL,
@@ -139,6 +148,41 @@ def _build_v7_auth_artifact(path: Path) -> None:
             "CREATE TABLE _schema_version (database TEXT PRIMARY KEY, version INTEGER NOT NULL)"
         )
         connection.execute("INSERT INTO _schema_version VALUES ('auth', 7)")
+        connection.commit()
+
+
+def _build_v8_auth_collaborator_artifact(path: Path, *, non_empty: bool) -> None:
+    """Build the prior v8 shape with the superseded auth collaborator table."""
+
+    baseline = files("ainrf.db.baselines").joinpath("auth.sql").read_text(encoding="utf-8")
+    with _connect(path) as connection:
+        connection.executescript(baseline)
+        connection.executescript(
+            """
+            CREATE TABLE project_collaborators (
+                project_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                added_by_user_id TEXT NOT NULL,
+                added_at TEXT NOT NULL,
+                PRIMARY KEY (project_id, user_id)
+            );
+            CREATE INDEX idx_collab_user ON project_collaborators(user_id);
+            CREATE TABLE _schema_version (
+                database TEXT PRIMARY KEY,
+                version INTEGER NOT NULL
+            );
+            INSERT INTO _schema_version VALUES ('auth', 8);
+            """
+        )
+        if non_empty:
+            connection.execute(
+                """
+                INSERT INTO project_collaborators (
+                    project_id, user_id, role, added_by_user_id, added_at
+                ) VALUES ('legacy-project', 'legacy-user', 'member', 'legacy-admin', 't1')
+                """
+            )
         connection.commit()
 
 
@@ -343,7 +387,7 @@ def _build_v36_approval_artifact(path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("database", "version"),
-    [("auth", 8), ("agentic_researcher", 37), ("literature", 11), ("terminal", 1)],
+    [("auth", 9), ("agentic_researcher", 37), ("literature", 11), ("terminal", 1)],
 )
 def test_fresh_install_uses_current_baseline(tmp_path: Path, database: str, version: int) -> None:
     path = tmp_path / f"{database}.sqlite3"
@@ -357,13 +401,13 @@ def test_auth_v7_access_event_ledger_migrates_to_fresh_schema(tmp_path: Path) ->
     fresh_path = tmp_path / "fresh-auth.sqlite3"
     artifact_path = tmp_path / "v7-auth.sqlite3"
     with _connect(fresh_path) as connection:
-        assert run_pending(connection, "auth") == 2
+        assert run_pending(connection, "auth") == 3
         fresh_schema = _schema_objects(connection)
 
     _build_v7_auth_artifact(artifact_path)
     with _connect(artifact_path) as connection:
-        assert run_pending(connection, "auth") == 1
-        assert current_version(connection, "auth") == 8
+        assert run_pending(connection, "auth") == 2
+        assert current_version(connection, "auth") == 9
         artifact_schema = _schema_objects(connection)
         authorities = connection.execute(
             """
@@ -381,6 +425,45 @@ def test_auth_v7_access_event_ledger_migrates_to_fresh_schema(tmp_path: Path) ->
         ("env-1", 3, "active", "admin-2", "renewed", 2, "t3", None, None, None),
         ("env-2", 2, "revoked", "admin-1", "initial", None, "t1", "admin-2", "retired", "t2"),
     ]
+
+
+def test_auth_v8_empty_legacy_collaborator_table_migrates_to_fresh_schema(
+    tmp_path: Path,
+) -> None:
+    fresh_path = tmp_path / "fresh-auth.sqlite3"
+    artifact_path = tmp_path / "v8-auth.sqlite3"
+    with _connect(fresh_path) as connection:
+        assert run_pending(connection, "auth") == 3
+        fresh_schema = _schema_objects(connection)
+
+    _build_v8_auth_collaborator_artifact(artifact_path, non_empty=False)
+    with _connect(artifact_path) as connection:
+        assert run_pending(connection, "auth") == 1
+        assert current_version(connection, "auth") == 9
+        artifact_schema = _schema_objects(connection)
+
+    assert artifact_schema == fresh_schema
+
+
+def test_auth_v8_non_empty_legacy_collaborator_table_is_preserved(tmp_path: Path) -> None:
+    path = tmp_path / "v8-auth-non-empty.sqlite3"
+    _build_v8_auth_collaborator_artifact(path, non_empty=True)
+
+    with _connect(path) as connection:
+        with pytest.raises(RuntimeError, match="non-empty legacy project_collaborators"):
+            run_pending(connection, "auth")
+
+        assert current_version(connection, "auth") == 8
+        assert _has_table_for_test(connection, "project_collaborators")
+        row = connection.execute(
+            """
+            SELECT project_id, user_id, role, added_by_user_id, added_at
+            FROM project_collaborators
+            """
+        ).fetchone()
+
+    assert row is not None
+    assert tuple(row) == ("legacy-project", "legacy-user", "member", "legacy-admin", "t1")
 
 
 def test_auth_v7_access_event_migration_refuses_orphan_history(tmp_path: Path) -> None:

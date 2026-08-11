@@ -152,41 +152,6 @@ def _ensure_user(auth_svc, username, password):
     return user.id
 
 
-class TestCollaboratorCrud:
-    @staticmethod
-    def _make_service():
-        from ainrf.auth import AuthService
-
-        svc = AuthService(state_root=Path(tempfile.mkdtemp()))
-        svc.initialize()
-        return svc
-
-    def test_add_and_list_collaborator(self):
-        svc = self._make_service()
-        uid = _ensure_user(svc, "bob", "bob123")
-        svc.add_collaborator(project_id="p1", user_id=uid, role="member", added_by="admin")
-        collabs = svc.list_collaborators("p1")
-        assert len(collabs) == 1
-        assert collabs[0]["role"] == "member"
-        assert collabs[0]["user_id"] == uid
-
-    def test_remove_collaborator(self):
-        svc = self._make_service()
-        uid = _ensure_user(svc, "bob", "bob123")
-        svc.add_collaborator(project_id="p1", user_id=uid, role="member", added_by="admin")
-        svc.remove_collaborator("p1", uid)
-        assert len(svc.list_collaborators("p1")) == 0
-
-    def test_get_user_project_ids(self):
-        svc = self._make_service()
-        uid = _ensure_user(svc, "bob", "bob123")
-        svc.add_collaborator(project_id="p1", user_id=uid, role="viewer", added_by="admin")
-        svc.add_collaborator(project_id="p2", user_id=uid, role="member", added_by="admin")
-        project_ids = svc.get_user_project_ids(uid)
-        assert "p1" in project_ids
-        assert "p2" in project_ids
-
-
 class TestEnvironmentAccessCrud:
     @staticmethod
     def _make_service():
