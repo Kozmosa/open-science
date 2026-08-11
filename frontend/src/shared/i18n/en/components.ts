@@ -130,7 +130,6 @@ const components = {
       },
       skills: {
         ungrouped: 'Ungrouped',
-        mixed: 'Mixed',
       },
       token: {
         tokens: 'Tokens',

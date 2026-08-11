@@ -135,7 +135,6 @@ function resolveJson<Resolver>(resolver: Resolver): Resolver {
 export const legacyMockHandlers = [
   mswHttp.get('/build-info.json', () => HttpResponse.json({ short_commit: null, committed_at: null })),
   http.get('/api/health', () => HttpResponse.json(mockGetHealth())),
-  http.get('/api/settings/codex-defaults', () => HttpResponse.json({ codex_config_toml: null, codex_auth_json: null })),
   http.get('/api/settings/deployment-version', () => HttpResponse.json({ short_commit: null, committed_at: null })),
   http.get('/api/settings/monitoring', () => HttpResponse.json({
     services: [

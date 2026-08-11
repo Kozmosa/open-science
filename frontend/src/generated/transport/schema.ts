@@ -149,20 +149,6 @@ export type ChangePasswordRequest = {
 };
 
 /**
- * CodexDefaultsResponse
- */
-export type CodexDefaultsResponse = {
-    /**
-     * Codex Auth Json
-     */
-    codex_auth_json?: string | null;
-    /**
-     * Codex Config Toml
-     */
-    codex_config_toml?: string | null;
-};
-
-/**
  * ComponentHealth
  *
  * Health status for a single component (database, Litefuse, etc.).
@@ -6780,22 +6766,6 @@ export type GetApiResourcesResponses = {
 };
 
 export type GetApiResourcesResponse = GetApiResourcesResponses[keyof GetApiResourcesResponses];
-
-export type GetApiSettingsCodexDefaultsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/settings/codex-defaults';
-};
-
-export type GetApiSettingsCodexDefaultsResponses = {
-    /**
-     * Successful Response
-     */
-    200: CodexDefaultsResponse;
-};
-
-export type GetApiSettingsCodexDefaultsResponse = GetApiSettingsCodexDefaultsResponses[keyof GetApiSettingsCodexDefaultsResponses];
 
 export type GetApiSettingsDeploymentVersionData = {
     body?: never;

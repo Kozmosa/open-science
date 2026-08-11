@@ -1,15 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   createDefaultWebUiSettings,
-  defaultResearchAgentProfileId,
-  rawPromptTaskConfigurationId,
   readStoredSettings,
   settingsStorageKey,
   settingsStorageKeyForUser,
-  structuredResearchTaskConfigurationId,
 } from '@/features/settings';
 
-describe('settings storage v2 task configuration', () => {
+describe('settings storage v6 active preferences', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -46,36 +43,29 @@ describe('settings storage v2 task configuration', () => {
     expect(readStoredSettings().settings.general.appearance.theme).toBe('light');
   });
 
-  it('creates default task configuration catalog', () => {
+  it('creates only active browser preferences', () => {
     const settings = createDefaultWebUiSettings();
 
-    expect(settings.version).toBe(5);
-    expect(settings.general.defaultRoute).toBe('today');
-    expect(settings.general.appearance.theme).toBe('light');
-    expect(settings.general.appearance.motionEnabled).toBe(true);
-    expect(settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
-    expect(settings.taskConfiguration.defaultResearchAgentProfileId).toBe(
-      defaultResearchAgentProfileId
-    );
-    expect(settings.taskConfiguration.defaultTaskConfigurationId).toBe(rawPromptTaskConfigurationId);
-    expect(settings.taskConfiguration.researchAgentProfiles[0]?.profileId).toBe(
-      defaultResearchAgentProfileId
-    );
-    expect(settings.taskConfiguration.taskConfigurations.map((config) => config.configId)).toEqual([
-      rawPromptTaskConfigurationId,
-      structuredResearchTaskConfigurationId,
-      'reproduce-baseline-default',
-      'discover-ideas-default',
-      'validate-ideas-default',
-    ]);
-    const modes = settings.taskConfiguration.taskConfigurations.map((c) => c.mode);
-    expect(modes).toContain('reproduce_baseline');
-    expect(modes).toContain('discover_ideas');
-    expect(modes).toContain('validate_ideas');
+    expect(settings).toEqual({
+      version: 6,
+      general: {
+        defaultRoute: 'today',
+        terminal: { fontSize: 13 },
+        editor: { fontSize: 14, fontFamily: 'monospace' },
+        appearance: { theme: 'light', motionEnabled: true },
+      },
+      projectDefaults: {
+        default: {
+          defaultEnvironmentId: null,
+          selection: { lastEnvironmentId: null },
+        },
+      },
+    });
   });
 
   it('backfills enabled motion for older appearance settings', () => {
     const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    settings.version = 5;
     const general = settings.general as Record<string, unknown>;
     general.appearance = { theme: 'dark' };
     window.localStorage.setItem(settingsStorageKeyForUser('test-user'), JSON.stringify(settings));
@@ -86,23 +76,45 @@ describe('settings storage v2 task configuration', () => {
     });
   });
 
-  it('upgrades v1 settings and preserves environment task templates', () => {
+  it('migrates v5 active preferences and scrubs detached execution credentials', () => {
     window.localStorage.setItem(
       settingsStorageKey,
       JSON.stringify({
-        version: 1,
+        version: 5,
         general: {
           defaultRoute: 'tasks',
           terminal: { fontSize: 16 },
+          editor: { fontSize: 15, fontFamily: 'monospace' },
+          appearance: { theme: 'dark', motionEnabled: false },
         },
+        taskConfiguration: {
+          defaultExecutionEngineId: 'codex-app-server',
+          researchAgentProfiles: [{
+            profileId: 'secret-profile',
+            label: 'Secret profile',
+            apiKey: 'sk-browser-secret',
+            codexAuthJson: '{"token":"browser-secret"}',
+            skills: ['disabled-skill'],
+          }],
+        },
+        llmProviders: [{
+          id: 'secret-provider',
+          name: 'Secret provider',
+          format: 'anthropic',
+          baseUrl: 'https://example.invalid',
+          apiKey: 'sk-provider-secret',
+        }],
         projectDefaults: {
           default: {
             defaultEnvironmentId: 'env-1',
-            selection: { lastEnvironmentId: 'env-2' },
+            defaultWorkspaceId: 'workspace-1',
+            selection: { lastEnvironmentId: 'env-2', lastWorkspaceId: 'workspace-2' },
             environmentDefaults: {
               'env-1': {
-                titleTemplate: 'Daily check',
-                taskInputTemplate: 'Inspect the environment.',
+                titleTemplate: 'Detached title',
+                taskInputTemplate: 'Detached prompt',
+                researchAgentProfileId: 'secret-profile',
+                taskConfigurationId: 'raw-prompt',
               },
             },
           },
@@ -113,196 +125,65 @@ describe('settings storage v2 task configuration', () => {
     const result = readStoredSettings();
 
     expect(result.recoveryReason).toBeNull();
-    expect(result.settings.version).toBe(5);
-    expect(result.settings.general.defaultRoute).toBe('tasks');
-    expect(result.settings.general.terminal.fontSize).toBe(16);
-    expect(result.settings.projectDefaults.default.environmentDefaults['env-1']).toEqual({
-      titleTemplate: 'Daily check',
-      taskInputTemplate: 'Inspect the environment.',
-      researchAgentProfileId: defaultResearchAgentProfileId,
-      taskConfigurationId: rawPromptTaskConfigurationId,
+    expect(result.settings).toMatchObject({
+      version: 6,
+      general: {
+        defaultRoute: 'tasks',
+        terminal: { fontSize: 16 },
+        editor: { fontSize: 15, fontFamily: 'monospace' },
+        appearance: { theme: 'dark', motionEnabled: false },
+      },
+      projectDefaults: {
+        default: {
+          defaultEnvironmentId: 'env-1',
+          selection: { lastEnvironmentId: 'env-2' },
+        },
+      },
     });
-  });
-
-  it('migrates v3 settings without skillModes from skills array', () => {
-    window.localStorage.setItem(
-      settingsStorageKey,
-      JSON.stringify({
-        version: 3,
-        general: {
-          defaultRoute: 'tasks',
-          terminal: { fontSize: 13 },
-          editor: { fontSize: 14, fontFamily: 'monospace' },
-        },
-        taskConfiguration: {
-          defaultExecutionEngineId: 'claude-code',
-          researchAgentProfiles: [
-            {
-              profileId: 'claude-code-default',
-              label: 'Claude Code Default',
-              systemPrompt: '',
-              skills: ['web-search', 'code-analysis'],
-              skillsPrompt: '',
-              settingsJson: '',
-            },
-          ],
-          taskConfigurations: [
-            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
-          ],
-          defaultResearchAgentProfileId: 'claude-code-default',
-          defaultTaskConfigurationId: 'raw-prompt',
-        },
-        projectDefaults: {
-          default: {
-            defaultEnvironmentId: null,
-            defaultWorkspaceId: null,
-            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
-            environmentDefaults: {},
-          },
-        },
-      })
-    );
-
-    const result = readStoredSettings();
-
-    expect(result.recoveryReason).toBeNull();
-    const profile = result.settings.taskConfiguration.researchAgentProfiles[0]!;
-    expect(profile.skillModes).toEqual({
-      'web-search': 'enabled',
-      'code-analysis': 'enabled',
-    });
-    expect(profile.skills).toEqual(['web-search', 'code-analysis']);
-  });
-
-  it('preserves skillModes when present in v3 settings', () => {
-    window.localStorage.setItem(
-      settingsStorageKey,
-      JSON.stringify({
-        version: 3,
-        general: {
-          defaultRoute: 'tasks',
-          terminal: { fontSize: 13 },
-          editor: { fontSize: 14, fontFamily: 'monospace' },
-        },
-        taskConfiguration: {
-          defaultExecutionEngineId: 'kimi-claude-code',
-          researchAgentProfiles: [
-            {
-              profileId: 'claude-code-default',
-              label: 'Claude Code Default',
-              systemPrompt: '',
-              skills: ['web-search'],
-              skillModes: { 'web-search': 'auto', 'code-analysis': 'disabled' },
-              skillsPrompt: '',
-              settingsJson: '',
-            },
-          ],
-          taskConfigurations: [
-            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
-          ],
-          defaultResearchAgentProfileId: 'claude-code-default',
-          defaultTaskConfigurationId: 'raw-prompt',
-        },
-        projectDefaults: {
-          default: {
-            defaultEnvironmentId: null,
-            defaultWorkspaceId: null,
-            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
-            environmentDefaults: {},
-          },
-        },
-      })
-    );
-
-    const result = readStoredSettings();
-    expect(result.settings.taskConfiguration.defaultExecutionEngineId).toBe('claude-code');
-    const profile = result.settings.taskConfiguration.researchAgentProfiles[0]!;
-    expect(profile.skillModes).toEqual({
-      'web-search': 'auto',
-      'code-analysis': 'disabled',
-    });
-    expect(profile.skills).toEqual(['web-search']);
-  });
-
-  it('accepts codex-app-server as default execution engine', () => {
-    window.localStorage.setItem(
-      settingsStorageKey,
-      JSON.stringify({
-        version: 3,
-        general: {
-          defaultRoute: 'tasks',
-          terminal: { fontSize: 13 },
-          editor: { fontSize: 14, fontFamily: 'monospace' },
-        },
-        taskConfiguration: {
-          defaultExecutionEngineId: 'codex-app-server',
-          researchAgentProfiles: [
-            {
-              profileId: 'codex-app-server-default',
-              label: 'Codex App Server Default',
-              systemPrompt: '',
-              skills: [],
-              skillModes: {},
-              skillsPrompt: '',
-              settingsJson: '',
-              codexModel: 'gpt-5-codex',
-              codexAppServerCommand: 'codex app-server --listen stdio://',
-              codexApprovalPolicy: 'never',
-              codexConfigToml: 'model = "custom-provider"',
-              codexAuthJson: '{"token":"override"}',
-            },
-          ],
-          taskConfigurations: [
-            { configId: 'raw-prompt', label: 'Raw Prompt', mode: 'raw_prompt' },
-          ],
-          defaultResearchAgentProfileId: 'codex-app-server-default',
-          defaultTaskConfigurationId: 'raw-prompt',
-        },
-        projectDefaults: {
-          default: {
-            defaultEnvironmentId: null,
-            defaultWorkspaceId: null,
-            selection: { lastEnvironmentId: null, lastWorkspaceId: null },
-            environmentDefaults: {},
-          },
-        },
-      })
-    );
-
-    const result = readStoredSettings();
-    expect(result.settings.taskConfiguration.defaultExecutionEngineId).toBe('codex-app-server');
-    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexModel).toBe(
-      'gpt-5-codex'
-    );
-    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexConfigToml).toBe(
-      'model = "custom-provider"'
-    );
-    expect(result.settings.taskConfiguration.researchAgentProfiles[0]?.codexAuthJson).toBe(
-      '{"token":"override"}'
-    );
+    const rewritten = window.localStorage.getItem(settingsStorageKey) ?? '';
+    expect(rewritten).not.toContain('taskConfiguration');
+    expect(rewritten).not.toContain('llmProviders');
+    expect(rewritten).not.toContain('environmentDefaults');
+    expect(rewritten).not.toContain('defaultWorkspaceId');
+    expect(rewritten).not.toContain('lastWorkspaceId');
+    expect(rewritten).not.toContain('browser-secret');
+    expect(rewritten).not.toContain('disabled-skill');
   });
 
   it.each(['projects', 'terminal', 'tasks', 'workspaces', 'environments'] as const)(
-    'preserves the legal v4 default route %s during the v5 upgrade',
+    'preserves the legal v5 default route %s during the v6 upgrade',
     (defaultRoute) => {
       const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
-      settings.version = 4;
+      settings.version = 5;
       (settings.general as Record<string, unknown>).defaultRoute = defaultRoute;
       window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
 
       const result = readStoredSettings();
 
-      expect(result.settings.version).toBe(5);
+      expect(result.settings.version).toBe(6);
       expect(result.settings.general.defaultRoute).toBe(defaultRoute);
     },
   );
 
+  it('migrates the legacy containers route to environments', () => {
+    const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
+    settings.version = 5;
+    (settings.general as Record<string, unknown>).defaultRoute = 'containers';
+    window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings));
+
+    const result = readStoredSettings();
+
+    expect(result.recoveryReason).toBeNull();
+    expect(result.settings.general.defaultRoute).toBe('environments');
+    expect(window.localStorage.getItem(settingsStorageKey)).not.toContain('containers');
+  });
+
   it.each([
     { label: 'missing', value: undefined },
     { label: 'invalid', value: 'dashboard' },
-  ])('migrates a $label v4 default route to today', ({ value }) => {
+  ])('migrates a $label v5 default route to today', ({ value }) => {
     const settings = createDefaultWebUiSettings() as unknown as Record<string, unknown>;
-    settings.version = 4;
+    settings.version = 5;
     const general = settings.general as Record<string, unknown>;
     if (value === undefined) delete general.defaultRoute;
     else general.defaultRoute = value;
@@ -310,7 +191,7 @@ describe('settings storage v2 task configuration', () => {
 
     const result = readStoredSettings();
 
-    expect(result.settings.version).toBe(5);
+    expect(result.settings.version).toBe(6);
     expect(result.settings.general.defaultRoute).toBe('today');
     expect(result.recoveryReason).toBe('invalid_document');
   });

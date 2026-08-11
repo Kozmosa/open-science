@@ -5,24 +5,18 @@ import type { EnvironmentSelectionPreferences } from '@features/environments';
 import {
   clampEditorFontSize,
   clampTerminalFontSize,
-  createDefaultTaskConfigurationSettings,
   createDefaultWebUiSettings,
-  createEmptyEnvironmentTaskDefaults,
   isDefaultRoute,
 } from '@features/settings/utils/defaults';
-import { readStoredSettings, resolveProjectEnvironmentDefaults, writeStoredSettings, normalizeLlmProviders } from '@features/settings/utils/storage';
+import { readStoredSettings, writeStoredSettings } from '@features/settings/utils/storage';
 import type {
   DefaultProjectSettings,
-  EnvironmentTaskDefaults,
   SettingsRecoveryReason,
   WebUiSettingsDocument,
 } from '@features/settings/types';
 
 import { GeneralSettingsProvider } from './GeneralSettingsContext';
 import { AppearanceSettingsProvider } from './AppearanceSettingsContext';
-import { TaskConfigurationProvider } from './TaskConfigurationContext';
-import { ProjectDefaultsProvider } from './ProjectDefaultsContext';
-import { LlmProvidersProvider } from './LlmProvidersContext';
 
 // ── Shared state helpers ──────────────────────────────────────────
 
@@ -38,9 +32,7 @@ function getOrCreateProjectSettings(
   return (
     projectDefaults[projectId] ?? {
       defaultEnvironmentId: null,
-      defaultWorkspaceId: null,
-      selection: { lastEnvironmentId: null, lastWorkspaceId: null },
-      environmentDefaults: {},
+      selection: { lastEnvironmentId: null },
     }
   );
 }
@@ -65,35 +57,23 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
       defaultEnvironmentId:
         typeof projectSettings.defaultEnvironmentId === 'string'
           ? projectSettings.defaultEnvironmentId : null,
-      defaultWorkspaceId:
-        typeof projectSettings.defaultWorkspaceId === 'string'
-          ? projectSettings.defaultWorkspaceId : null,
       selection: {
         lastEnvironmentId:
           typeof projectSettings.selection?.lastEnvironmentId === 'string'
             ? projectSettings.selection.lastEnvironmentId : null,
-        lastWorkspaceId:
-          typeof projectSettings.selection?.lastWorkspaceId === 'string'
-            ? projectSettings.selection.lastWorkspaceId : null,
       },
-      environmentDefaults:
-        typeof projectSettings.environmentDefaults === 'object' &&
-        projectSettings.environmentDefaults !== null
-          ? projectSettings.environmentDefaults : {},
     };
   }
 
   if (!sanitizedProjectDefaults.default) {
     sanitizedProjectDefaults.default = {
       defaultEnvironmentId: null,
-      defaultWorkspaceId: null,
-      selection: { lastEnvironmentId: null, lastWorkspaceId: null },
-      environmentDefaults: {},
+      selection: { lastEnvironmentId: null },
     };
   }
 
   return {
-    version: 5,
+    version: 6,
     general: {
       defaultRoute: isDefaultRoute(settings.general.defaultRoute)
         ? settings.general.defaultRoute : 'today',
@@ -101,9 +81,7 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
       editor: { fontSize: editorFontSize, fontFamily: editorFontFamily },
       appearance: { theme: appearanceTheme, motionEnabled },
     },
-    taskConfiguration: settings.taskConfiguration,
     projectDefaults: sanitizedProjectDefaults,
-    llmProviders: normalizeLlmProviders(settings.llmProviders),
   };
 }
 
@@ -112,25 +90,12 @@ function sanitizeSettings(settings: WebUiSettingsDocument): WebUiSettingsDocumen
 const LegacySettingsContext = createContext<{
   settings: WebUiSettingsDocument;
   recoveryReason: SettingsRecoveryReason | null;
-  activeProjectId: string;
-  setActiveProjectId: (projectId: string) => void;
   saveGeneralPreferences: (general: WebUiSettingsDocument['general']) => void;
   resetGeneralPreferences: () => void;
   saveAppearanceSettings: (appearance: WebUiSettingsDocument['general']['appearance']) => void;
   resetAppearanceSettings: () => void;
-  saveTaskConfigurationSettings: (tc: WebUiSettingsDocument['taskConfiguration']) => void;
-  resetTaskConfigurationSettings: () => void;
-  saveResearchAgentProfile: (p: WebUiSettingsDocument['taskConfiguration']['researchAgentProfiles'][number]) => void;
   saveProjectDefaultEnvironment: (projectId: string, environmentId: string | null) => void;
-  saveProjectDefaultWorkspace: (projectId: string, workspaceId: string | null) => void;
-  saveProjectEnvironmentDefaults: (projectId: string, environmentId: string, defaults: EnvironmentTaskDefaults) => void;
-  resetProjectEnvironmentDefaults: (projectId: string, environmentId: string) => void;
   rememberSelectedEnvironment: (projectId: string, environmentId: string | null) => void;
-  rememberSelectedWorkspace: (projectId: string, workspaceId: string | null) => void;
-  getProjectEnvironmentDefaults: (projectId: string, environmentId: string | null) => EnvironmentTaskDefaults;
-  saveLlmProvider: (provider: WebUiSettingsDocument['llmProviders'][number]) => void;
-  updateLlmProvider: (provider: WebUiSettingsDocument['llmProviders'][number]) => void;
-  deleteLlmProvider: (providerId: string) => void;
 } | null>(null);
 
 // ── Composite Provider ───────────────────────────────────────────
@@ -142,7 +107,6 @@ interface ProviderProps {
 
 export function SettingsProvider({ children, userId = 'test-user' }: ProviderProps) {
   const [state, setState] = useState<SettingsState>(() => readStoredSettings(userId));
-  const [activeProjectId, setActiveProjectId] = useState<string>('default');
 
   useLayoutEffect(() => {
     const preference = state.settings.general.appearance.theme;
@@ -206,71 +170,12 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
     },
   }), [state, commitSettings]);
 
-  const taskConfigurationValue = useMemo(() => ({
-    taskConfiguration: state.settings.taskConfiguration,
-    saveTaskConfigurationSettings: (tc: WebUiSettingsDocument['taskConfiguration']) => {
-      commitSettings({ ...state.settings, taskConfiguration: tc });
-    },
-    resetTaskConfigurationSettings: () => {
-      commitSettings({ ...state.settings, taskConfiguration: createDefaultTaskConfigurationSettings() });
-    },
-    saveResearchAgentProfile: (profile: WebUiSettingsDocument['taskConfiguration']['researchAgentProfiles'][number]) => {
-      const profiles = state.settings.taskConfiguration.researchAgentProfiles;
-      const exists = profiles.some((p) => p.profileId === profile.profileId);
-      commitSettings({
-        ...state.settings,
-        taskConfiguration: {
-          ...state.settings.taskConfiguration,
-          researchAgentProfiles: exists
-            ? profiles.map((p) => (p.profileId === profile.profileId ? profile : p))
-            : [...profiles, profile],
-        },
-      });
-    },
-  }), [state, commitSettings]);
-
   const projectDefaultsValue = useMemo(() => ({
-    activeProjectId,
-    setActiveProjectId,
     saveProjectDefaultEnvironment: (projectId: string, environmentId: string | null) => {
       const cp = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
       commitSettings({
         ...state.settings,
         projectDefaults: { ...state.settings.projectDefaults, [projectId]: { ...cp, defaultEnvironmentId: environmentId } },
-      });
-    },
-    saveProjectDefaultWorkspace: (projectId: string, workspaceId: string | null) => {
-      const cp = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
-      commitSettings({
-        ...state.settings,
-        projectDefaults: { ...state.settings.projectDefaults, [projectId]: { ...cp, defaultWorkspaceId: workspaceId } },
-      });
-    },
-    saveProjectEnvironmentDefaults: (projectId: string, environmentId: string, defaults: EnvironmentTaskDefaults) => {
-      const cp = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
-      commitSettings({
-        ...state.settings,
-        projectDefaults: {
-          ...state.settings.projectDefaults,
-          [projectId]: {
-            ...cp,
-            environmentDefaults: { ...cp.environmentDefaults, [environmentId]: {
-              titleTemplate: defaults.titleTemplate,
-              taskInputTemplate: defaults.taskInputTemplate,
-              researchAgentProfileId: defaults.researchAgentProfileId,
-              taskConfigurationId: defaults.taskConfigurationId,
-            }},
-          },
-        },
-      });
-    },
-    resetProjectEnvironmentDefaults: (projectId: string, environmentId: string) => {
-      const cp = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
-      const next = { ...cp.environmentDefaults };
-      delete next[environmentId];
-      commitSettings({
-        ...state.settings,
-        projectDefaults: { ...state.settings.projectDefaults, [projectId]: { ...cp, environmentDefaults: next } },
       });
     },
     rememberSelectedEnvironment: (projectId: string, environmentId: string | null) => {
@@ -281,37 +186,6 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
           ...state.settings.projectDefaults,
           [projectId]: { ...cp, selection: { ...cp.selection, lastEnvironmentId: environmentId } },
         },
-      });
-    },
-    rememberSelectedWorkspace: (projectId: string, workspaceId: string | null) => {
-      const cp = getOrCreateProjectSettings(state.settings.projectDefaults, projectId);
-      commitSettings({
-        ...state.settings,
-        projectDefaults: {
-          ...state.settings.projectDefaults,
-          [projectId]: { ...cp, selection: { ...cp.selection, lastWorkspaceId: workspaceId } },
-        },
-      });
-    },
-    getProjectEnvironmentDefaults: (projectId: string, environmentId: string | null) =>
-      resolveProjectEnvironmentDefaults(state.settings, projectId, environmentId),
-  }), [state, activeProjectId, commitSettings]);
-
-  const llmProvidersValue = useMemo(() => ({
-    llmProviders: state.settings.llmProviders,
-    saveLlmProvider: (provider: WebUiSettingsDocument['llmProviders'][number]) => {
-      commitSettings({ ...state.settings, llmProviders: [...state.settings.llmProviders, provider] });
-    },
-    updateLlmProvider: (provider: WebUiSettingsDocument['llmProviders'][number]) => {
-      commitSettings({
-        ...state.settings,
-        llmProviders: state.settings.llmProviders.map((p) => (p.id === provider.id ? provider : p)),
-      });
-    },
-    deleteLlmProvider: (providerId: string) => {
-      commitSettings({
-        ...state.settings,
-        llmProviders: state.settings.llmProviders.filter((p) => p.id !== providerId),
       });
     },
   }), [state, commitSettings]);
@@ -327,25 +201,17 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
       recoveryReason: state.recoveryReason,
       ...generalRest,
       ...appearanceValue,
-      ...taskConfigurationValue,
       ...projectDefaultsValue,
-      ...llmProvidersValue,
     };
-  }, [state, generalValue, appearanceValue, taskConfigurationValue, projectDefaultsValue, llmProvidersValue]);
+  }, [state, generalValue, appearanceValue, projectDefaultsValue]);
 
   return (
     <LegacySettingsContext.Provider value={legacyValue}>
       <GeneralSettingsProvider value={generalValue}>
         <AppearanceSettingsProvider value={appearanceValue}>
-          <TaskConfigurationProvider value={taskConfigurationValue}>
-            <ProjectDefaultsProvider value={projectDefaultsValue}>
-              <LlmProvidersProvider value={llmProvidersValue}>
-                <MotionPreferenceProvider motionEnabled={state.settings.general.appearance.motionEnabled}>
-                  {children}
-                </MotionPreferenceProvider>
-              </LlmProvidersProvider>
-            </ProjectDefaultsProvider>
-          </TaskConfigurationProvider>
+          <MotionPreferenceProvider motionEnabled={state.settings.general.appearance.motionEnabled}>
+            {children}
+          </MotionPreferenceProvider>
         </AppearanceSettingsProvider>
       </GeneralSettingsProvider>
     </LegacySettingsContext.Provider>
@@ -354,7 +220,7 @@ export function SettingsProvider({ children, userId = 'test-user' }: ProviderPro
 
 // ── Legacy hook (deprecated) ─────────────────────────────────────
 
-/** @deprecated Prefer useGeneralSettings / useAppearanceSettings / useTaskConfiguration / useProjectDefaults / useLlmProviders */
+/** @deprecated Prefer useGeneralSettings / useAppearanceSettings. */
 export function useSettings() {
   const context = useContext(LegacySettingsContext);
   if (context === null) {
@@ -384,11 +250,4 @@ export function useTerminalFontSize(): number {
 export function useEditorSettings(): { fontSize: number; fontFamily: string } {
   const { settings } = useSettings();
   return { fontSize: settings.general.editor.fontSize, fontFamily: settings.general.editor.fontFamily };
-}
-
-export function useProjectEnvironmentDefaults(
-  projectId: string,
-  environmentId: string | null
-): EnvironmentTaskDefaults {
-  return useSettings().getProjectEnvironmentDefaults(projectId, environmentId) ?? createEmptyEnvironmentTaskDefaults();
 }

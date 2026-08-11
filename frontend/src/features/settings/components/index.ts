@@ -8,4 +8,3 @@ export { GeneralPreferencesSection } from './GeneralPreferencesSection';
 export { ProjectDefaultsSection } from './ProjectDefaultsSection';
 export { SearchBackendSection } from './SearchBackendSection';
 export { SkillRepositorySection } from './SkillRepositorySection';
-export { TaskConfigurationSection } from './TaskConfigurationSection';

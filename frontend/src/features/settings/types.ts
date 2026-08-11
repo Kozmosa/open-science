@@ -1,7 +1,6 @@
-import type { SkillMode, ThemePreference } from '@design-system';
+import type { ThemePreference } from '@design-system';
 import type {
   AdminUserResponse as TransportAdminUserResponse,
-  CodexDefaultsResponse,
   DeploymentVersionResponse as TransportDeploymentVersionResponse,
   EnvironmentAccessResponse,
   MonitoringServiceItem as TransportMonitoringServiceItem,
@@ -16,62 +15,17 @@ import type {
   SkillRegistryUpdateResponse as TransportSkillRegistryUpdateResponse,
 } from '@/generated/transport';
 
-export type { SkillMode, ThemePreference } from '@design-system';
+export type { ThemePreference } from '@design-system';
 
 export type DefaultRoute = 'today' | 'projects' | 'terminal' | 'tasks' | 'workspaces' | 'environments';
 
-export type ExecutionEngineId = 'claude-code' | 'agent-sdk' | 'codex-app-server';
-export type CodexConfigSource = 'host_default' | 'custom';
-export type TaskConfigurationMode = 'raw_prompt' | 'structured_research' | 'reproduce_baseline' | 'discover_ideas' | 'validate_ideas';
-
-export interface ResearchAgentProfileSettings {
-  profileId: string;
-  label: string;
-  systemPrompt: string;
-  skills: string[];
-  skillModes: Record<string, SkillMode>;
-  skillsPrompt: string;
-  settingsJson: string;
-  apiBaseUrl: string;
-  apiKey: string;
-  defaultOpusModel: string;
-  defaultSonnetModel: string;
-  defaultHaikuModel: string;
-  envOverrides: string;
-  codexBaseUrl: string;
-  codexApiKey: string;
-  codexModel: string;
-  codexAppServerCommand: string;
-  codexApprovalPolicy: string;
-  codexConfigToml: string;
-  codexAuthJson: string;
-  codexConfigTomlSource: CodexConfigSource;
-  codexAuthJsonSource: CodexConfigSource;
-}
-
-export interface TaskConfigurationPreset {
-  configId: string;
-  label: string;
-  mode: TaskConfigurationMode;
-}
-
-export interface EnvironmentTaskDefaults {
-  titleTemplate: string;
-  taskInputTemplate: string;
-  researchAgentProfileId: string;
-  taskConfigurationId: string;
-}
-
 export interface DefaultProjectSelectionState {
   lastEnvironmentId: string | null;
-  lastWorkspaceId: string | null;
 }
 
 export interface DefaultProjectSettings {
   defaultEnvironmentId: string | null;
-  defaultWorkspaceId: string | null;
   selection: DefaultProjectSelectionState;
-  environmentDefaults: Record<string, EnvironmentTaskDefaults>;
 }
 
 export interface AppearanceSettings {
@@ -79,30 +33,8 @@ export interface AppearanceSettings {
   motionEnabled: boolean;
 }
 
-export interface TaskConfigurationSettings {
-  defaultExecutionEngineId: ExecutionEngineId;
-  researchAgentProfiles: ResearchAgentProfileSettings[];
-  taskConfigurations: TaskConfigurationPreset[];
-  defaultResearchAgentProfileId: string;
-  defaultTaskConfigurationId: string;
-}
-
-export type LlmProviderFormat = 'anthropic' | 'openai-chat' | 'openai-responses';
-
-export interface LlmProvider {
-  id: string;
-  name: string;
-  format: LlmProviderFormat;
-  baseUrl: string;
-  apiKey: string;
-  opusModel?: string;
-  sonnetModel?: string;
-  haikuModel?: string;
-  defaultModel?: string;
-}
-
 export interface WebUiSettingsDocument {
-  version: 5;
+  version: 6;
   general: {
     defaultRoute: DefaultRoute;
     terminal: {
@@ -114,14 +46,11 @@ export interface WebUiSettingsDocument {
     };
     appearance: AppearanceSettings;
   };
-  taskConfiguration: TaskConfigurationSettings;
   projectDefaults: Record<string, DefaultProjectSettings>;
-  llmProviders: LlmProvider[];
 }
 
 export type SettingsRecoveryReason = 'invalid_document' | 'unsupported_version';
 
-export type CodexDefaults = CodexDefaultsResponse;
 export type SkillItem = SkillItemResponse & { description: string | null; dependencies: string[]; inject_mode: 'auto' | 'prompt_only' | 'disabled'; package?: string };
 export type SkillListResponse = { items: SkillItem[] };
 export type SkillDetail = SkillDetailResponse & { description: string | null; dependencies: string[]; skill_md: string | null; package?: string };

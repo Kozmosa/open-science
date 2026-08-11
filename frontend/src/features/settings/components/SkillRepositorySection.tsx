@@ -73,7 +73,7 @@ export function SkillRepositorySection({ availableSkills }: SkillRepositorySecti
       if (status === 409) {
         setShowDirtyConfirm(true);
       } else {
-        alert(err instanceof Error ? err.message : t('pages.settings.llmProviders.updateFailed'));
+        alert(err instanceof Error ? err.message : t('pages.settings.skillRepository.updateFailed'));
         setShowDirtyConfirm(false);
         setPendingRegistryId(null);
       }

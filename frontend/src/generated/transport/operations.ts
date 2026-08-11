@@ -693,13 +693,6 @@ export const transportOperations = {
     "canonical": true,
     "deprecated": false
   },
-  "get_api_settings_codex_defaults": {
-    "method": "GET",
-    "path": "/api/settings/codex-defaults",
-    "clientPath": "/settings/codex-defaults",
-    "canonical": true,
-    "deprecated": false
-  },
   "get_api_settings_deployment_version": {
     "method": "GET",
     "path": "/api/settings/deployment-version",

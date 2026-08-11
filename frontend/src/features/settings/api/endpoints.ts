@@ -2,7 +2,6 @@ import { api } from '@/shared/api/client';
 import type {
   AdminUserItem,
   AdminUserListResponse,
-  CodexDefaults,
   DeploymentVersionResponse,
   MonitoringSettingsResponse,
   SearchSettingsResponse,
@@ -27,7 +26,6 @@ import {
 import type {
   AdminUserListResponse as TransportAdminUserListResponse,
   AdminUserResponse as TransportAdminUserResponse,
-  CodexDefaultsResponse,
   DeploymentVersionResponse as TransportDeploymentVersionResponse,
   EnvironmentAccessListResponse,
   SkillDetailResponse,
@@ -49,8 +47,6 @@ export const getSkillDetail = (skillId: string): Promise<SkillDetail> =>
 export const importSkill = (payload: SkillImportInput): Promise<SkillImportResponse> =>
   api.post('/skills/import', toSkillImportRequest(payload));
 
-export const getCodexDefaults = (): Promise<CodexDefaults> =>
-  api.get<CodexDefaultsResponse>('/settings/codex-defaults');
 export const getDeploymentVersion = (): Promise<DeploymentVersionResponse> =>
   api.get<TransportDeploymentVersionResponse>('/settings/deployment-version');
 export const getFrontendBuildVersion = (): Promise<DeploymentVersionResponse> =>

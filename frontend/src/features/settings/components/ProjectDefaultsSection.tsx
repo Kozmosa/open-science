@@ -1,35 +1,22 @@
 import { useState } from 'react';
 import { Button, FormField, SectionCard, SectionHeader, NativeSelect } from '@design-system';
 import { useT } from '@/shared/i18n';
-import type { EnvironmentTaskDefaults, TaskConfigurationSettings } from '../types';
 import type { EnvironmentRecord } from '@features/environments/types';
-import { EnvironmentDefaultsCard } from './EnvironmentDefaultsCard';
 
 export interface ProjectDefaultsSectionProps {
   environments: EnvironmentRecord[];
-  taskConfiguration: TaskConfigurationSettings;
   savedDefaultEnvironmentId: string | null;
   isLoading: boolean;
   loadError: string | null;
-  getProjectEnvironmentDefaults: (environmentId: string | null) => EnvironmentTaskDefaults;
   saveProjectDefaultEnvironment: (environmentId: string | null) => void;
-  saveProjectEnvironmentDefaults: (
-    environmentId: string,
-    defaults: EnvironmentTaskDefaults
-  ) => void;
-  resetProjectEnvironmentDefaults: (environmentId: string) => void;
 }
 
 export function ProjectDefaultsSection({
   environments,
-  taskConfiguration,
   savedDefaultEnvironmentId,
   isLoading,
   loadError,
-  getProjectEnvironmentDefaults,
   saveProjectDefaultEnvironment,
-  saveProjectEnvironmentDefaults,
-  resetProjectEnvironmentDefaults,
 }: ProjectDefaultsSectionProps) {
   const t = useT();
   const [defaultEnvironmentDraft, setDefaultEnvironmentDraft] = useState<string>(
@@ -95,22 +82,6 @@ export function ProjectDefaultsSection({
           {t('pages.settings.project.noEnvironments')}
         </div>
       ) : null}
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        {environments.map((environment) => {
-          const savedDefaults = getProjectEnvironmentDefaults(environment.id);
-          return (
-            <EnvironmentDefaultsCard
-              key={`${environment.id}:${savedDefaults.titleTemplate}:${savedDefaults.taskInputTemplate}:${savedDefaults.researchAgentProfileId}:${savedDefaults.taskConfigurationId}`}
-              environment={environment}
-              savedDefaults={savedDefaults}
-              taskConfiguration={taskConfiguration}
-              onSave={(defaults) => saveProjectEnvironmentDefaults(environment.id, defaults)}
-              onReset={() => resetProjectEnvironmentDefaults(environment.id)}
-            />
-          );
-        })}
-      </div>
     </SectionCard>
   );
 }

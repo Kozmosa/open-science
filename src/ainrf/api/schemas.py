@@ -1038,12 +1038,6 @@ class WorkspaceUpdateRequest(BaseModel):
     workspace_prompt: str | None = Field(default=None, min_length=1)
 
 
-class CodexDefaultsResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    codex_config_toml: str | None = None
-    codex_auth_json: str | None = None
-
-
 class DeploymentVersionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     short_commit: str | None = None

@@ -7,7 +7,6 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 
 from ainrf.api.schemas import (
-    CodexDefaultsResponse,
     DeploymentVersionResponse,
     McpServersResponse,
     McpServerSummary,
@@ -31,9 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-# ── Codex defaults ──────────────────────────────────────────────────
-
-
 @router.get("/deployment-version", response_model=DeploymentVersionResponse)
 async def get_deployment_version(request: Request) -> DeploymentVersionResponse:
     config = getattr(request.app.state, "api_config", None)
@@ -43,13 +39,6 @@ async def get_deployment_version(request: Request) -> DeploymentVersionResponse:
         short_commit=version_info.short_commit,
         committed_at=version_info.committed_at,
     )
-
-
-@router.get("/codex-defaults", response_model=CodexDefaultsResponse)
-async def read_codex_defaults() -> CodexDefaultsResponse:
-    """Preserve the compatibility shape without exposing host credentials."""
-
-    return CodexDefaultsResponse()
 
 
 # ── Search backend settings ─────────────────────────────────────────

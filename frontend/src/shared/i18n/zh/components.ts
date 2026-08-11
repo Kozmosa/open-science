@@ -128,7 +128,6 @@ const components = {
       },
       skills: {
         ungrouped: '未分组',
-        mixed: '混合',
       },
       token: {
         tokens: 'Tokens',

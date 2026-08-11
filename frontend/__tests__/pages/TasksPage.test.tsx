@@ -30,7 +30,7 @@ import {
   reopenTask,
   updateTask,
 } from '@features/tasks/api';
-import { getCodexDefaults, getSkills } from '@features/settings/api';
+import { getSkills } from '@features/settings/api';
 import { getEnvironments, getProjectEnvironmentReferences } from '@features/environments/api';
 import { queryKeys } from '@/shared/api/queryKeys';
 import { getDomainProjects } from '@features/domain';
@@ -290,7 +290,6 @@ vi.mock('@features/tasks/api', () => ({
   updateTask: vi.fn(),
 }));
 vi.mock('@features/settings/api', () => ({
-  getCodexDefaults: vi.fn(() => Promise.resolve({ codex_config_toml: null, codex_auth_json: null })),
   getSkills: vi.fn(),
 }));
 vi.mock('@features/environments/api', () => ({
@@ -417,7 +416,6 @@ const mockCompleteTask = vi.mocked(completeTask);
 const mockUpdateTask = vi.mocked(updateTask);
 const mockConfirmFork = vi.mocked(confirmFork);
 const mockPreviewFork = vi.mocked(previewFork);
-const mockGetCodexDefaults = vi.mocked(getCodexDefaults);
 const mockGetEnvironments = vi.mocked(getEnvironments);
 const mockGetProjectEnvironmentReferences = vi.mocked(getProjectEnvironmentReferences);
 const mockGetTask = vi.mocked(getTask);
@@ -447,7 +445,6 @@ beforeEach(() => {
   mockUpdateTask.mockReset();
   mockConfirmFork.mockReset();
   mockPreviewFork.mockReset();
-  mockGetCodexDefaults.mockReset();
   mockGetEnvironments.mockReset();
   mockGetProjectEnvironmentReferences.mockReset();
   mockGetTask.mockReset();
@@ -461,10 +458,6 @@ beforeEach(() => {
   mockRetryTask.mockReset();
   mockReopenTask.mockReset();
 
-  mockGetCodexDefaults.mockResolvedValue({
-    codex_config_toml: null,
-    codex_auth_json: null,
-  });
   mockGetEnvironments.mockResolvedValue({ items: [environment] });
   mockGetSkills.mockResolvedValue({ items: availableSkills });
   mockGetProjectEnvironmentReferences.mockResolvedValue({ items: [] });
