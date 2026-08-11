@@ -775,7 +775,9 @@ def test_terminal_attachment_websocket_fails_closed_when_auth_authority_unavaila
     if auth_db_state == "missing":
         auth_db.unlink()
     else:
-        auth_db.write_bytes(b"not a sqlite database")
+        corrupt_db = auth_db.with_name("auth-corrupt.sqlite3")
+        corrupt_db.write_bytes(b"not a sqlite database")
+        corrupt_db.replace(auth_db)
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect(
