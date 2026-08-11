@@ -21,7 +21,6 @@ import { createTask } from '../api';
 import { useIdempotencyKey } from '@/shared/api/idempotency';
 import { queryKeys } from '@/shared/api/queryKeys';
 import type { HarnessEngine, ResearcherType, TaskCreateInput, TaskSummary } from '../types';
-import type { SkillItem } from '@features/settings/types';
 import {
   capabilityAvailability,
   getDomainCapabilities,
@@ -402,7 +401,7 @@ function TaskCreateFlowContent({
       </FormField> : null}
       {source !== 'literature' && researcherType === 'vanilla' ? (
         <TaskSkillPicker
-          skills={(skillsQuery.data?.items ?? []) as SkillItem[]}
+          skills={skillsQuery.data?.items ?? []}
           selectedSkillIds={skills}
           onChange={setSkills}
         />
