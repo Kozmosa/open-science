@@ -23,6 +23,9 @@ import {
   engineFamilyForHarnessEngine,
   FORK_HARNESS_ENGINES_BY_FAMILY,
   isTaskListSort,
+  parseForkEngineFamily,
+  parseForkHarnessEngine,
+  parseForkTransferMode,
 } from '../types';
 import type {
   ForkEngineFamily,
@@ -1112,7 +1115,12 @@ function TasksPage() {
                   aria-label="Target engine family"
                   value={forkTargetEngineFamily}
                   onChange={(event) => {
-                    const family = event.target.value as ForkEngineFamily;
+                    const family = parseForkEngineFamily(event.target.value);
+                    if (!family) {
+                      setForkTargetEngineFamily('');
+                      setForkTargetHarnessEngine('');
+                      return;
+                    }
                     setForkTargetEngineFamily(family);
                     setForkTargetHarnessEngine(FORK_HARNESS_ENGINES_BY_FAMILY[family]?.[0] ?? '');
                   }}
@@ -1128,7 +1136,7 @@ function TasksPage() {
                 <NativeSelect
                   aria-label="Target driver"
                   value={forkTargetHarnessEngine}
-                  onChange={(event) => setForkTargetHarnessEngine(event.target.value as ForkHarnessEngine)}
+                  onChange={(event) => setForkTargetHarnessEngine(parseForkHarnessEngine(event.target.value) ?? '')}
                   disabled={forkTargetDrivers.length === 0}
                 >
                   <option value="">Select target driver</option>
@@ -1141,7 +1149,10 @@ function TasksPage() {
                 <NativeSelect
                   aria-label="Transfer mode"
                   value={forkTransferMode}
-                  onChange={(event) => setForkTransferMode(event.target.value as ForkTransferMode)}
+                  onChange={(event) => {
+                    const transferMode = parseForkTransferMode(event.target.value);
+                    if (transferMode) setForkTransferMode(transferMode);
+                  }}
                 >
                   <option value="selected_turns">Selected turns</option>
                   <option value="recent_turns">Recent turns</option>

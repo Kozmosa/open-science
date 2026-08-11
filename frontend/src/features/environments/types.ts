@@ -11,8 +11,8 @@ import type {
 
 export type { EnvironmentAuthKind } from '@/generated/transport';
 
-export type EnvironmentDetectionStatus = 'success' | 'partial' | 'failed';
-export type AnthropicEnvStatus = 'present' | 'missing' | 'unknown';
+export type EnvironmentDetectionStatus = EnvironmentDetectionResponse['status'];
+export type AnthropicEnvStatus = EnvironmentDetectionResponse['anthropic_env'];
 
 export type ToolStatus = {
   available: boolean;

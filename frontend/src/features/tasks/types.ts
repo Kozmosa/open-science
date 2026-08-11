@@ -1,4 +1,5 @@
 import type {
+  ForkPreviewRequest,
   ForkPreviewResponse,
   GetApiTasksData,
   TaskCreateRequest,
@@ -15,9 +16,9 @@ export type TaskListSort = (typeof TASK_LIST_SORTS)[number];
 export type TaskOutputKind = 'stdout' | 'stderr' | 'system' | 'lifecycle' | 'message' | 'thinking' | 'tool_call' | 'tool_result';
 export type ResearcherType = TaskCreateRequest['researcher_type'];
 export type HarnessEngine = TaskCreateRequest['harness_engine'];
-export type ForkEngineFamily = 'codex' | 'claude';
-export type ForkHarnessEngine = HarnessEngine;
-export type ForkTransferMode = 'selected_turns' | 'recent_turns' | 'full_transcript' | 'context_only';
+export type ForkEngineFamily = ForkPreviewRequest['target_engine_family'];
+export type ForkHarnessEngine = NonNullable<ForkPreviewRequest['target_harness_engine']>;
+export type ForkTransferMode = ForkPreviewRequest['transfer_mode'];
 
 export type ForkPreview = {
   preview_id: string;
@@ -39,6 +40,25 @@ export const FORK_HARNESS_ENGINES_BY_FAMILY: Record<ForkEngineFamily, readonly F
   codex: ['codex-app-server'],
   claude: ['agent-sdk', 'claude-code'],
 };
+const FORK_ENGINE_FAMILIES = ['codex', 'claude'] as const satisfies readonly ForkEngineFamily[];
+const FORK_HARNESS_ENGINES = ['codex-app-server', 'agent-sdk', 'claude-code'] as const satisfies readonly ForkHarnessEngine[];
+const FORK_TRANSFER_MODES = ['selected_turns', 'recent_turns', 'full_transcript', 'context_only'] as const satisfies readonly ForkTransferMode[];
+
+function includesValue<TValue extends string>(values: readonly TValue[], value: string): value is TValue {
+  return values.some((candidate) => candidate === value);
+}
+
+export function parseForkEngineFamily(value: string): ForkEngineFamily | null {
+  return includesValue(FORK_ENGINE_FAMILIES, value) ? value : null;
+}
+
+export function parseForkHarnessEngine(value: string): ForkHarnessEngine | null {
+  return includesValue(FORK_HARNESS_ENGINES, value) ? value : null;
+}
+
+export function parseForkTransferMode(value: string): ForkTransferMode | null {
+  return includesValue(FORK_TRANSFER_MODES, value) ? value : null;
+}
 
 export function engineFamilyForHarnessEngine(engine: string): ForkEngineFamily | null {
   if (engine === 'codex-app-server') return 'codex';

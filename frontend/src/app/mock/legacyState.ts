@@ -11,7 +11,6 @@ import type {
   EnvironmentRecord,
   ProjectEnvironmentReference,
   ProjectEnvironmentReferenceListResponse,
-  AnthropicEnvStatus,
 } from '@features/environments/types';
 import type { FileListResponse, FileReadResponse } from '@features/workspaces/types';
 import type { SkillDetail, SkillImportResponse, SkillItem, SkillListResponse } from '@features/settings/types';
@@ -489,7 +488,7 @@ function createMockDetection(environment: EnvironmentRecord): EnvironmentRecord[
       environment.is_seed ? null : 'mock',
       environment.is_seed ? null : '/usr/bin/claude'
     ),
-    anthropic_env: 'unknown' as AnthropicEnvStatus,
+    anthropic_env: 'unknown',
   };
 }
 
