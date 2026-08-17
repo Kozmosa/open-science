@@ -1,33 +1,70 @@
 :root {
+  --font-status: "Noto Sans osci", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: light;
-  --background: #fff;
+  --background: #fbfcff;
   --foreground: #0a0a0a;
-  --muted: #f5f5f5;
-  --muted-soft: rgb(245 245 245 / 0.8);
+  --muted: #f1f4f8;
+  --muted-soft: rgb(241 244 248 / 0.82);
   --muted-foreground: #737373;
-  --border: #e5e5e5;
-  --green: #22c55e;
-  --green-soft: #d1fae5;
+  --border: #e1e7ef;
+  --green: #16b364;
+  --green-soft: #dff8eb;
   --amber: #eab308;
   --orange: #f97316;
   --red: #ef4444;
-  --blue: #4f6ef7;
+  --blue: #4263eb;
   --card: #fff;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.03), 0 14px 34px rgb(37 63 104 / 0.06);
+  --shadow-float: 0 18px 52px rgb(15 23 42 / 0.16);
+  font-family: var(--font-status);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+@font-face {
+  font-family: "Noto Sans osci";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans osci";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/noto-sans/files/noto-sans-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans osci";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/noto-sans/files/noto-sans-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans osci";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff2") format("woff2");
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
   --background: #0a0a0a;
   --foreground: #fafafa;
-  --muted: #262626;
-  --muted-soft: rgb(38 38 38 / 0.72);
+  --muted: #1b2028;
+  --muted-soft: rgb(27 32 40 / 0.82);
   --muted-foreground: #a3a3a3;
-  --border: #2b2b2b;
-  --green-soft: rgb(34 197 94 / 0.2);
-  --card: #111;
+  --border: #2a3442;
+  --green-soft: rgb(22 179 100 / 0.18);
+  --card: #12171f;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.25), 0 16px 42px rgb(0 0 0 / 0.2);
+  --shadow-float: 0 20px 56px rgb(0 0 0 / 0.44);
 }
 
 * {
@@ -36,6 +73,7 @@
 
 html {
   background: var(--background);
+  scroll-behavior: smooth;
 }
 
 body {
@@ -47,6 +85,19 @@ body {
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 50% -16rem, rgb(66 99 235 / 0.1), transparent 34rem),
+    var(--background);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.22), transparent 24rem);
 }
 
 button,
@@ -56,6 +107,13 @@ a {
 
 button {
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
 }
 
 .status-shell {
@@ -64,11 +122,15 @@ button {
 }
 
 .status-header {
-  height: 68px;
+  min-height: 80px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.status-shell.is-entering .status-header {
+  animation: fade-up 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .brand {
@@ -78,13 +140,24 @@ button {
   color: var(--blue);
   text-decoration: none;
   font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.brand:hover {
+  color: #3154df;
+  transform: translateY(-1px);
 }
 
 .brand img {
   width: 35px;
   height: 35px;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brand:hover img {
+  transform: rotate(-7deg) scale(1.05);
 }
 
 .header-actions {
@@ -108,11 +181,20 @@ button {
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  box-shadow: 0 1px 1px rgb(15 23 42 / 0.02);
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .button:hover {
   background: var(--muted);
+  border-color: rgb(66 99 235 / 0.28);
+  box-shadow: 0 7px 18px rgb(37 63 104 / 0.08);
+  transform: translateY(-1px);
+}
+
+.button:active {
+  box-shadow: none;
+  transform: translateY(0) scale(0.98);
 }
 
 .icon-button {
@@ -126,7 +208,7 @@ button {
 }
 
 .status-main {
-  padding: 24px 0;
+  padding: 20px 0 32px;
 }
 
 .stack {
@@ -135,17 +217,55 @@ button {
 }
 
 .summary {
+  position: relative;
+  overflow: hidden;
   min-height: 84px;
   padding: 15px 20px 16px;
-  border-radius: 12px;
+  border: 1px solid rgb(22 179 100 / 0.2);
+  border-radius: 16px;
   background: var(--green-soft);
+  box-shadow: var(--shadow-card);
+}
+
+.status-shell.is-entering .summary {
+  animation: fade-up 560ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.summary::after {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: -90px;
+  bottom: -150px;
+  border-radius: 999px;
+  background: rgb(22 179 100 / 0.12);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.summary.degraded {
+  border-color: rgb(249 115 22 / 0.24);
+  background: rgb(255 237 213 / 0.9);
+}
+
+.summary.outage {
+  border-color: rgb(239 68 68 / 0.24);
+  background: rgb(254 226 226 / 0.92);
+}
+
+.summary.unknown {
+  border-color: rgb(115 115 115 / 0.24);
+  background: rgb(245 245 245 / 0.9);
 }
 
 .summary-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .summary p {
@@ -164,6 +284,8 @@ button {
   border-radius: 999px;
   background: var(--green);
   color: #fff;
+  box-shadow: 0 0 0 4px rgb(22 179 100 / 0.12);
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .status-dot svg {
@@ -172,15 +294,46 @@ button {
   stroke-width: 3;
 }
 
-.status-dot.degraded { background: var(--orange); }
-.status-dot.outage { background: var(--red); }
-.status-dot.unknown { background: #a3a3a3; }
+.status-dot.degraded {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgb(249 115 22 / 0.12);
+}
+
+.status-dot.outage {
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgb(239 68 68 / 0.12);
+}
+
+.status-dot.unknown {
+  background: #a3a3a3;
+  box-shadow: 0 0 0 4px rgb(163 163 163 / 0.12);
+}
+
+.summary .status-dot.healthy {
+  position: relative;
+  box-shadow: 0 0 0 4px rgb(22 179 100 / 0.12);
+}
+
+.summary .status-dot.healthy::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgb(22 179 100 / 0.4);
+  border-radius: inherit;
+  animation: status-pulse 2.6s ease-out infinite;
+}
 
 .system-panel {
   overflow: hidden;
   padding: 0 4px 4px;
-  border-radius: 12px;
+  border: 1px solid rgb(225 231 239 / 0.78);
+  border-radius: 16px;
   background: var(--muted-soft);
+  box-shadow: var(--shadow-card);
+}
+
+.status-shell.is-entering .system-panel {
+  animation: fade-up 600ms 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .panel-heading,
@@ -190,14 +343,44 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 14px 16px;
 }
 
 .panel-heading h2,
 .calendar-heading h2 {
   margin: 0;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.panel-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 999px;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgb(22 179 100 / 0.11);
+}
+
+.period-label {
+  white-space: nowrap;
 }
 
 .period-control {
@@ -241,17 +424,31 @@ button {
 
 .component-list {
   overflow: hidden;
-  border-radius: 8px;
+  border: 1px solid rgb(225 231 239 / 0.78);
+  border-radius: 11px;
   background: var(--card);
 }
 
 .component {
+  position: relative;
   padding: 16px;
   border-top: 1px solid var(--muted);
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.status-shell.is-entering .component {
+  animation: component-in 520ms calc(220ms + var(--component-index, 0) * 55ms) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .component:first-child {
   border-top: 0;
+}
+
+.component:hover {
+  z-index: 1;
+  background: rgb(246 249 255 / 0.72);
+  box-shadow: inset 3px 0 0 rgb(66 99 235 / 0.32);
+  transform: translateY(-1px);
 }
 
 .component-row,
@@ -274,7 +471,8 @@ button {
 .component-title-text {
   overflow: hidden;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.015em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -316,19 +514,32 @@ button {
   grid-template-columns: repeat(90, minmax(1px, 1fr));
   gap: 1.5px;
   margin-top: 12px;
-  cursor: pointer;
+  cursor: default;
+  transition: opacity 180ms ease;
 }
 
 .bar {
   min-width: 1px;
   border-radius: 2px;
   background: #d4d4d4;
+  transform-origin: center bottom;
+  transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
 }
 
 .bar.healthy { background: var(--green); }
 .bar.degraded { background: var(--orange); }
 .bar.outage { background: var(--red); }
 .bar.unknown { background: #d4d4d4; }
+
+.bars:hover .bar {
+  opacity: 0.72;
+}
+
+.bars .bar:hover {
+  opacity: 1;
+  filter: saturate(1.2) brightness(0.96);
+  transform: scaleY(1.3);
+}
 
 .component-group-toggle {
   width: 100%;
@@ -357,7 +568,7 @@ button {
   height: 16px;
   margin-left: 2px;
   color: var(--muted-foreground);
-  transition: transform 140ms ease;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), color 180ms ease;
 }
 
 .component-group[data-expanded='true'] .group-chevron {
@@ -365,14 +576,23 @@ button {
 }
 
 .group-children {
-  display: none;
+  display: grid;
+  grid-template-rows: 0fr;
   margin: 16px -16px -16px;
   border-top: 1px solid var(--muted);
   background: var(--background);
+  opacity: 0;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
 }
 
 .component-group[data-expanded='true'] .group-children {
-  display: block;
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.group-children-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .group-children .component {
@@ -384,16 +604,23 @@ button {
   gap: 32px;
 }
 
+.status-shell.is-entering .calendar-section {
+  animation: fade-up 620ms 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .calendar-panel {
   overflow: hidden;
   padding: 0 4px 4px;
-  border-radius: 12px;
+  border: 1px solid rgb(225 231 239 / 0.78);
+  border-radius: 16px;
   background: var(--muted-soft);
+  box-shadow: var(--shadow-card);
 }
 
 .calendar {
   overflow: hidden;
-  border-radius: 8px;
+  border: 1px solid rgb(225 231 239 / 0.72);
+  border-radius: 11px;
   background: var(--card);
 }
 
@@ -423,6 +650,12 @@ button {
   place-items: center;
   color: var(--foreground);
   font-size: 13px;
+  font-family: inherit;
+  line-height: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  transition: color 160ms ease, transform 160ms ease;
 }
 
 .calendar-day.outside {
@@ -442,14 +675,33 @@ button {
   cursor: pointer;
 }
 
+.calendar-day.has-event span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(239 68 68 / 0.75);
+  border-radius: 999px;
+  color: var(--red);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.calendar-day.has-event:hover span,
+.calendar-day.has-event:focus-visible span {
+  background: rgb(239 68 68 / 0.08);
+  box-shadow: 0 7px 18px rgb(239 68 68 / 0.16);
+  transform: scale(1.08);
+}
+
 .calendar-day.has-event::after {
   content: '';
   position: absolute;
-  bottom: 3px;
+  bottom: 1px;
   width: 4px;
   height: 4px;
   border-radius: 999px;
   background: var(--red);
+  box-shadow: 0 0 0 3px rgb(239 68 68 / 0.1);
 }
 
 .history-button {
@@ -470,7 +722,8 @@ button {
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--card);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-float);
+  animation: popover-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .popover[hidden] {
@@ -504,7 +757,9 @@ button {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgb(0 0 0 / 0.42);
+  background: rgb(15 23 42 / 0.46);
+  backdrop-filter: blur(8px);
+  animation: fade-in 180ms ease both;
 }
 
 .modal-backdrop[hidden] {
@@ -519,7 +774,8 @@ button {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--card);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.24);
+  box-shadow: var(--shadow-float);
+  animation: modal-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .modal-header {
@@ -572,6 +828,13 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.event-item:hover {
+  border-color: rgb(66 99 235 / 0.32);
+  background: rgb(246 249 255 / 0.72);
+  transform: translateX(2px);
 }
 
 .event-item time {
@@ -592,13 +855,92 @@ button {
   to { background-position: -200% 0; }
 }
 
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes component-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.25);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes status-pulse {
+  0% { opacity: 0.8; transform: scale(0.86); }
+  70%, 100% { opacity: 0; transform: scale(1.55); }
+}
+
+.status-shell.is-entering .bar {
+  animation: bar-in 440ms calc(260ms + var(--bar-index, 0) * 8ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 @media (max-width: 640px) {
   .status-shell {
     width: min(100% - 24px, 672px);
   }
 
   .status-header {
-    height: auto;
     min-height: 68px;
     flex-wrap: wrap;
     padding: 12px 0;
@@ -613,7 +955,11 @@ button {
     padding: 0;
   }
 
-  .period-control {
+  .panel-meta {
+    gap: 0;
+  }
+
+  .period-label {
     display: none;
   }
 
@@ -631,6 +977,21 @@ button {
 
   .component-title-text {
     white-space: normal;
+  }
+
+  .component-group .group-title-row {
+    gap: 6px;
+  }
+
+  .component-group .component-title-text {
+    overflow: visible;
+    font-size: 13px;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  .component-group .component-count {
+    font-size: 12px;
   }
 
   .calendar-day {

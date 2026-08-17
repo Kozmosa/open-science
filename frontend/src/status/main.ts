@@ -11,7 +11,6 @@ import {
   parseStatusLocale,
   parseStatusTheme,
   parseUptime,
-  periodLabel,
   resultDurationMs,
   resultTone,
   type ComponentStatus,
@@ -38,6 +37,8 @@ const translations = {
     systemStatus: 'System status',
     infrastructure: 'Infrastructure',
     components: 'components',
+    live: 'Live monitoring',
+    uptimeWindow: '30-day uptime',
     eventCalendar: 'Event calendar',
     historicalEvents: 'View historical events',
     noEvents: 'No status changes have been recorded for this period.',
@@ -67,6 +68,8 @@ const translations = {
     systemStatus: '系统状态',
     infrastructure: '基础设施',
     components: '个组件',
+    live: '实时监测',
+    uptimeWindow: '近 30 天可用性',
     eventCalendar: '事件日历',
     historicalEvents: '查看历史事件',
     noEvents: '当前时段没有记录到状态变化。',
@@ -93,6 +96,7 @@ let components: ComponentStatus[] = []
 let events: StatusEvent[] = []
 let selectedMonth = new Date()
 let openModal: { title: string; description: string; events: StatusEvent[] } | null = null
+let hasPainted = false
 
 const icon = (name: 'check' | 'alert' | 'info' | 'left' | 'right' | 'down' | 'calendar' | 'bell' | 'language' | 'sun' | 'close') => {
   const paths = {
@@ -146,7 +150,7 @@ function statusDot(tone: StatusTone): string {
 }
 
 function renderBars(tones: Array<StatusTone | null>, label: string): string {
-  return `<div class="bars" role="img" aria-label="${escapeHtml(label)}">${tones.map((tone) => `<span class="bar ${tone ?? 'unknown'}"></span>`).join('')}</div>`
+  return `<div class="bars" role="img" aria-label="${escapeHtml(label)}">${tones.map((tone, index) => `<span class="bar ${tone ?? 'unknown'}" style="--bar-index: ${index}"></span>`).join('')}</div>`
 }
 
 function componentDescription(component: ComponentStatus): string {
@@ -158,8 +162,8 @@ function componentDescription(component: ComponentStatus): string {
   return `${toneLabel(component.tone)} · ${t.latestCheck}: ${checkedAt} · ${t.responseTime}: ${duration === null ? '—' : `${duration}ms`}`
 }
 
-function componentMarkup(component: ComponentStatus, nested = false): string {
-  return `<article class="component${nested ? ' nested' : ''}">
+function componentMarkup(component: ComponentStatus, nested = false, index = 0): string {
+  return `<article class="component${nested ? ' nested' : ''}" style="--component-index: ${Math.min(index, 9)}">
     <div class="component-row">
       <div class="component-title">
         ${statusDot(component.tone)}
@@ -187,7 +191,12 @@ function renderCalendar(): string {
     const outside = date.getMonth() !== month
     const isToday = date.toDateString() === today.toDateString()
     const hasEvent = !outside && eventDays.has(date.getDate())
-    return `<div class="calendar-day${outside ? ' outside' : ''}${isToday ? ' today' : ''}${hasEvent ? ' has-event' : ''}" ${hasEvent ? `data-event-day="${date.toISOString()}" tabindex="0" role="button"` : ''}><span>${date.getDate()}</span></div>`
+    const classes = `calendar-day${outside ? ' outside' : ''}${isToday ? ' today' : ''}${hasEvent ? ' has-event' : ''}`
+    const label = new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(date)
+    if (hasEvent) {
+      return `<button class="${classes}" type="button" data-event-day="${date.toISOString()}" aria-label="${escapeHtml(label)}"><span>${date.getDate()}</span></button>`
+    }
+    return `<div class="${classes}"><span>${date.getDate()}</span></div>`
   }).join('')
   return `<div class="weekdays">${weekdays.map((day) => `<span>${day}</span>`).join('')}</div><div class="calendar-grid">${days}</div>`
 }
@@ -228,6 +237,7 @@ function restoreTransientState(state: TransientState): void {
 
 function render(preserveInteractions = false): void {
   const transient = preserveInteractions ? captureTransientState() : null
+  const entering = !hasPainted
   const t = translations[locale]
   const tone = overallTone(components)
   const copy = statusCopy(tone)
@@ -238,7 +248,7 @@ function render(preserveInteractions = false): void {
     : null
   const groupTone = infrastructure.length ? overallTone(infrastructure) : 'unknown'
 
-  root!.innerHTML = `<div class="status-shell">
+  root!.innerHTML = `<div class="status-shell${entering ? ' is-entering' : ''}">
     <header class="status-header">
       <a class="brand" href="/" aria-label="OpenScience"><img src="/openscience-mark.svg" alt=""><span>OpenScience</span></a>
       <div class="header-actions">
@@ -254,15 +264,15 @@ function render(preserveInteractions = false): void {
           <p>${copy.body}</p>
         </section>
         <section class="system-panel">
-          <div class="panel-heading"><h2>${t.systemStatus}</h2><div class="period-control"><button class="chevron-button" type="button" aria-label="Previous period">${icon('left')}</button><span>${periodLabel(new Date(), locale)}</span><button class="chevron-button" type="button" aria-label="Next period" disabled>${icon('right')}</button></div></div>
+          <div class="panel-heading"><h2>${t.systemStatus}</h2><div class="panel-meta"><span class="live-indicator"><span class="live-dot" aria-hidden="true"></span>${t.live}</span><span class="period-label">${t.uptimeWindow}</span></div></div>
           <div class="component-list">
-            ${primary.map((component) => componentMarkup(component)).join('')}
+            ${primary.map((component, index) => componentMarkup(component, false, index)).join('')}
             ${infrastructure.length ? `<article class="component component-group" data-expanded="false">
               <button class="component-group-toggle" type="button" aria-expanded="false">
                 <div class="component-row"><div class="group-title-row">${statusDot(groupTone)}<span class="component-title-text">${t.infrastructure}</span><span class="component-count">${infrastructure.length} ${t.components}</span>${icon('down').replace('<svg ', '<svg class="group-chevron" ')}</div><span class="uptime-label">${formatUptime(groupUptime)}</span></div>
                 ${renderBars(aggregateBars(infrastructure), `${t.infrastructure}: ${toneLabel(groupTone)}`)}
               </button>
-              <div class="group-children">${infrastructure.map((component) => componentMarkup(component, true)).join('')}</div>
+              <div class="group-children"><div class="group-children-inner">${infrastructure.map((component, index) => componentMarkup(component, true, index)).join('')}</div></div>
             </article>` : ''}
           </div>
         </section>
@@ -277,6 +287,7 @@ function render(preserveInteractions = false): void {
   <div class="popover" id="language-popover" hidden><button type="button" data-locale="en" aria-current="${locale === 'en'}">English</button><button type="button" data-locale="zh-CN" aria-current="${locale === 'zh-CN'}">简体中文</button></div>
   <div class="popover" id="theme-popover" hidden><button type="button" data-theme="system" aria-current="${theme === 'system'}">System</button><button type="button" data-theme="light" aria-current="${theme === 'light'}">Light</button><button type="button" data-theme="dark" aria-current="${theme === 'dark'}">Dark</button></div>
   <div class="modal-backdrop" id="modal-backdrop" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-header"><div><h2 id="modal-title"></h2><p id="modal-description"></p></div><button class="modal-close" type="button" aria-label="${t.close}">${icon('close')}</button></div><div class="event-list" id="modal-content"></div></section></div>`
+  hasPainted = true
   if (transient) restoreTransientState(transient)
   bindInteractions()
 }
@@ -373,11 +384,14 @@ function bindInteractions(): void {
       showModal(new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(date), '', dayEvents)
     }
     day.addEventListener('click', openDay)
-    day.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') openDay() })
   })
   document.querySelector('.modal-close')?.addEventListener('click', closeModal)
   document.querySelector('#modal-backdrop')?.addEventListener('click', (event) => { if (event.target === event.currentTarget) closeModal() })
 }
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && openModal) closeModal()
+})
 
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url, { headers: { Accept: 'text/plain' } })
