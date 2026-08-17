@@ -91,7 +91,11 @@ export function overallTone(components: ComponentStatus[]): StatusTone {
 
 export function parseUptime(value: string): number | null {
   const parsed = Number.parseFloat(value)
-  return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : null
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+  const percentage = parsed >= 0 && parsed <= 1 ? parsed * 100 : parsed
+  return Math.min(100, Math.max(0, percentage))
 }
 
 export function formatUptime(value: number | null): string {

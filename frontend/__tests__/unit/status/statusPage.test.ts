@@ -79,6 +79,8 @@ describe('status page model', () => {
       { type: 'HEALTHY', timestamp: '2026-08-01T02:00:00Z' },
     ]
     expect(parseUptime('101.5')).toBe(100)
+    expect(parseUptime('0.999669')).toBeCloseTo(99.9669)
+    expect(parseUptime('99.5')).toBe(99.5)
     expect(collectEvents([item]).map((event) => event.type)).toEqual(['HEALTHY', 'UNHEALTHY'])
   })
 })
