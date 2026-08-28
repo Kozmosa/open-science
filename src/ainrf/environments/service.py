@@ -116,6 +116,20 @@ def _build_seed_environment(default_workdir: str | None = None) -> EnvironmentRe
     )
 
 
+def seed_environment_connection() -> dict[str, object]:
+    """Return the built-in localhost seed connection payload."""
+
+    seed = _build_seed_environment()
+    return {
+        "host": seed.host,
+        "port": seed.port,
+        "user": seed.user,
+        "auth_kind": seed.auth_kind.value,
+        "identity_file": seed.identity_file,
+        "ssh_options": dict(seed.ssh_options),
+    }
+
+
 class InMemoryEnvironmentService:
     def __init__(
         self,
