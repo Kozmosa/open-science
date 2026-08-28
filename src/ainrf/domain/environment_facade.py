@@ -17,7 +17,7 @@ from pathlib import Path
 
 from ainrf.db import connect, run_pending
 from ainrf.environments.models import EnvironmentAuthKind, EnvironmentRegistryEntry
-from ainrf.environments.service import EnvironmentNotFoundError
+from ainrf.environments.service import EnvironmentNotFoundError, seed_environment_connection
 
 
 def _optional_text(value: object) -> str | None:
@@ -112,6 +112,11 @@ class PersistentEnvironmentFacade:
     @staticmethod
     def _entry_from_row(row: sqlite3.Row) -> EnvironmentRegistryEntry:
         connection = _connection_object(row["connection_json"])
+        if bool(row["is_seed"]) and not connection.get("host"):
+            # Seed rows persisted by retired v2 migrations can carry an empty
+            # connection payload; without the built-in profile the runtime
+            # resolves an empty SSH host for the seed environment.
+            connection = {**seed_environment_connection(), **connection}
         raw_auth_kind = connection.get("auth_kind", EnvironmentAuthKind.SSH_KEY.value)
         try:
             auth_kind = EnvironmentAuthKind(str(raw_auth_kind))
