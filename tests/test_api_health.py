@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sys
 from pathlib import Path
 
 import httpx
@@ -224,3 +225,72 @@ async def test_settings_deployment_version_reads_backend_build_info(
         "short_commit": "abc123",
         "committed_at": "20260612-2017",
     }
+
+
+@pytest.mark.anyio
+async def test_health_reports_litefuse_degraded_when_enabled_reporter_fell_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An enabled-but-inactive reporter must surface as degraded, not ok."""
+
+    from ainrf.observability import factory as obs_factory
+
+    obs_factory.reset_reporter()
+    # Block the langfuse import so the factory caches the NullReporter
+    # fallback, exactly like a startup against an unreachable Litefuse.
+    monkeypatch.setitem(sys.modules, "langfuse", None)
+    try:
+        app = create_app(
+            ApiConfig(
+                api_key_hashes=frozenset({hash_api_key("secret-key")}),
+                state_root=tmp_path,
+                observability_enabled=True,
+                observability_base_url="http://ainrf-litefuse-web:3000",
+                observability_secret_key="sk-test",
+                observability_public_key="pk-test",
+            )
+        )
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/api/health")
+
+        litefuse = response.json()["checks"]["litefuse"]
+        assert response.status_code == 200
+        assert litefuse["status"] == "degraded"
+        assert "inactive" in litefuse["error"]
+        # Litefuse degradation is advisory and must not flip the overall status.
+        assert response.json()["status"] == "ok"
+    finally:
+        obs_factory.reset_reporter()
+
+
+@pytest.mark.anyio
+async def test_health_reports_litefuse_ok_when_observability_disabled(
+    tmp_path: Path,
+) -> None:
+    from ainrf.observability import factory as obs_factory
+
+    obs_factory.reset_reporter()
+    try:
+        app = create_app(
+            ApiConfig(
+                api_key_hashes=frozenset({hash_api_key("secret-key")}),
+                state_root=tmp_path,
+            )
+        )
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/api/health")
+
+        litefuse = response.json()["checks"]["litefuse"]
+        assert response.status_code == 200
+        assert litefuse["status"] == "ok"
+        assert litefuse["error"] is None
+    finally:
+        obs_factory.reset_reporter()

@@ -68,7 +68,7 @@ def _probe_database(state_root: str, *, read_only: bool = False) -> ComponentHea
         )
 
 
-def _probe_litefuse(request: Request) -> ComponentHealth:
+def _probe_litefuse(request: Request, *, enabled: bool) -> ComponentHealth:
     """Probe Litefuse observability backend connectivity."""
     start = _time.monotonic()
     reporter = getattr(request.app.state, "observability_reporter", None)
@@ -81,7 +81,20 @@ def _probe_litefuse(request: Request) -> ComponentHealth:
     try:
         # LitefuseReporter wraps the SafeReporter; check the inner reporter.
         inner = getattr(reporter, "_inner", reporter)
-        if hasattr(inner, "is_healthy") and not inner.is_healthy():
+        if not hasattr(inner, "is_healthy"):
+            # NullReporter is used both when observability is disabled by
+            # configuration and when initialization failed at startup; only
+            # the enabled case hides a real fault.
+            return ComponentHealth(
+                status="degraded" if enabled else "ok",
+                latency_ms=round((_time.monotonic() - start) * 1000, 1),
+                error=(
+                    "Litefuse reporter inactive (initialization failed or SDK missing)"
+                    if enabled
+                    else None
+                ),
+            )
+        if not inner.is_healthy():
             return ComponentHealth(
                 status="degraded",
                 latency_ms=round((_time.monotonic() - start) * 1000, 1),
@@ -147,7 +160,7 @@ async def health_check(request: Request) -> HealthResponse:
     maintenance_read_only = bool(getattr(request.app.state, "maintenance_startup_read_only", False))
     checks: dict[str, ComponentHealth] = {}
     checks["database"] = _probe_database(state_root, read_only=maintenance_read_only)
-    checks["litefuse"] = _probe_litefuse(request)
+    checks["litefuse"] = _probe_litefuse(request, enabled=api_config.observability_enabled)
     checks["filesystem"] = _probe_filesystem(state_root, read_only=maintenance_read_only)
     checks["runtime"] = ComponentHealth(
         status="ok" if runtime_readiness.get("all_ready") else "degraded",
