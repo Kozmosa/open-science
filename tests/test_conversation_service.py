@@ -814,6 +814,79 @@ def test_create_task_atomically_uses_conversation_authority_without_attempt(
         )
 
 
+def test_create_task_auto_publishes_verified_successor_when_active_version_needs_review(
+    state_root: Path,
+    committed_v2_state: str,
+) -> None:
+    service, _, owner, project_id, workspace_id, _ = _task_creation_fixture(
+        state_root, committed_v2_state
+    )
+    with closing(connect(_db_path(state_root))) as conn:
+        conn.execute(
+            "UPDATE project_context_versions SET is_active = 0 WHERE project_id = ?",
+            (project_id,),
+        )
+        conn.execute(
+            """INSERT INTO project_context_versions (
+                   context_version_id, project_id, content, fingerprint, is_active,
+                   created_by_user_id, created_at, fragment_manifest_json
+               ) VALUES ('context-version-legacy', ?, 'Legacy brief', 'legacy-fingerprint',
+                         1, 'owner', ?, '[]')""",
+            (project_id, _NOW),
+        )
+        conn.execute(
+            """INSERT INTO project_context_version_provenance (
+                   context_version_id, fragment_provenance_status, evidence_json, recorded_at
+               ) VALUES ('context-version-legacy', 'attention_needed', '{}', ?)""",
+            (_NOW,),
+        )
+        conn.commit()
+
+    created = service.create_task(
+        owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="create",
+    )
+
+    with closing(connect(_db_path(state_root))) as conn:
+        active = conn.execute(
+            """SELECT version.context_version_id,
+                      COALESCE(provenance.fragment_provenance_status, 'attention_needed')
+                          AS fragment_provenance_status
+               FROM project_context_versions AS version
+               LEFT JOIN project_context_version_provenance AS provenance
+                 ON provenance.context_version_id = version.context_version_id
+               WHERE version.project_id = ? AND version.is_active = 1""",
+            (project_id,),
+        ).fetchone()
+        assert active is not None
+        assert active["fragment_provenance_status"] == "verified"
+        assert str(active["context_version_id"]) != "context-version-legacy"
+        legacy = conn.execute(
+            "SELECT is_active FROM project_context_versions WHERE context_version_id = ?",
+            ("context-version-legacy",),
+        ).fetchone()
+        assert legacy is not None and legacy["is_active"] == 0
+        task = conn.execute(
+            """SELECT project_context_version_id, project_context_snapshot_id FROM tasks
+               WHERE task_id = ?""",
+            (created["task_id"],),
+        ).fetchone()
+        assert task is not None
+        assert str(task["project_context_version_id"]) == str(active["context_version_id"])
+        assert task["project_context_snapshot_id"] is not None
+        auto_published = conn.execute(
+            "SELECT COUNT(*) FROM domain_audit_events WHERE event_type = ?",
+            ("project_context.auto_published",),
+        ).fetchone()
+        assert auto_published[0] == 1
+
+
 def test_create_task_replay_requires_current_task_authorization_before_conflict(
     state_root: Path,
     committed_v2_state: str,

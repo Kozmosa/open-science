@@ -585,14 +585,6 @@ class ProjectContextService:
                 if cached is not None:
                     return cached
             auth.require_project_publisher(project_id, dict(user))
-            draft = conn.execute(
-                "SELECT content FROM project_context_drafts WHERE project_id = ?", (project_id,)
-            ).fetchone()
-            if draft is None:
-                raise DomainNotFoundError("project context draft")
-            content = str(draft["content"])
-            fragment_manifest = self._freeze_project_fragments(conn, project_id)
-            version_fingerprint = context_version_fingerprint(content, fragment_manifest)
             request = {"project_id": project_id}
             if idempotency_key is not None:
                 cached = self._idempotent_result(
@@ -600,47 +592,17 @@ class ProjectContextService:
                 )
                 if cached is not None:
                     return cached
-            version_id = f"context-{uuid4().hex}"
-            now = _now()
-            conn.execute(
-                "UPDATE project_context_versions SET is_active = 0 WHERE project_id = ?",
-                (project_id,),
-            )
-            conn.execute(
-                """INSERT INTO project_context_versions
-                   (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
-                    is_active, created_by_user_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
-                (
-                    version_id,
-                    project_id,
-                    content,
-                    version_fingerprint,
-                    _canonical_json(list(fragment_manifest)),
-                    actor_user_id,
-                    now,
-                ),
-            )
-            record_context_version_fragment_provenance_in_transaction(
+            published = self._publish_verified_version_in_transaction(
                 conn,
-                context_version_id=version_id,
-                status="verified",
-                evidence_json=verified_fragment_provenance_evidence(fragment_manifest),
-                recorded_at=now,
+                project_id=project_id,
+                actor_user_id=actor_user_id,
+                audit_event_type="project_context.published",
             )
             result: dict[str, object] = {
-                "context_version_id": version_id,
+                **published,
                 "project_id": project_id,
-                "fingerprint": version_fingerprint,
-                "content": content,
-                "fragment_manifest": list(fragment_manifest),
                 "fragment_provenance_status": "verified",
-                "fragment_provenance_evidence": _load_json_object(
-                    verified_fragment_provenance_evidence(fragment_manifest)
-                ),
                 "is_active": True,
-                "created_by_user_id": actor_user_id,
-                "created_at": now,
             }
             if idempotency_key is not None:
                 self._store_idempotency(
@@ -654,6 +616,70 @@ class ProjectContextService:
             self._audit(conn, actor_user_id, "project_context.published", "project", project_id)
             conn.commit()
             return result
+
+    def _publish_verified_version_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        actor_user_id: str,
+        audit_event_type: str,
+    ) -> dict[str, object]:
+        """Insert a new active verified Version from the current Draft and Fragments.
+
+        The caller owns the transaction.  The explicit publish flow and the
+        Task-creation fallback for an unrunnable active Version share this
+        core so every verified successor records the same frozen-manifest
+        provenance.
+        """
+
+        draft = conn.execute(
+            "SELECT content FROM project_context_drafts WHERE project_id = ?", (project_id,)
+        ).fetchone()
+        if draft is None:
+            raise DomainNotFoundError("project context draft")
+        content = str(draft["content"])
+        fragment_manifest = self._freeze_project_fragments(conn, project_id)
+        version_fingerprint = context_version_fingerprint(content, fragment_manifest)
+        evidence_json = verified_fragment_provenance_evidence(fragment_manifest)
+        version_id = f"context-{uuid4().hex}"
+        now = _now()
+        conn.execute(
+            "UPDATE project_context_versions SET is_active = 0 WHERE project_id = ?",
+            (project_id,),
+        )
+        conn.execute(
+            """INSERT INTO project_context_versions
+               (context_version_id, project_id, content, fingerprint, fragment_manifest_json,
+                is_active, created_by_user_id, created_at)
+               VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+            (
+                version_id,
+                project_id,
+                content,
+                version_fingerprint,
+                _canonical_json(list(fragment_manifest)),
+                actor_user_id,
+                now,
+            ),
+        )
+        record_context_version_fragment_provenance_in_transaction(
+            conn,
+            context_version_id=version_id,
+            status="verified",
+            evidence_json=evidence_json,
+            recorded_at=now,
+        )
+        self._audit(conn, actor_user_id, audit_event_type, "project", project_id)
+        return {
+            "context_version_id": version_id,
+            "content": content,
+            "fingerprint": version_fingerprint,
+            "fragment_manifest": list(fragment_manifest),
+            "fragment_provenance_evidence": _load_json_object(evidence_json),
+            "created_by_user_id": actor_user_id,
+            "created_at": now,
+        }
 
     def list_versions(self, project_id: str, user: Mapping[str, object]) -> list[dict[str, object]]:
         with closing(self._connect()) as conn:
@@ -1102,6 +1128,7 @@ class ProjectContextService:
                 workspace_id=str(task["workspace_id"]),
                 task_id=task_id,
                 task_prompt=str(task["prompt"]),
+                actor_user_id=str(task["owner_user_id"]),
             )
             conn.execute(
                 """UPDATE tasks
@@ -1428,9 +1455,28 @@ class ProjectContextService:
         workspace_id: str,
         task_id: str,
         task_prompt: str,
+        actor_user_id: str,
     ) -> tuple[str, str]:
+        """Freeze the Project's active Context Version for a new Task snapshot.
+
+        An active Version whose Fragment history cannot be proven (legacy
+        import or a pre-tracking publish) must not block the core Task
+        action.  Such a Version gets a verified successor published from the
+        current reviewed Draft and Fragments in the caller's transaction;
+        the unrunnable Version stays inactive for audit.
+        """
+
         active = self._active_version(conn, project_id)
-        version_id = str(active["context_version_id"])
+        if str(active["fragment_provenance_status"]) != "verified":
+            published = self._publish_verified_version_in_transaction(
+                conn,
+                project_id=project_id,
+                actor_user_id=actor_user_id,
+                audit_event_type="project_context.auto_published",
+            )
+            version_id = str(published["context_version_id"])
+        else:
+            version_id = str(active["context_version_id"])
         assembly = self._assemble_for_task(
             conn,
             project_id=project_id,
@@ -1559,21 +1605,34 @@ class ProjectContextService:
         provenance_status = version["fragment_provenance_status"]
         if provenance_status != "verified":
             raise DomainConflictError(
-                "Context Version Fragment provenance needs explicit review before a new Snapshot"
+                "This project's context was created before context tracking was added. "
+                "Publish the project context again, then retry."
             )
         raw_manifest = version["fragment_manifest_json"]
         if not isinstance(raw_manifest, str):
-            raise DomainConflictError("Context Version fragment manifest is missing")
+            raise DomainConflictError(
+                "This project's saved context is damaged: its content list is missing. "
+                "Publish the project context again, then retry."
+            )
         try:
             decoded = json.loads(raw_manifest)
         except json.JSONDecodeError as exc:
-            raise DomainConflictError("Context Version fragment manifest is invalid") from exc
+            raise DomainConflictError(
+                "This project's saved context is damaged: its content list is unreadable. "
+                "Publish the project context again, then retry."
+            ) from exc
         if not isinstance(decoded, list):
-            raise DomainConflictError("Context Version fragment manifest is invalid")
+            raise DomainConflictError(
+                "This project's saved context is damaged: its content list is unreadable. "
+                "Publish the project context again, then retry."
+            )
         fragments: list[ContextFragment] = []
         for entry in decoded:
             if not isinstance(entry, dict):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             content = entry.get("content")
             fragment_id = entry.get("fragment_id")
             source_type = entry.get("source_type")
@@ -1591,21 +1650,36 @@ class ProjectContextService:
                     created_at,
                 )
             ):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             metadata = entry.get("source_metadata", {})
             if not isinstance(metadata, dict):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             sort_order = entry.get("sort_order", 0)
             byte_budget = entry.get("byte_budget")
             created_by_user_id = entry.get("created_by_user_id")
             if isinstance(sort_order, bool) or not isinstance(sort_order, int):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             if byte_budget is not None and (
                 isinstance(byte_budget, bool) or not isinstance(byte_budget, int)
             ):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             if created_by_user_id is not None and not isinstance(created_by_user_id, str):
-                raise DomainConflictError("Context Version fragment manifest is invalid")
+                raise DomainConflictError(
+                    "This project's saved context is damaged: its content list is unreadable. "
+                    "Publish the project context again, then retry."
+                )
             if source_fingerprint != _fingerprint(content):
                 raise DomainConflictError(
                     "Context Version fragment manifest fingerprint is invalid"

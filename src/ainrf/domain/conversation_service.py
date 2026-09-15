@@ -598,6 +598,7 @@ class ConversationApplicationService:
                         workspace_id=workspace_id,
                         task_id=task_id,
                         task_prompt=prompt,
+                        actor_user_id=actor,
                     )
                 )
                 conn.execute(
@@ -1920,6 +1921,7 @@ class ConversationApplicationService:
                         workspace_id=target_workspace_id,
                         task_id=new_task_id,
                         task_prompt=transfer_prompt,
+                        actor_user_id=actor,
                     )
                 )
                 conn.execute(
