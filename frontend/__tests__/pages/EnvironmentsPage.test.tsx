@@ -313,7 +313,7 @@ describe('EnvironmentsPage', () => {
   it('shows a backend conflict when deleting a referenced environment', async () => {
     mockGetEnvironments.mockResolvedValue({ items: [baseEnvironment] });
     mockDeleteEnvironment.mockRejectedValue(
-      new Error('Request to /environments/env-1 failed with 409 Conflict: Environment is still referenced by a project')
+      new Error('Environment is still referenced by a project (HTTP 409)')
     );
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 

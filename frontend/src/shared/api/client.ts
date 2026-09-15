@@ -110,7 +110,9 @@ function createErrorMessage(path: string, response: Response, data: unknown): st
   const detail = getErrorDetail(data);
   const statusLabel = response.statusText.trim() || 'Unknown Error';
   const baseMessage = `Request to ${path} failed with ${response.status} ${statusLabel}`;
-  return detail ? `${baseMessage}: ${detail}` : baseMessage;
+  // Prefer the server's human-readable sentence; the status code stays for
+  // bug reports without forcing users through transport jargon first.
+  return detail ? `${detail} (HTTP ${response.status})` : baseMessage;
 }
 
 function isLiteraturePath(path: string): boolean {

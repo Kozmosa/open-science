@@ -92,9 +92,7 @@ describe('api client', () => {
           detail: 'terminal unavailable',
         },
       });
-      expect((error as Error).message).toBe(
-        'Request to /terminal/session failed with 503 Service Unavailable: terminal unavailable'
-      );
+      expect((error as Error).message).toBe('terminal unavailable (HTTP 503)');
     }
   });
 
