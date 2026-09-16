@@ -199,7 +199,9 @@ services:
   literature-redis-staging:
     # Background workers are opt-in.  A staging production snapshot must not
     # consume copied durable work or make external Literature requests.
-    profiles: ["background-workers"]
+    # Redis also activates with domain-v2 because the domain worker depends
+    # on it; without that profile membership the worker cannot start alone.
+    profiles: ["domain-v2", "background-workers"]
     image: docker.1ms.run/redis:7-alpine
     restart: unless-stopped
     container_name: ainrf-staging-literature-redis
@@ -223,7 +225,11 @@ services:
     volumes:
       - staging-literature-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping"]
+      test:
+        [
+          "CMD-SHELL",
+          "redis-cli -p 17379 -a \"$$AINRF_LITERATURE_REDIS_PASSWORD\" ping",
+        ]
       interval: 15s
       timeout: 5s
       retries: 5
