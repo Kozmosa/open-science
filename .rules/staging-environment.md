@@ -86,6 +86,24 @@ The default `npm --prefix frontend run build` cleans only the shared `dist`
 root artifacts and preserves the independently mounted `dist/production`,
 `dist/staging`, and `dist/gpu` bundles.
 
+## Post-Acceptance Cleanup
+
+Staging and release acceptance share host-network ports (`17000`/`7192`).
+After any release acceptance run on the `openscience-release-staging`
+project, stop its containers so the regular staging stack can bind again
+(production Gatus probes `:7192`, so a stale acceptance stack silently
+remains the probe target):
+
+```bash
+docker ps -a --format '{{.Names}}\t{{.Status}}' | grep openscience-release-staging
+docker stop <those containers>   # volumes are preserved; docker start can resume them
+```
+
+`staging.sh up` preflights these ports and names a foreign holder instead of
+failing as an unhealthy backend. Regular staging volumes are disposable: if a
+freshly built backend refuses to start with `schema version N is older than
+the current fresh-install baseline`, purge and re-up.
+
 ## Data Isolation
 
 All staging data lives in `staging-*` Docker volumes. Production (`ainrf-*`) volumes are never touched. Both environments can run simultaneously on the same host.

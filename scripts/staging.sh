@@ -141,9 +141,31 @@ fi
 
 # ── Commands ───────────────────────────────────────────────────────
 
+
+_prewrite_staging_port_owners() {
+  # Host networking means a foreign listener on our ports surfaces later as
+  # an opaque "unhealthy" backend.  Name the holder up front instead.
+  local port holder
+  for port in 17000 7192; do
+    holder="$(ss -H -ltnp "sport = :${port}" 2>/dev/null | grep -oE 'cgroup:[^ ]*docker-([0-9a-f]{64})' | head -1 | grep -oE '[0-9a-f]{64}')"
+    if [[ -z "${holder}" ]]; then
+      continue
+    fi
+    local foreign
+    foreign="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep "^${holder}" | awk '{print $2}')"
+    if [[ -n "${foreign}" && "${foreign}" != ainrf-staging* ]]; then
+      _error "Port ${port} is held by container '${foreign}' (not this staging project)."
+      _error "Stop it first (e.g. docker stop ${foreign}) or free the port, then retry."
+      return 1
+    fi
+  done
+  return 0
+}
+
 cmd_up() {
   _info "Building and starting staging environment..."
   _assert_no_background_worker_profiles
+  _prewrite_staging_port_owners
 
   # Always stamp the current worktree into the staging-only host bundle.
   # Vite may replace the output directory inode while cleaning it, so nginx
