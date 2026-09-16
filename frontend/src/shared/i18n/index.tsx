@@ -85,10 +85,28 @@ const defaultContextValue: I18nContextValue = {
   t: (key, values) => interpolate(readMessage('en', key), values),
 };
 
+// Mirror of the provider locale for non-React consumers such as the shared
+// error extraction util.  The provider keeps it in sync on mount and change.
+let currentLocale: Locale = 'en';
+
+function setCurrentLocale(locale: Locale): void {
+  currentLocale = locale;
+}
+
+export function resolveErrorCopy(code: string): string | null {
+  const errors = messages[currentLocale].errors as Record<string, string> | undefined;
+  const copy = errors?.[code];
+  return typeof copy === 'string' ? copy : null;
+}
+
 export const I18nContext = createContext<I18nContextValue>(defaultContextValue);
 
 export function LocaleProvider({ children, initialLocale }: ProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(() => resolveInitialLocale(initialLocale));
+
+  // Mirror during render so non-React consumers (error localization) observe
+  // the locale in the same commit as React consumers.
+  setCurrentLocale(locale);
 
   useEffect(() => {
     try {

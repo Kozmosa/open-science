@@ -53,34 +53,60 @@ class ApiError extends Error {
   status: number;
   data?: unknown;
   path: string;
+  code: string | null;
 
-  constructor(message: string, status: number, path: string, data?: unknown) {
+  constructor(
+    message: string,
+    status: number,
+    path: string,
+    data?: unknown,
+    code: string | null = null
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.path = path;
     this.data = data;
+    this.code = code;
   }
 }
 
-function getErrorDetail(data: unknown): string | null {
+interface ErrorDetailParts {
+  message: string | null;
+  code: string | null;
+}
+
+// Error bodies come in two shapes: a plain string detail, or the coded form
+// {"detail": {"code": "...", "message": "..."}} emitted for user-reachable
+// domain errors so the WebUI can localize them by stable code.
+function getErrorDetailParts(data: unknown): ErrorDetailParts {
   if (typeof data === 'string') {
-    return data.trim() || null;
+    return { message: data.trim() || null, code: null };
   }
 
   if (!data || typeof data !== 'object') {
-    return null;
+    return { message: null, code: null };
   }
 
   const record = data as Record<string, unknown>;
+  const detail = record.detail;
+  if (detail && typeof detail === 'object') {
+    const coded = detail as Record<string, unknown>;
+    const code = typeof coded.code === 'string' && coded.code.trim() ? coded.code.trim() : null;
+    const message =
+      typeof coded.message === 'string' && coded.message.trim() ? coded.message.trim() : null;
+    if (code || message) {
+      return { message, code };
+    }
+  }
   for (const key of ['detail', 'message', 'error', 'title', 'reason']) {
     const value = record[key];
     if (typeof value === 'string' && value.trim()) {
-      return value.trim();
+      return { message: value.trim(), code: null };
     }
   }
 
-  return null;
+  return { message: null, code: null };
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {
@@ -107,12 +133,17 @@ async function parseResponseBody(response: Response): Promise<unknown> {
 }
 
 function createErrorMessage(path: string, response: Response, data: unknown): string {
-  const detail = getErrorDetail(data);
+  const { message: detail } = getErrorDetailParts(data);
   const statusLabel = response.statusText.trim() || 'Unknown Error';
   const baseMessage = `Request to ${path} failed with ${response.status} ${statusLabel}`;
   // Prefer the server's human-readable sentence; the status code stays for
   // bug reports without forcing users through transport jargon first.
   return detail ? `${detail} (HTTP ${response.status})` : baseMessage;
+}
+
+function createApiError(path: string, response: Response, data: unknown): ApiError {
+  const { code } = getErrorDetailParts(data);
+  return new ApiError(createErrorMessage(path, response, data), response.status, path, data, code);
 }
 
 function isLiteraturePath(path: string): boolean {
@@ -255,12 +286,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
             response: retryData,
             error: createErrorMessage(path, retryResponse, retryData),
           });
-          throw new ApiError(
-            createErrorMessage(path, retryResponse, retryData),
-            retryResponse.status,
-            path,
-            retryData,
-          );
+          throw createApiError(path, retryResponse, retryData);
         }
         const retryBody = await parseResponseBody(retryResponse);
         logLiteratureRequest(method, path, {
@@ -301,7 +327,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       response: data,
       error: createErrorMessage(path, response, data),
     });
-    throw new ApiError(createErrorMessage(path, response, data), response.status, path, data);
+    throw createApiError(path, response, data);
   }
 
   const data = await parseResponseBody(response);

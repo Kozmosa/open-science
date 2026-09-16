@@ -16,6 +16,12 @@ const allowedIndirectArguments = new Set([
   'statusMessageKey[status]',
   'tKey',
 ]);
+// Catalog modules consumed dynamically through a declared resolver
+// (shared/i18n resolveErrorCopy maps server error codes at runtime) instead
+// of literal t() call sites.  Their leaves still enforce zh/en parity, but
+// are exempt from the orphan scan.  New modules must be audited before they
+// can hide catalog reachability from this check.
+const dynamicCatalogModules = ['errors.ts'];
 
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -69,6 +75,7 @@ function collectCatalogLeaves(expression, prefix, leaves) {
 function readCatalog(locale) {
   const localeRoot = path.join(catalogRoot, locale);
   const leaves = new Set();
+  const dynamicLeaves = new Set();
 
   for (const filePath of walk(localeRoot)) {
     if (!filePath.endsWith('.ts') || filePath.endsWith(`${path.sep}index.ts`)) continue;
@@ -101,10 +108,11 @@ function readCatalog(locale) {
       ? declarations.get(exportExpression.text)
       : exportExpression;
     if (!catalogExpression) throw new Error(`Cannot resolve default export in ${filePath}`);
-    collectCatalogLeaves(catalogExpression, '', leaves);
+    const target = path.basename(filePath) === 'errors.ts' ? dynamicLeaves : leaves;
+    collectCatalogLeaves(catalogExpression, '', target);
   }
 
-  return leaves;
+  return { leaves, dynamicLeaves };
 }
 
 function escapeRegExp(value) {
@@ -128,10 +136,19 @@ function sourceLocation(sourceFile, node) {
   return `${relative(sourceFile.fileName)}:${position.line + 1}`;
 }
 
-const englishKeys = readCatalog('en');
-const chineseKeys = readCatalog('zh');
-const missingChinese = [...englishKeys].filter((key) => !chineseKeys.has(key)).sort();
-const missingEnglish = [...chineseKeys].filter((key) => !englishKeys.has(key)).sort();
+const english = readCatalog('en');
+const chinese = readCatalog('zh');
+const englishKeys = english.leaves;
+const chineseKeys = chinese.leaves;
+const dynamicallyConsumedKeys = new Set([...english.dynamicLeaves, ...chinese.dynamicLeaves]);
+const missingChinese = [
+  ...[...englishKeys].filter((key) => !chineseKeys.has(key)),
+  ...[...english.dynamicLeaves].filter((key) => !chinese.dynamicLeaves.has(key)),
+].sort();
+const missingEnglish = [
+  ...[...chineseKeys].filter((key) => !englishKeys.has(key)),
+  ...[...chinese.dynamicLeaves].filter((key) => !english.dynamicLeaves.has(key)),
+].sort();
 
 if (missingChinese.length || missingEnglish.length) {
   if (missingChinese.length) console.error(`Missing Chinese i18n keys:\n${missingChinese.join('\n')}`);
@@ -193,7 +210,9 @@ if (missingChinese.length || missingEnglish.length) {
     visit(sourceFile);
   }
 
-  const orphanKeys = [...englishKeys].filter((key) => !usedKeys.has(key)).sort();
+  const orphanKeys = [...englishKeys]
+    .filter((key) => !usedKeys.has(key) && !dynamicallyConsumedKeys.has(key))
+    .sort();
   if (unmatchedTemplates.length) {
     console.error(`Dynamic i18n templates without catalog matches:\n${unmatchedTemplates.join('\n')}`);
     process.exitCode = 1;

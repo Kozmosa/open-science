@@ -50,6 +50,7 @@ flowchart TD
 
 Conversation Module 以小 Interface 隐藏幂等、因果 guard、可靠投递、runtime control 与 SQLite 事务，形成足够的 Depth。HTTP、worker 与 runtime driver 是该 Module 不同 Seam 上的 Adapter；这种 Locality 让状态机修复集中在一个实现中，并为所有 caller 提供 Leverage。退休完成后，旧 Attempt/RuntimeSession、cutover 和 migration tables 不再是 current schema；只读 admin audit 只保留 `legacy_domain_records` 历史证据，不能把历史 payload 转成新的 Task 或 Session。
 - `npm --prefix frontend run generate:transport` 确定性生成 `frontend/src/generated/transport/`。
+- 用户可达的领域错误使用稳定机器码契约：领域异常携带 `DomainErrorCode`（或 Conversation 域既有的 `ConversationErrorCode`），HTTP adapter 以 `{"detail": {"code", "message"}}` 透出；`message` 是 canonical 英文文案，供日志、CLI 与原始 API 调用方使用。WebUI 按错误码在前端 i18n 目录（`shared/i18n/*/errors.ts`）本地化，未映射的错误码回退到原始英文 message 加状态码。后端不做按 `Accept-Language` 的消息翻译；新增用户可达错误时必须同时补 `DomainErrorCode` 与双语文案。
 - `npm --prefix frontend run check:transport` 重建并检查 schema manifest、operation/path metadata 与工作树 drift。
 - Generated transport 的长期验证由正常 drift gate、真实 HTTP contract tests 和 MSW Adapter tests 负责；临时 architecture-cleanup suite 已在 P6 删除。
 

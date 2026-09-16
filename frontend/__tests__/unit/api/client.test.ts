@@ -96,6 +96,38 @@ describe('api client', () => {
     }
   });
 
+  it('carries the stable code from coded domain error details', async () => {
+    const response = {
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      headers: new Headers({
+        'content-type': 'application/json',
+      }),
+      text: async () =>
+        JSON.stringify({
+          detail: {
+            code: 'project_publish_required',
+            message: 'Project publish permission is required',
+          },
+        }),
+    } as Response;
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { ApiError, api } = await import('../../../src/shared/api/client');
+
+    try {
+      await api.post('/domain/projects/project-1/context/publish');
+      throw new Error('expected request to fail');
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(ApiError);
+      const apiError = error as ApiError;
+      expect(apiError.code).toBe('project_publish_required');
+      expect(apiError.message).toBe('Project publish permission is required (HTTP 403)');
+    }
+  });
+
   it('supports PATCH requests', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: 'env-1' }), {

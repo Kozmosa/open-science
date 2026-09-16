@@ -9,6 +9,7 @@ export const messages = {
     ...en.navigation,
     ...en.pages,
     ...en.components,
+    errors: en.errors,
   },
   zh: {
     ...zh.common,
@@ -16,5 +17,6 @@ export const messages = {
     ...zh.navigation,
     ...zh.pages,
     ...zh.components,
+    errors: zh.errors,
   },
 };
