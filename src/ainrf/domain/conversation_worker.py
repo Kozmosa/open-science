@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
+import structlog
+
 from ainrf.db import connect
 from ainrf.domain.conversation_contracts import (
     ConversationContractError,
@@ -49,6 +51,8 @@ from ainrf.literature.tracking import LiteratureTrackingService
 from ainrf.runtime import tenant_identity
 from ainrf.runtime.paths import build_runtime_path_config
 from ainrf.skills.mount import preflight_workspace_skills, resolve_workspace_skills
+
+_DISPATCH_LOG = structlog.get_logger(__name__)
 
 if TYPE_CHECKING:
     from ainrf.literature.task_saga import LiteratureTaskSagaService
@@ -227,12 +231,16 @@ class ConversationDispatcher:
 
     @staticmethod
     def _validate_workspace_permissions(path: Path, tenant_user: str | None) -> None:
-        if not path.is_dir():
-            raise RuntimeError("Workspace canonical path is unavailable")
         if tenant_user is None:
+            if not path.is_dir():
+                raise RuntimeError("Workspace canonical path is unavailable")
             if not os.access(path, os.R_OK | os.W_OK | os.X_OK):
                 raise RuntimeError("Worker lacks Workspace permissions")
             return
+        # Tenant homes are 0700 by design, so the backend user must not stat
+        # them: existence and permissions are validated in one tenant-scoped
+        # sudo call.  stdin stays an explicit pipe because sudo with the
+        # image's use_pty Defaults blocks forever when stdin is /dev/null.
         result = subprocess.run(
             [
                 "sudo",
@@ -241,13 +249,14 @@ class ConversationDispatcher:
                 tenant_user,
                 "sh",
                 "-c",
-                'test -r "$1" && test -w "$1" && test -x "$1"',
+                'test -d "$1" && test -r "$1" && test -w "$1" && test -x "$1"',
                 "tenant-workspace-permissions",
                 str(path),
             ],
             check=False,
             capture_output=True,
             text=True,
+            stdin=subprocess.PIPE,
         )
         if result.returncode != 0:
             raise RuntimeError("Tenant lacks Workspace permissions")
@@ -264,12 +273,28 @@ class ConversationDispatcher:
         except asyncio.CancelledError:
             raise
         except Exception:
+            # The claim is released and retried; without this log the churn is
+            # completely invisible to operators (issue #89).
+            _DISPATCH_LOG.error(
+                "task_dispatch_aborted",
+                task_id=claim.task_id,
+                submission_id=claim.submission_id,
+                stage="context",
+                exc_info=True,
+            )
             return True
         try:
             grant = self._require_claim_environment_grant(claim)
         except asyncio.CancelledError:
             raise
         except Exception:
+            _DISPATCH_LOG.error(
+                "task_dispatch_aborted",
+                task_id=claim.task_id,
+                submission_id=claim.submission_id,
+                stage="environment_grant",
+                exc_info=True,
+            )
             return True
         try:
             # Cross into durable delivery only after every deterministic local

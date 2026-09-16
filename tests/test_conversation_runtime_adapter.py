@@ -160,7 +160,7 @@ def test_adapter_derives_fresh_session_identity_from_bound_runtime_context() -> 
     assert cli.native_conversation_identity(
         runtime_launch_key="launch-1",
         fallback_task_id="task-1",
-    ) == ("session", "launch-1")
+    ) == ("session", ClaudeCodeEngine._make_session_id(context))
 
 
 @pytest.mark.anyio

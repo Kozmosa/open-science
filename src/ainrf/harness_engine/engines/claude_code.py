@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import time
+import uuid
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -277,14 +278,20 @@ class ClaudeCodeEngine(HarnessEngine):
 
     # ── command construction ──────────────────────────────────────────
 
-    @staticmethod
-    def _make_session_id(context: ExecutionContext) -> str:
-        """Derive a deterministic session id from the runtime identity.
+    # The CLI requires --session-id to be a valid UUID; deriving it with
+    # uuid5 keeps the id deterministic across process restarts so resume and
+    # runtime recovery keep addressing the same engine session.
+    _SESSION_ID_NAMESPACE = uuid.UUID("d6f19d1e-4f4a-4a6b-9d8f-3d0e1c6a5b47")
+
+    @classmethod
+    def _make_session_id(cls, context: ExecutionContext) -> str:
+        """Derive a deterministic UUID session id from the runtime identity.
 
         The CLI uses this as a filename component under
-        ``~/.claude/projects/<key>/<session_id>.jsonl``.
+        ``~/.claude/projects/<key>/<session_id>.jsonl`` and rejects any
+        non-UUID value.
         """
-        return context.runtime_identity
+        return str(uuid.uuid5(cls._SESSION_ID_NAMESPACE, context.runtime_identity))
 
     def _build_command(
         self,

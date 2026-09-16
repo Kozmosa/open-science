@@ -115,6 +115,10 @@ async def _validate_local_tenant_path(canonical_path: str, tenant_user: str) -> 
             canonical_path,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
+            # sudo with the image's use_pty Defaults blocks forever when
+            # stdin is /dev/null; an explicit pipe keeps the preflight
+            # independent of the server process's stdin shape.
+            stdin=asyncio.subprocess.PIPE,
         )
     except OSError as exc:
         raise WorkspacePathPreflightError(

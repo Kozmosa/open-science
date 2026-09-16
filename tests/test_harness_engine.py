@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import uuid
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, patch
@@ -152,16 +153,44 @@ async def test_claude_code_scopes_maps_and_session_ids_by_runtime_identity() -> 
         await engine.start(first, lambda _event: None)
         await engine.start(second, lambda _event: None)
 
+    first_session = ClaudeCodeEngine._make_session_id(first)
+    second_session = ClaudeCodeEngine._make_session_id(second)
     assert prompts == ["first follow-up", "second follow-up"]
     assert engine._session_ids == {
-        "launch-attempt-1": "launch-attempt-1",
-        "launch-attempt-2": "launch-attempt-2",
+        "launch-attempt-1": first_session,
+        "launch-attempt-2": second_session,
     }
     assert "task-shared" not in engine._session_ids
     assert [command[command.index("--session-id") + 1] for command in commands] == [
-        "launch-attempt-1",
-        "launch-attempt-2",
+        first_session,
+        second_session,
     ]
+
+
+def test_claude_code_session_ids_are_deterministic_uuids() -> None:
+    """The pinned CLI rejects non-UUID --session-id values (issue #87)."""
+
+    context = ExecutionContext(
+        task_id="task-uuid",
+        working_directory="/tmp",
+        rendered_prompt="prompt",
+        runtime_execution_id="execution-1",
+        runtime_launch_key="launch-1",
+    )
+    first = ClaudeCodeEngine._make_session_id(context)
+    second = ClaudeCodeEngine._make_session_id(context)
+    assert first == second
+    uuid.UUID(first)  # must parse as a UUID
+    other = ClaudeCodeEngine._make_session_id(
+        ExecutionContext(
+            task_id="task-uuid",
+            working_directory="/tmp",
+            rendered_prompt="prompt",
+            runtime_execution_id="execution-2",
+            runtime_launch_key="launch-2",
+        )
+    )
+    assert other != first
 
 
 def test_claude_code_engine_scrubs_implicit_anthropic_env() -> None:

@@ -5,6 +5,7 @@ import json
 from contextlib import closing
 from dataclasses import asdict, replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -26,6 +27,7 @@ from ainrf.domain.conversation_execution import (
 from ainrf.domain.conversation_execution_repository import SqliteConversationExecutionRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
 from ainrf.domain.conversation_worker import ConversationDispatcher, ConversationWorkerRuntime
+import ainrf.domain.conversation_worker as conversation_worker_module
 from ainrf.domain_control import DomainMaintenanceService
 from ainrf.domain.service import DomainConflictError
 from ainrf.harness_engine.base import EngineEvent, ExecutionContext, HarnessEngineType
@@ -1502,3 +1504,57 @@ async def test_worker_cancellation_reconciles_claimed_interrupt_before_propagati
     assert tuple(control_row[:2]) == ("delivery_unknown", "adapter_cancelled")
     assert control_row["completed_at"] is not None
     assert turn is not None and tuple(turn) == ("interrupted", None)
+
+
+def test_tenant_workspace_validation_uses_one_sudo_probe_without_backend_stat(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Issue #90/#91: tenant homes are opaque to the backend user.
+
+    Existence and permissions must come from one tenant-scoped sudo call with
+    an explicit stdin pipe; the backend user never stats the path.
+    """
+
+    import subprocess as subprocess_module
+
+    recorded: dict[str, object] = {}
+
+    class Result:
+        returncode = 0
+
+    def fake_run(*args: object, **kwargs: object) -> Result:
+        recorded["args"] = args
+        recorded["kwargs"] = kwargs
+        return Result()
+
+    monkeypatch.setattr(conversation_worker_module.subprocess, "run", fake_run)
+    # A path the backend user cannot stat stands in for the 0700 tenant home.
+    tenant_path = tmp_path / "tenant-home" / "workspace"
+
+    conversation_worker_module.ConversationDispatcher._validate_workspace_permissions(
+        tenant_path, "ainrf_tenant"
+    )
+
+    args = cast("tuple[object, ...]", recorded["args"])
+    command = [str(item) for item in cast("tuple[object, ...]", args[0])]
+    kwargs = cast("dict[str, object]", recorded["kwargs"])
+    assert command[:4] == ["sudo", "-n", "-u", "ainrf_tenant"]
+    assert 'test -d "$1" && test -r "$1" && test -w "$1" && test -x "$1"' in command
+    assert kwargs["stdin"] == subprocess_module.PIPE
+
+
+def test_tenant_workspace_validation_reports_tenant_denial(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class Result:
+        returncode = 1
+
+    monkeypatch.setattr(
+        conversation_worker_module.subprocess,
+        "run",
+        lambda *args, **kwargs: Result(),
+    )
+    with pytest.raises(RuntimeError, match="Tenant lacks Workspace permissions"):
+        conversation_worker_module.ConversationDispatcher._validate_workspace_permissions(
+            tmp_path / "tenant-home" / "workspace", "ainrf_tenant"
+        )
