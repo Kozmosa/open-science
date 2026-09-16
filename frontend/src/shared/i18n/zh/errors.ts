@@ -78,6 +78,7 @@ const errors = {
     task_move_turn_active: '移动任务前请先中断进行中的 Turn。',
     task_move_same_project: '该任务已属于目标项目。',
     task_execution_slot_held: '该任务已占用一个执行槽位。',
+    engine_tenant_ineligible: '所选引擎在当前部署形态下不可用,请选择其他执行引擎。',
     fork_transfer_range_invalid: 'Fork 的转移范围无效。',
 
     // 会话契约错误

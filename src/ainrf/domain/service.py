@@ -114,6 +114,7 @@ class DomainErrorCode(StrEnum):
     FORK_TRANSFER_RANGE_INVALID = "fork_transfer_range_invalid"
     ENVIRONMENT_CAPACITY_EXHAUSTED = "environment_capacity_exhausted"
     TASK_EXECUTION_SLOT_HELD = "task_execution_slot_held"
+    ENGINE_TENANT_INELIGIBLE = "engine_tenant_ineligible"
 
 
 class _DomainError:

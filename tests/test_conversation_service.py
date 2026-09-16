@@ -887,6 +887,59 @@ def test_create_task_auto_publishes_verified_successor_when_active_version_needs
         assert auto_published[0] == 1
 
 
+def test_create_task_rejects_agent_sdk_under_tenant_isolation(
+    state_root: Path,
+    committed_v2_state: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _, owner, project_id, workspace_id, _ = _task_creation_fixture(
+        state_root, committed_v2_state
+    )
+    monkeypatch.setattr(
+        conversation_service_module.tenant_identity, "is_container_environment", lambda: True
+    )
+
+    with pytest.raises(DomainConflictError) as excinfo:
+        service.create_task(
+            owner,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            title="Task",
+            prompt="Prompt",
+            researcher_type="vanilla",
+            harness_engine="agent-sdk",
+            idempotency_key="agent-sdk-tenant",
+        )
+    assert excinfo.value.code == "engine_tenant_ineligible"
+
+    created = service.create_task(
+        owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="claude-code",
+        idempotency_key="claude-code-ok",
+    )
+    assert created["task_id"]
+
+    monkeypatch.setattr(
+        conversation_service_module.tenant_identity, "is_container_environment", lambda: False
+    )
+    created_host = service.create_task(
+        owner,
+        project_id=project_id,
+        workspace_id=workspace_id,
+        title="Task",
+        prompt="Prompt",
+        researcher_type="vanilla",
+        harness_engine="agent-sdk",
+        idempotency_key="agent-sdk-host",
+    )
+    assert created_host["task_id"]
+
+
 def test_create_task_replay_requires_current_task_authorization_before_conflict(
     state_root: Path,
     committed_v2_state: str,
@@ -2082,7 +2135,7 @@ def test_fork_preview_confirmation_binds_revision_mode_and_disclosures(
             "SELECT task_id, status FROM turn_submissions WHERE submission_id = ?",
             (confirmed["submission_id"],),
         ).fetchone()
-    assert target["harness_engine"] == "agent-sdk"
+    assert target["harness_engine"] == "claude-code"
     assert submission["task_id"] == confirmed["target_task_id"]
     assert submission["status"] == "queued"
 

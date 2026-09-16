@@ -38,7 +38,7 @@ export type ForkPreview = {
 
 export const FORK_HARNESS_ENGINES_BY_FAMILY: Record<ForkEngineFamily, readonly ForkHarnessEngine[]> = {
   codex: ['codex-app-server'],
-  claude: ['agent-sdk', 'claude-code'],
+  claude: ['claude-code'],
 };
 const FORK_ENGINE_FAMILIES = ['codex', 'claude'] as const satisfies readonly ForkEngineFamily[];
 const FORK_HARNESS_ENGINES = ['codex-app-server', 'agent-sdk', 'claude-code'] as const satisfies readonly ForkHarnessEngine[];

@@ -92,6 +92,8 @@ const errors = {
     task_move_turn_active: 'Interrupt the active turn before moving this task.',
     task_move_same_project: 'This task already belongs to the target project.',
     task_execution_slot_held: 'This task already holds an execution slot.',
+    engine_tenant_ineligible:
+      'The selected engine is not available in this deployment. Choose another engine.',
     fork_transfer_range_invalid: 'The fork transfer range is invalid.',
 
     // Conversation contract errors

@@ -42,6 +42,7 @@ from ainrf.domain.output_redaction import redact_task_item_payload_for_viewer
 from ainrf.domain.write_fence import DomainWriteFence
 from ainrf.domain_control import MaintenanceModeError
 from ainrf.harness_engine.base import HarnessEngineType
+from ainrf.runtime import tenant_identity
 
 
 _ENGINE_FAMILY_BY_HARNESS = {
@@ -49,6 +50,25 @@ _ENGINE_FAMILY_BY_HARNESS = {
     HarnessEngineType.AGENT_SDK: "claude",
     HarnessEngineType.CODEX_APP_SERVER: "codex",
 }
+
+
+def _require_deployable_engine(harness_engine: str) -> None:
+    """Reject engines that cannot execute under the current isolation model.
+
+    The agent-sdk engine runs its SDK client in-process and therefore cannot
+    switch to the tenant Linux user; in container deployments (tenant
+    isolation) it would be claimed and dropped by the worker forever.  It
+    stays available on host-style deployments without tenant isolation.
+    """
+
+    if (
+        harness_engine == HarnessEngineType.AGENT_SDK.value
+        and tenant_identity.is_container_environment()
+    ):
+        raise DomainConflictError(
+            "The agent-sdk engine is not available in this deployment",
+            code=DomainErrorCode.ENGINE_TENANT_INELIGIBLE,
+        )
 
 
 def _now() -> str:
@@ -623,6 +643,7 @@ class ConversationApplicationService:
                 authorization = DomainAuthorizationService(conn)
                 authorization.require_project_editor(project_id, user)
                 authorization.require_workspace_owner(workspace_id, user)
+                _require_deployable_engine(harness_engine)
                 workspace = self._writable_workspace(
                     conn,
                     project_id=project_id,
@@ -1693,8 +1714,9 @@ class ConversationApplicationService:
                 resolved_project_id = target_project_id or str(source_task["project_id"])
                 resolved_workspace_id = target_workspace_id or str(source_task["workspace_id"])
                 resolved_harness_engine = target_harness_engine or (
-                    "codex-app-server" if target_engine_family == "codex" else "agent-sdk"
+                    "codex-app-server" if target_engine_family == "codex" else "claude-code"
                 )
+                _require_deployable_engine(resolved_harness_engine)
                 expected_family = _ENGINE_FAMILY_BY_HARNESS.get(
                     HarnessEngineType(resolved_harness_engine)
                 )

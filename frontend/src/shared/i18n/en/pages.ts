@@ -104,7 +104,6 @@ const pages = {
           researcherAris: 'ARIS Researcher',
           executionEngine: 'Execution Engine',
           engineClaudeCode: 'Claude Code',
-          engineAgentSdk: 'Agent SDK',
           engineCodexAppServer: 'Codex App Server',
           titlePlaceholder: 'Optional task title',
           promptLabel: 'Prompt',

@@ -1568,7 +1568,7 @@ describe('TasksPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New task' }));
     expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Dialog task' } });
-    selectTaskCreateOption('Execution Engine', 'Agent SDK');
+    selectTaskCreateOption('Execution Engine', 'Codex App Server');
     fireEvent.change(screen.getByLabelText('Prompt'), { target: { value: 'Dialog task body' } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
@@ -1578,7 +1578,7 @@ describe('TasksPage', () => {
         expect.objectContaining({
           title: 'Dialog task',
           prompt: 'Dialog task body',
-          harnessEngine: 'agent-sdk',
+          harnessEngine: 'codex-app-server',
           researcherType: 'vanilla',
         }),
         expect.stringMatching(/^task\.create/),

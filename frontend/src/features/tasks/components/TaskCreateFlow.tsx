@@ -357,7 +357,6 @@ function TaskCreateFlowContent({
             onValueChange={(value) => setHarnessEngine(value as HarnessEngine)}
           >
             <SelectItem value="claude-code">{t('pages.tasks.create.engineClaudeCode')}</SelectItem>
-            <SelectItem value="agent-sdk">{t('pages.tasks.create.engineAgentSdk')}</SelectItem>
             <SelectItem value="codex-app-server">{t('pages.tasks.create.engineCodexAppServer')}</SelectItem>
           </TaskCreateSelect>
         </FormField> : null}

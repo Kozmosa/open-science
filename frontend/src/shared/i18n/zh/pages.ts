@@ -104,7 +104,6 @@ const pages = {
           researcherAris: 'ARIS Researcher（ARIS 研究员）',
           executionEngine: '执行引擎',
           engineClaudeCode: 'Claude Code',
-          engineAgentSdk: 'Agent SDK',
           engineCodexAppServer: 'Codex App Server',
           titlePlaceholder: '可选任务标题',
           promptLabel: '提示词',
