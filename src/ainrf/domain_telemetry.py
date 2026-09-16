@@ -81,6 +81,9 @@ _SQLITE_ERROR_TYPES = (
     "other",
 )
 _SQLITE_ERROR_KINDS = ("busy_or_locked", "readonly", "corrupt", "other")
+# Raw SQLite messages are truncated before entering any log line so an
+# unclassified failure stays diagnosable without unbounded log growth.
+_SQLITE_ERROR_MESSAGE_LIMIT = 200
 _SAGA_STATUSES = (
     "pending",
     "creating_task",
@@ -936,6 +939,11 @@ def record_sqlite_error(
         operation=normalized_operation,
         error_type=error_type,
         error_kind=error_kind,
+        # The classified labels stay bounded for metrics; the truncated raw
+        # message exists only in the log line so the next unclassified
+        # failure (e.g. issue #93's non-lock OperationalError) is
+        # diagnosable from logs alone.
+        error_detail=str(error)[:_SQLITE_ERROR_MESSAGE_LIMIT],
         user_id=user_id,
         project_id=project_id,
         workspace_id=workspace_id,

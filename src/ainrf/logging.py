@@ -104,6 +104,9 @@ def configure_cli_logging() -> None:
             _drop_below_effective_level,
             structlog.stdlib.add_log_level,
             timestamper,
+            # Render exc_info into an "exception" field; without this the
+            # boolean flag is JSON-serialized and the traceback is lost.
+            structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
         logger_factory=structlog.PrintLoggerFactory(file=_CURRENT_STDERR),
@@ -159,6 +162,9 @@ def configure_logging(state_root: Path) -> None:
             _drop_below_effective_level,
             structlog.stdlib.add_log_level,
             timestamper,
+            # Render exc_info into an "exception" field; without this the
+            # boolean flag is JSON-serialized and the traceback is lost.
+            structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),

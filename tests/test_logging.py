@@ -149,3 +149,23 @@ def test_cli_logging_does_not_retain_a_closed_capture_stream(
         assert "still-writable" in second_stderr.getvalue()
     finally:
         structlog.configure(**original_config)
+
+
+def test_configure_logging_renders_exception_tracebacks(tmp_path: Path) -> None:
+    """exc_info=True must reach the sinks as traceback text (issue #94)."""
+
+    configure_logging(tmp_path)
+
+    try:
+        raise ValueError("traceback-canary")
+    except ValueError:
+        structlog.get_logger("test.tracebacks").error("unhandled_exception", exc_info=True)
+
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    log_files = list((tmp_path / "logs").glob("backend-*.log"))
+    assert len(log_files) == 1
+    content = log_files[0].read_text(encoding="utf-8")
+    assert "traceback-canary" in content
+    assert "Traceback (most recent call last)" in content
+    assert '"exc_info": true' not in content
