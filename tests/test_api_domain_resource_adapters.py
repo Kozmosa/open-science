@@ -669,7 +669,10 @@ async def test_canonical_removals_preserve_idempotency_and_not_found_errors(
                 headers=_write_headers(headers, f"missing:{path}"),
             )
             assert missing_key.status_code == 409, (path, missing_key.text)
-            assert missing_key.json()["detail"] == "Idempotency-Key is required"
+            assert missing_key.json()["detail"] == {
+                "code": "idempotency_key_required",
+                "message": "Idempotency-Key is required",
+            }
             assert missing_resource.status_code == 404, (path, missing_resource.text)
 
 

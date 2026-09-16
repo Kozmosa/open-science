@@ -90,11 +90,26 @@ async def test_v2_runtime_facades_hide_ungranted_environments(
 
     assert owner_files.status_code == 200
     assert outsider_terminal.status_code == 404
-    assert outsider_terminal.json() == {"detail": "Environment not found"}
+    assert outsider_terminal.json() == {
+        "detail": {
+            "code": "domain_resource_not_found",
+            "message": "Environment not found",
+        }
+    }
     assert outsider_session_pairs.status_code == 404
-    assert outsider_session_pairs.json() == {"detail": "Environment not found"}
+    assert outsider_session_pairs.json() == {
+        "detail": {
+            "code": "domain_resource_not_found",
+            "message": "Environment not found",
+        }
+    }
     assert outsider_files.status_code == 404
-    assert outsider_files.json() == {"detail": "Environment not found"}
+    assert outsider_files.json() == {
+        "detail": {
+            "code": "domain_resource_not_found",
+            "message": "Environment not found",
+        }
+    }
 
 
 @pytest.mark.anyio
@@ -203,9 +218,19 @@ async def test_v2_runtime_workspace_access_requires_the_linux_tenant_owner(
             )
 
         assert file_read.status_code == 403
-        assert file_read.json() == {"detail": "Workspace owner permission is required"}
+        assert file_read.json() == {
+            "detail": {
+                "code": "workspace_owner_required",
+                "message": "Workspace owner permission is required",
+            }
+        }
         assert terminal_exec.status_code == 403
-        assert terminal_exec.json() == {"detail": "Workspace owner permission is required"}
+        assert terminal_exec.json() == {
+            "detail": {
+                "code": "workspace_owner_required",
+                "message": "Workspace owner permission is required",
+            }
+        }
         assert (
             'ainrf_domain_permission_denied_total{reason="tenant_owner_required",resource="workspace"} 2.0'
             in get_metrics_text()
@@ -329,7 +354,12 @@ async def test_environment_execution_grant_passes_then_revoke_denies_and_records
 
     assert allowed.status_code == 200
     assert denied.status_code == 403
-    assert denied.json() == {"detail": "Environment execution grant is required"}
+    assert denied.json() == {
+        "detail": {
+            "code": "environment_grant_required",
+            "message": "Environment execution grant is required",
+        }
+    }
     metrics = get_metrics_text()
     assert (
         'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 1.0'
@@ -376,7 +406,12 @@ async def test_environment_execution_grant_fails_closed_for_unavailable_auth_aut
         )
 
     assert response.status_code == 403
-    assert response.json() == {"detail": "Environment execution grant is required"}
+    assert response.json() == {
+        "detail": {
+            "code": "environment_grant_required",
+            "message": "Environment execution grant is required",
+        }
+    }
     metrics = get_metrics_text()
     assert (
         'ainrf_domain_permission_denied_total{reason="environment_grant_required",resource="environment"} 1.0'

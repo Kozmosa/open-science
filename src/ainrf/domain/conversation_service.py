@@ -31,6 +31,7 @@ from ainrf.domain.context import ProjectContextService
 from ainrf.domain.environment_access import has_active_environment_execution_grant
 from ainrf.domain.repositories import _SqliteDomainRepository
 from ainrf.domain.service import (
+    DomainErrorCode,
     DomainAuthorizationService,
     DomainConflictError,
     DomainNotFoundError,
@@ -281,16 +282,24 @@ class ConversationApplicationService:
         request: object,
     ) -> tuple[str, dict[str, object] | None]:
         if not key:
-            raise DomainConflictError("Idempotency-Key is required")
+            raise DomainConflictError(
+                "Idempotency-Key is required", code=DomainErrorCode.IDEMPOTENCY_KEY_REQUIRED
+            )
         digest = _request_hash(request)
         row = repository.idempotency_record(actor_user_id=actor, scope=scope, key=key)
         if row is None:
             return digest, None
         if str(row["request_hash"]) != digest:
-            raise DomainConflictError("Idempotency-Key was already used for a different request")
+            raise DomainConflictError(
+                "Idempotency-Key was already used for a different request",
+                code=DomainErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+            )
         value = json.loads(str(row["response_json"]))
         if not isinstance(value, dict):
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         return digest, value
 
     def _replay_create_task(
@@ -306,7 +315,9 @@ class ConversationApplicationService:
         """Authorize a CREATE_TASK replay before disclosing key outcomes."""
 
         if not key:
-            raise DomainConflictError("Idempotency-Key is required")
+            raise DomainConflictError(
+                "Idempotency-Key is required", code=DomainErrorCode.IDEMPOTENCY_KEY_REQUIRED
+            )
         digest = _request_hash(request)
         row = repository.idempotency_record(
             actor_user_id=actor,
@@ -318,15 +329,27 @@ class ConversationApplicationService:
         try:
             value = json.loads(str(row["response_json"]))
         except (TypeError, ValueError):
-            raise DomainConflictError("Stored idempotency response is invalid") from None
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            ) from None
         if not isinstance(value, dict):
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         task_id = value.get("task_id")
         if not isinstance(task_id, str) or not task_id:
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         DomainAuthorizationService(conn).require_task_owner(task_id, user)
         if str(row["request_hash"]) != digest:
-            raise DomainConflictError("Idempotency-Key was already used for a different request")
+            raise DomainConflictError(
+                "Idempotency-Key was already used for a different request",
+                code=DomainErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+            )
         return digest, value
 
     @staticmethod
@@ -383,7 +406,9 @@ class ConversationApplicationService:
         if project is None:
             raise DomainNotFoundError(project_id)
         if project["status"] != "active":
-            raise DomainConflictError("Project is archived")
+            raise DomainConflictError(
+                "Project is archived", code=DomainErrorCode.PROJECT_ALREADY_ARCHIVED
+            )
         row = conn.execute(
             """
             SELECT workspace.environment_id, workspace.status AS workspace_status,
@@ -399,11 +424,20 @@ class ConversationApplicationService:
             (project_id, workspace_id),
         ).fetchone()
         if row is None:
-            raise DomainConflictError("Task Workspace must be an active Project link")
+            raise DomainConflictError(
+                "Task Workspace must be an active Project link",
+                code=DomainErrorCode.TASK_WORKSPACE_NOT_LINKED,
+            )
         if row["workspace_status"] != "active" or row["environment_status"] != "active":
-            raise DomainConflictError("Task Workspace and Environment must be active")
+            raise DomainConflictError(
+                "Task Workspace and Environment must be active",
+                code=DomainErrorCode.TASK_WORKSPACE_ENVIRONMENT_INACTIVE,
+            )
         if expected_environment_id is not None and row["environment_id"] != expected_environment_id:
-            raise DomainConflictError("Task environment must be derived from the Workspace")
+            raise DomainConflictError(
+                "Task environment must be derived from the Workspace",
+                code=DomainErrorCode.TASK_ENVIRONMENT_MISMATCH,
+            )
         return row
 
     def _require_environment_execution_grant(
@@ -451,7 +485,10 @@ class ConversationApplicationService:
         if row is None:
             raise DomainNotFoundError(task_id)
         if row["environment_id"] != row["workspace_environment_id"]:
-            raise DomainConflictError("Task Environment no longer matches the Workspace")
+            raise DomainConflictError(
+                "Task Environment no longer matches the Workspace",
+                code=DomainErrorCode.TASK_ENVIRONMENT_MISMATCH,
+            )
         self._require_environment_execution_grant(
             environment_id=str(row["workspace_environment_id"]),
             user=user,
@@ -490,7 +527,10 @@ class ConversationApplicationService:
         if snapshot_ref is None:
             return None
         if not snapshot_ref.strip():
-            raise DomainConflictError("Context snapshot reference must be non-empty")
+            raise DomainConflictError(
+                "Context snapshot reference must be non-empty",
+                code=DomainErrorCode.CONTEXT_SNAPSHOT_REF_INVALID,
+            )
         snapshot = conn.execute(
             """
             SELECT snapshot.context_snapshot_id
@@ -502,7 +542,10 @@ class ConversationApplicationService:
             (snapshot_ref, str(task["project_id"])),
         ).fetchone()
         if snapshot is None:
-            raise DomainConflictError("Context snapshot reference must belong to the Task Project")
+            raise DomainConflictError(
+                "Context snapshot reference must belong to the Task Project",
+                code=DomainErrorCode.CONTEXT_SNAPSHOT_REF_INVALID,
+            )
         return str(snapshot["context_snapshot_id"])
 
     def initialize_task(self, task_id: str, user: dict[str, object]) -> dict[str, object]:
@@ -749,9 +792,15 @@ class ConversationApplicationService:
                 conversations = SqliteConversationRepository(conn)
                 self._require_current_conversation(conversations, task_id)
                 if conversations.active_turn(task_id) is not None:
-                    raise DomainConflictError("Active Turn must be interrupted before moving Task")
+                    raise DomainConflictError(
+                        "Active Turn must be interrupted before moving Task",
+                        code=DomainErrorCode.TASK_MOVE_TURN_ACTIVE,
+                    )
                 if str(task["project_id"]) == project_id:
-                    raise DomainConflictError("Task already belongs to the target Project")
+                    raise DomainConflictError(
+                        "Task already belongs to the target Project",
+                        code=DomainErrorCode.TASK_MOVE_SAME_PROJECT,
+                    )
                 authorization.require_workspace_owner(
                     str(task["workspace_id"]), dict(user), resource_visible=True
                 )
@@ -1884,7 +1933,10 @@ class ConversationApplicationService:
                 )
                 transfer_range = json.loads(str(preview["transfer_range_json"]))
                 if not isinstance(transfer_range, dict):
-                    raise DomainConflictError("Fork transfer range is invalid")
+                    raise DomainConflictError(
+                        "Fork transfer range is invalid",
+                        code=DomainErrorCode.FORK_TRANSFER_RANGE_INVALID,
+                    )
                 selected_turns = _fork_selection(
                     conversations.list_turns(task_id),
                     transfer_mode=transfer_mode,

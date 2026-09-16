@@ -63,6 +63,7 @@ from ainrf.api.schemas import (
     TaskRelationshipResponse,
     WorkspaceUpdateRequest,
 )
+from ainrf.api.error_detail import coded_detail
 from ainrf.auth.permissions import get_current_user
 from ainrf.domain import (
     DomainPermissionError,
@@ -258,11 +259,11 @@ def _context_service(request: Request) -> ProjectContextService:
 
 def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, DomainPermissionError):
-        return HTTPException(status_code=403, detail="Domain permission denied")
+        return HTTPException(status_code=403, detail=coded_detail(exc))
     if isinstance(exc, LookupError):
-        return HTTPException(status_code=404, detail="Domain resource not found")
+        return HTTPException(status_code=404, detail=coded_detail(exc, "Domain resource not found"))
     if isinstance(exc, ValueError):
-        return HTTPException(status_code=409, detail=str(exc))
+        return HTTPException(status_code=409, detail=coded_detail(exc))
     raise exc
 
 

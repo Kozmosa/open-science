@@ -1179,7 +1179,12 @@ async def test_terminal_session_post_returns_404_for_missing_environment(tmp_pat
         )
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Environment not found"}
+    assert response.json() == {
+        "detail": {
+            "code": "domain_resource_not_found",
+            "message": "Environment not found",
+        }
+    }
 
 
 @pytest.mark.anyio

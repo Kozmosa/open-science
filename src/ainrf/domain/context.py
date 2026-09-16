@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from ainrf.db import connect, run_pending
 from ainrf.domain.service import (
+    DomainErrorCode,
     DomainAuthorizationService,
     DomainConflictError,
     DomainNotFoundError,
@@ -637,7 +638,9 @@ class ProjectContextService:
             "SELECT content FROM project_context_drafts WHERE project_id = ?", (project_id,)
         ).fetchone()
         if draft is None:
-            raise DomainNotFoundError("project context draft")
+            raise DomainNotFoundError(
+                "project context draft", code=DomainErrorCode.CONTEXT_DRAFT_REQUIRED
+            )
         content = str(draft["content"])
         fragment_manifest = self._freeze_project_fragments(conn, project_id)
         version_fingerprint = context_version_fingerprint(content, fragment_manifest)
@@ -734,10 +737,14 @@ class ProjectContextService:
             source_output_end_seq,
         )
         if source_task_id is None:
-            raise DomainConflictError("Context Candidate provenance requires a source Task")
+            raise DomainConflictError(
+                "Context Candidate provenance requires a source Task",
+                code=DomainErrorCode.CONTEXT_CANDIDATE_SOURCE_REQUIRED,
+            )
         if source_message_start_seq is None and source_output_start_seq is None:
             raise DomainConflictError(
-                "Context Candidate provenance requires a message or output source range"
+                "Context Candidate provenance requires a message or output source range",
+                code=DomainErrorCode.CONTEXT_CANDIDATE_SOURCE_REQUIRED,
             )
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
@@ -869,7 +876,10 @@ class ProjectContextService:
                     return cached
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "rejected":
-                raise DomainConflictError("A rejected Context Candidate cannot be accepted")
+                raise DomainConflictError(
+                    "A rejected Context Candidate cannot be accepted",
+                    code=DomainErrorCode.CONTEXT_CANDIDATE_REJECTED,
+                )
             draft = conn.execute(
                 "SELECT content FROM project_context_drafts WHERE project_id = ?", (project_id,)
             ).fetchone()
@@ -964,7 +974,10 @@ class ProjectContextService:
                     return cached
             candidate = self._candidate(conn, project_id, candidate_id)
             if candidate["status"] == "accepted":
-                raise DomainConflictError("An accepted Context Candidate cannot be rejected")
+                raise DomainConflictError(
+                    "An accepted Context Candidate cannot be rejected",
+                    code=DomainErrorCode.CONTEXT_CANDIDATE_ACCEPTED,
+                )
             if candidate["status"] == "rejected":
                 result = self._candidate_payload(candidate)
                 if idempotency_key is not None:
@@ -1020,9 +1033,15 @@ class ProjectContextService:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if not source_type:
-            raise DomainConflictError("Context Fragment source_type is required")
+            raise DomainConflictError(
+                "Context Fragment source_type is required",
+                code=DomainErrorCode.CONTEXT_FRAGMENT_SOURCE_REQUIRED,
+            )
         if byte_budget is not None and byte_budget < 0:
-            raise DomainConflictError("Context Fragment byte_budget cannot be negative")
+            raise DomainConflictError(
+                "Context Fragment byte_budget cannot be negative",
+                code=DomainErrorCode.CONTEXT_FRAGMENT_BUDGET_INVALID,
+            )
         with closing(self._connect()) as conn:
             self._begin_domain_write(conn)
             # Persisted Fragments participate in future Task Snapshots.  They
@@ -1332,9 +1351,15 @@ class ProjectContextService:
             if preview is None:
                 raise DomainNotFoundError("task context update preview")
             if str(preview["expires_at"]) < _now():
-                raise DomainConflictError("Task Context update preview has expired")
+                raise DomainConflictError(
+                    "Task Context update preview has expired",
+                    code=DomainErrorCode.CONTEXT_PREVIEW_EXPIRED,
+                )
             if preview["confirmed_snapshot_id"] is not None:
-                raise DomainConflictError("Task Context update preview was already confirmed")
+                raise DomainConflictError(
+                    "Task Context update preview was already confirmed",
+                    code=DomainErrorCode.CONTEXT_PREVIEW_ALREADY_CONFIRMED,
+                )
             assembly = ContextAssembly(
                 content=str(preview["proposed_content"]),
                 fingerprint=str(preview["proposed_fingerprint"]),
@@ -1606,32 +1631,37 @@ class ProjectContextService:
         if provenance_status != "verified":
             raise DomainConflictError(
                 "This project's context was created before context tracking was added. "
-                "Publish the project context again, then retry."
+                "Publish the project context again, then retry.",
+                code=DomainErrorCode.CONTEXT_VERSION_UNREVIEWED,
             )
         raw_manifest = version["fragment_manifest_json"]
         if not isinstance(raw_manifest, str):
             raise DomainConflictError(
                 "This project's saved context is damaged: its content list is missing. "
-                "Publish the project context again, then retry."
+                "Publish the project context again, then retry.",
+                code=DomainErrorCode.CONTEXT_MANIFEST_MISSING,
             )
         try:
             decoded = json.loads(raw_manifest)
         except json.JSONDecodeError as exc:
             raise DomainConflictError(
                 "This project's saved context is damaged: its content list is unreadable. "
-                "Publish the project context again, then retry."
+                "Publish the project context again, then retry.",
+                code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
             ) from exc
         if not isinstance(decoded, list):
             raise DomainConflictError(
                 "This project's saved context is damaged: its content list is unreadable. "
-                "Publish the project context again, then retry."
+                "Publish the project context again, then retry.",
+                code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
             )
         fragments: list[ContextFragment] = []
         for entry in decoded:
             if not isinstance(entry, dict):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             content = entry.get("content")
             fragment_id = entry.get("fragment_id")
@@ -1652,13 +1682,15 @@ class ProjectContextService:
             ):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             metadata = entry.get("source_metadata", {})
             if not isinstance(metadata, dict):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             sort_order = entry.get("sort_order", 0)
             byte_budget = entry.get("byte_budget")
@@ -1666,19 +1698,22 @@ class ProjectContextService:
             if isinstance(sort_order, bool) or not isinstance(sort_order, int):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             if byte_budget is not None and (
                 isinstance(byte_budget, bool) or not isinstance(byte_budget, int)
             ):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             if created_by_user_id is not None and not isinstance(created_by_user_id, str):
                 raise DomainConflictError(
                     "This project's saved context is damaged: its content list is unreadable. "
-                    "Publish the project context again, then retry."
+                    "Publish the project context again, then retry.",
+                    code=DomainErrorCode.CONTEXT_MANIFEST_INVALID,
                 )
             if source_fingerprint != _fingerprint(content):
                 raise DomainConflictError(
@@ -2075,7 +2110,10 @@ class ProjectContextService:
         response = _load_json_object(row["response_json"])
         project_id = response.get("project_id")
         if not isinstance(project_id, str) or not project_id:
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         return project_id
 
     def _idempotent_result(
@@ -2087,7 +2125,9 @@ class ProjectContextService:
         request: Mapping[str, object],
     ) -> dict[str, object] | None:
         if not idempotency_key:
-            raise DomainConflictError("Idempotency-Key is required")
+            raise DomainConflictError(
+                "Idempotency-Key is required", code=DomainErrorCode.IDEMPOTENCY_KEY_REQUIRED
+            )
         row = conn.execute(
             """SELECT request_hash, response_json FROM domain_idempotency_requests
                WHERE actor_user_id = ? AND scope = ? AND idempotency_key = ?""",
@@ -2103,10 +2143,16 @@ class ProjectContextService:
                 idempotency_key=idempotency_key,
                 request=request,
             )
-            raise DomainConflictError("Idempotency-Key was already used for a different request")
+            raise DomainConflictError(
+                "Idempotency-Key was already used for a different request",
+                code=DomainErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+            )
         response = _load_json_object(row["response_json"])
         if not response:
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         record_durable_idempotency_event(
             "reused",
             actor_user_id=actor_user_id,
@@ -2127,7 +2173,9 @@ class ProjectContextService:
         result: Mapping[str, object],
     ) -> None:
         if not idempotency_key:
-            raise DomainConflictError("Idempotency-Key is required")
+            raise DomainConflictError(
+                "Idempotency-Key is required", code=DomainErrorCode.IDEMPOTENCY_KEY_REQUIRED
+            )
         conn.execute(
             """INSERT INTO domain_idempotency_requests
                (actor_user_id, scope, idempotency_key, request_hash, response_json, created_at)

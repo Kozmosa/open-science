@@ -18,7 +18,10 @@ def require_idempotency_key(request: Request) -> str:
     key = header_key
     if not key:
         record_idempotency_event("missing", scope=request.url.path, state_root=state_root)
-        raise HTTPException(status_code=409, detail="Idempotency-Key is required")
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "idempotency_key_required", "message": "Idempotency-Key is required"},
+        )
     if len(key) > _MAX_IDEMPOTENCY_KEY_LENGTH:
         record_idempotency_event(
             "invalid",
@@ -26,7 +29,10 @@ def require_idempotency_key(request: Request) -> str:
             idempotency_key=key,
             state_root=state_root,
         )
-        raise HTTPException(status_code=422, detail="Idempotency-Key is too long")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "idempotency_key_too_long", "message": "Idempotency-Key is too long"},
+        )
     record_idempotency_event(
         "accepted",
         scope=request.url.path,

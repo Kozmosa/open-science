@@ -8,6 +8,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
@@ -27,16 +28,119 @@ from ainrf.domain_control import MaintenanceModeError
 from ainrf.domain.write_fence import DomainWriteFence
 
 
-class DomainNotFoundError(LookupError):
-    pass
+class DomainErrorCode(StrEnum):
+    """Stable machine codes for user-reachable domain errors.
+
+    The HTTP adapter pairs a code with the canonical English message; the
+    WebUI maps codes to localized copy.  Uncoded internal errors keep the
+    plain string detail and fall back gracefully in the client.
+    """
+
+    # Permissions
+    PROJECT_EDITOR_REQUIRED = "project_editor_required"
+    PROJECT_OWNER_REQUIRED = "project_owner_required"
+    PROJECT_PUBLISH_REQUIRED = "project_publish_required"
+    WORKSPACE_OWNER_REQUIRED = "workspace_owner_required"
+    TASK_OWNER_REQUIRED = "task_owner_required"
+    ENVIRONMENT_ADMIN_REQUIRED = "environment_admin_required"
+    ENVIRONMENT_GRANT_REQUIRED = "environment_grant_required"
+    AUTH_USER_REQUIRED = "auth_user_required"
+
+    # Not found
+    DOMAIN_RESOURCE_NOT_FOUND = "domain_resource_not_found"
+
+    # Idempotency
+    IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
+    IDEMPOTENCY_KEY_CONFLICT = "idempotency_key_conflict"
+    IDEMPOTENCY_RESPONSE_INVALID = "idempotency_response_invalid"
+
+    # Projects and members
+    PROJECT_CREATE_FAILED = "project_create_failed"
+    PROJECT_DEFAULT_CONFLICT = "project_default_conflict"
+    PROJECT_DEFAULT_CREATE_FAILED = "project_default_create_failed"
+    PROJECT_DEFAULT_PROVISIONING_INCOMPLETE = "project_default_provisioning_incomplete"
+    PROJECT_DEFAULT_ARCHIVED = "project_default_archived"
+    PROJECT_DEFAULT_ARCHIVE_FORBIDDEN = "project_default_archive_forbidden"
+    PROJECT_DEFAULT_TRANSFER_FORBIDDEN = "project_default_transfer_forbidden"
+    PROJECT_ALREADY_ARCHIVED = "project_already_archived"
+    PROJECT_NOT_ARCHIVED = "project_not_archived"
+    MEMBER_ROLE_INVALID = "member_role_invalid"
+    MEMBER_PUBLISH_ROLE_INVALID = "member_publish_role_invalid"
+    MEMBER_OWNER_MISSING = "member_owner_missing"
+    MEMBER_OWNER_IMMUTABLE = "member_owner_immutable"
+    TASK_RELATIONSHIP_CREATE_FAILED = "task_relationship_create_failed"
+    PROJECT_TRANSFER_OWNER_REQUIRED = "project_transfer_owner_required"
+
+    # Environments
+    ENVIRONMENT_CREATE_FAILED = "environment_create_failed"
+    ENVIRONMENT_ALIAS_EXISTS = "environment_alias_exists"
+    ENVIRONMENT_REFERENCED_REPOINT = "environment_referenced_repoint"
+
+    # Workspaces
+    WORKSPACE_CREATE_FAILED = "workspace_create_failed"
+    WORKSPACE_ENVIRONMENT_REQUIRED = "workspace_environment_required"
+    WORKSPACE_PATH_ALREADY_REGISTERED = "workspace_path_already_registered"
+    WORKSPACE_LINK_PROJECT_INACTIVE = "workspace_link_project_inactive"
+    WORKSPACE_LINK_WORKSPACE_INACTIVE = "workspace_link_workspace_inactive"
+    WORKSPACE_LINK_ENVIRONMENT_INACTIVE = "workspace_link_environment_inactive"
+    WORKSPACE_PRIMARY_COMPARE_FAILED = "workspace_primary_compare_failed"
+    WORKSPACE_PRIMARY_DETACH_REQUIRES_REPLACEMENT = "workspace_primary_detach_requires_replacement"
+    WORKSPACE_PRIMARY_REPLACEMENT_REQUIRED = "workspace_primary_replacement_required"
+    WORKSPACE_PRIMARY_REPLACE_REQUIRED = "workspace_primary_replace_required"
+    WORKSPACE_PRIMARY_NOT_LINKED = "workspace_primary_not_linked"
+    WORKSPACE_UNREGISTER_TASKS_PENDING = "workspace_unregister_tasks_pending"
+
+    # Project Context
+    CONTEXT_CANDIDATE_SOURCE_REQUIRED = "context_candidate_source_required"
+    CONTEXT_CANDIDATE_REJECTED = "context_candidate_rejected"
+    CONTEXT_CANDIDATE_ACCEPTED = "context_candidate_accepted"
+    CONTEXT_FRAGMENT_SOURCE_REQUIRED = "context_fragment_source_required"
+    CONTEXT_FRAGMENT_BUDGET_INVALID = "context_fragment_budget_invalid"
+    CONTEXT_PREVIEW_EXPIRED = "context_preview_expired"
+    CONTEXT_PREVIEW_ALREADY_CONFIRMED = "context_preview_already_confirmed"
+    CONTEXT_DRAFT_REQUIRED = "context_draft_required"
+    CONTEXT_SNAPSHOT_REF_INVALID = "context_snapshot_ref_invalid"
+    CONTEXT_VERSION_UNREVIEWED = "context_version_unreviewed"
+    CONTEXT_MANIFEST_MISSING = "context_manifest_missing"
+    CONTEXT_MANIFEST_INVALID = "context_manifest_invalid"
+
+    # Tasks
+    TASK_PROJECT_REQUIRED = "task_project_required"
+    TASK_WORKSPACE_NOT_LINKED = "task_workspace_not_linked"
+    TASK_WORKSPACE_ENVIRONMENT_INACTIVE = "task_workspace_environment_inactive"
+    TASK_ENVIRONMENT_MISMATCH = "task_environment_mismatch"
+    TASK_MOVE_TURN_ACTIVE = "task_move_turn_active"
+    TASK_MOVE_SAME_PROJECT = "task_move_same_project"
+    FORK_TRANSFER_RANGE_INVALID = "fork_transfer_range_invalid"
+    ENVIRONMENT_CAPACITY_EXHAUSTED = "environment_capacity_exhausted"
+    TASK_EXECUTION_SLOT_HELD = "task_execution_slot_held"
 
 
-class DomainPermissionError(PermissionError):
-    pass
+class _DomainError:
+    """Shared optional stable-code support for user-reachable domain errors."""
+
+    code: str
+
+    def _init_code(self, code: DomainErrorCode | str | None) -> None:
+        self.code = "" if code is None else str(code)
 
 
-class DomainConflictError(ValueError):
-    pass
+class DomainNotFoundError(LookupError, _DomainError):
+    def __init__(self, message: str = "", *, code: DomainErrorCode | str | None = None) -> None:
+        super().__init__(message)
+        self._init_code(code)
+
+
+class DomainPermissionError(PermissionError, _DomainError):
+    def __init__(self, message: str = "", *, code: DomainErrorCode | str | None = None) -> None:
+        super().__init__(message)
+        self._init_code(code)
+
+
+class DomainConflictError(ValueError, _DomainError):
+    def __init__(self, message: str = "", *, code: DomainErrorCode | str | None = None) -> None:
+        super().__init__(message)
+        self._init_code(code)
 
 
 class _Unset:
@@ -100,7 +204,10 @@ class DomainAuthorizationService:
             self._record_denial(
                 resource="project", reason="editor_required", user=user, project_id=project_id
             )
-            raise DomainPermissionError("Project editor permission is required")
+            raise DomainPermissionError(
+                "Project editor permission is required",
+                code=DomainErrorCode.PROJECT_EDITOR_REQUIRED,
+            )
 
     def require_project_owner(self, project_id: str, user: dict[str, object]) -> None:
         role = self.project_role(project_id, user)
@@ -113,7 +220,9 @@ class DomainAuthorizationService:
             self._record_denial(
                 resource="project", reason="owner_required", user=user, project_id=project_id
             )
-            raise DomainPermissionError("Project owner permission is required")
+            raise DomainPermissionError(
+                "Project owner permission is required", code=DomainErrorCode.PROJECT_OWNER_REQUIRED
+            )
 
     def require_project_viewer(self, project_id: str, user: dict[str, object]) -> str:
         role = self.project_role(project_id, user)
@@ -146,7 +255,10 @@ class DomainAuthorizationService:
             self._record_denial(
                 resource="project", reason="publish_required", user=user, project_id=project_id
             )
-            raise DomainPermissionError("Project publish permission is required")
+            raise DomainPermissionError(
+                "Project publish permission is required",
+                code=DomainErrorCode.PROJECT_PUBLISH_REQUIRED,
+            )
 
     def require_workspace_viewer(self, workspace_id: str, user: dict[str, object]) -> None:
         owner_user_id = self._repository.workspace_owner(workspace_id)
@@ -187,12 +299,18 @@ class DomainAuthorizationService:
                 user=user,
                 workspace_id=workspace_id,
             )
-            raise DomainPermissionError("Workspace owner permission is required")
+            raise DomainPermissionError(
+                "Workspace owner permission is required",
+                code=DomainErrorCode.WORKSPACE_OWNER_REQUIRED,
+            )
         if resource_visible:
             self._record_denial(
                 resource="workspace", reason="owner_required", user=user, workspace_id=workspace_id
             )
-            raise DomainPermissionError("Workspace owner permission is required")
+            raise DomainPermissionError(
+                "Workspace owner permission is required",
+                code=DomainErrorCode.WORKSPACE_OWNER_REQUIRED,
+            )
         self._record_denial(
             resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
         )
@@ -228,7 +346,10 @@ class DomainAuthorizationService:
                 user=user,
                 workspace_id=workspace_id,
             )
-            raise DomainPermissionError("Workspace owner permission is required")
+            raise DomainPermissionError(
+                "Workspace owner permission is required",
+                code=DomainErrorCode.WORKSPACE_OWNER_REQUIRED,
+            )
         self._record_denial(
             resource="workspace", reason="not_visible", user=user, workspace_id=workspace_id
         )
@@ -269,7 +390,9 @@ class DomainAuthorizationService:
             self._record_denial(resource="task", reason="not_visible", user=user, task_id=task_id)
             raise DomainNotFoundError(task_id)
         self._record_denial(resource="task", reason="owner_required", user=user, task_id=task_id)
-        raise DomainPermissionError("Task owner permission is required")
+        raise DomainPermissionError(
+            "Task owner permission is required", code=DomainErrorCode.TASK_OWNER_REQUIRED
+        )
 
 
 class _DomainWriteKernel:
@@ -416,12 +539,17 @@ class _DomainWriteKernel:
             # Project owner explicitly grants this exact membership.
             return
         if not self._auth_db_path.is_file():
-            raise DomainConflictError("A durable auth user is required for this operation")
+            raise DomainConflictError(
+                "A durable auth user is required for this operation",
+                code=DomainErrorCode.AUTH_USER_REQUIRED,
+            )
         auth_uri = f"{self._auth_db_path.resolve().as_uri()}?mode=ro"
         with closing(sqlite3.connect(auth_uri, uri=True)) as conn:
             row = conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
-            raise DomainConflictError("Target user is not a durable auth user")
+            raise DomainConflictError(
+                "Target user is not a durable auth user", code=DomainErrorCode.AUTH_USER_REQUIRED
+            )
 
     @staticmethod
     def _environment_is_referenced(conn: sqlite3.Connection, environment_id: str) -> bool:
@@ -497,7 +625,9 @@ class _DomainWriteKernel:
             )
             created = repository.project(project_id)
             if created is None:  # pragma: no cover - INSERT invariant
-                raise DomainConflictError("Project creation did not persist")
+                raise DomainConflictError(
+                    "Project creation did not persist", code=DomainErrorCode.PROJECT_CREATE_FAILED
+                )
             result = dict(created)
             if idempotency_key is not None:
                 self._store_idempotency(
@@ -569,7 +699,10 @@ class _DomainWriteKernel:
                     None,
                 )
                 if active is None:
-                    raise DomainConflictError("Default Project provisioning conflicted") from exc
+                    raise DomainConflictError(
+                        "Default Project provisioning conflicted",
+                        code=DomainErrorCode.PROJECT_DEFAULT_CONFLICT,
+                    ) from exc
                 conn.commit()
                 return dict(active)
             initialize_project_context(
@@ -582,7 +715,10 @@ class _DomainWriteKernel:
             created = repository.project(project_id)
             conn.commit()
         if created is None:  # pragma: no cover - INSERT/SELECT invariant
-            raise DomainConflictError("Default Project provisioning did not persist")
+            raise DomainConflictError(
+                "Default Project provisioning did not persist",
+                code=DomainErrorCode.PROJECT_DEFAULT_CREATE_FAILED,
+            )
         return dict(created)
 
     def update_project(
@@ -666,9 +802,14 @@ class _DomainWriteKernel:
             if project is None:
                 raise DomainNotFoundError(project_id)
             if bool(project["is_default"]):
-                raise DomainConflictError("Default projects cannot be archived")
+                raise DomainConflictError(
+                    "Default projects cannot be archived",
+                    code=DomainErrorCode.PROJECT_DEFAULT_ARCHIVE_FORBIDDEN,
+                )
             if str(project["status"]) == "archived":
-                raise DomainConflictError("Project is already archived")
+                raise DomainConflictError(
+                    "Project is already archived", code=DomainErrorCode.PROJECT_ALREADY_ARCHIVED
+                )
             now = _now()
             conn.execute(
                 """UPDATE projects
@@ -710,7 +851,9 @@ class _DomainWriteKernel:
                 (_now(), project_id),
             )
             if updated.rowcount != 1:
-                raise DomainConflictError("Project is not archived")
+                raise DomainConflictError(
+                    "Project is not archived", code=DomainErrorCode.PROJECT_NOT_ARCHIVED
+                )
             result: dict[str, object] = {"project_id": project_id, "unarchived": True}
             self._store_idempotency(
                 conn, actor, "project.unarchive", idempotency_key, request, result
@@ -734,7 +877,10 @@ class _DomainWriteKernel:
             self._record_direct_permission_denial(
                 resource="environment", reason="admin_required", user=user
             )
-            raise DomainPermissionError("Only admins can register environments")
+            raise DomainPermissionError(
+                "Only admins can register environments",
+                code=DomainErrorCode.ENVIRONMENT_ADMIN_REQUIRED,
+            )
         actor_user_id = self._user_id(user)
         canonical_connection = canonical_connection_object(connection)
         connection_json = canonical_connection_json(canonical_connection)
@@ -757,21 +903,30 @@ class _DomainWriteKernel:
             environment_id = f"env-{uuid4().hex}"
             now = _now()
             repository = self._repository(conn)
-            repository.insert_environment(
-                environment_id=environment_id,
-                alias=alias,
-                owner_user_id=actor_user_id,
-                display_name=display_name,
-                description=description,
-                connection_json=connection_json,
-                connection_fingerprint=connection_fingerprint,
-                credential_ref=credential_ref,
-                created_at=now,
-                updated_at=now,
-            )
+            try:
+                repository.insert_environment(
+                    environment_id=environment_id,
+                    alias=alias,
+                    owner_user_id=actor_user_id,
+                    display_name=display_name,
+                    description=description,
+                    connection_json=connection_json,
+                    connection_fingerprint=connection_fingerprint,
+                    credential_ref=credential_ref,
+                    created_at=now,
+                    updated_at=now,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise DomainConflictError(
+                    "Environment alias already exists",
+                    code=DomainErrorCode.ENVIRONMENT_ALIAS_EXISTS,
+                ) from exc
             created = repository.environment(environment_id)
             if created is None:  # pragma: no cover - INSERT invariant
-                raise DomainConflictError("Environment creation did not persist")
+                raise DomainConflictError(
+                    "Environment creation did not persist",
+                    code=DomainErrorCode.ENVIRONMENT_CREATE_FAILED,
+                )
             result = dict(created)
             result.pop("credential_ref", None)
             if idempotency_key is not None:
@@ -820,7 +975,10 @@ class _DomainWriteKernel:
                     user=user,
                     environment_id=environment_id,
                 )
-                raise DomainPermissionError("Only admins can disable environments")
+                raise DomainPermissionError(
+                    "Only admins can disable environments",
+                    code=DomainErrorCode.ENVIRONMENT_ADMIN_REQUIRED,
+                )
             request: dict[str, object] = {"environment_id": environment_id}
             if idempotency_key is not None:
                 cached = self._idempotent_result(
@@ -888,7 +1046,10 @@ class _DomainWriteKernel:
                     user=user,
                     environment_id=environment_id,
                 )
-                raise DomainPermissionError("Only admins can update environments")
+                raise DomainPermissionError(
+                    "Only admins can update environments",
+                    code=DomainErrorCode.ENVIRONMENT_ADMIN_REQUIRED,
+                )
             request: dict[str, object] = {"environment_id": environment_id}
             if alias is not None:
                 request["alias"] = alias
@@ -940,7 +1101,10 @@ class _DomainWriteKernel:
                 if repository.update_environment(environment_id, updates) != 1:
                     raise DomainNotFoundError(environment_id)
             except sqlite3.IntegrityError as exc:
-                raise DomainConflictError("Environment alias already exists") from exc
+                raise DomainConflictError(
+                    "Environment alias already exists",
+                    code=DomainErrorCode.ENVIRONMENT_ALIAS_EXISTS,
+                ) from exc
             updated = repository.environment(environment_id)
             if updated is None:  # pragma: no cover - UPDATE invariant
                 raise DomainNotFoundError(environment_id)
@@ -1069,7 +1233,10 @@ class _DomainWriteKernel:
             if environment is None:
                 raise DomainNotFoundError(environment_id)
             if environment["status"] != "active":
-                raise DomainConflictError("Workspace requires an active environment")
+                raise DomainConflictError(
+                    "Workspace requires an active environment",
+                    code=DomainErrorCode.WORKSPACE_ENVIRONMENT_REQUIRED,
+                )
             self._require_environment_execution_access(
                 environment_id=environment_id,
                 owner_user_id=environment["owner_user_id"],
@@ -1101,10 +1268,16 @@ class _DomainWriteKernel:
                     updated_at=now,
                 )
             except sqlite3.IntegrityError as exc:
-                raise DomainConflictError("Workspace canonical path is already registered") from exc
+                raise DomainConflictError(
+                    "Workspace canonical path is already registered",
+                    code=DomainErrorCode.WORKSPACE_PATH_ALREADY_REGISTERED,
+                ) from exc
             created = repository.workspace(workspace_id)
             if created is None:  # pragma: no cover - INSERT invariant
-                raise DomainConflictError("Workspace creation did not persist")
+                raise DomainConflictError(
+                    "Workspace creation did not persist",
+                    code=DomainErrorCode.WORKSPACE_CREATE_FAILED,
+                )
             result = dict(created)
             if idempotency_key is not None:
                 self._store_idempotency(
@@ -1159,12 +1332,18 @@ class _DomainWriteKernel:
             repository = self._repository(conn)
             project = repository.project(project_id)
             if project is None or str(project["status"]) != "active":
-                raise DomainConflictError("Workspace links require an active Project")
+                raise DomainConflictError(
+                    "Workspace links require an active Project",
+                    code=DomainErrorCode.WORKSPACE_LINK_PROJECT_INACTIVE,
+                )
             environment = repository.environment(environment_id)
             if environment is None:
                 raise DomainNotFoundError(environment_id)
             if str(environment["status"]) != "active":
-                raise DomainConflictError("Workspace requires an active environment")
+                raise DomainConflictError(
+                    "Workspace requires an active environment",
+                    code=DomainErrorCode.WORKSPACE_ENVIRONMENT_REQUIRED,
+                )
             self._require_environment_execution_access(
                 environment_id=environment_id,
                 owner_user_id=environment["owner_user_id"],
@@ -1192,7 +1371,10 @@ class _DomainWriteKernel:
                     updated_at=now,
                 )
             except sqlite3.IntegrityError as exc:
-                raise DomainConflictError("Workspace canonical path is already registered") from exc
+                raise DomainConflictError(
+                    "Workspace canonical path is already registered",
+                    code=DomainErrorCode.WORKSPACE_PATH_ALREADY_REGISTERED,
+                ) from exc
             repository.upsert_project_workspace_link(
                 project_id=project_id,
                 workspace_id=workspace_id,
@@ -1202,7 +1384,10 @@ class _DomainWriteKernel:
             )
             created = repository.workspace(workspace_id)
             if created is None:  # pragma: no cover - INSERT invariant
-                raise DomainConflictError("Workspace creation did not persist")
+                raise DomainConflictError(
+                    "Workspace creation did not persist",
+                    code=DomainErrorCode.WORKSPACE_CREATE_FAILED,
+                )
             result = dict(created)
             self._store_idempotency(
                 conn,
@@ -1292,7 +1477,10 @@ class _DomainWriteKernel:
                 if repository.update_workspace(workspace_id, updates) != 1:
                     raise DomainNotFoundError(workspace_id)
             except sqlite3.IntegrityError as exc:
-                raise DomainConflictError("Workspace canonical path is already registered") from exc
+                raise DomainConflictError(
+                    "Workspace canonical path is already registered",
+                    code=DomainErrorCode.WORKSPACE_PATH_ALREADY_REGISTERED,
+                ) from exc
             updated = repository.workspace(workspace_id)
             if updated is None:  # pragma: no cover - UPDATE invariant
                 raise DomainNotFoundError(workspace_id)
@@ -1358,7 +1546,10 @@ class _DomainWriteKernel:
                 or str(previous["status"]) != "active"
                 or not bool(previous["is_primary"])
             ):
-                raise DomainConflictError("Specified previous Workspace is not the active Primary")
+                raise DomainConflictError(
+                    "Specified previous Workspace is not the active Primary",
+                    code=DomainErrorCode.WORKSPACE_PRIMARY_COMPARE_FAILED,
+                )
             replacement = self._link_operation_in_transaction(
                 conn,
                 project_id=project_id,
@@ -1422,7 +1613,10 @@ class _DomainWriteKernel:
             if link is None or str(link["status"]) != "active":
                 raise DomainNotFoundError("project workspace link")
             if bool(link["is_primary"]) and not allow_no_primary:
-                raise DomainConflictError("Detach primary requires replacement or allow_no_primary")
+                raise DomainConflictError(
+                    "Detach primary requires replacement or allow_no_primary",
+                    code=DomainErrorCode.WORKSPACE_PRIMARY_DETACH_REQUIRES_REPLACEMENT,
+                )
             old_link = self._link_audit_value(link)
             repository.retire_project_workspace_link(
                 project_id=project_id,
@@ -1465,9 +1659,14 @@ class _DomainWriteKernel:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if role not in {"viewer", "editor"}:
-            raise DomainConflictError("Unknown project role")
+            raise DomainConflictError(
+                "Unknown project role", code=DomainErrorCode.MEMBER_ROLE_INVALID
+            )
         if can_publish and role != "editor":
-            raise DomainConflictError("Only editors may receive project publish permission")
+            raise DomainConflictError(
+                "Only editors may receive project publish permission",
+                code=DomainErrorCode.MEMBER_PUBLISH_ROLE_INVALID,
+            )
         self._require_known_auth_user(member_user_id, allow_api_key_principal=True)
         with closing(self._connect()) as conn:
             self._begin_write(conn)
@@ -1490,7 +1689,10 @@ class _DomainWriteKernel:
             if project is None:
                 raise DomainNotFoundError(project_id)
             if str(project["owner_user_id"]) == member_user_id:
-                raise DomainConflictError("Project owner is not a project member")
+                raise DomainConflictError(
+                    "Project owner is not a project member",
+                    code=DomainErrorCode.MEMBER_OWNER_MISSING,
+                )
             repository.upsert_project_member(
                 project_id=project_id,
                 user_id=member_user_id,
@@ -1544,7 +1746,10 @@ class _DomainWriteKernel:
             if owner is None:
                 raise DomainNotFoundError(project_id)
             if owner["owner_user_id"] == member_user_id:
-                raise DomainConflictError("Project owner cannot be removed as a member")
+                raise DomainConflictError(
+                    "Project owner cannot be removed as a member",
+                    code=DomainErrorCode.MEMBER_OWNER_IMMUTABLE,
+                )
             if repository.remove_project_member(project_id, member_user_id) != 1:
                 raise DomainNotFoundError("project member")
             result: dict[str, object] = {
@@ -1647,7 +1852,10 @@ class _DomainWriteKernel:
                 relationship_type=relationship_type,
             )
             if row is None:
-                raise DomainConflictError("Task relationship was not created")
+                raise DomainConflictError(
+                    "Task relationship was not created",
+                    code=DomainErrorCode.TASK_RELATIONSHIP_CREATE_FAILED,
+                )
             result: dict[str, object] = {
                 "relationship_id": str(row["relationship_id"]),
                 "project_id": project_id,
@@ -1728,7 +1936,10 @@ class _DomainWriteKernel:
         idempotency_key: str | None = None,
     ) -> dict[str, object]:
         if not new_owner_user_id:
-            raise DomainConflictError("new_owner_user_id is required")
+            raise DomainConflictError(
+                "new_owner_user_id is required",
+                code=DomainErrorCode.PROJECT_TRANSFER_OWNER_REQUIRED,
+            )
         self._require_known_auth_user(new_owner_user_id)
         with closing(self._connect()) as conn:
             self._begin_write(conn)
@@ -1750,7 +1961,10 @@ class _DomainWriteKernel:
             if project is None:
                 raise DomainNotFoundError(project_id)
             if bool(project["is_default"]):
-                raise DomainConflictError("Default Project ownership cannot be transferred")
+                raise DomainConflictError(
+                    "Default Project ownership cannot be transferred",
+                    code=DomainErrorCode.PROJECT_DEFAULT_TRANSFER_FORBIDDEN,
+                )
             old_owner_user_id = str(project["owner_user_id"])
             if old_owner_user_id == new_owner_user_id:
                 result: dict[str, object] = {
@@ -1833,7 +2047,10 @@ class _DomainWriteKernel:
                 )
             primary = repository.active_primary_for_workspace(workspace_id)
             if primary is not None and not allow_no_primary:
-                raise DomainConflictError("Replace the Primary Workspace before unregistering it")
+                raise DomainConflictError(
+                    "Replace the Primary Workspace before unregistering it",
+                    code=DomainErrorCode.WORKSPACE_PRIMARY_REPLACEMENT_REQUIRED,
+                )
             previous_links = [
                 self._link_audit_value(link)
                 for link in repository.list_project_links_for_workspace(workspace_id)
@@ -2272,11 +2489,20 @@ class _DomainWriteKernel:
             project = repository.project(project_id)
             workspace = repository.linked_workspace_state(workspace_id)
             if project is None or str(project["status"]) != "active":
-                raise DomainConflictError("Workspace links require an active Project")
+                raise DomainConflictError(
+                    "Workspace links require an active Project",
+                    code=DomainErrorCode.WORKSPACE_LINK_PROJECT_INACTIVE,
+                )
             if workspace is None or str(workspace["workspace_status"]) != "active":
-                raise DomainConflictError("Workspace links require an active Workspace")
+                raise DomainConflictError(
+                    "Workspace links require an active Workspace",
+                    code=DomainErrorCode.WORKSPACE_LINK_WORKSPACE_INACTIVE,
+                )
             if str(workspace["environment_status"]) != "active":
-                raise DomainConflictError("Workspace links require an active Environment")
+                raise DomainConflictError(
+                    "Workspace links require an active Environment",
+                    code=DomainErrorCode.WORKSPACE_LINK_ENVIRONMENT_INACTIVE,
+                )
             can_execute = self._has_environment_execution_access(
                 environment_id=str(workspace["environment_id"]), user=user
             )
@@ -2357,11 +2583,20 @@ class _DomainWriteKernel:
         project = repository.project(project_id)
         workspace = repository.linked_workspace_state(workspace_id)
         if project is None or str(project["status"]) != "active":
-            raise DomainConflictError("Workspace links require an active Project")
+            raise DomainConflictError(
+                "Workspace links require an active Project",
+                code=DomainErrorCode.WORKSPACE_LINK_PROJECT_INACTIVE,
+            )
         if workspace is None or str(workspace["workspace_status"]) != "active":
-            raise DomainConflictError("Workspace links require an active Workspace")
+            raise DomainConflictError(
+                "Workspace links require an active Workspace",
+                code=DomainErrorCode.WORKSPACE_LINK_WORKSPACE_INACTIVE,
+            )
         if str(workspace["environment_status"]) != "active":
-            raise DomainConflictError("Workspace links require an active Environment")
+            raise DomainConflictError(
+                "Workspace links require an active Environment",
+                code=DomainErrorCode.WORKSPACE_LINK_ENVIRONMENT_INACTIVE,
+            )
         can_execute = self._has_environment_execution_access(
             environment_id=str(workspace["environment_id"]), user=user
         )
@@ -2377,7 +2612,10 @@ class _DomainWriteKernel:
             raise DomainPermissionError("Active Environment access is required")
         target_link = repository.project_workspace_link(project_id, workspace_id)
         if target_link is None or str(target_link["status"]) != "active":
-            raise DomainConflictError("Primary Workspace must already be an active Project link")
+            raise DomainConflictError(
+                "Primary Workspace must already be an active Project link",
+                code=DomainErrorCode.WORKSPACE_PRIMARY_NOT_LINKED,
+            )
         now = _now()
         repository.clear_active_primary(project_id, now=now)
         repository.upsert_project_workspace_link(
@@ -2461,7 +2699,9 @@ class _DomainWriteKernel:
         request: dict[str, object],
     ) -> dict[str, object] | None:
         if not key:
-            raise DomainConflictError("idempotency_key is required")
+            raise DomainConflictError(
+                "idempotency_key is required", code=DomainErrorCode.IDEMPOTENCY_KEY_REQUIRED
+            )
         row = _SqliteDomainRepository(conn).idempotency_record(
             actor_user_id=actor_user_id,
             scope=scope,
@@ -2477,10 +2717,16 @@ class _DomainWriteKernel:
                 idempotency_key=key,
                 request=request,
             )
-            raise DomainConflictError("Idempotency-Key was already used for a different request")
+            raise DomainConflictError(
+                "Idempotency-Key was already used for a different request",
+                code=DomainErrorCode.IDEMPOTENCY_KEY_CONFLICT,
+            )
         value = json.loads(row["response_json"])
         if not isinstance(value, dict):
-            raise DomainConflictError("Stored idempotency response is invalid")
+            raise DomainConflictError(
+                "Stored idempotency response is invalid",
+                code=DomainErrorCode.IDEMPOTENCY_RESPONSE_INVALID,
+            )
         result = {str(item_key): item for item_key, item in value.items()}
         record_durable_idempotency_event(
             "reused",

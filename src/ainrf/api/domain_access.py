@@ -64,7 +64,10 @@ def require_v2_active_environment(
         # an ungranted ID exists or has merely been disabled.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found",
+            detail={
+                "code": "domain_resource_not_found",
+                "message": "Environment not found",
+            },
         ) from exc
 
 
@@ -129,7 +132,10 @@ def reject_v2_environment_execution_grant(
     )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail=_ENVIRONMENT_EXECUTION_GRANT_DETAIL,
+        detail={
+            "code": "environment_grant_required",
+            "message": _ENVIRONMENT_EXECUTION_GRANT_DETAIL,
+        },
     )
 
 
@@ -178,10 +184,16 @@ def require_v2_workspace_execution_owner(
     except DomainNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Workspace not found",
+            detail={
+                "code": "domain_resource_not_found",
+                "message": "Workspace not found",
+            },
         ) from exc
     if workspace.get("status") != "active":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "domain_resource_not_found", "message": "Workspace not found"},
+        )
     if workspace.get("owner_user_id") != user.get("id"):
         config = getattr(request.app.state, "api_config", None)
         state_root = getattr(config, "state_root", None)
@@ -195,6 +207,9 @@ def require_v2_workspace_execution_owner(
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Workspace owner permission is required",
+            detail={
+                "code": "workspace_owner_required",
+                "message": "Workspace owner permission is required",
+            },
         )
     return workspace

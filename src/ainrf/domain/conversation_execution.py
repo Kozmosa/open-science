@@ -30,7 +30,11 @@ from ainrf.domain.conversation_execution_repository import (
 )
 from ainrf.domain.conversation_repository import SqliteConversationRepository
 from ainrf.domain.conversation_service import ConversationApplicationService
-from ainrf.domain.service import DomainConflictError, DomainNotFoundError
+from ainrf.domain.service import (
+    DomainConflictError,
+    DomainErrorCode,
+    DomainNotFoundError,
+)
 from ainrf.domain_control import MaintenanceModeError
 
 
@@ -454,12 +458,18 @@ class ConversationExecutionService:
                     environment_id=str(task["environment_id"]),
                 )
                 if str(submission["task_id"]) in active_task_ids:
-                    raise DomainConflictError("Task already holds an external execution slot")
+                    raise DomainConflictError(
+                        "Task already holds an external execution slot",
+                        code=DomainErrorCode.TASK_EXECUTION_SLOT_HELD,
+                    )
                 if (
                     max_concurrent_tasks is not None
                     and len(active_task_ids) >= max_concurrent_tasks
                 ):
-                    raise DomainConflictError("Environment concurrent Task capacity is exhausted")
+                    raise DomainConflictError(
+                        "Environment concurrent Task capacity is exhausted",
+                        code=DomainErrorCode.ENVIRONMENT_CAPACITY_EXHAUSTED,
+                    )
                 if (
                     repository.transition_submission(
                         submission_id=submission_id,

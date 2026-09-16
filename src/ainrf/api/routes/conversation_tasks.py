@@ -22,7 +22,11 @@ from ainrf.auth.permissions import get_current_user
 from ainrf.domain import ConversationApplicationService
 from ainrf.domain.conversation_contracts import ConversationContractError
 from ainrf.domain.conversation_contracts import ForkTransferMode
-from ainrf.domain.service import DomainNotFoundError, DomainPermissionError
+from ainrf.api.error_detail import coded_detail
+from ainrf.domain.service import (
+    DomainNotFoundError,
+    DomainPermissionError,
+)
 from ainrf.domain_control import MaintenanceModeError
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -41,16 +45,18 @@ def _translate(exc: Exception) -> HTTPException:
     if isinstance(exc, MaintenanceModeError):
         return HTTPException(status_code=503, detail="Domain writes are paused for maintenance")
     if isinstance(exc, DomainPermissionError):
-        return HTTPException(status_code=403, detail="Task permission denied")
+        return HTTPException(status_code=403, detail=coded_detail(exc))
     if isinstance(exc, DomainNotFoundError):
-        return HTTPException(status_code=404, detail="Conversation resource not found")
+        return HTTPException(
+            status_code=404, detail=coded_detail(exc, "Conversation resource not found")
+        )
     if isinstance(exc, ConversationContractError):
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": exc.code, "message": str(exc)},
+            detail={"code": str(exc.code), "message": str(exc)},
         )
     if isinstance(exc, ValueError):
-        return HTTPException(status_code=409, detail=str(exc))
+        return HTTPException(status_code=409, detail=coded_detail(exc))
     return HTTPException(status_code=500, detail="Unexpected Conversation error")
 
 
