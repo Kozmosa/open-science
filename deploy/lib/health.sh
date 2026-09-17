@@ -47,6 +47,67 @@ load_runtime_env_from_container() {
     done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "${container_name}")
 }
 
+# Recover the literature redis password from the running redis container's
+# --requirepass argument when the deploy shell does not provide it.  Fresh
+# installs have no container yet and must provide the value via .env.
+load_literature_redis_password_from_container() {
+    local container_name="${1:-ainrf-literature-redis}"
+    local cmd_json password
+
+    if [[ -n "${AINRF_LITERATURE_REDIS_PASSWORD:-}" ]]; then
+        return 0
+    fi
+    if ! docker inspect "${container_name}" >/dev/null 2>&1; then
+        return 0
+    fi
+    cmd_json="$(docker inspect --format '{{json .Config.Cmd}}' "${container_name}")"
+    password="$(printf '%s' "${cmd_json}" | python3 -c \
+        'import json,sys; cmd=json.load(sys.stdin); print(cmd[cmd.index("--requirepass")+1] if "--requirepass" in cmd else "")' \
+        2>/dev/null || true)"
+    if [[ -n "${password}" ]]; then
+        export AINRF_LITERATURE_REDIS_PASSWORD="${password}"
+    fi
+}
+
+# Poll a service that has no HTTP healthcheck until it stays running.  A
+# crash-looping container reports Restarting/Exited and never passes.
+# Args: compose_file service retries delay_seconds [env_file]
+wait_for_compose_service_running() {
+    local compose_file="$1"
+    local service="$2"
+    local retries="${3:-30}"
+    local delay="${4:-2}"
+    local env_file="${5:-}"
+    local -a compose_args=()
+    local stable=0
+
+    if [[ -n "${env_file}" ]]; then
+        compose_args+=(--env-file "${env_file}")
+    fi
+
+    _ainrf_info "Waiting for Docker service '${service}' to stay running ..."
+    while ((retries > 0)); do
+        if docker compose "${compose_args[@]}" -f "${compose_file}" ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null \
+            | awk -v svc="${service}" '$1 == svc && $2 == "Up" {found=1} END {exit !found}'; then
+            stable=$((stable + 1))
+            if ((stable >= 2)); then
+                _ainrf_info "Service '${service}' is running"
+                return 0
+            fi
+            sleep "${delay}"
+        else
+            stable=0
+        fi
+        retries=$((retries - 1))
+        if ((retries > 0)); then
+            sleep "${delay}"
+        fi
+    done
+
+    _ainrf_error "Timed out waiting for service '${service}' to run"
+    return 1
+}
+
 # Return 0 if <url> responds with HTTP 2xx/3xx.
 _url_is_healthy() {
     local url="$1"

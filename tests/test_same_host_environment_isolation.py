@@ -276,9 +276,9 @@ def test_production_release_builds_all_artifacts_before_compose_up() -> None:
         assert f"build_target {target}" in build
     assert 'chmod 600 "${MANIFEST_PATH}"' in build
     assert '"${REPO_ROOT}/deploy/build-production.sh"' in release
-    assert 'docker compose -f "${COMPOSE_FILE}" up -d --no-build' in release
+    assert 'docker compose -f "${COMPOSE_FILE}" --profile domain-v2 up -d --no-build' in release
     assert release.index('"${REPO_ROOT}/deploy/build-production.sh"') < release.index(
-        'docker compose -f "${COMPOSE_FILE}" up -d --no-build'
+        'docker compose -f "${COMPOSE_FILE}" --profile domain-v2 up -d --no-build'
     )
     assert "COPY --from=frontend-build /build/frontend/dist /usr/share/nginx/html" in dockerfile
     assert (

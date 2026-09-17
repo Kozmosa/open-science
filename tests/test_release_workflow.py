@@ -217,3 +217,28 @@ def test_gatus_is_an_immutable_public_uptime_service_with_isolated_routes() -> N
             "location /uptime/"
         )
         assert nginx_config.index("location /uptime/") < nginx_config.index("location /api/")
+
+
+def test_release_deploys_the_domain_worker_with_its_artifact_sha() -> None:
+    """The release must not strand the profiled domain worker (#97)."""
+
+    root = Path(__file__).resolve().parents[1]
+    production = (root / "deploy/release-production.sh").read_text(encoding="utf-8")
+    health = (root / "deploy/lib/health.sh").read_text(encoding="utf-8")
+    compose = yaml.safe_load((root / "deploy/docker-compose.cpu.yml").read_text(encoding="utf-8"))
+
+    worker = compose["services"]["domain-worker"]
+    assert worker["profiles"] == ["domain-v2"]
+    assert ":?" in worker["environment"]["AINRF_DOMAIN_ARTIFACT_SHA"]
+
+    assert "--profile domain-v2 up -d --no-build" in production
+    assert 'AINRF_DOMAIN_ARTIFACT_SHA="${OPENSCIENCE_RELEASE_GIT_SHA}"' in production
+    assert "load_runtime_env_from_container ainrf-domain-worker" in production
+    assert "load_literature_redis_password_from_container" in production
+    assert 'wait_for_compose_service_running "${COMPOSE_FILE}" domain-worker' in production
+    # The worker wait runs after the HTTP health gates, never before.
+    assert production.index("wait_for_compose_service_running") > production.index(
+        'wait_for_url "http://localhost:8192/health"'
+    )
+    assert "load_literature_redis_password_from_container()" in health
+    assert "wait_for_compose_service_running()" in health
