@@ -39,6 +39,7 @@ import type {
   LiteratureTopicUpdateRequest,
 } from '@/generated/transport';
 import { createTransportMockAdapter } from '@/shared/api/transport';
+import { mockTurnItemId } from './legacyState';
 
 const http = createTransportMockAdapter(mswHttp);
 
@@ -746,7 +747,7 @@ function mockTranscriptRows(taskId: string): {
         : 'system_notice';
     const actor = message.type === 'user' ? 'user' : message.type === 'assistant' ? 'agent' : 'system';
     return {
-      item_id: message.id,
+      item_id: mockTurnItemId(message.id),
       task_id: taskId,
       turn_id: turnId,
       task_item_seq: message.metadata.sequence,
@@ -1193,7 +1194,7 @@ export const frontendV2MockHandlers = [
     if (!taskById(taskId)) return notFound('Task', taskId);
     const items = (state.messages[taskId] ?? [])
       .map((message) => ({
-        item_id: message.id, task_id: taskId, turn_id: `turn-${taskId}-1`,
+        item_id: mockTurnItemId(message.id), task_id: taskId, turn_id: `turn-${taskId}-1`,
         task_item_seq: message.metadata.sequence, turn_item_seq: message.metadata.sequence,
         item_type: message.type === 'user' ? 'user_message' : message.type === 'assistant' ? 'agent_message' : 'system_notice',
         actor: message.type === 'user' ? 'user' : message.type === 'assistant' ? 'agent' : 'system',

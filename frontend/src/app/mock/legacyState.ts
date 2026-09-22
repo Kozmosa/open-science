@@ -116,6 +116,22 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function mockTurnItemId(seed: string): string {
+  // The backend persists turn item ids as uuid4 hex (32 chars, no task-id
+  // prefix); the mock must serve the same shape so the mock never masks a
+  // frontend assumption about item-id format.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  const first = hash >>> 0;
+  const second = Math.imul(first ^ 0x9e3779b9, 0x85ebca6b) >>> 0;
+  const third = Math.imul(second ^ 0xc2b2ae35, 0x27d4eb2f) >>> 0;
+  const fourth = Math.imul(third ^ 0x165667b1, 0x9e3779b1) >>> 0;
+  return [first, second, third, fourth].map((word) => word.toString(16).padStart(8, '0')).join('');
+}
+
 function createSeedEnvironment(): EnvironmentRecord {
   const timestamp = nowIso();
   return {

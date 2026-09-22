@@ -52,6 +52,7 @@ import {
   mockUpdateEnvironment,
   mockUpdateProjectEnvironmentReference,
   mockUpdateWorkspace,
+  mockTurnItemId,
   mockUnarchiveTask,
   resetMockEnvironmentState,
   resetMockTaskState,
@@ -219,7 +220,7 @@ export const legacyMockHandlers = [
     const taskId = textParam(params, 'taskId');
     const output = mockGetTaskOutput(taskId, 0);
     return HttpResponse.json({ items: output.items.map((item) => ({
-      item_id: `${taskId}-${item.seq}`, task_id: taskId, turn_id: textParam(params, 'turnId'),
+      item_id: mockTurnItemId(`${taskId}:${item.seq}`), task_id: taskId, turn_id: textParam(params, 'turnId'),
       task_item_seq: item.seq, turn_item_seq: item.seq,
       item_type: item.kind === 'message' ? 'agent_message' : 'system_notice',
       actor: item.kind === 'message' ? 'agent' : 'system', payload: { text: item.content },

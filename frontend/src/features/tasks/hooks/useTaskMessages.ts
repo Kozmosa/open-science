@@ -220,13 +220,10 @@ export function useTaskMessages(
   }, [outputItems, initialPrompt, taskId]);
 
   const messages = useMemo(() => {
-    const historyMsgs = history || [];
-    const prefix = taskId ? `${taskId}-` : null;
-    const ownHistory = prefix
-      ? historyMsgs.filter((message) => message.id.startsWith(prefix))
-      : historyMsgs;
-    return mergeMessages([...ownHistory, ...streamMessages]);
-  }, [history, streamMessages, taskId]);
+    // Canonical history is already task-scoped by listCanonicalTaskItems;
+    // item ids are backend uuids and must not be filtered by id prefix.
+    return mergeMessages([...(history || []), ...streamMessages]);
+  }, [history, streamMessages]);
 
   return { messages, isLoading, error };
 }
