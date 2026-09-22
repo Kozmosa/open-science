@@ -28,6 +28,9 @@ from ainrf.backup.service import BackupService
 from ainrf.db.retire_legacy import migrate as retire_legacy_migrate
 from ainrf.db.retire_legacy import preflight as retire_legacy_preflight
 from ainrf.db.retire_legacy import verify as retire_legacy_verify
+from ainrf.db.backfill_legacy_turn_items import apply as backfill_legacy_apply
+from ainrf.db.backfill_legacy_turn_items import preflight as backfill_legacy_preflight
+from ainrf.db.backfill_legacy_turn_items import verify as backfill_legacy_verify
 from ainrf.domain_control import (
     REQUIRED_PARTICIPANT_TYPES,
     DomainMaintenanceService,
@@ -753,6 +756,77 @@ def retire_legacy_verify_command(
 ) -> None:
     """Validate the current baseline and absence of retired tables."""
     report = retire_legacy_verify(state_root)
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
+
+
+backfill_legacy_app = typer.Typer(
+    help="Backfill retired task_outputs into Items on legacy-inferred Turns."
+)
+migration_app.add_typer(backfill_legacy_app, name="backfill-legacy-turn-items")
+
+
+@backfill_legacy_app.command("preflight")
+def backfill_legacy_preflight_command(
+    legacy_source_db: Annotated[
+        Path,
+        typer.Option(
+            help="Pre-retirement agentic snapshot still containing the task_outputs table."
+        ),
+    ],
+    state_root: Annotated[
+        Path, typer.Option(help="State root holding the agentic database.")
+    ] = default_state_root(),
+) -> None:
+    """Report read-only whether the legacy Item backfill is safe to apply."""
+    report = backfill_legacy_preflight(state_root, legacy_source_db)
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
+
+
+@backfill_legacy_app.command("apply")
+def backfill_legacy_apply_command(
+    legacy_source_db: Annotated[
+        Path,
+        typer.Option(
+            help="Pre-retirement agentic snapshot still containing the task_outputs table."
+        ),
+    ],
+    state_root: Annotated[
+        Path, typer.Option(help="State root holding the agentic database.")
+    ] = default_state_root(),
+) -> None:
+    """Insert the planned legacy Items during an authorized maintenance window."""
+    try:
+        report = backfill_legacy_apply(state_root, legacy_source_db)
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(json_mod.dumps(report.as_dict(), indent=2))
+    if not report.ready:
+        raise typer.Exit(code=2)
+
+
+@backfill_legacy_app.command("verify")
+def backfill_legacy_verify_command(
+    legacy_source_db: Annotated[
+        Path,
+        typer.Option(
+            help="Pre-retirement agentic snapshot still containing the task_outputs table."
+        ),
+    ],
+    state_root: Annotated[
+        Path, typer.Option(help="State root holding the agentic database.")
+    ] = default_state_root(),
+) -> None:
+    """Validate that every planned legacy Item exists on its Turn."""
+    try:
+        report = backfill_legacy_verify(state_root, legacy_source_db)
+    except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
     typer.echo(json_mod.dumps(report.as_dict(), indent=2))
     if not report.ready:
         raise typer.Exit(code=2)
