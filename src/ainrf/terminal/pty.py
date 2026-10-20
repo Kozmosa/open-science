@@ -55,7 +55,7 @@ def _to_websocket_base(api_base_url: str) -> str:
 
 def build_attachment_ws_url(api_base_url: str, attachment_id: str, token: str) -> str:
     websocket_base = _to_websocket_base(api_base_url)
-    return f"{websocket_base}/terminal/attachments/{attachment_id}/ws?token={token}"
+    return f"{websocket_base}/api/terminal/attachments/{attachment_id}/ws?token={token}"
 
 
 def _close_master_fd(master_fd: int | None) -> None:

@@ -521,7 +521,7 @@ async def test_terminal_session_post_creates_personal_session_and_attachment(
     assert payload["attachment_expires_at"] is not None
     assert (
         payload["terminal_ws_url"]
-        == f"ws://testserver/terminal/attachments/{payload['attachment_id']}/ws?token="
+        == f"ws://testserver/api/terminal/attachments/{payload['attachment_id']}/ws?token="
         f"{app.state.terminal_attachment_broker._attachments[payload['attachment_id']].token}"
     )
 
@@ -558,7 +558,7 @@ async def test_terminal_session_post_returns_webui_origin_attachment_ws_url(
     assert response.status_code == 200
     assert response.json()["terminal_ws_url"] is not None
     ws_url = response.json()["terminal_ws_url"]
-    assert ws_url.startswith("ws://lab.internal:5173/terminal/attachments/")
+    assert ws_url.startswith("ws://lab.internal:5173/api/terminal/attachments/")
     assert "/ws?token=" in ws_url
 
 

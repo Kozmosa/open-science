@@ -93,7 +93,7 @@ def make_client(tmp_path: Path) -> tuple[TestClient, FastAPI]:
 
 def test_build_attachment_ws_url_translates_http_base() -> None:
     assert build_attachment_ws_url("http://testserver", "attach-1", "token-1") == (
-        "ws://testserver/terminal/attachments/attach-1/ws?token=token-1"
+        "ws://testserver/api/terminal/attachments/attach-1/ws?token=token-1"
     )
 
 

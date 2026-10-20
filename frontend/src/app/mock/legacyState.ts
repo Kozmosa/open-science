@@ -343,7 +343,7 @@ function terminalSessionName(environmentId: string): string {
 }
 
 function createAttachmentUrl(attachmentId: string): string {
-  return `ws://127.0.0.1:8000/terminal/attachments/${attachmentId}/ws?token=mock-token-${attachmentId}`;
+  return `ws://127.0.0.1:8000/api/terminal/attachments/${attachmentId}/ws?token=mock-token-${attachmentId}`;
 }
 
 function agentSessionName(environmentId: string): string {
