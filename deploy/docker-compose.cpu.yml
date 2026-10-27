@@ -35,6 +35,22 @@ services:
     restart: unless-stopped
     container_name: ainrf
     network_mode: host
+    # ── GPU 透传（宿主机未装 nvidia-container-toolkit，手动透传 8× A100 设备节点；
+    #    驱动用户态库在 volumes 中从宿主机只读挂载，版本须与宿主驱动 535.309.01 一致）──
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidia1:/dev/nvidia1
+      - /dev/nvidia2:/dev/nvidia2
+      - /dev/nvidia3:/dev/nvidia3
+      - /dev/nvidia4:/dev/nvidia4
+      - /dev/nvidia5:/dev/nvidia5
+      - /dev/nvidia6:/dev/nvidia6
+      - /dev/nvidia7:/dev/nvidia7
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+      - /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1
+      - /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2
     environment:
       AINRF_PRODUCTION: "1"
       AINRF_HOST: "127.0.0.1"
@@ -73,6 +89,13 @@ services:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
       - ainrf-tenants:/home/ainrf_tenants
+      # 宿主机 NVIDIA 535.309.01 驱动用户态库，只读挂载供容器内 CUDA 应用加载
+      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:/usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:ro
+      # nvidia-smi 二进制（CUDA 镜像不带，来自宿主机驱动包；monitor collector 依赖它枚举 GPU）
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
     cap_add:
       - SYS_ADMIN
     ulimits:
@@ -105,6 +128,21 @@ services:
     restart: unless-stopped
     container_name: ainrf-domain-worker
     network_mode: host
+    # ── GPU 透传（与 ainrf 服务相同的 8× A100 设备节点 + 宿主驱动用户态库）──
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidia1:/dev/nvidia1
+      - /dev/nvidia2:/dev/nvidia2
+      - /dev/nvidia3:/dev/nvidia3
+      - /dev/nvidia4:/dev/nvidia4
+      - /dev/nvidia5:/dev/nvidia5
+      - /dev/nvidia6:/dev/nvidia6
+      - /dev/nvidia7:/dev/nvidia7
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+      - /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1
+      - /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2
     environment:
       HOME: /opt/ainrf
       AINRF_PRODUCTION: "1"
@@ -123,6 +161,13 @@ services:
       - ainrf-state:/opt/ainrf/state
       - ainrf-workspaces:/opt/ainrf/.ainrf_workspaces
       - ainrf-tenants:/home/ainrf_tenants
+      # 宿主机 NVIDIA 535.309.01 驱动用户态库，只读挂载供容器内 CUDA 应用加载
+      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:/usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:ro
+      # nvidia-smi 二进制（CUDA 镜像不带，来自宿主机驱动包；monitor collector 依赖它枚举 GPU）
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
     cap_add:
       - SYS_ADMIN
     ulimits:
@@ -181,6 +226,21 @@ services:
     restart: unless-stopped
     container_name: ainrf-literature-worker
     network_mode: host
+    # ── GPU 透传（与 ainrf 服务相同的 8× A100 设备节点 + 宿主驱动用户态库）──
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidia1:/dev/nvidia1
+      - /dev/nvidia2:/dev/nvidia2
+      - /dev/nvidia3:/dev/nvidia3
+      - /dev/nvidia4:/dev/nvidia4
+      - /dev/nvidia5:/dev/nvidia5
+      - /dev/nvidia6:/dev/nvidia6
+      - /dev/nvidia7:/dev/nvidia7
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools
+      - /dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1
+      - /dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2
     environment:
       AINRF_STATE_ROOT: /opt/ainrf/state
       AINRF_LITERATURE_REDIS_URL: redis://:${AINRF_LITERATURE_REDIS_PASSWORD:?Set AINRF_LITERATURE_REDIS_PASSWORD in .env}@127.0.0.1:16379/0
@@ -193,6 +253,13 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
     volumes:
       - ainrf-state:/opt/ainrf/state
+      # 宿主机 NVIDIA 535.309.01 驱动用户态库，只读挂载供容器内 CUDA 应用加载
+      - /usr/lib/x86_64-linux-gnu/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1:ro
+      - /usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:/usr/lib/x86_64-linux-gnu/libcudadebugger.so.1:ro
+      # nvidia-smi 二进制（CUDA 镜像不带，来自宿主机驱动包；monitor collector 依赖它枚举 GPU）
+      - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi:ro
     command: ["python", "-m", "dramatiq", "ainrf.literature.tasks", "--processes", "1", "--threads", "2"]
     healthcheck:
       disable: true
