@@ -7,6 +7,9 @@ RELEASE_ID="${OPENSCIENCE_RELEASE_ID:-$(git -C "${REPO_ROOT}" rev-parse --short=
 COMMITTED_AT="$(git -C "${REPO_ROOT}" show -s --format=%cd --date=format:%Y%m%d-%H%M HEAD)"
 IMAGE_PREFIX="${OPENSCIENCE_IMAGE_PREFIX:-openscience}"
 MANIFEST_PATH="${OPENSCIENCE_RELEASE_MANIFEST:-/tmp/openscience-release-${RELEASE_ID}.env}"
+# Runtime base image override (e.g. a CUDA base for GPU deployments);
+# defaults to the CPU-only python:3.13-slim used by the release pipeline.
+RUNTIME_BASE_IMAGE="${OPENSCIENCE_RUNTIME_BASE_IMAGE:-docker.1ms.run/python:3.13-slim}"
 
 if [[ -n "$(git -C "${REPO_ROOT}" status --short)" && "${OPENSCIENCE_ALLOW_DIRTY_BUILD:-0}" != "1" ]]; then
   echo "Refusing a production build from a dirty worktree." >&2
@@ -21,6 +24,7 @@ build_target() {
     --target "${target}" \
     --build-arg "AINRF_BUILD_COMMIT=${RELEASE_ID}" \
     --build-arg "AINRF_BUILD_COMMITTED_AT=${COMMITTED_AT}" \
+    --build-arg "RUNTIME_BASE_IMAGE=${RUNTIME_BASE_IMAGE}" \
     --tag "${image}" \
     "${REPO_ROOT}"
 }

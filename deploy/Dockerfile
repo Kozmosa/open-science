@@ -122,21 +122,29 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ARG PYTHON_VERSION
 
+# uv from official image, copied before the Python bootstrap so the bootstrap
+# can use it when the base image does not provide the required Python version.
+COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
+
 # If the chosen runtime base does not provide the required Python version,
-# install it via deadsnakes.  This keeps the default CPU image unchanged while
-# allowing nvidia/cuda-based GPU images to work without baking a custom image.
+# install a relocatable python-build-standalone build via uv and merge it into
+# /usr/local.  This keeps the backend-build COPY paths and the
+# /usr/local/bin/python shebangs of installed scripts working.  The download
+# routes through gh-proxy.org (deadsnakes PPA is unreachable on mirror-only
+# networks); uv itself comes from the official image.
 RUN set -eux; \
     installed_version=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo ""); \
     if [ "${installed_version}" != "${PYTHON_VERSION}" ]; then \
         sed -i 's|archive.ubuntu.com|mirrors.ustc.edu.cn|g; s|security.ubuntu.com|mirrors.ustc.edu.cn|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
-        apt-get update; \
-        apt-get install -y --no-install-recommends software-properties-common; \
-        add-apt-repository -y ppa:deadsnakes/ppa; \
-        apt-get update; \
-        apt-get install -y --no-install-recommends python${PYTHON_VERSION} python${PYTHON_VERSION}-venv; \
-        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1; \
-        update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1; \
-        rm -rf /var/lib/apt/lists/*; \
+        export UV_PYTHON_INSTALL_MIRROR="https://gh-proxy.org/https://github.com/astral-sh/python-build-standalone/releases/download"; \
+        export UV_PYTHON_INSTALL_DIR=/usr/local/share/uv/python; \
+        uv python install "${PYTHON_VERSION}"; \
+        PY_PREFIX="$(dirname "$(dirname "$(realpath "$(uv python find "${PYTHON_VERSION}")")")")"; \
+        cp -a "${PY_PREFIX}/." /usr/local/; \
+        UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple \
+            uv pip install --break-system-packages --python /usr/local/bin/python3.13 pip tzdata; \
+        update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.13 100; \
+        update-alternatives --install /usr/bin/python python /usr/local/bin/python3.13 100; \
     fi
 
 # Runtime OS packages (USTC mirror) — includes SSH server for localhost self-test
@@ -146,9 +154,6 @@ RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debi
     apt-get install -y --no-install-recommends \
         sudo openssh-server bubblewrap socat procps tmux git && \
     rm -rf /var/lib/apt/lists/*
-
-# uv from official image (needed for runtime Python dev commands)
-COPY --from=ghcr.1ms.run/astral-sh/uv:0.11.20 /uv /usr/local/bin/uv
 
 # pixi package manager (used for agent/execution environments).
 # jsDelivr only serves files tracked in the Git repo, not release assets, so we
